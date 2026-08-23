@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "ai:fix": "node scripts/openrouter-fix.mjs",
+    "ai:repair": "AI_FIX_ROUNDS=3 node scripts/openrouter-fix.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
