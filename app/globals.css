@@ -237,6 +237,32 @@
   animation: postbox-shake 120ms ease-in-out infinite;
 }
 
+.hero-envelope {
+  animation: hero-envelope-float 5.5s ease-in-out infinite;
+  transform-style: preserve-3d;
+}
+
+.hero-envelope-seal {
+  animation: seal-glow 2.8s ease-in-out infinite;
+}
+
+.arrival-card {
+  animation: arrival-in 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.reveal-line {
+  opacity: 0.52;
+  filter: blur(4px);
+  transform: translateY(8px);
+  transition: opacity 500ms ease, filter 700ms ease, transform 700ms ease;
+}
+
+.reveal-line-visible {
+  opacity: 1;
+  filter: blur(0);
+  transform: translateY(0);
+}
+
 @keyframes journey-drift {
   0%, 100% {
     transform: translateY(0) rotate(-2deg);
@@ -266,6 +292,21 @@
   50% { transform: translate(calc(-50% + 3px), -50%) rotate(1deg); }
 }
 
+@keyframes hero-envelope-float {
+  0%, 100% { transform: translate(-50%, -50%) rotate(-7deg) translateY(0); }
+  50% { transform: translate(-50%, -50%) rotate(-3deg) translateY(-12px); }
+}
+
+@keyframes seal-glow {
+  0%, 100% { box-shadow: 0 10px 18px rgba(92, 29, 29, 0.18); }
+  50% { box-shadow: 0 12px 28px rgba(139, 45, 45, 0.35); }
+}
+
+@keyframes arrival-in {
+  from { opacity: 0; transform: translateY(18px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .page-enter,
   .journey-bike,
@@ -275,5 +316,15 @@
   .scene-wax,
   .scene-postbox-shaking {
     animation: none;
+  }
+
+  .hero-envelope,
+  .hero-envelope-seal,
+  .arrival-card {
+    animation: none;
+  }
+
+  .reveal-line {
+    transition: none;
   }
 }

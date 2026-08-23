@@ -33,17 +33,17 @@ async function run(command, args) {
   }
 }
 
-const tracked = (await run("git", ["ls-files"]))
+const projectFiles = (await run("git", ["ls-files", "--cached", "--others", "--exclude-standard"]))
   .split("\n")
   .filter(Boolean)
   .filter((file) => !/(^|\/)(node_modules|\.next|dist|build|\.git)(\/|$)/.test(file))
   .filter((file) => !/(^|\/)(\.env|\.env\.|.*\.pem$|.*\.key$)/.test(file));
 
-log(`Found ${tracked.length} safe tracked files to inspect.`);
+log(`Found ${projectFiles.length} safe project files to inspect.`);
 
 const files = [];
 let totalChars = 0;
-for (const file of tracked) {
+for (const file of projectFiles) {
   if (totalChars > 120000) break;
   if (!/\.(tsx?|jsx?|css|json|mjs|cjs)$/.test(file) || /package-lock\.json$/.test(file)) continue;
   try {
@@ -80,7 +80,8 @@ Instructions:
 3. Preserve the existing visual style and public APIs.
 4. Do not change package versions, add dependencies, or expose secrets.
 5. Return ONLY a unified git diff, with no Markdown fences or explanation.
-6. If no safe improvement is justified, return NO_CHANGES.`;
+6. Every changed file must have a complete, syntactically valid patch. Never stop in the middle of a hunk or file.
+7. If no safe improvement is justified, return NO_CHANGES.`;
 
 for (let round = 1; round <= maxRounds; round += 1) {
   log(`Round ${round}/${maxRounds}: running local typecheck...`);
@@ -170,7 +171,11 @@ for (let round = 1; round <= maxRounds; round += 1) {
     console.error("Patch validation failed:\n" + check);
     process.exit(1);
   }
-  await run("git", ["apply", "openrouter-fix.patch"]);
+  const applied = await run("git", ["apply", "openrouter-fix.patch"]);
+  if (applied) {
+    console.error("Patch application failed:\n" + applied);
+    process.exit(1);
+  }
   log(`Round ${round}/${maxRounds}: patch applied successfully.`);
 }
 

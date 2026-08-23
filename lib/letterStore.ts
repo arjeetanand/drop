@@ -213,6 +213,7 @@ export function draftAsLetter(draft: LetterDraftState): MockLetter {
     status: draft.status,
     excerpt: draft.content.trim() || 'An empty letter, waiting for your words.',
     subject: draft.subject || 'Untitled Letter',
+    direction: 'sent',
   };
 }
 
@@ -231,4 +232,8 @@ export function getLettersWithDraft(draft = getLetterDraft()): MockLetter[] {
     if (b.id === activeLetter.id) return 1;
     return 0;
   });
+}
+
+export function getLetterById(id: string) {
+  return getLettersWithDraft().find((letter) => letter.id === id);
 }

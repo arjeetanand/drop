@@ -3,10 +3,14 @@ export type LetterStatus = 'draft' | 'sealed' | 'dispatched' | 'delivered';
 export interface MockLetter {
   id: string;
   recipient: string;
+  sender?: string;
+  direction?: 'sent' | 'received';
   date: string;
   status: LetterStatus;
   excerpt: string;
   subject: string;
+  teaser?: string[];
+  deliveryHours?: number;
 }
 
 export interface MockSeal {
@@ -27,6 +31,18 @@ export interface TrackingEvent {
 }
 
 export const mockLetters: MockLetter[] = [
+  {
+    id: 'incoming-1',
+    recipient: 'sunny.stories',
+    sender: 'Mina Vale',
+    direction: 'received',
+    date: 'Just now',
+    status: 'delivered',
+    excerpt: 'I kept the blue hour for you. It was hiding between the rain and the first streetlight, exactly where we left it.',
+    subject: 'The blue hour',
+    teaser: ['I kept the blue hour for you.', 'It was hiding between the rain…', 'Open when you want a small secret.'],
+    deliveryHours: 0,
+  },
   {
     id: '1',
     recipient: 'Eleanor Hartwell',
@@ -108,44 +124,44 @@ export const mockSeals: MockSeal[] = [
 
 export const mockTrackingEvents: TrackingEvent[] = [
   {
-    id: '1',
-    status: 'Dispatched',
-    note: 'Collected from the pillar box on Tuesday morning. The postman smiled.',
-    date: 'Aug 20',
-    time: '07:42',
+    id: 'written',
+    status: 'Written',
+    note: 'The words are saved and ready to travel.',
+    date: 'Today',
+    time: '9:12 AM',
     done: true,
   },
   {
-    id: '2',
-    status: 'Sorted',
-    note: 'Sorted at the central depot. Your words are moving.',
-    date: 'Aug 20',
-    time: '14:15',
+    id: 'sealed',
+    status: 'Sealed',
+    note: 'The envelope is closed with care.',
+    date: 'Today',
+    time: '9:18 AM',
     done: true,
   },
   {
-    id: '3',
-    status: 'In Transit',
-    note: 'On the scenic route. Passing through countryside and coast.',
-    date: 'Aug 21',
-    time: '09:30',
+    id: 'picked-up',
+    status: 'Picked up',
+    note: 'Collected from the pillar box and on the move.',
+    date: 'Today',
+    time: '10:04 AM',
     done: true,
   },
   {
-    id: '4',
-    status: 'Out for Delivery',
-    note: 'Out for delivery. Almost there.',
-    date: 'Aug 22',
-    time: '06:00',
+    id: 'on-the-way',
+    status: 'On the way',
+    note: 'Your letter is crossing the distance.',
+    date: 'Today',
+    time: '11:30 AM',
     done: false,
     current: true,
   },
   {
-    id: '5',
-    status: 'Delivered',
-    note: 'Awaiting arrival at the destination.',
-    date: 'Expected',
-    time: '3–5 days',
+    id: 'arriving-soon',
+    status: 'Arriving soon',
+    note: 'Almost there. Keep an eye on the mailbox.',
+    date: 'Soon',
+    time: 'Next stop',
     done: false,
   },
 ];

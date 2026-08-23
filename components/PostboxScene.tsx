@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { playInterfaceSound } from '@/lib/interfaceSound';
 
 export function PostboxScene({ onPosted }: { onPosted?: () => void }) {
   const [sent, setSent] = useState(false);
@@ -50,7 +51,10 @@ export function PostboxScene({ onPosted }: { onPosted?: () => void }) {
       {!sent && (
         <button
           type="button"
-          onClick={() => setSent(true)}
+          onClick={() => {
+            setSent(true);
+            playInterfaceSound('send');
+          }}
           className="absolute bottom-8 left-1/2 z-10 -translate-x-1/2 rounded-sm bg-wax-red px-xl py-md font-label-md text-label-md uppercase tracking-widest text-surface-bright transition-all hover:-translate-y-0.5 hover:bg-wax-red-dark hover:shadow-lg"
         >
           Send Letter

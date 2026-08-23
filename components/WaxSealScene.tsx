@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { playInterfaceSound } from '@/lib/interfaceSound';
 
 export function WaxSealScene({ onPressed }: { onPressed?: () => void }) {
   const [pressed, setPressed] = useState(false);
@@ -8,6 +9,7 @@ export function WaxSealScene({ onPressed }: { onPressed?: () => void }) {
   const handlePress = () => {
     if (pressed) return;
     setPressed(true);
+    playInterfaceSound('seal');
     onPressed?.();
   };
 

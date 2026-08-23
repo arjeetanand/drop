@@ -6,12 +6,21 @@ import { Mail, Inbox } from 'lucide-react';
 import { mockLetters } from '@/data/mockData';
 import { LetterCard } from '@/components/LetterCard';
 import { getLetterDraft, getLettersWithDraft } from '@/lib/letterStore';
+import { getRemoteLetters } from '@/lib/letterBackend';
 
 export default function Mailbox() {
   const [all, setAll] = useState(mockLetters);
 
   useEffect(() => {
-    setAll(getLettersWithDraft(getLetterDraft()));
+    let active = true;
+    const loadLetters = async () => {
+      const draft = getLetterDraft();
+      const remoteLetters = await getRemoteLetters();
+      if (!active) return;
+      setAll(remoteLetters?.length ? remoteLetters : getLettersWithDraft(draft));
+    };
+    void loadLetters();
+    return () => { active = false; };
   }, []);
 
   const needsAttention = all.filter((letter) => letter.status === 'draft' || letter.status === 'sealed').slice(0, 3);

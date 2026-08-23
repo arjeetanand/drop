@@ -3,23 +3,32 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { PenLine, Mail, MapPin } from 'lucide-react';
+import { PenLine, Mail, MapPin, UserRound } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getLetterDraft } from '@/lib/letterStore';
+import { defaultUserProfile, getUserProfile } from '@/lib/userStore';
+import { getRemoteProfile } from '@/lib/letterBackend';
+import { SoundToggle } from '@/components/SoundToggle';
 
 const navItems = [
   { href: '/', label: 'Desk', icon: PenLine },
   { href: '/mailbox', label: 'Mailbox', icon: Mail },
   { href: '/journey', label: 'Journey', icon: MapPin },
+  { href: '/profile', label: 'Profile', icon: UserRound },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
   const [writeHref, setWriteHref] = useState('/compose');
   const [writeLabel, setWriteLabel] = useState('Write a Letter');
+  const [profile, setProfile] = useState(defaultUserProfile);
 
   useEffect(() => {
     const draft = getLetterDraft();
+    setProfile(getUserProfile());
+    void getRemoteProfile().then((remoteProfile) => {
+      if (remoteProfile) setProfile(remoteProfile);
+    });
     if (draft.status === 'dispatched' || draft.status === 'delivered') {
       setWriteHref('/compose?new=1');
       setWriteLabel('Write another Letter');
@@ -94,16 +103,17 @@ export function Sidebar() {
         </nav>
 
         <div className="border-t border-parchment-deep/20 px-4 py-4">
-          <div className="flex items-center gap-3 rounded-full px-3 py-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-parchment-warm text-xs font-semibold text-ink-navy">
-              AM
-            </div>
-            <div className="flex-1">
-              <p className="text-sm font-medium text-ink-navy">Anya Mercer</p>
-              <p className="font-caption text-[10px] text-on-surface-variant">
-                Letter Writer
-              </p>
-            </div>
+          <div className="flex items-center gap-2">
+            <Link href="/profile" className="flex min-w-0 flex-1 items-center gap-3 rounded-full px-3 py-2 transition-colors hover:bg-surface-container-high/60">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-parchment-warm text-xs font-semibold text-ink-navy">
+                {profile.displayName.split(' ').map((part) => part[0]).join('').slice(0, 2)}
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-ink-navy">{profile.displayName}</p>
+                <p className="truncate font-caption text-[10px] text-on-surface-variant">@{profile.username}</p>
+              </div>
+            </Link>
+            <SoundToggle />
           </div>
         </div>
       </aside>

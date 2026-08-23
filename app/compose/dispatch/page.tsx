@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { ArrowLeft, ArrowRight, Mail } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { dispatchLetter, getLetterDraft } from '@/lib/letterStore';
+import { syncLetterToBackend } from '@/lib/letterBackend';
 import { LetterProgress } from '@/components/LetterProgress';
 
 const WaxSealScene = dynamic(
@@ -56,7 +57,8 @@ export default function DispatchSequence() {
   };
 
   const handlePosted = () => {
-    dispatchLetter();
+    const dispatched = dispatchLetter();
+    void syncLetterToBackend(dispatched);
     setPosted(true);
   };
 

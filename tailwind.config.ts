@@ -98,6 +98,8 @@ const config: Config = {
         'wax-red-dark': '#6B1F1F',
         'ink-navy': '#1a1c1b',
         'amber-accent': '#D4A017',
+        'mint-accent': '#94C9B6',
+        'sky-accent': '#BCD8F0',
       },
       spacing: {
         'xs': '4px',

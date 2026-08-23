@@ -15,17 +15,22 @@ const statusConfig: Record<LetterStatus, { label: string; icon: typeof Send; cla
 export function LetterCard({ letter }: { letter: MockLetter }) {
   const config = statusConfig[letter.status];
   const Icon = config.icon;
+  const href = letter.direction === 'received'
+    ? `/letter/${letter.id}`
+    : letter.status === 'draft'
+      ? '/compose'
+      : `/journey?letter=${letter.id}`;
 
   return (
     <Link
-      href={letter.status === 'draft' ? '/compose' : `/journey?letter=${letter.id}`}
+      href={href}
       className="flex items-center justify-between py-md border-b border-outline-variant hover:pl-md transition-all duration-300 cursor-pointer group"
     >
       <div className="flex items-center gap-md">
         <Icon className={cn('h-5 w-5 text-outline-variant group-hover:text-primary transition-colors', config.className)} />
         <div>
           <h4 className="font-label-md text-label-md text-primary">
-            To: {letter.recipient}
+            {letter.direction === 'received' ? `From: ${letter.sender || 'A correspondent'}` : `To: ${letter.recipient}`}
           </h4>
           <p className="font-caption text-caption text-on-surface-variant">
             {letter.subject} — {config.label}
