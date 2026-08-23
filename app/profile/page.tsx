@@ -1,17 +1,24 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Check, Copy, Link2, LogIn, Sparkles } from 'lucide-react';
 import { getSupabaseBrowserClient, isGoogleAuthConfigured } from '@/lib/supabaseBrowser';
 import { defaultUserProfile, getUserProfile, profileUrl, saveUserProfile, type UserProfile } from '@/lib/userStore';
 import { getRemoteProfile, saveRemoteProfile } from '@/lib/letterBackend';
 
-export default function ProfilePage() {
+function ProfileContent() {
   const [profile, setProfile] = useState<UserProfile>(defaultUserProfile);
   const [saved, setSaved] = useState(false);
   const [notice, setNotice] = useState('');
+  const [accountNotice, setAccountNotice] = useState('');
   const [copied, setCopied] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [signedInEmail, setSignedInEmail] = useState('');
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const googleConfigured = isGoogleAuthConfigured();
 
   useEffect(() => {
     let active = true;
@@ -21,6 +28,22 @@ export default function ProfilePage() {
     };
     void loadProfile();
     return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    const authError = searchParams.get('authError');
+    if (authError) {
+      setAccountNotice(`Google sign-in could not finish: ${authError}`);
+      router.replace('/profile', { scroll: false });
+    }
+  }, [router, searchParams]);
+
+  useEffect(() => {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) return;
+    void supabase.auth.getUser().then(({ data }) => {
+      setSignedInEmail(data.user?.email || '');
+    });
   }, []);
 
   const update = (field: keyof UserProfile, value: string) => {
@@ -43,14 +66,19 @@ export default function ProfilePage() {
   const connectGoogle = async () => {
     const supabase = getSupabaseBrowserClient();
     if (!supabase) {
-      setNotice('Google sign-in is ready once Supabase URL and anon key are added to .env.local.');
+      setAccountNotice('Google sign-in is not connected yet. Add the Supabase values shown below, restart the app, and this button will start the real Google flow.');
       return;
     }
+    setGoogleLoading(true);
+    setAccountNotice('Opening Google sign-in…');
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/profile` },
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
     });
-    if (error) setNotice(error.message);
+    if (error) {
+      setGoogleLoading(false);
+      setAccountNotice(error.message);
+    }
   };
 
   const copyProfileLink = async () => {
@@ -133,12 +161,13 @@ export default function ProfilePage() {
                 </div>
                 <LogIn className="h-5 w-5 text-amber-accent" />
               </div>
-              <p className="mt-md font-body-md text-body-md leading-relaxed text-on-surface-variant">Google login can protect your identity across devices once Supabase is connected.</p>
-              <button type="button" onClick={connectGoogle} className="mt-lg flex w-full items-center justify-center gap-sm border border-primary px-lg py-sm font-label-md text-label-md uppercase tracking-widest text-primary hover:bg-secondary-container/30">
+              <p className="mt-md break-words font-body-md text-body-md leading-relaxed text-on-surface-variant">{signedInEmail ? `Signed in as ${signedInEmail}. Your letters can follow you across devices.` : googleConfigured ? 'Use Google to keep your letters with you across devices.' : 'Google sign-in is not connected in this local build yet.'}</p>
+              <button type="button" onClick={connectGoogle} disabled={googleLoading} className="mt-lg flex min-h-12 w-full items-center justify-center gap-sm border border-primary px-lg py-sm text-center font-label-md text-label-md uppercase tracking-widest text-primary transition-colors hover:bg-secondary-container/30 disabled:cursor-wait disabled:opacity-60">
                 <span className="font-bold">G</span>
-                {isGoogleAuthConfigured() ? 'Continue with Google' : 'Connect Google'}
+                {googleLoading ? 'Opening Google…' : googleConfigured ? 'Continue with Google' : 'Set up Google sign-in'}
               </button>
-              {!isGoogleAuthConfigured() && <p className="mt-sm font-caption text-caption text-on-surface-variant">Demo mode is active until Supabase is configured.</p>}
+              {!googleConfigured && <div className="mt-md space-y-xs border border-outline-variant bg-surface p-md"><p className="break-words font-caption text-caption font-semibold text-primary">To activate it</p><p className="break-words font-caption text-caption leading-relaxed text-on-surface-variant">Add <code>NEXT_PUBLIC_SUPABASE_URL</code> and <code>NEXT_PUBLIC_SUPABASE_ANON_KEY</code> to <code>.env.local</code>, run the SQL migration, enable Google in Supabase, then restart Next.js.</p></div>}
+              {accountNotice && <p className="mt-md break-words font-caption text-caption leading-relaxed text-on-surface-variant" aria-live="polite">{accountNotice}</p>}
             </div>
             <div className="grid grid-cols-2 gap-md">
               <div className="border border-outline-variant/60 bg-surface-container-lowest p-md"><p className="font-caption text-caption text-on-surface-variant">Letters sent</p><p className="mt-xs font-headline-md text-headline-md text-primary">{profile.lettersSent}</p></div>
@@ -149,4 +178,8 @@ export default function ProfilePage() {
       </div>
     </main>
   );
+}
+
+export default function ProfilePage() {
+  return <Suspense fallback={<main className="min-h-screen" />}><ProfileContent /></Suspense>;
 }
