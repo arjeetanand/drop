@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { Suspense, useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Check, ArrowLeft, ArrowRight, Minus, Plus, AlignLeft, AlignCenter, AlignRight } from 'lucide-react';
@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 import { getLetterDraft, saveLetterDraft, startNewLetter } from '@/lib/letterStore';
 import { LetterProgress } from '@/components/LetterProgress';
 
-export default function Composer() {
+function Composer() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [content, setContent] = useState('');
@@ -239,5 +239,13 @@ export default function Composer() {
         </button>
       </div>
     </div>
+  );
+}
+
+export default function ComposePage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-background" />}>
+      <Composer />
+    </Suspense>
   );
 }

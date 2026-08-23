@@ -1,0 +1,4 @@
+Paste the error message and the command that produced it here.
+
+Example:
+npm run typecheck

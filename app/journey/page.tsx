@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Bike, Clock, MapPin, Sparkles } from 'lucide-react';
 import { TrackingTimeline } from '@/components/TrackingTimeline';
 import { mockTrackingEvents, mockFieldNotes } from '@/data/mockData';
 import { getJourneyNotes, getLetterDraft, getLettersWithDraft, saveJourneyNotes } from '@/lib/letterStore';
 
-export default function Journey() {
+function Journey() {
   const searchParams = useSearchParams();
   const [secondsToNextScan, setSecondsToNextScan] = useState(48 * 3600 + 15 * 60 + 22);
   const [notes, setNotes] = useState(mockFieldNotes);
@@ -156,5 +156,13 @@ export default function Journey() {
         </section>
       </div>
     </main>
+  );
+}
+
+export default function JourneyPage() {
+  return (
+    <Suspense fallback={<main className="min-h-screen bg-background" />}>
+      <Journey />
+    </Suspense>
   );
 }

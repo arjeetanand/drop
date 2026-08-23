@@ -1,162 +1,66 @@
 'use client';
 
-import { useRef, useState, useMemo } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls } from '@react-three/drei';
-import * as THREE from 'three';
-
-function Postbox({ shaking }: { shaking: boolean }) {
-  const groupRef = useRef<THREE.Group>(null);
-
-  useFrame((state) => {
-    if (!groupRef.current) return;
-    if (shaking) {
-      const t = state.clock.elapsedTime;
-      groupRef.current.rotation.z = Math.sin(t * 30) * 0.02;
-      groupRef.current.position.x = Math.sin(t * 25) * 0.03;
-    } else {
-      groupRef.current.rotation.z += (0 - groupRef.current.rotation.z) * 0.1;
-      groupRef.current.position.x += (0 - groupRef.current.position.x) * 0.1;
-    }
-  });
-
-  return (
-    <group ref={groupRef}>
-      {/* Main body */}
-      <mesh position={[0, 0, 0]}>
-        <cylinderGeometry args={[0.5, 0.5, 2, 32]} />
-        <meshStandardMaterial color="#8B2D2D" roughness={0.4} metalness={0.3} />
-      </mesh>
-      {/* Top cap */}
-      <mesh position={[0, 1.1, 0]}>
-        <cylinderGeometry args={[0.55, 0.5, 0.2, 32]} />
-        <meshStandardMaterial color="#6B1F1F" roughness={0.3} metalness={0.4} />
-      </mesh>
-      {/* Top dome */}
-      <mesh position={[0, 1.3, 0]}>
-        <sphereGeometry args={[0.55, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2]} />
-        <meshStandardMaterial color="#8B2D2D" roughness={0.4} metalness={0.3} />
-      </mesh>
-      {/* Slot */}
-      <mesh position={[0, 0.7, 0.5]}>
-        <boxGeometry args={[0.3, 0.04, 0.02]} />
-        <meshStandardMaterial color="#1a1c1b" roughness={0.8} />
-      </mesh>
-      {/* Door */}
-      <mesh position={[0, -0.3, 0.49]}>
-        <boxGeometry args={[0.3, 0.6, 0.02]} />
-        <meshStandardMaterial color="#6B1F1F" roughness={0.3} metalness={0.5} />
-      </mesh>
-      {/* "POST" plate */}
-      <mesh position={[0, 0.85, 0.51]}>
-        <boxGeometry args={[0.25, 0.08, 0.01]} />
-        <meshStandardMaterial color="#C4A882" roughness={0.2} metalness={0.6} />
-      </mesh>
-    </group>
-  );
-}
-
-function Envelope({ sent }: { sent: boolean }) {
-  const meshRef = useRef<THREE.Mesh>(null);
-  const targetPos = useMemo(() => new THREE.Vector3(), []);
-
-  useFrame((state) => {
-    if (!meshRef.current) return;
-    const t = state.clock.elapsedTime;
-
-    if (sent) {
-      // Float toward the slot
-      targetPos.set(0, 0.7, 0.5);
-      meshRef.current.position.lerp(targetPos, 0.05);
-      meshRef.current.rotation.x += 0.02;
-      meshRef.current.rotation.z += 0.01;
-    } else {
-      // Idle floating
-      meshRef.current.position.y = 1.5 + Math.sin(t * 1.5) * 0.1;
-      meshRef.current.position.x = Math.sin(t * 0.8) * 0.2;
-      meshRef.current.rotation.z = Math.sin(t * 0.5) * 0.1;
-    }
-  });
-
-  return (
-    <mesh ref={meshRef} position={[0, 1.5, 0.5]}>
-      <boxGeometry args={[0.4, 0.02, 0.28]} />
-      <meshStandardMaterial color="#F5ECD7" roughness={0.8} />
-    </mesh>
-  );
-}
-
-function Ground() {
-  return (
-    <mesh position={[0, -1.1, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-      <planeGeometry args={[10, 10]} />
-      <meshStandardMaterial color="#2a1f1a" roughness={0.9} />
-    </mesh>
-  );
-}
+import { useEffect, useRef, useState } from 'react';
 
 export function PostboxScene({ onPosted }: { onPosted?: () => void }) {
   const [sent, setSent] = useState(false);
   const [shaking, setShaking] = useState(false);
+  const onPostedRef = useRef(onPosted);
 
-  const handleSend = () => {
-    setSent(true);
-    setTimeout(() => {
-      setShaking(true);
-      setTimeout(() => {
-        setShaking(false);
-        onPosted?.();
-      }, 600);
-    }, 1500);
-  };
+  useEffect(() => {
+    onPostedRef.current = onPosted;
+  }, [onPosted]);
+
+  useEffect(() => {
+    if (!sent) return;
+
+    const shakeTimer = window.setTimeout(() => setShaking(true), 1500);
+    const finishTimer = window.setTimeout(() => {
+      setShaking(false);
+      onPostedRef.current?.();
+    }, 2100);
+
+    return () => {
+      window.clearTimeout(shakeTimer);
+      window.clearTimeout(finishTimer);
+    };
+  }, [sent]);
 
   return (
-    <div className="relative w-full h-full">
-      <Canvas
-        camera={{ position: [2, 1, 4], fov: 50 }}
-        gl={{ antialias: true, alpha: true }}
-      >
-        <ambientLight intensity={0.2} color="#ffcc88" />
-        <pointLight position={[3, 4, 3]} intensity={0.6} color="#ff9966" />
-        <pointLight position={[-2, 2, -1]} intensity={0.3} color="#ff6644" />
-        <spotLight
-          position={[0, 5, 2]}
-          angle={0.3}
-          penumbra={0.5}
-          intensity={0.8}
-          color="#ffcc88"
-        />
+    <div className="relative min-h-[360px] h-full w-full overflow-hidden bg-[radial-gradient(circle_at_50%_28%,rgba(255,204,136,0.18),transparent_32%),linear-gradient(180deg,#241812_0%,#1a1410_100%)]">
+      <div className="absolute inset-x-[10%] bottom-[18%] h-px bg-amber-accent/20" />
+      <div className="absolute bottom-[18%] left-1/2 h-24 w-[min(78vw,620px)] -translate-x-1/2 rounded-[50%] bg-black/30 blur-2xl" />
 
-        <Postbox shaking={shaking} />
-        <Envelope sent={sent} />
-        <Ground />
+      <div className={`scene-postbox absolute left-1/2 top-[48%] h-64 w-40 -translate-x-1/2 -translate-y-1/2 ${shaking ? 'scene-postbox-shaking' : ''}`}>
+        <div className="absolute bottom-0 left-1/2 h-48 w-32 -translate-x-1/2 rounded-t-[2.5rem] border border-wax-red/50 bg-[linear-gradient(90deg,#6b1f1f_0%,#a13a38_48%,#6b1f1f_100%)] shadow-2xl" />
+        <div className="absolute left-1/2 top-2 h-20 w-36 -translate-x-1/2 rounded-t-full border border-wax-red/50 bg-[#8b2d2d] shadow-lg" />
+        <div className="absolute left-1/2 top-24 h-3 w-16 -translate-x-1/2 rounded-sm bg-ink-navy/80" />
+        <div className="absolute bottom-14 left-1/2 h-12 w-16 -translate-x-1/2 rounded-sm border border-wax-red/40 bg-[#6b1f1f]" />
+        <div className="absolute bottom-24 left-1/2 h-4 w-20 -translate-x-1/2 border border-amber-accent/50 bg-parchment/30 text-center font-caption text-[8px] tracking-[0.3em] text-amber-accent">POST</div>
+      </div>
 
-        <OrbitControls
-          enablePan={false}
-          minDistance={3}
-          maxDistance={8}
-          target={[0, 0, 0]}
-        />
-      </Canvas>
+      <div className={`scene-post-envelope absolute left-1/2 top-[22%] h-16 w-28 -translate-x-1/2 rotate-[-7deg] border border-parchment/35 bg-parchment shadow-xl ${sent ? 'scene-post-envelope-sent' : ''}`}>
+        <div className="absolute inset-0 bg-[linear-gradient(135deg,transparent_49.5%,rgba(139,45,45,0.16)_50%,transparent_50.5%),linear-gradient(45deg,transparent_49.5%,rgba(139,45,45,0.12)_50%,transparent_50.5%)]" />
+      </div>
 
-      {/* Send button overlay */}
+      <p className="absolute left-1/2 top-8 -translate-x-1/2 font-caption text-caption uppercase tracking-[0.3em] text-parchment/35">
+        The road begins here
+      </p>
+
       {!sent && (
         <button
-          onClick={handleSend}
-          className="absolute bottom-8 left-1/2 -translate-x-1/2 px-xl py-md bg-wax-red text-surface-bright font-label-md text-label-md uppercase tracking-widest rounded-sm hover:bg-wax-red-dark transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg z-10"
+          type="button"
+          onClick={() => setSent(true)}
+          className="absolute bottom-8 left-1/2 z-10 -translate-x-1/2 rounded-sm bg-wax-red px-xl py-md font-label-md text-label-md uppercase tracking-widest text-surface-bright transition-all hover:-translate-y-0.5 hover:bg-wax-red-dark hover:shadow-lg"
         >
           Send Letter
         </button>
       )}
       {sent && !shaking && (
-        <p className="absolute bottom-8 left-1/2 -translate-x-1/2 font-caption text-caption text-on-surface-variant animate-fade-in">
-          Sliding into the postbox...
-        </p>
+        <p className="absolute bottom-8 left-1/2 -translate-x-1/2 font-caption text-caption text-parchment/60">Sliding into the postbox...</p>
       )}
       {shaking && (
-        <p className="absolute bottom-8 left-1/2 -translate-x-1/2 font-caption text-caption text-wax-red animate-fade-in">
-          Posted!
-        </p>
+        <p className="absolute bottom-8 left-1/2 -translate-x-1/2 font-caption text-caption text-wax-red">Posted!</p>
       )}
     </div>
   );
