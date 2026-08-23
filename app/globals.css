@@ -4,31 +4,31 @@
 
 @layer base {
   :root {
-    --background: 40 30% 96%;
-    --foreground: 0 0% 10%;
-    --card: 40 30% 97%;
-    --card-foreground: 0 0% 10%;
-    --popover: 40 30% 97%;
-    --popover-foreground: 0 0% 10%;
-    --primary: 0 0% 10%;
-    --primary-foreground: 40 30% 96%;
-    --secondary: 40 20% 85%;
-    --secondary-foreground: 0 0% 10%;
-    --muted: 40 15% 88%;
-    --muted-foreground: 30 5% 35%;
-    --accent: 40 80% 50%;
+    --background: 40 25% 97%;
+    --foreground: 30 8% 18%;
+    --card: 40 30% 98%;
+    --card-foreground: 30 8% 18%;
+    --popover: 40 30% 98%;
+    --popover-foreground: 30 8% 18%;
+    --primary: 30 8% 18%;
+    --primary-foreground: 40 30% 97%;
+    --secondary: 40 20% 88%;
+    --secondary-foreground: 30 8% 18%;
+    --muted: 40 15% 90%;
+    --muted-foreground: 30 5% 42%;
+    --accent: 38 75% 55%;
     --accent-foreground: 0 0% 100%;
-    --destructive: 0 70% 40%;
-    --destructive-foreground: 40 30% 96%;
-    --border: 40 20% 78%;
-    --input: 40 20% 80%;
-    --ring: 40 80% 50%;
+    --destructive: 10 65% 45%;
+    --destructive-foreground: 40 30% 97%;
+    --border: 40 15% 82%;
+    --input: 40 15% 84%;
+    --ring: 38 75% 55%;
     --chart-1: 12 76% 61%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 197 37% 24%;
+    --chart-2: 160 40% 52%;
+    --chart-3: 200 35% 50%;
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
-    --radius: 0.5rem;
+    --radius: 0.625rem;
   }
 }
 
@@ -42,7 +42,7 @@
   }
 }
 
-/* Paper grain texture overlay */
+/* --- Nostalgic paper grain texture (light, subtle) --- */
 .paper-grain {
   position: relative;
 }
@@ -50,7 +50,7 @@
   content: '';
   position: absolute;
   inset: 0;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.08'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.05'/%3E%3C/svg%3E");
   pointer-events: none;
   z-index: 0;
   border-radius: inherit;
@@ -60,26 +60,27 @@
   z-index: 1;
 }
 
-/* Parchment surface */
+/* --- Warm bright surface --- */
 .parchment-surface {
-  background-color: #F5ECD7;
+  background-color: #FAF8F5;
   background-image:
-    radial-gradient(at 20% 30%, rgba(196, 168, 130, 0.08) 0%, transparent 50%),
-    radial-gradient(at 80% 70%, rgba(232, 213, 176, 0.12) 0%, transparent 50%);
+    radial-gradient(at 15% 20%, rgba(232, 168, 56, 0.06) 0%, transparent 50%),
+    radial-gradient(at 85% 80%, rgba(125, 211, 174, 0.05) 0%, transparent 50%),
+    radial-gradient(at 50% 50%, rgba(200, 168, 130, 0.03) 0%, transparent 60%);
 }
 
-/* Ruled line texture for composer */
+/* --- Ruled line texture for composer --- */
 .ruled-lines {
   background-image: repeating-linear-gradient(
     transparent,
     transparent 31px,
-    rgba(196, 168, 130, 0.3) 31px,
-    rgba(196, 168, 130, 0.3) 32px
+    rgba(180, 160, 120, 0.2) 31px,
+    rgba(180, 160, 120, 0.2) 32px
   );
   line-height: 32px;
 }
 
-/* Stamp effect border */
+/* --- Stamp / postmark effect --- */
 .stamp-border {
   border: 2px solid currentColor;
   border-radius: 4px;
@@ -91,33 +92,61 @@
   font-size: 12px;
 }
 
-/* Card shadow depth */
+.postmark {
+  position: relative;
+}
+.postmark::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border: 2px solid rgba(192, 57, 43, 0.3);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+/* --- Card shadow depth (soft, modern) --- */
 .card-depth {
   box-shadow:
-    0 1px 2px rgba(26, 28, 27, 0.04),
-    0 4px 12px rgba(26, 28, 27, 0.06),
-    0 12px 32px rgba(26, 28, 27, 0.04);
+    0 1px 2px rgba(45, 42, 38, 0.03),
+    0 4px 12px rgba(45, 42, 38, 0.05),
+    0 12px 32px rgba(45, 42, 38, 0.04);
 }
 
 .card-depth-lg {
   box-shadow:
-    0 2px 4px rgba(26, 28, 27, 0.05),
-    0 8px 24px rgba(26, 28, 27, 0.08),
-    0 24px 48px rgba(26, 28, 27, 0.06);
+    0 2px 4px rgba(45, 42, 38, 0.04),
+    0 8px 24px rgba(45, 42, 38, 0.07),
+    0 24px 48px rgba(45, 42, 38, 0.05);
 }
 
-/* Hatched dispatch slot */
+/* --- Polaroid card --- */
+.polaroid-card {
+  background: #FFFFFF;
+  padding: 12px 12px 32px 12px;
+  box-shadow:
+    0 2px 4px rgba(45, 42, 38, 0.06),
+    0 8px 20px rgba(45, 42, 38, 0.08);
+  transition: transform 400ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 400ms ease;
+}
+.polaroid-card:hover {
+  transform: translateY(-4px) rotate(-0.5deg);
+  box-shadow:
+    0 4px 8px rgba(45, 42, 38, 0.08),
+    0 16px 40px rgba(45, 42, 38, 0.1);
+}
+
+/* --- Hatched dispatch slot --- */
 .hatched-bg {
   background-image: repeating-linear-gradient(
     45deg,
     transparent,
     transparent 6px,
-    rgba(196, 168, 130, 0.25) 6px,
-    rgba(196, 168, 130, 0.25) 7px
+    rgba(180, 160, 120, 0.2) 6px,
+    rgba(180, 160, 120, 0.2) 7px
   );
 }
 
-/* Envelope fold line */
+/* --- Envelope fold line --- */
 .fold-line {
   background-image: linear-gradient(
     to right,
@@ -129,7 +158,7 @@
   height: 1px;
 }
 
-/* Handwritten note rotation */
+/* --- Handwritten note rotation --- */
 .note-rotate {
   transform: rotate(-1.5deg);
 }
@@ -137,12 +166,12 @@
   transform: rotate(1deg);
 }
 
-/* Page transition */
+/* --- Page transition --- */
 .page-enter {
-  animation: fade-in 0.6s ease-out forwards;
+  animation: fade-in 0.5s ease-out forwards;
 }
 
-/* Scrollbar styling */
+/* --- Scrollbar styling --- */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -151,23 +180,23 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(196, 168, 130, 0.4);
+  background: rgba(180, 160, 120, 0.35);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(196, 168, 130, 0.6);
+  background: rgba(180, 160, 120, 0.55);
 }
 
-/* Wax seal shimmer */
+/* --- Wax seal shimmer --- */
 .wax-shimmer {
   background: radial-gradient(
     circle at 30% 30%,
-    rgba(255, 200, 200, 0.3),
+    rgba(255, 220, 220, 0.3),
     transparent 60%
   );
 }
 
-/* Textarea reset for composer */
+/* --- Textarea reset for composer --- */
 .composer-textarea {
   resize: none;
   outline: none;
@@ -177,131 +206,148 @@
   height: 100%;
 }
 
-/* Typewriter input */
+/* --- Typewriter input --- */
 .typewriter-input {
   font-family: var(--font-courier), monospace;
   background: transparent;
   border: none;
-  border-bottom: 1px solid rgba(196, 168, 130, 0.5);
+  border-bottom: 1px solid rgba(180, 160, 120, 0.4);
   outline: none;
   padding: 4px 0;
   width: 100%;
+  transition: border-bottom-color 200ms ease;
 }
 .typewriter-input.w-32 {
   width: 8rem;
   flex: 0 0 8rem;
 }
 .typewriter-input:focus {
-  border-bottom-color: #8B2D2D;
+  border-bottom-color: #C0392B;
 }
 
-/* Progress bar shimmer */
+/* --- Progress bar shimmer --- */
 .progress-shimmer {
   background: linear-gradient(
     90deg,
     transparent 0%,
-    rgba(212, 160, 23, 0.4) 50%,
+    rgba(232, 168, 56, 0.4) 50%,
     transparent 100%
   );
   background-size: 200% 100%;
   animation: progress 2s ease-in-out infinite;
 }
 
-/* A small, readable motion cue for the journey map */
+/* --- 3D scene container helper --- */
+.scene3d-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 360px;
+}
+.scene3d-container canvas {
+  display: block;
+  touch-action: none;
+}
+
+/* --- Scene overlay gradient (warm light) --- */
+.scene-light-bg {
+  background: radial-gradient(ellipse at 50% 30%, #FFF9F0 0%, #F5EDE0 60%, #EDE5D5 100%);
+}
+.scene-warm-bg {
+  background: radial-gradient(ellipse at 50% 40%, #FFF4E6 0%, #F5E8D0 50%, #E8DCC8 100%);
+}
+
+/* --- A small, readable motion cue for the journey map --- */
 .journey-bike {
   animation: journey-drift 3.8s ease-in-out infinite;
 }
 
+/* --- Legacy CSS scene animations (kept for reduced-motion fallback) --- */
 .scene-envelope-float,
 .scene-post-envelope {
   animation: envelope-float 3.6s ease-in-out infinite;
 }
-
 .scene-wax {
   animation: wax-pulse 2.4s ease-in-out infinite;
 }
-
 .scene-stamp {
   transition: transform 700ms cubic-bezier(0.22, 1, 0.36, 1);
 }
-
 .scene-stamp-pressed {
   transform: translate(-50%, 5rem) rotate(-3deg);
 }
-
 .scene-post-envelope-sent {
   animation: envelope-post 1.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
-
 .scene-postbox-shaking {
   animation: postbox-shake 120ms ease-in-out infinite;
 }
-
 .hero-envelope {
   animation: hero-envelope-float 5.5s ease-in-out infinite;
   transform-style: preserve-3d;
 }
-
 .hero-envelope-seal {
   animation: seal-glow 2.8s ease-in-out infinite;
 }
-
 .arrival-card {
   animation: arrival-in 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
-
 .reveal-line {
   opacity: 0.52;
   filter: blur(4px);
   transform: translateY(8px);
   transition: opacity 500ms ease, filter 700ms ease, transform 700ms ease;
 }
-
 .reveal-line-visible {
   opacity: 1;
   filter: blur(0);
   transform: translateY(0);
 }
 
-@keyframes journey-drift {
-  0%, 100% {
-    transform: translateY(0) rotate(-2deg);
-  }
-  50% {
-    transform: translateY(-8px) rotate(2deg);
-  }
+/* --- Thin rule separator --- */
+.thin-rule {
+  border: none;
+  border-top: 1px solid rgba(180, 160, 120, 0.25);
+  margin: 0;
 }
 
+/* --- Decorative paper-layer (alias for polaroid-style card) --- */
+.paper-layer {
+  background: #FFFFFF;
+  box-shadow:
+    0 1px 2px rgba(45, 42, 38, 0.03),
+    0 4px 12px rgba(45, 42, 38, 0.05);
+  transition: transform 400ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 400ms ease;
+}
+
+@keyframes journey-drift {
+  0%, 100% { transform: translateY(0) rotate(-2deg); }
+  50% { transform: translateY(-8px) rotate(2deg); }
+}
 @keyframes envelope-float {
   0%, 100% { transform: translate(-50%, -50%) rotate(-5deg); }
   50% { transform: translate(-50%, calc(-50% - 8px)) rotate(-2deg); }
 }
-
 @keyframes wax-pulse {
   0%, 100% { transform: translate(-50%, -50%) scale(1); }
   50% { transform: translate(-50%, -50%) scale(1.04); }
 }
-
 @keyframes envelope-post {
   0% { transform: translate(-50%, 0) rotate(-7deg); opacity: 1; }
   100% { transform: translate(-50%, 8rem) rotate(2deg); opacity: 0.15; }
 }
-
 @keyframes postbox-shake {
   0%, 100% { transform: translate(-50%, -50%) rotate(0deg); }
   50% { transform: translate(calc(-50% + 3px), -50%) rotate(1deg); }
 }
-
 @keyframes hero-envelope-float {
   0%, 100% { transform: translate(-50%, -50%) rotate(-7deg) translateY(0); }
   50% { transform: translate(-50%, -50%) rotate(-3deg) translateY(-12px); }
 }
-
 @keyframes seal-glow {
-  0%, 100% { box-shadow: 0 10px 18px rgba(92, 29, 29, 0.18); }
-  50% { box-shadow: 0 12px 28px rgba(139, 45, 45, 0.35); }
+  0%, 100% { box-shadow: 0 10px 18px rgba(192, 57, 43, 0.15); }
+  50% { box-shadow: 0 12px 28px rgba(192, 57, 43, 0.3); }
 }
-
 @keyframes arrival-in {
   from { opacity: 0; transform: translateY(18px) scale(0.98); }
   to { opacity: 1; transform: translateY(0) scale(1); }
@@ -314,17 +360,16 @@
   .scene-envelope-float,
   .scene-post-envelope,
   .scene-wax,
-  .scene-postbox-shaking {
-    animation: none;
-  }
-
+  .scene-postbox-shaking,
   .hero-envelope,
   .hero-envelope-seal,
   .arrival-card {
     animation: none;
   }
-
   .reveal-line {
     transition: none;
+  }
+  .polaroid-card:hover {
+    transform: none;
   }
 }
