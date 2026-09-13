@@ -36,7 +36,7 @@ export default function FinishingTouches() {
     saveLetterDraft({ address: nextAddress });
   };
 
-  const hasCompleteAddress = Object.values(address).every((value) => value.trim().length > 0);
+  const hasCompleteAddress = Boolean(address.name.trim() && address.city.trim() && address.country.trim());
   const canDispatch = ready && Boolean(selectedSeal) && hasCompleteAddress;
 
   const handleSealSelect = (sealId: string) => {
@@ -62,7 +62,7 @@ export default function FinishingTouches() {
             <ArrowLeft className="h-4 w-4" />
             <span className="font-caption text-caption hidden sm:inline">Back to Letter</span>
           </Link>
-          <h1 className="font-headline-md text-headline-md text-primary">Correspondence</h1>
+          <h1 className="font-headline-md text-headline-md text-primary">Destination & Wax Seal</h1>
           <div className="w-20" />
         </div>
         <div className="mx-auto mt-lg max-w-[1140px] border-t border-outline-variant/20 pt-md">
@@ -74,10 +74,10 @@ export default function FinishingTouches() {
       <main className="flex-grow flex flex-col items-center justify-center p-margin-mobile md:p-margin-desktop w-full max-w-[1140px] mx-auto">
         <header className="mb-xl text-center md:mb-xxl">
           <h1 className="font-headline-lg text-headline-lg md:text-display-lg text-primary mb-md">
-            Make it ready to travel
+            Where should this letter travel?
           </h1>
           <p className="font-body-lg text-body-lg text-on-surface-variant max-w-2xl mx-auto leading-relaxed">
-            Address the envelope, choose a seal, and give your letter a proper send-off.
+            Specify the destination city and choose the wax mark that locks your envelope. Carriers only see the destination, never the contents.
           </p>
         </header>
 
@@ -102,17 +102,17 @@ export default function FinishingTouches() {
             {/* Fold line */}
             <div className="w-full border-t border-dashed border-outline-variant opacity-50 mb-xl relative">
               <span className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-surface-container-lowest px-2 font-caption text-caption text-outline">
-                Fold Here
+                Keep the words sealed
               </span>
             </div>
 
             {/* Addressing Area */}
             <div className="mb-xl mt-lg w-full max-w-md">
               <h2 className="mb-xs text-center font-headline-md text-headline-md text-primary">
-                Where should it go?
+                Where should it reach them?
               </h2>
               <p className="mb-lg text-center font-caption text-caption text-on-surface-variant">
-                Every line helps it find its way.
+                A name, city, and country are enough to begin.
               </p>
               <div className="space-y-sm">
                 <input
@@ -127,8 +127,8 @@ export default function FinishingTouches() {
                   className="typewriter-input text-center text-lg"
                   value={address.street}
                   onChange={(e) => updateAddress('street', e.target.value)}
-                  placeholder="Street Address"
-                  aria-label="Street address"
+                  placeholder="Optional handoff detail"
+                  aria-label="Optional handoff detail"
                   autoComplete="street-address"
                 />
                 <div className="flex gap-sm">
@@ -144,8 +144,8 @@ export default function FinishingTouches() {
                     className="typewriter-input text-center text-lg w-32"
                     value={address.postcode}
                     onChange={(e) => updateAddress('postcode', e.target.value)}
-                    placeholder="Postcode"
-                    aria-label="Postcode"
+                    placeholder="Optional"
+                    aria-label="Optional postcode"
                     autoComplete="postal-code"
                   />
                 </div>
@@ -163,10 +163,10 @@ export default function FinishingTouches() {
             {/* Wax Seal Interaction */}
             <fieldset className="w-full max-w-2xl border-t border-outline-variant/30 pt-xl">
               <legend className="mx-auto px-md font-headline-md text-headline-md text-primary">
-                Choose a seal
+                Choose the mark
               </legend>
               <p className="mb-lg text-center font-caption text-caption text-on-surface-variant">
-                Pick the little mark they will find when they open it.
+                This is the small sign that tells the recipient the letter is truly theirs.
               </p>
               <div className="grid grid-cols-2 gap-sm sm:grid-cols-4">
                 {mockSeals.map((seal) => {
@@ -211,7 +211,7 @@ export default function FinishingTouches() {
             <div className="absolute inset-0 bg-secondary-container transform scale-y-0 origin-bottom transition-transform duration-300 group-hover:scale-y-100 z-0" />
             <div className="relative z-10 flex items-center justify-center space-x-4">
               <span className="font-label-md text-label-md uppercase tracking-widest text-primary group-hover:text-on-secondary-container transition-colors">
-                Continue to the send-off
+                Proceed to Wax Ceremony
               </span>
               <ArrowRight className="h-4 w-4 text-primary group-hover:text-on-secondary-container transition-colors" />
             </div>
@@ -222,7 +222,7 @@ export default function FinishingTouches() {
             </p>
           ) : !hasCompleteAddress ? (
             <p className="mt-sm font-caption text-caption text-on-surface-variant">
-              Complete the address above to continue
+              Add a name, city, and country to continue
             </p>
           ) : null}
         </div>

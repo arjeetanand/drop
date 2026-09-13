@@ -110,16 +110,6 @@ export function saveLetterDraft(
   return next;
 }
 
-export function clearLetterDraft() {
-  if (canUseStorage()) {
-    try {
-      window.localStorage.removeItem(STORAGE_KEY);
-    } catch {
-      // Ignore storage access failures.
-    }
-  }
-}
-
 function getLetterHistory(): MockLetter[] {
   if (!canUseStorage()) return [];
 

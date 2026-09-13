@@ -25,8 +25,8 @@ const courier = Courier_Prime({
 });
 
 export const metadata: Metadata = {
-  title: 'Dear.exe — Sun-Drenched Stationery',
-  description: 'A calm, sun-lit workspace for writing letters that matter.',
+  title: 'Dear.exe — Human Relay',
+  description: 'A quiet, human-powered way to send messages worth carrying.',
 };
 
 export default function RootLayout({
@@ -41,7 +41,7 @@ export default function RootLayout({
       >
         <div className="min-h-screen parchment-surface">
           <Sidebar />
-          <div className="lg:pl-64">{children}</div>
+          <div className="lg:pl-[216px]">{children}</div>
         </div>
       </body>
     </html>

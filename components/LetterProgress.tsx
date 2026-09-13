@@ -8,15 +8,15 @@ type LetterStep = 'write' | 'address' | 'send';
 
 const steps: Array<{ id: LetterStep; label: string; href: string }> = [
   { id: 'write', label: 'Write', href: '/compose' },
-  { id: 'address', label: 'Address', href: '/compose/address' },
-  { id: 'send', label: 'Send', href: '/compose/dispatch' },
+  { id: 'address', label: 'Destination & Seal', href: '/compose/address' },
+  { id: 'send', label: 'Dispatch', href: '/compose/dispatch' },
 ];
 
 export function LetterProgress({ current, dark = false }: { current: LetterStep; dark?: boolean }) {
   const currentIndex = steps.findIndex((step) => step.id === current);
 
   return (
-    <nav aria-label="Letter progress" className="flex items-center justify-center gap-2 sm:gap-3">
+    <nav aria-label="Relay setup progress" className="flex items-center justify-center gap-2 sm:gap-3">
       {steps.map((step, index) => {
         const isCurrent = step.id === current;
         const isComplete = index < currentIndex;
@@ -70,4 +70,3 @@ export function LetterProgress({ current, dark = false }: { current: LetterStep;
     </nav>
   );
 }
-

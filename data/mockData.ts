@@ -10,7 +10,6 @@ export interface MockLetter {
   excerpt: string;
   subject: string;
   teaser?: string[];
-  deliveryHours?: number;
 }
 
 export interface MockSeal {
@@ -41,7 +40,6 @@ export const mockLetters: MockLetter[] = [
     excerpt: 'I kept the blue hour for you. It was hiding between the rain and the first streetlight, exactly where we left it.',
     subject: 'The blue hour',
     teaser: ['I kept the blue hour for you.', 'It was hiding between the rain…', 'Open when you want a small secret.'],
-    deliveryHours: 0,
   },
   {
     id: '1',
@@ -90,7 +88,7 @@ export const currentFocusDraft = {
   recipient: 'E.H.',
   subject: 'Morning Light',
   excerpt:
-    'Morning light through the kitchen window. The kettle is whistling and I am thinking of you. There is so much I want to say, but the pen feels heavy today. Perhaps it is the season changing, or perhaps it is simply that some words need more time to find their shape. I have been walking the same route each evening — past the postbox, past the bookshop, past the bench where we used to sit...',
+    'Morning light through the kitchen window. The kettle is whistling and I am thinking of you. There is so much I want to say, but the pen feels heavy today. Perhaps it is the season changing, or perhaps it is simply that some words need more time to find their shape. I have been walking the same route each evening — past the bookshop, past the bench where we used to sit...',
   lastEdited: '2 hours ago',
   wordCount: 247,
 };
@@ -119,50 +117,6 @@ export const mockSeals: MockSeal[] = [
     name: 'Rose',
     description: 'A single rose, delicate and quiet',
     emoji: '✿',
-  },
-];
-
-export const mockTrackingEvents: TrackingEvent[] = [
-  {
-    id: 'written',
-    status: 'Written',
-    note: 'The words are saved and ready to travel.',
-    date: 'Today',
-    time: '9:12 AM',
-    done: true,
-  },
-  {
-    id: 'sealed',
-    status: 'Sealed',
-    note: 'The envelope is closed with care.',
-    date: 'Today',
-    time: '9:18 AM',
-    done: true,
-  },
-  {
-    id: 'picked-up',
-    status: 'Picked up',
-    note: 'Collected from the pillar box and on the move.',
-    date: 'Today',
-    time: '10:04 AM',
-    done: true,
-  },
-  {
-    id: 'on-the-way',
-    status: 'On the way',
-    note: 'Your letter is crossing the distance.',
-    date: 'Today',
-    time: '11:30 AM',
-    done: false,
-    current: true,
-  },
-  {
-    id: 'arriving-soon',
-    status: 'Arriving soon',
-    note: 'Almost there. Keep an eye on the mailbox.',
-    date: 'Soon',
-    time: 'Next stop',
-    done: false,
   },
 ];
 

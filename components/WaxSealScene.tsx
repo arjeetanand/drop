@@ -14,7 +14,7 @@ export function WaxSealScene({ onPressed }: { onPressed?: () => void }) {
   };
 
   return (
-    <div className="relative min-h-[360px] h-full w-full overflow-hidden bg-[radial-gradient(circle_at_50%_34%,rgba(196,168,130,0.2),transparent_40%),linear-gradient(180deg,#241812_0%,#1a1410_100%)]">
+    <div className="relative min-h-[360px] h-full w-full overflow-hidden bg-[radial-gradient(circle_at_50%_34%,rgba(201,149,67,0.22),transparent_40%),linear-gradient(180deg,#163b5b_0%,#102a43_100%)]">
       <div className="absolute inset-x-[15%] top-[16%] h-px bg-amber-accent/20" />
       <div className="absolute inset-x-[12%] bottom-[18%] h-px bg-amber-accent/10" />
 

@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, ArrowRight, Mail } from 'lucide-react';
+import { ArrowLeft, ArrowRight, LockKeyhole, UsersRound } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { dispatchLetter, getLetterDraft } from '@/lib/letterStore';
 import { syncLetterToBackend } from '@/lib/letterBackend';
@@ -13,12 +13,12 @@ const WaxSealScene = dynamic(
   () => import('@/components/WaxSealScene').then((m) => m.WaxSealScene),
   { ssr: false }
 );
-const PostboxScene = dynamic(
-  () => import('@/components/PostboxScene').then((m) => m.PostboxScene),
+const RelayLaunchScene = dynamic(
+  () => import('@/components/RelayLaunchScene').then((m) => m.RelayLaunchScene),
   { ssr: false }
 );
 
-type Scene = 'wax' | 'postbox';
+type Scene = 'wax' | 'relay';
 
 export default function DispatchSequence() {
   const router = useRouter();
@@ -31,7 +31,7 @@ export default function DispatchSequence() {
 
   useEffect(() => {
     const draft = getLetterDraft();
-    const hasAddress = Object.values(draft.address).every((value) => value.trim().length > 0);
+    const hasAddress = Boolean(draft.address.name.trim() && draft.address.city.trim() && draft.address.country.trim());
 
     if (!draft.content.trim()) {
       router.replace('/compose');
@@ -42,7 +42,10 @@ export default function DispatchSequence() {
       return;
     }
 
-    setPosted(draft.status === 'dispatched');
+    const alreadyStarted = draft.status === 'dispatched' || draft.status === 'delivered';
+    setPosted(alreadyStarted);
+    setSealed(Boolean(draft.sealId));
+    setScene(alreadyStarted ? 'relay' : 'wax');
     setLetterDetails({ recipient: draft.address.name || draft.recipient, subject: draft.subject });
     setReady(true);
   }, [router]);
@@ -51,7 +54,7 @@ export default function DispatchSequence() {
     if (!sealed) return;
     setTransitioning(true);
     setTimeout(() => {
-      setScene('postbox');
+      setScene('relay');
       setTransitioning(false);
     }, 800);
   };
@@ -60,29 +63,27 @@ export default function DispatchSequence() {
     const dispatched = dispatchLetter();
     void syncLetterToBackend(dispatched);
     setPosted(true);
+    setTimeout(() => {
+      router.push('/sent');
+    }, 400);
   };
 
   const handleSealed = () => {
     setSealed(true);
   };
 
-  const handleCompleteDispatch = () => {
-    if (!posted) return;
-    router.push('/sent');
-  };
-
   if (!ready) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#1a1410]">
+      <div className="min-h-screen flex items-center justify-center bg-[#102a43]">
         <p className="font-caption text-caption text-parchment/50">Preparing the dispatch...</p>
       </div>
     );
   }
 
   return (
-    <div className="page-enter min-h-screen flex flex-col bg-[#1a1410]">
+    <div className="page-enter min-h-screen flex flex-col bg-[#102a43]">
       {/* Header */}
-      <header className="px-margin-mobile md:px-margin-desktop py-lg border-b border-wax-red/20 bg-[#1a1410]/90 backdrop-blur-sm sticky top-0 z-40">
+      <header className="px-margin-mobile md:px-margin-desktop py-lg border-b border-parchment/15 bg-[#102a43]/90 backdrop-blur-sm sticky top-0 z-40">
         <div className="max-w-[1140px] mx-auto flex items-center justify-between">
           <Link
             href="/compose/address"
@@ -99,15 +100,15 @@ export default function DispatchSequence() {
       {/* Scene title */}
       <div className="px-margin-mobile pt-xl pb-md text-center md:px-margin-desktop">
         <h1 className="font-headline-lg text-headline-lg text-parchment mb-xs">
-          {scene === 'wax' ? 'Make it official' : 'Give it a send-off'}
+          {scene === 'wax' ? 'Make it official' : 'Put it in human hands'}
         </h1>
         <p className="font-body-md text-body-md text-parchment/50">
           {scene === 'wax'
-            ? 'Press the seal yourself, then send your letter on its way.'
-            : `Your letter to ${letterDetails.recipient || 'your correspondent'} is ready for the pillar box.`}
+            ? 'Press the seal yourself. The next step creates a passport for the people who carry it.'
+            : `Your letter to ${letterDetails.recipient || 'your correspondent'} is sealed and ready to move hand to hand.`}
         </p>
         <div className="mx-auto mt-md flex max-w-md items-center justify-center gap-sm font-caption text-caption text-parchment/50">
-          <Mail className="h-4 w-4" />
+          {scene === 'wax' ? <LockKeyhole className="h-4 w-4" /> : <UsersRound className="h-4 w-4" />}
           <span>{letterDetails.subject || 'Your letter'}</span>
         </div>
       </div>
@@ -127,7 +128,7 @@ export default function DispatchSequence() {
             </div>
           }
         >
-          {scene === 'wax' ? <WaxSealScene onPressed={handleSealed} /> : <PostboxScene onPosted={handlePosted} />}
+          {scene === 'wax' ? <WaxSealScene onPressed={handleSealed} /> : <RelayLaunchScene onLaunched={handlePosted} />}
         </Suspense>
       </div>
 
@@ -139,31 +140,20 @@ export default function DispatchSequence() {
             disabled={!sealed}
             className="inline-flex items-center gap-sm rounded-sm bg-amber-accent px-xl py-md font-label-md text-label-md uppercase tracking-widest text-ink-navy transition-all duration-300 hover:-translate-y-0.5 hover:bg-amber-accent/90 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {sealed ? 'Continue to postbox' : 'Press the seal first'}
+            {sealed ? 'Continue to the relay' : 'Press the seal first'}
             <ArrowRight className="h-4 w-4" />
           </button>
           <p className="mt-sm font-caption text-caption text-parchment/30">
-            {sealed ? 'One more step and it is on its way.' : 'Drag to rotate, then press the seal.'}
+            {sealed ? 'One more step and it can find its first carrier.' : 'Press the seal to lock the words.'}
           </p>
         </div>
       )}
 
-      {scene === 'postbox' && (
+      {scene === 'relay' && (
         <div className="pb-xxl px-margin-mobile md:px-margin-desktop text-center">
-          <button
-            type="button"
-            onClick={handleCompleteDispatch}
-            disabled={!posted}
-            className="inline-flex items-center gap-sm px-xl py-md border border-parchment/30 text-parchment font-label-md text-label-md uppercase tracking-widest rounded-sm hover:bg-parchment/10 transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {posted ? 'View delivery details' : 'Send it through the postbox'}
-            <ArrowRight className="h-4 w-4" />
-          </button>
-          {!posted && (
-            <p className="mt-sm font-caption text-caption text-parchment/40">
-              Send the letter through the postbox to continue
-            </p>
-          )}
+          <p className="font-caption text-caption text-parchment/60">
+            {posted ? 'Letter launched! Preparing your passport…' : 'Click "Start the relay" above to begin the journey.'}
+          </p>
         </div>
       )}
     </div>

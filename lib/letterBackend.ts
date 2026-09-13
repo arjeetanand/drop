@@ -30,10 +30,6 @@ type ProfileRow = {
   letters_received: number;
 };
 
-export function isBackendReady() {
-  return Boolean(getSupabaseBrowserClient());
-}
-
 async function getAuthenticatedClient() {
   const supabase = getSupabaseBrowserClient();
   if (!supabase) return null;
@@ -111,10 +107,10 @@ function eventsForDraft(draft: LetterDraftState): TrackingEvent[] {
   const now = new Date(draft.dispatchedAt || draft.updatedAt);
   const stages = [
     ['written', 'Written', 'The words are saved and ready to travel.'],
-    ['sealed', 'Sealed', 'The envelope is closed with care.'],
-    ['picked-up', 'Picked up', 'Collected from the pillar box and on the move.'],
-    ['on-the-way', 'On the way', 'Your letter is crossing the distance.'],
-    ['arriving-soon', draft.status === 'delivered' ? 'Delivered' : 'Arriving soon', draft.status === 'delivered' ? 'It reached the other side safely.' : 'Almost there. Keep an eye on the mailbox.'],
+    ['sealed', 'Sealed', 'The message is locked. Carriers can move it without reading it.'],
+    ['first-handoff', 'First handoff', 'Someone agreed to become the next link in the route.'],
+    ['in-relay', 'In the relay', 'Your letter is moving hand to hand.'],
+    ['arriving-soon', draft.status === 'delivered' ? 'Delivered' : 'Waiting for a hand', draft.status === 'delivered' ? 'It reached the other side safely.' : 'The next person is still finding their way to it.'],
   ] as const;
   const activeIndex = draft.status === 'delivered' ? 4 : draft.status === 'dispatched' ? 3 : draft.status === 'sealed' ? 1 : 0;
 

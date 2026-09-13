@@ -107,10 +107,10 @@ function ProfileContent() {
             <div className="mb-lg flex h-14 w-14 items-center justify-center rounded-full bg-ink-navy text-xl text-surface-bright">
               {profile.displayName.split(' ').map((part) => part[0]).join('').slice(0, 2)}
             </div>
-            <p className="font-caption text-caption uppercase tracking-[0.2em] text-amber-accent">Make it yours</p>
-            <h1 className="mt-sm font-headline-lg text-headline-lg text-primary md:text-display-lg">A name people remember.</h1>
+            <p className="font-caption text-caption uppercase tracking-[0.2em] text-amber-accent">Your relay identity</p>
+            <h1 className="mt-sm font-headline-lg text-headline-lg text-primary md:text-display-lg">Give your relay a name.</h1>
             <p className="mt-md max-w-xl font-body-md text-body-md leading-relaxed text-on-surface-variant">
-              Your username is the tiny address people use to send you a moment. Keep it short, warm, and unmistakably you.
+              Your username is the tiny address people use to hand you a moment. Keep it short, warm, and unmistakably you.
             </p>
 
             <div className="mt-xl space-y-lg">
@@ -170,8 +170,8 @@ function ProfileContent() {
               {accountNotice && <p className="mt-md break-words font-caption text-caption leading-relaxed text-on-surface-variant" aria-live="polite">{accountNotice}</p>}
             </div>
             <div className="grid grid-cols-2 gap-md">
-              <div className="border border-outline-variant/60 bg-surface-container-lowest p-md"><p className="font-caption text-caption text-on-surface-variant">Letters sent</p><p className="mt-xs font-headline-md text-headline-md text-primary">{profile.lettersSent}</p></div>
-              <div className="border border-outline-variant/60 bg-surface-container-lowest p-md"><p className="font-caption text-caption text-on-surface-variant">Received</p><p className="mt-xs font-headline-md text-headline-md text-primary">{profile.lettersReceived}</p></div>
+              <div className="border border-outline-variant/60 bg-surface-container-lowest p-md"><p className="font-caption text-caption text-on-surface-variant">Relays started</p><p className="mt-xs font-headline-md text-headline-md text-primary">{profile.lettersSent}</p></div>
+              <div className="border border-outline-variant/60 bg-surface-container-lowest p-md"><p className="font-caption text-caption text-on-surface-variant">Arrivals received</p><p className="mt-xs font-headline-md text-headline-md text-primary">{profile.lettersReceived}</p></div>
             </div>
           </aside>
         </section>

@@ -173,22 +173,22 @@ function Composer() {
             {/* Letter details */}
             <div className="mb-xl grid grid-cols-1 gap-md border-b border-outline-variant/30 pb-lg sm:grid-cols-2">
               <label className="font-caption text-caption text-on-surface-variant">
-                To
+                To (Recipient Name)
                 <input
                   value={recipient}
                   onChange={(event) => setRecipient(event.target.value)}
                   className="typewriter-input mt-xs text-base text-primary"
-                  placeholder="Who is this for?"
+                  placeholder="Who is this for? (e.g. Eleanor)"
                   aria-label="Letter recipient"
                 />
               </label>
               <label className="font-caption text-caption text-on-surface-variant">
-                Subject
+                Subject (Envelope Title)
                 <input
                   value={subject}
                   onChange={(event) => setSubject(event.target.value)}
                   className="typewriter-input mt-xs text-base text-primary"
-                  placeholder="Give it a title"
+                  placeholder="Give it a title (e.g. Morning Light)"
                   aria-label="Letter subject"
                 />
               </label>
@@ -200,7 +200,7 @@ function Composer() {
                 {wordCount} {wordCount === 1 ? 'word' : 'words'} · about {readingMinutes} min read
               </span>
               <span className="font-caption text-caption text-on-surface-variant">
-                {saved ? 'Saved to desk' : ready ? 'Saving…' : 'Loading draft…'}
+                {saved ? 'Saved to desk · private' : ready ? 'Saving…' : 'Loading draft…'}
               </span>
             </div>
 
@@ -214,7 +214,7 @@ function Composer() {
                   alignClass
                 )}
                 style={{ fontSize: `${fontSize}px` }}
-                placeholder="Begin your letter..."
+                placeholder="Write the words that deserve a journey…"
                 aria-label="Letter contents"
                 spellCheck={false}
                 autoFocus
@@ -234,7 +234,7 @@ function Composer() {
           disabled={!ready || !content.trim() || !recipient.trim() || !subject.trim()}
           className="flex w-full items-center justify-center gap-sm rounded-sm border border-primary/20 bg-secondary-container px-xl py-md font-label-md text-label-md uppercase tracking-widest text-on-secondary-container transition-all duration-300 hover:-translate-y-0.5 hover:bg-secondary-fixed hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
         >
-          Next: address & seal
+          Next: Destination & Seal
           <ArrowRight className="h-4 w-4" />
         </button>
       </div>
