@@ -73,7 +73,9 @@ export async function saveRemoteProfile(profile: UserProfile) {
   return !error;
 }
 
-function rowToLetter(row: LetterRow, userId: string): MockLetter {
+function rowToLetter(row: LetterRow, userId: string, revealContent = false): MockLetter {
+  const content = row.content.trim();
+  const teaser = row.teaser?.filter(Boolean).join(' ') || content.slice(0, 150);
   return {
     id: row.id,
     recipient: row.recipient_name || row.recipient_username || 'your correspondent',
@@ -83,7 +85,10 @@ function rowToLetter(row: LetterRow, userId: string): MockLetter {
       ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(row.dispatched_at))
       : 'Saved just now',
     status: row.status,
-    excerpt: row.content || 'An empty letter, waiting for your words.',
+    // Mailbox cards get a teaser only. Full content is fetched on the detail route after reveal.
+    excerpt: revealContent
+      ? content || 'An empty letter, waiting for your words.'
+      : teaser ? `${teaser}${content.length > 150 ? '…' : ''}` : 'A sealed letter waiting to be opened.',
     subject: row.subject || 'Untitled Letter',
     teaser: row.teaser || undefined,
   };
@@ -101,6 +106,20 @@ export async function getRemoteLetters(): Promise<MockLetter[] | null> {
 
   if (error || !data) return null;
   return data.map((row) => rowToLetter(row, context.user.id));
+}
+
+export async function getRemoteLetterById(letterId: string): Promise<MockLetter | null> {
+  const context = await getAuthenticatedClient();
+  if (!context) return null;
+
+  const { data, error } = await context.supabase
+    .from('letters')
+    .select('id, sender_id, recipient_id, sender_display_name, recipient_username, recipient_name, subject, content, teaser, status, seal_id, dispatched_at, delivered_at, created_at')
+    .eq('id', letterId)
+    .maybeSingle<LetterRow>();
+
+  if (error || !data) return null;
+  return rowToLetter(data, context.user.id, true);
 }
 
 function eventsForDraft(draft: LetterDraftState): TrackingEvent[] {
@@ -140,7 +159,10 @@ export async function syncLetterToBackend(draft: LetterDraftState) {
     await saveRemoteProfile(generatedProfile);
     profile = await getRemoteProfile();
   }
-  const recipientUsername = draft.recipient.trim() || null;
+  const recipientInput = draft.recipient.trim();
+  const recipientUsername = /^@[a-z0-9._-]{2,24}$/i.test(recipientInput)
+    ? recipientInput.slice(1).toLowerCase()
+    : null;
   const { data: recipientProfile } = recipientUsername
     ? await context.supabase.from('profiles').select('id').eq('username', recipientUsername).maybeSingle<{ id: string }>()
     : { data: null };
@@ -153,20 +175,26 @@ export async function syncLetterToBackend(draft: LetterDraftState) {
     recipient_name: draft.address.name || null,
     subject: draft.subject || 'Untitled Letter',
     content: draft.content,
+    teaser: draft.content
+      .split(/(?<=[.!?])\s+/)
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .slice(0, 3),
     status: draft.status,
     seal_id: draft.sealId,
     dispatched_at: draft.dispatchedAt || null,
   });
   if (error) return false;
 
-  const events = eventsForDraft(draft).map((event) => ({
+  const eventStart = new Date(draft.dispatchedAt || draft.updatedAt).getTime();
+  const events = eventsForDraft(draft).map((event, index) => ({
     letter_id: draft.id,
     event_key: event.id,
     status: event.status,
     note: event.note,
     is_done: event.done,
     is_current: Boolean(event.current),
-    occurred_at: new Date(`${event.date} ${event.time}`).toISOString(),
+    occurred_at: new Date(eventStart + index * 60 * 60 * 1000).toISOString(),
   }));
   await context.supabase.from('letter_events').upsert(events, { onConflict: 'letter_id,event_key' });
   return true;

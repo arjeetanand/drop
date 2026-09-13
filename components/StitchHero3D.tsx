@@ -161,7 +161,7 @@ export function StitchHero3D({
               </span>
             </div>
             <p className="font-serif text-xs text-slate-700 italic leading-relaxed line-clamp-3">
-              "{excerpt}"
+              &ldquo;{excerpt}&rdquo;
             </p>
           </div>
 

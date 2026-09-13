@@ -1,16 +1,12 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import { cn } from '@/lib/utils';
+
+function usesPrivateShell(pathname: string | null) {
+  return pathname === null || pathname === '/' || ['/mailbox', '/journey', '/profile', '/sent'].some((path) => pathname?.startsWith(path));
+}
 
 export function MainContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const hideSidebar =
-    pathname?.startsWith('/compose') || pathname === '/sent';
-
-  return (
-    <div className={cn(!hideSidebar && 'lg:pl-[228px]')}>
-      {children}
-    </div>
-  );
+  return <div className={usesPrivateShell(pathname) ? 'min-h-screen lg:pl-[240px]' : 'min-h-screen'}>{children}</div>;
 }

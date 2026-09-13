@@ -2,195 +2,289 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, ArrowRight, Clock3, LockKeyhole, MailOpen, Sparkles, UsersRound } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, LockKeyhole, MailOpen } from 'lucide-react';
 import { useParams } from 'next/navigation';
-import { EnvelopeOrbit } from '@/components/EnvelopeOrbit';
-import { getLetterById } from '@/lib/letterStore';
 import type { MockLetter } from '@/data/mockData';
-import { playInterfaceSound } from '@/lib/interfaceSound';
-import { getRelayState, getRelayStats } from '@/lib/relayStore';
+import { getRemoteLetterById, getRemoteLetters } from '@/lib/letterBackend';
+import { getLetterById } from '@/lib/letterStore';
 
-export default function LetterArrivalPage() {
-  const params = useParams<{ id: string }>();
-  const [letter, setLetter] = useState<MockLetter | null>(null);
-  const [revealed, setRevealed] = useState(false);
-  const [opened, setOpened] = useState(false);
-
-  useEffect(() => setLetter(getLetterById(params.id) || null), [params.id]);
-
-  const teasers = useMemo(() => letter?.teaser || [
-    'A little thought found its way to you.',
-    letter?.excerpt.slice(0, 46) || 'Some words are waiting behind the seal.',
-    'Open when you want the whole story.',
-  ], [letter]);
-  const relay = letter ? getRelayState(letter.id, { subject: letter.subject, recipient: letter.recipient }) : null;
-  const relayStats = relay ? getRelayStats(relay) : null;
-
-  if (!letter) {
-    return <main className="flex min-h-screen items-center justify-center p-margin-mobile"><div className="text-center"><h1 className="font-headline-lg text-headline-lg text-primary">That letter is still finding its way.</h1><Link href="/" className="mt-lg inline-block underline">Back to desk</Link></div></main>;
-  }
-
-  const reveal = () => {
-    setRevealed(true);
-    playInterfaceSound('reveal');
-  };
-
-  const openLetter = () => {
-    setOpened(true);
-    playInterfaceSound('send');
-  };
-
+function LoadingLetter() {
   return (
-    <main className="page-enter min-h-screen pb-24 lg:pb-12 bg-surface text-ink-navy">
-      <div className="mx-auto max-w-[1120px] px-margin-mobile py-6 md:px-12 md:py-10 xl:px-16">
-        {/* Floating Top Navigation */}
-        <header className="flex items-center justify-between pb-6 border-b border-[#102a43]/[0.08]">
+    <main className="page-shell page-enter">
+      <div className="page-container max-w-[760px]">
+        <div className="flex min-h-[70dvh] items-center justify-center">
+          <p className="meta" role="status" aria-live="polite">
+            Finding the letter…
+          </p>
+        </div>
+      </div>
+    </main>
+  );
+}
+
+function MissingLetter() {
+  return (
+    <main className="page-shell page-enter">
+      <div className="page-container max-w-[760px]">
+        <header className="page-header">
           <Link
             href="/"
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-[#102a43]/[0.1] bg-white/70 backdrop-blur-sm text-xs font-mono tracking-wider uppercase text-on-surface-variant hover:text-ink-navy hover:bg-white transition-all shadow-[0_1px_2px_rgba(0,0,0,0.03)]"
+            className="button-quiet -ml-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f7f4ee]"
           >
-            <ArrowLeft className="h-3.5 w-3.5" /> Back to desk
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+            Back to desk
           </Link>
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-mint-accent/30 bg-mint-accent/10 font-mono text-xs uppercase tracking-[0.16em] text-mint-accent font-semibold">
-            <Sparkles className="h-3.5 w-3.5" /> Relay Arrival
-          </span>
+        </header>
+        <section className="panel mt-12 p-7 sm:p-10">
+          <p className="eyebrow">Letter not found</p>
+          <h1 className="section-title mt-3">This letter has not reached this desk.</h1>
+          <p className="body-copy mt-4 max-w-xl">
+            The address may be out of date, or the letter may still be finding its way through the relay.
+          </p>
+          <Link
+            href="/mailbox"
+            className="button-primary mt-7 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+          >
+            Open mailbox
+            <ArrowRight className="h-4 w-4" aria-hidden="true" />
+          </Link>
+        </section>
+      </div>
+    </main>
+  );
+}
+
+export default function LetterArrivalPage() {
+  const params = useParams<{ id?: string | string[] }>();
+  const letterId = Array.isArray(params.id) ? params.id[0] : params.id;
+  const [letter, setLetter] = useState<MockLetter | null>(null);
+  const [fullContentAvailable, setFullContentAvailable] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [revealed, setRevealed] = useState(false);
+  const [opened, setOpened] = useState(false);
+  const [contentLoading, setContentLoading] = useState(false);
+  const [contentNotice, setContentNotice] = useState('');
+
+  useEffect(() => {
+    if (!letterId) {
+      setLoading(false);
+      return;
+    }
+
+    let active = true;
+
+    const loadLetter = async () => {
+      const localLetter = getLetterById(letterId);
+      if (localLetter) {
+        if (active) {
+          setLetter(localLetter);
+          setFullContentAvailable(true);
+          setLoading(false);
+        }
+        return;
+      }
+
+      try {
+        const remoteLetters = await getRemoteLetters();
+        const remoteLetter = remoteLetters?.find((candidate) => candidate.id === letterId) || null;
+        if (active) {
+          setLetter(remoteLetter);
+          setFullContentAvailable(false);
+        }
+      } catch {
+        if (active) {
+          setLetter(null);
+          setFullContentAvailable(false);
+        }
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    void loadLetter();
+    return () => {
+      active = false;
+    };
+  }, [letterId]);
+
+  const revealFragments = async () => {
+    setContentNotice('');
+
+    if (!fullContentAvailable && letterId) {
+      setContentLoading(true);
+      try {
+        const remoteDetail = await getRemoteLetterById(letterId);
+        if (remoteDetail) {
+          setLetter(remoteDetail);
+          setFullContentAvailable(true);
+        } else {
+          setContentNotice('The complete letter is available when you are signed in as its recipient. This view will keep the relay preview available.');
+        }
+      } catch {
+        setContentNotice('The complete letter could not be loaded right now. This view will keep the relay preview available.');
+      } finally {
+        setContentLoading(false);
+      }
+    }
+
+    setRevealed(true);
+  };
+
+  const teasers = useMemo(() => {
+    if (!letter) return [];
+
+    const savedTeasers = letter.teaser?.filter((teaser) => teaser.trim()) || [];
+    if (savedTeasers.length) return savedTeasers;
+
+    const excerpt = letter.excerpt.trim();
+    return [
+      'A little thought found its way to you.',
+      excerpt ? `${excerpt.slice(0, 64)}${excerpt.length > 64 ? '…' : ''}` : 'Some words are waiting behind the seal.',
+      'Open when you want the whole story.',
+    ];
+  }, [letter]);
+
+  if (loading) return <LoadingLetter />;
+  if (!letter) return <MissingLetter />;
+
+  const sender = letter.sender || 'A correspondent';
+  const isReceived = letter.direction === 'received';
+  const encodedLetterId = encodeURIComponent(letter.id);
+
+  return (
+    <main className="page-shell page-enter">
+      <div className="page-container">
+        <header className="page-header flex-col gap-5 sm:flex-row sm:items-center">
+          <Link
+            href="/mailbox"
+            className="button-quiet -ml-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f7f4ee]"
+          >
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+            Back to mailbox
+          </Link>
+          <p className="meta">Letter {letter.id}</p>
         </header>
 
-        {/* Hero Section */}
-        <section className="mt-10 text-center max-w-2xl mx-auto">
-          <p className="font-mono text-xs uppercase tracking-[0.24em] text-amber-accent font-semibold">
-            From {letter.sender || 'A correspondent'}
-          </p>
-          <h1 className="mt-2 font-headline-lg text-[clamp(2.4rem,4.5vw,4.2rem)] leading-[1.02] tracking-[-0.035em] text-ink-navy">
-            Someone carried something to you.
-          </h1>
-          <p className="mt-4 font-body-lg text-base md:text-lg leading-relaxed text-on-surface-variant">
-            Your envelope traveled through {relayStats?.carriers || 1} human {relayStats?.carriers === 1 ? 'custodian' : 'custodians'}. Read the teaser fragments before you break the seal and unfold the full letter.
+        <section className="mt-12 max-w-[760px]">
+          <p className="eyebrow">{isReceived ? 'A letter for you' : 'Letter preview'}</p>
+          <h1 className="display-title mt-4 max-w-[12ch]">Something made its way to you.</h1>
+          <p className="body-copy mt-5 max-w-2xl text-lg">
+            {sender} left a message in your hands. Read the fragments first, then open the full letter when you are ready.
           </p>
         </section>
 
-        {/* Reader Workspace */}
-        <section className="mt-12 grid items-start gap-8 lg:grid-cols-[minmax(0,1.4fr)_minmax(300px,0.7fr)]">
-          {/* Main Paper / Teaser Area */}
-          <div className="refero-card rounded-2xl p-6 md:p-10 bg-white border border-[#102a43]/[0.08] shadow-[0_12px_40px_-8px_rgba(16,42,67,0.07)]">
-            <div className="flex items-center justify-between border-b border-[#102a43]/[0.08] pb-5">
+        <section className="mt-12 grid items-start gap-8 lg:grid-cols-[minmax(0,1.45fr)_minmax(250px,0.7fr)]">
+          <article className="paper-card p-6 sm:p-9">
+            <div className="flex flex-col gap-5 border-b border-[rgba(16,42,67,0.13)] pb-6 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <span className="font-mono text-[10px] uppercase tracking-widest text-on-surface-variant block">Subject</span>
-                <span className="font-headline-md text-2xl text-ink-navy font-bold">{letter.subject}</span>
+                <p className="eyebrow">Subject</p>
+                <h2 className="section-title mt-2 text-3xl">{letter.subject}</h2>
+                <p className="meta mt-3">From {sender} · {letter.date}</p>
               </div>
-              <span className="inline-flex items-center gap-1.5 font-mono text-xs px-2.5 py-1 rounded-full bg-mint-accent/10 border border-mint-accent/20 text-mint-accent font-medium">
-                <Clock3 className="h-3.5 w-3.5" /> In your hands
+              <span className="status-mark success self-start">
+                <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
+                {isReceived ? 'Received' : 'Ready to read'}
               </span>
             </div>
 
-            {/* Teasers List */}
-            <div className="mt-6 space-y-3">
-              {teasers.map((teaser, index) => (
-                <div
-                  key={teaser}
-                  className={`flex items-start gap-3 rounded-xl border border-[#102a43]/[0.08] bg-[#faf8f4] p-4 transition-all duration-300 ${
-                    revealed ? 'border-amber-accent/30 bg-amber-accent/[0.04]' : ''
-                  }`}
-                  style={{ transitionDelay: `${index * 120}ms` }}
-                >
-                  <div className="mt-0.5 p-1.5 rounded bg-white border border-[#102a43]/[0.1] text-amber-accent shrink-0">
-                    <LockKeyhole className="h-3.5 w-3.5" />
-                  </div>
-                  <span className="font-serif text-base text-ink-navy leading-relaxed">
-                    {revealed ? teaser : 'A confidential fragment is resting behind the seal.'}
-                  </span>
-                </div>
-              ))}
+            <div id="letter-fragments" className="mt-6" aria-label="Letter fragments">
+              <p className="meta">Three fragments, kept closed until you ask to see them.</p>
+              <ol className="mt-3 divide-y divide-[rgba(16,42,67,0.1)] border-y border-[rgba(16,42,67,0.1)]">
+                {teasers.map((teaser, index) => (
+                  <li key={`${teaser}-${index}`} className="flex gap-4 py-5">
+                    <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center border border-[rgba(16,42,67,0.14)] bg-white text-[#b84b3a]">
+                      {revealed ? <Check className="h-4 w-4" aria-hidden="true" /> : <LockKeyhole className="h-4 w-4" aria-hidden="true" />}
+                    </span>
+                    <p className="font-literata text-base leading-relaxed text-ink-navy">
+                      {revealed ? teaser : 'A confidential fragment is resting behind the seal.'}
+                    </p>
+                  </li>
+                ))}
+              </ol>
             </div>
 
-            {/* Action Buttons */}
-            <div className="mt-8 flex flex-wrap items-center gap-4">
+            <p className="sr-only" aria-live="polite">
+              {revealed ? 'The letter fragments are now visible.' : ''}
+            </p>
+
+            <div className="mt-7 flex flex-wrap items-center gap-3 border-t border-[rgba(16,42,67,0.1)] pt-6">
               {!revealed && (
                 <button
                   type="button"
-                  onClick={reveal}
-                  className="inline-flex items-center gap-2 bg-ink-navy text-white px-6 py-3 rounded-xl font-label-md text-xs uppercase tracking-[0.14em] hover:bg-ink-navy/90 active:scale-[0.99] transition-all shadow-[0_2px_8px_rgba(16,42,67,0.15)]"
+                  onClick={() => void revealFragments()}
+                  disabled={contentLoading}
+                  aria-controls="letter-fragments"
+                  aria-expanded={revealed}
+                  className="button-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#fcfaf6]"
                 >
-                  <Sparkles className="h-4 w-4 text-amber-accent" />
-                  Reveal Fragments
+                  {contentLoading ? 'Loading the full letter…' : 'Reveal fragments'}
+                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
                 </button>
               )}
               {revealed && !opened && (
                 <button
                   type="button"
-                  onClick={openLetter}
-                  className="inline-flex items-center gap-2 bg-mint-accent text-ink-navy px-6 py-3 rounded-xl font-label-md text-xs uppercase tracking-[0.14em] font-semibold hover:bg-mint-accent/90 active:scale-[0.99] transition-all shadow-[0_2px_8px_rgba(43,138,107,0.2)]"
+                  onClick={() => setOpened(true)}
+                  aria-controls="letter-body"
+                  className="button-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#fcfaf6]"
                 >
-                  <MailOpen className="h-4 w-4" />
-                  Unfold Letter <ArrowRight className="h-3.5 w-3.5" />
+                  Open received letter
+                  <MailOpen className="h-4 w-4" aria-hidden="true" />
                 </button>
               )}
+              {opened && <p className="meta">The full letter is open below.</p>}
             </div>
 
-            {/* The Fully Opened Stationery Sheet */}
+            {contentNotice && <p className="notice mt-5" role="status" aria-live="polite">{contentNotice}</p>}
+
             {opened && (
-              <div className="mt-8 border-t border-[#102a43]/[0.08] pt-8" aria-live="polite">
-                <div className="flex items-center gap-2 font-mono text-xs uppercase tracking-widest text-mint-accent font-semibold">
-                  <MailOpen className="h-4 w-4" />
-                  <span>Unsealed & Open</span>
-                </div>
-                <div className="mt-4 p-8 rounded-2xl bg-[#faf8f4] border border-[#102a43]/[0.1] shadow-inner relative overflow-hidden">
-                  <p className="font-serif text-lg md:text-xl leading-relaxed text-ink-navy italic">
-                    &ldquo;{letter.excerpt}&rdquo;
+              <section id="letter-body" className="mt-8 border-t border-[rgba(16,42,67,0.13)] pt-8" aria-live="polite">
+                <p className="eyebrow text-[#b84b3a]">Unsealed</p>
+                <div className="mt-4 border-l-2 border-[#b84b3a] bg-white px-6 py-7 sm:px-8">
+                  <p className="body-copy text-lg text-ink-navy">
+                    {fullContentAvailable
+                      ? letter.excerpt
+                      : 'This letter is still available as a sealed preview. Sign in as its recipient to read the full words.'}
                   </p>
-                  <div className="mt-8 pt-4 border-t border-[#102a43]/[0.08] flex items-center justify-between">
-                    <span className="font-mono text-xs text-on-surface-variant">
-                      Received via Voluntary Relay
-                    </span>
-                    <Link
-                      href={`/journey?letter=${encodeURIComponent(letter.id)}`}
-                      className="inline-flex items-center gap-1.5 font-label-md text-xs uppercase tracking-[0.14em] text-ink-navy underline decoration-amber-accent decoration-2 underline-offset-4 hover:text-amber-accent transition-colors"
-                    >
-                      See the complete route <ArrowRight className="h-3.5 w-3.5" />
-                    </Link>
-                  </div>
+                  <p className="meta mt-6 border-t border-[rgba(16,42,67,0.1)] pt-4">From {sender}</p>
                 </div>
-              </div>
+                <Link
+                  href={`/journey?letter=${encodedLetterId}`}
+                  className="button-secondary mt-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#fcfaf6]"
+                >
+                  Follow the letter&apos;s journey
+                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                </Link>
+              </section>
             )}
-          </div>
+          </article>
 
-          {/* Right Sidebar: Envelope & Stats */}
           <aside className="space-y-6">
-            <div className="refero-card rounded-2xl p-6 bg-white text-center">
-              <EnvelopeOrbit />
-              <div className="mt-4 pt-4 border-t border-[#102a43]/[0.08]">
-                <p className="font-mono text-[10px] uppercase tracking-widest text-on-surface-variant font-bold">
-                  Custody Statistics
-                </p>
-                <p className="mt-1 font-headline-md text-2xl text-ink-navy font-bold">
-                  {relayStats?.carriers || 1} people carried it
-                </p>
-                <p className="mt-1 inline-flex items-center gap-1.5 font-mono text-xs text-mint-accent font-medium">
-                  <UsersRound className="h-3.5 w-3.5" />
-                  {relayStats?.cities || 1} {relayStats?.cities === 1 ? 'city' : 'cities'} touched
-                </p>
-              </div>
-            </div>
-
-            <div className="refero-card rounded-2xl p-6 bg-[#faf8f4] border border-[#102a43]/[0.08]">
-              <p className="font-mono text-[10px] uppercase tracking-widest text-on-surface-variant font-bold mb-2">
-                Letter Identity
+            <section className="panel p-6">
+              <p className="eyebrow">Before you open</p>
+              <h2 className="section-title mt-3 text-2xl">Take your time.</h2>
+              <p className="body-copy mt-3 text-sm">
+                A sealed letter can wait. Opening it shows the message and keeps the route available for you to revisit.
               </p>
-              <div className="space-y-2 text-xs font-mono text-on-surface-variant">
-                <div className="flex justify-between py-1 border-b border-[#102a43]/[0.06]">
-                  <span>Passport:</span>
-                  <span className="text-ink-navy font-bold">{letter.id}</span>
+            </section>
+
+            <section className="panel-muted p-6">
+              <p className="eyebrow">Letter details</p>
+              <dl className="mt-5 divide-y divide-[rgba(16,42,67,0.1)] border-y border-[rgba(16,42,67,0.1)]">
+                <div className="flex items-start justify-between gap-4 py-3">
+                  <dt className="meta">From</dt>
+                  <dd className="text-right text-sm font-semibold text-ink-navy">{sender}</dd>
                 </div>
-                <div className="flex justify-between py-1 border-b border-[#102a43]/[0.06]">
-                  <span>Seal:</span>
-                  <span className="text-ink-navy font-semibold">Intaglio Wax</span>
+                <div className="flex items-start justify-between gap-4 py-3">
+                  <dt className="meta">Addressed to</dt>
+                  <dd className="text-right text-sm font-semibold text-ink-navy">{letter.recipient || 'you'}</dd>
                 </div>
-                <div className="flex justify-between py-1">
-                  <span>Privacy:</span>
-                  <span className="text-mint-accent font-semibold">Zero Words Exposed</span>
+                <div className="flex items-start justify-between gap-4 py-3">
+                  <dt className="meta">Privacy</dt>
+                  <dd className="text-right text-sm font-semibold text-[#4f9d7a]">Words stay sealed in transit</dd>
                 </div>
-              </div>
-            </div>
+              </dl>
+            </section>
           </aside>
         </section>
       </div>

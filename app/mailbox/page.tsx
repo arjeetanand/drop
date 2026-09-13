@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ArrowRight, Mail, PenLine, Search, UsersRound, X } from 'lucide-react';
-import { mockLetters, type MockLetter } from '@/data/mockData';
+import { ArrowRight, Mail, PenLine, Search, X } from 'lucide-react';
 import { LetterCard } from '@/components/LetterCard';
-import { getLetterDraft, getLettersWithDraft } from '@/lib/letterStore';
+import { mockLetters, type MockLetter } from '@/data/mockData';
 import { getRemoteLetters } from '@/lib/letterBackend';
+import { getLetterDraft, getLettersWithDraft } from '@/lib/letterStore';
 import { cn } from '@/lib/utils';
 
 type FilterTab = 'all' | 'transit' | 'received' | 'delivered' | 'drafts';
@@ -22,199 +22,139 @@ export default function Mailbox() {
       const draft = getLetterDraft();
       const remoteLetters = await getRemoteLetters();
       if (!active) return;
-      setLetters(remoteLetters?.length ? remoteLetters : getLettersWithDraft(draft));
+      const localLetters = getLettersWithDraft(draft);
+      if (!remoteLetters?.length) {
+        setLetters(localLetters);
+        return;
+      }
+      const merged = new Map(localLetters.map((letter) => [letter.id, letter]));
+      remoteLetters.forEach((letter) => merged.set(letter.id, letter));
+      setLetters(Array.from(merged.values()));
     };
     void loadLetters();
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, []);
 
-  const transitCount = useMemo(() => letters.filter((l) => l.status === 'dispatched').length, [letters]);
-  const receivedCount = useMemo(() => letters.filter((l) => l.direction === 'received').length, [letters]);
-  const deliveredCount = useMemo(
-    () => letters.filter((l) => l.direction !== 'received' && l.status === 'delivered').length,
-    [letters]
-  );
-  const draftsCount = useMemo(
-    () => letters.filter((l) => l.status === 'draft' || l.status === 'sealed').length,
-    [letters]
-  );
+  const counts = useMemo(() => ({
+    transit: letters.filter((letter) => letter.status === 'dispatched').length,
+    received: letters.filter((letter) => letter.direction === 'received').length,
+    delivered: letters.filter((letter) => letter.direction !== 'received' && letter.status === 'delivered').length,
+    drafts: letters.filter((letter) => letter.status === 'draft' || letter.status === 'sealed').length,
+  }), [letters]);
 
-  const tabs: { id: FilterTab; label: string; count: number }[] = [
-    { id: 'all', label: 'All Letters', count: letters.length },
-    { id: 'transit', label: 'In Transit', count: transitCount },
-    { id: 'received', label: 'Received', count: receivedCount },
-    { id: 'delivered', label: 'Delivered', count: deliveredCount },
-    { id: 'drafts', label: 'Drafts', count: draftsCount },
+  const tabs: Array<{ id: FilterTab; label: string; count: number }> = [
+    { id: 'all', label: 'All letters', count: letters.length },
+    { id: 'transit', label: 'In relay', count: counts.transit },
+    { id: 'received', label: 'Received', count: counts.received },
+    { id: 'delivered', label: 'Delivered', count: counts.delivered },
+    { id: 'drafts', label: 'Drafts', count: counts.drafts },
   ];
 
   const filteredLetters = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
     return letters.filter((letter) => {
       if (activeTab === 'transit' && letter.status !== 'dispatched') return false;
       if (activeTab === 'received' && letter.direction !== 'received') return false;
       if (activeTab === 'delivered' && (letter.direction === 'received' || letter.status !== 'delivered')) return false;
       if (activeTab === 'drafts' && letter.status !== 'draft' && letter.status !== 'sealed') return false;
-
-      if (!searchQuery.trim()) return true;
-      const q = searchQuery.toLowerCase();
-      return (
-        letter.subject.toLowerCase().includes(q) ||
-        letter.recipient.toLowerCase().includes(q) ||
-        (letter.sender && letter.sender.toLowerCase().includes(q)) ||
-        (letter.excerpt && letter.excerpt.toLowerCase().includes(q))
-      );
+      if (!query) return true;
+      return [letter.subject, letter.recipient, letter.sender, letter.excerpt]
+        .filter(Boolean)
+        .some((value) => value?.toLowerCase().includes(query));
     });
-  }, [letters, activeTab, searchQuery]);
+  }, [activeTab, letters, searchQuery]);
 
   return (
-    <main className="page-enter min-h-screen pb-24 lg:pb-0">
-      <div className="mx-auto max-w-[1180px] px-margin-mobile py-lg md:px-12 md:py-xl xl:px-16">
-        {/* Header */}
-        <header className="border-b border-outline-variant/70 pb-8">
-          <div className="flex flex-col justify-between gap-6 sm:flex-row sm:items-end">
-            <div>
-              <p className="font-caption text-caption uppercase tracking-[0.22em] text-amber-accent">Mailbox & Archive</p>
-              <h1 className="mt-3 font-headline-lg text-[clamp(2.5rem,5vw,4.5rem)] leading-[0.98] tracking-[-0.04em] text-ink-navy">
-                Every letter holds a journey.
-              </h1>
-              <p className="mt-4 max-w-2xl font-body-lg text-body-lg leading-relaxed text-on-surface-variant">
-                Browse your drafts waiting for words, letters in active human relay across the country, and envelopes delivered to your doorstep.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <Link
-                href="/compose"
-                className="inline-flex items-center gap-sm bg-ink-navy px-lg py-md font-label-md text-label-md uppercase tracking-[0.12em] text-surface-bright transition-transform hover:-translate-y-0.5 hover:shadow-lg"
-              >
-                <PenLine className="h-4 w-4 text-amber-accent" /> Write a Letter
-              </Link>
-              <Link
-                href="/journey"
-                className="inline-flex items-center gap-sm border border-ink-navy px-lg py-md font-label-md text-label-md uppercase tracking-[0.12em] text-ink-navy hover:bg-ink-navy/5"
-              >
-                <UsersRound className="h-4 w-4" /> Live Relay
-              </Link>
-            </div>
+    <main className="page-shell page-enter">
+      <div className="page-container">
+        <header className="page-header flex-col gap-6 md:flex-row md:items-end">
+          <div>
+            <p className="eyebrow">Mailbox & archive</p>
+            <h1 className="display-title mt-4 max-w-3xl">Every letter holds a journey.</h1>
+            <p className="body-copy mt-5 max-w-2xl text-lg">
+              Keep drafts close, follow letters in relay, and return to the words that have already arrived.
+            </p>
           </div>
+          <Link href="/compose?new=1" className="button-primary shrink-0">
+            <PenLine className="h-4 w-4 text-[#8fd1ad]" aria-hidden="true" />
+            Write a letter
+          </Link>
         </header>
 
-        {/* Quick Postal Overview */}
-        <section className="grid grid-cols-2 gap-4 border-b border-[#102a43]/[0.08] py-6 md:grid-cols-4">
-          <div className="refero-card p-4 rounded-md">
-            <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-on-surface-variant/70 font-semibold">Total Letters</p>
-            <p className="mt-1 font-headline-md text-2xl text-ink-navy font-bold">{letters.length}</p>
-          </div>
-          <div className="refero-card p-4 rounded-md">
-            <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-mint-accent font-semibold">In Transit</p>
-            <p className="mt-1 font-headline-md text-2xl text-ink-navy font-bold">{transitCount}</p>
-          </div>
-          <div className="refero-card p-4 rounded-md">
-            <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-on-surface-variant/70 font-semibold">Delivered / Received</p>
-            <p className="mt-1 font-headline-md text-2xl text-ink-navy font-bold">{receivedCount + deliveredCount}</p>
-          </div>
-          <div className="refero-card p-4 rounded-md">
-            <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-amber-accent font-semibold">Drafts on Desk</p>
-            <p className="mt-1 font-headline-md text-2xl text-ink-navy font-bold">{draftsCount}</p>
-          </div>
+        <section className="grid grid-cols-2 gap-0 border-b border-[rgba(16,42,67,0.13)] py-7 sm:grid-cols-4">
+          {[
+            { label: 'Total letters', value: letters.length },
+            { label: 'In relay', value: counts.transit },
+            { label: 'Received', value: counts.received },
+            { label: 'On your desk', value: counts.drafts },
+          ].map((stat, index) => (
+            <div key={stat.label} className={cn('py-1', index > 0 && 'border-l border-[rgba(16,42,67,0.12)] pl-4 sm:pl-6')}>
+              <p className="font-headline-md text-3xl text-ink-navy">{stat.value}</p>
+              <p className="mt-1 text-xs text-on-surface-variant">{stat.label}</p>
+            </div>
+          ))}
         </section>
 
-        {/* Filters & Search */}
-        <section className="mt-8 flex flex-col gap-4 border-b border-[#102a43]/[0.08] pb-5 md:flex-row md:items-center md:justify-between">
-          <div className="flex flex-wrap gap-1.5 p-1 rounded-md bg-[#102a43]/[0.04] border border-[#102a43]/[0.06]">
+        <section className="mt-8 flex flex-col gap-4 border-b border-[rgba(16,42,67,0.13)] pb-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-wrap gap-1" role="tablist" aria-label="Filter letters">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 type="button"
+                role="tab"
+                aria-selected={activeTab === tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={cn(
-                  'inline-flex items-center gap-1.5 px-3 py-1.5 rounded font-label-md text-xs uppercase tracking-wider transition-all duration-150',
-                  activeTab === tab.id
-                    ? 'bg-ink-navy text-surface-bright shadow-xs font-semibold'
-                    : 'text-on-surface-variant hover:text-ink-navy hover:bg-white/60'
+                  'min-h-11 rounded-sm px-3 text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a]',
+                  activeTab === tab.id ? 'bg-ink-navy text-white' : 'text-on-surface-variant hover:bg-white/55 hover:text-ink-navy'
                 )}
               >
-                <span>{tab.label}</span>
-                <span className={cn('text-[10px] font-mono', activeTab === tab.id ? 'text-surface-bright/80' : 'text-on-surface-variant/60')}>
-                  ({tab.count})
-                </span>
+                {tab.label} <span className="ml-1 font-mono text-[0.68rem] opacity-70">{tab.count}</span>
               </button>
             ))}
           </div>
-
-          <div className="relative min-w-[260px] max-w-md">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-on-surface-variant/70" />
+          <div className="relative w-full lg:max-w-xs">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-on-surface-variant" aria-hidden="true" />
+            <label htmlFor="mailbox-search" className="sr-only">Search letters</label>
             <input
-              type="text"
+              id="mailbox-search"
+              type="search"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search letters, recipients..."
-              className="w-full rounded-md border border-[#102a43]/15 bg-white py-2 pl-9 pr-8 font-body-md text-sm text-ink-navy outline-none placeholder:text-on-surface-variant/50 focus:border-ink-navy focus:ring-1 focus:ring-ink-navy shadow-2xs"
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search letters"
+              className="input-field pl-10 pr-10"
             />
             {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-ink-navy"
-              >
-                <X className="h-3.5 w-3.5" />
+              <button type="button" onClick={() => setSearchQuery('')} aria-label="Clear search" className="absolute right-2 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center text-on-surface-variant hover:text-ink-navy">
+                <X className="h-4 w-4" aria-hidden="true" />
               </button>
             )}
           </div>
         </section>
 
-        {/* Letter List */}
-        <section className="py-6">
-          {filteredLetters.length > 0 ? (
-            <div className="flex flex-col">
-              {filteredLetters.map((letter) => (
-                <LetterCard key={letter.id} letter={letter} showExcerpt={true} />
-              ))}
-            </div>
-          ) : (
-            <div className="py-16 text-center">
-              <Mail className="mx-auto h-8 w-8 text-outline-variant" />
-              <h3 className="mt-3 font-headline-md text-lg text-ink-navy">
-                {searchQuery ? 'No letters match your search.' : 'No letters in this section.'}
-              </h3>
-              <p className="mt-1 font-body-md text-sm text-on-surface-variant">
-                {searchQuery ? 'Try another keyword or clear the search field.' : 'Ready to begin your next dispatch?'}
+        <section className="mt-2">
+          {filteredLetters.length ? filteredLetters.map((letter) => <LetterCard key={letter.id} letter={letter} showExcerpt />) : (
+            <div className="panel-muted my-10 p-10 text-center">
+              <Mail className="mx-auto h-7 w-7 text-on-surface-variant" aria-hidden="true" />
+              <h2 className="mt-4 font-headline-md text-2xl text-ink-navy">Nothing here yet.</h2>
+              <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-on-surface-variant">
+                {searchQuery ? 'Try a different search or clear the filter.' : 'Write a letter and give it a route through the world.'}
               </p>
-              <div className="mt-5 flex justify-center gap-3">
-                {searchQuery && (
-                  <button
-                    type="button"
-                    onClick={() => setSearchQuery('')}
-                    className="border border-outline-variant px-4 py-2 font-label-md text-xs uppercase tracking-wider text-ink-navy hover:bg-ink-navy/5"
-                  >
-                    Clear search
-                  </button>
-                )}
-                <Link
-                  href="/compose"
-                  className="inline-flex items-center gap-2 bg-ink-navy px-4 py-2 font-label-md text-xs uppercase tracking-wider text-surface-bright hover:shadow-md"
-                >
-                  <PenLine className="h-3.5 w-3.5 text-amber-accent" /> Write a Letter
-                </Link>
+              <div className="mt-5 flex flex-wrap justify-center gap-3">
+                {searchQuery && <button type="button" onClick={() => setSearchQuery('')} className="button-secondary">Clear search</button>}
+                <Link href="/compose?new=1" className="button-primary">Write a letter <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
               </div>
             </div>
           )}
         </section>
 
-        {/* Postal Note */}
-        <aside className="mt-12 border-t border-outline-variant/70 pt-8">
-          <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
-            <div>
-              <p className="font-caption text-caption uppercase tracking-[0.16em] text-amber-accent">How Relays Move</p>
-              <p className="mt-1 max-w-xl font-body-md text-sm text-on-surface-variant">
-                Letters in Dear.exe are carried from person to person. When you give a sealed letter to someone, they scan or log their handoff to update its path.
-              </p>
-            </div>
-            <Link
-              href="/journey"
-              className="inline-flex items-center gap-2 font-label-md text-xs uppercase tracking-[0.14em] text-ink-navy underline decoration-amber-accent decoration-2 underline-offset-4"
-            >
-              Open Live Journey Tracker <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
-          </div>
+        <aside className="mt-14 grid gap-4 border-t border-[rgba(16,42,67,0.13)] pt-7 md:grid-cols-[auto_minmax(0,1fr)] md:items-start md:gap-8">
+          <p className="eyebrow text-[#b88938]">How relays move</p>
+          <p className="max-w-2xl text-sm leading-relaxed text-on-surface-variant">
+            A sealed letter moves from person to person. Each carrier records a stop, never the words inside. Open a letter only when it reaches the person it was meant for.
+          </p>
         </aside>
       </div>
     </main>

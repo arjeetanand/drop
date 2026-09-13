@@ -1,26 +1,38 @@
 'use client';
 
-import { FormEvent, Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useState, type FormEvent } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import {
-  ArrowLeft, ArrowRight, Check, Clock3, LockKeyhole, MapPin,
-  Navigation, Package, Share2, ShieldCheck, UsersRound, Zap
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  MapPin,
+  Navigation,
+  Package,
+  QrCode,
+  Route,
+  Share2,
+  ShieldCheck,
+  UsersRound,
+  X,
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
-import { RelayChain } from '@/components/RelayChain';
-import { RelayEnvelope } from '@/components/RelayEnvelope';
-import { Interactive3DEnvelope } from '@/components/Interactive3DEnvelope';
-import { Card3DTilt } from '@/components/Card3DTilt';
-import { Luminous3DMap } from '@/components/Luminous3DMap';
-import { WaypointMap } from '@/components/WaypointMap';
 import { currentFocusDraft } from '@/data/mockData';
+import { RouteMap } from '@/components/RouteMap';
+import { TrackingTimeline } from '@/components/TrackingTimeline';
 import {
-  addRelayHandoff, getInitialRelayState, getRelayState, getRelayStats,
-  getNearbyLetters, type RelayState, type AvailableLetter
+  addRelayHandoff,
+  getInitialRelayState,
+  getNearbyLetters,
+  getRelayState,
+  getRelayStats,
+  relayToTrackingEvents,
+  type AvailableLetter,
+  type RelayState,
 } from '@/lib/relayStore';
 import { formatDistance } from '@/lib/gpsUtils';
-import { useSearchParams } from 'next/navigation';
-import { cn } from '@/lib/utils';
+import { getLetterDraftById } from '@/lib/letterStore';
 
 type ViewMode = 'sender' | 'carrier';
 
@@ -38,485 +50,466 @@ function RelayContent() {
   const [note, setNote] = useState('');
   const [copied, setCopied] = useState(false);
   const [notice, setNotice] = useState('');
+  const [formError, setFormError] = useState('');
+  const [origin, setOrigin] = useState('');
   const [nearbyLetters, setNearbyLetters] = useState<AvailableLetter[]>([]);
 
   useEffect(() => {
+    const draft = getLetterDraftById(letterId);
     setRelay(getRelayState(letterId, {
-      subject: currentFocusDraft.subject,
-      recipient: 'Eleanor',
+      subject: draft?.subject || currentFocusDraft.subject,
+      recipient: draft?.address.name || draft?.recipient || 'Eleanor',
     }));
+    setViewMode(carrierMode ? 'carrier' : 'sender');
     setShowHandoff(joinRequested);
     setNearbyLetters(getNearbyLetters());
-  }, [joinRequested, letterId]);
+  }, [carrierMode, joinRequested, letterId]);
+
+  useEffect(() => {
+    setOrigin(window.location.origin);
+  }, []);
 
   const stats = getRelayStats(relay);
-  const completedHandoffs = relay.handoffs.filter((h) => !h.next);
-  const shareLink = typeof window === 'undefined'
-    ? `/relay?letter=${encodeURIComponent(letterId)}&join=1`
-    : `${window.location.origin}/relay?letter=${encodeURIComponent(letterId)}&join=1`;
+  const waypoints = relay.gpsWaypoints ?? [];
+  const shareLink = `${origin}/relay?letter=${encodeURIComponent(letterId)}&join=1`;
+  const completedHandoffs = relay.handoffs.filter((handoff) => !handoff.next);
+
+  const announce = (message: string) => {
+    setNotice(message);
+    window.setTimeout(() => setNotice(''), 4200);
+  };
 
   const copyRelayLink = async () => {
     try {
+      if (!navigator.clipboard) throw new Error('Clipboard unavailable');
       await navigator.clipboard.writeText(shareLink);
       setCopied(true);
-      setNotice('Relay passport copied.');
+      announce('Carrier link copied.');
       window.setTimeout(() => setCopied(false), 1800);
     } catch {
-      setNotice(shareLink);
+      announce(`Copy is unavailable here. Share this link: ${shareLink}`);
     }
   };
 
   const recordHandoff = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!name.trim() || !location.trim()) return;
-    const next = addRelayHandoff(letterId, { name, location, note }, {
-      subject: relay.subject,
-      recipient: relay.recipient,
-    });
-    setRelay(next);
-    setName('');
-    setLocation('');
-    setNote('');
-    setShowHandoff(false);
-    setNotice(`${name.trim()} is now part of the relay.`);
+    const trimmedName = name.trim();
+    const trimmedLocation = location.trim();
+
+    if (!trimmedName || !trimmedLocation) {
+      setFormError('Add a name and neighborhood before recording the handoff.');
+      return;
+    }
+
+    try {
+      const next = addRelayHandoff(
+        letterId,
+        { name: trimmedName, location: trimmedLocation, note },
+        { subject: relay.subject, recipient: relay.recipient },
+      );
+      setRelay(next);
+      setName('');
+      setLocation('');
+      setNote('');
+      setFormError('');
+      setShowHandoff(false);
+      announce(`${trimmedName} is now part of the relay.`);
+    } catch {
+      setFormError('The handoff could not be saved. Check the details and try again.');
+    }
   };
 
-  // Waypoints from relay (only those with coords)
-  const waypoints = relay.gpsWaypoints ?? [];
-  const destCoords = relay.handoffs.find((h) => h.role === 'recipient')?.coords;
-
   return (
-    <main className="page-enter min-h-screen pb-24 lg:pb-12 bg-surface text-ink-navy">
-      <div className="mx-auto max-w-[1240px] px-4 py-6 md:px-12 md:py-10 xl:px-16">
-
-        {/* Header */}
-        <header className="flex flex-wrap items-center justify-between gap-4 pb-6 border-b border-[#102a43]/[0.08]">
-          <Link
-            href="/"
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-[#102a43]/[0.1] bg-white/70 backdrop-blur-sm text-xs font-mono tracking-wider uppercase text-on-surface-variant hover:text-ink-navy hover:bg-white transition-all shadow-sm"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" /> Back to desk
-          </Link>
-
-          {/* Sender / Carrier toggle */}
-          <div className="flex items-center gap-1 p-1 rounded-full bg-[#102a43]/[0.05] border border-[#102a43]/[0.08]">
-            <button
-              onClick={() => setViewMode('sender')}
-              className={cn(
-                'flex items-center gap-1.5 px-4 py-1.5 rounded-full font-mono text-[11px] uppercase tracking-wider transition-all',
-                viewMode === 'sender'
-                  ? 'bg-ink-navy text-white shadow-sm'
-                  : 'text-on-surface-variant hover:text-ink-navy'
-              )}
-            >
-              <Package className="h-3 w-3" /> Sender view
-            </button>
-            <button
-              onClick={() => setViewMode('carrier')}
-              className={cn(
-                'flex items-center gap-1.5 px-4 py-1.5 rounded-full font-mono text-[11px] uppercase tracking-wider transition-all',
-                viewMode === 'carrier'
-                  ? 'bg-ink-navy text-white shadow-sm'
-                  : 'text-on-surface-variant hover:text-ink-navy'
-              )}
-            >
-              <Navigation className="h-3 w-3" /> Carrier mode
-            </button>
+    <main className="page-shell page-enter">
+      <div className="page-container">
+        <header className="page-header flex-col gap-5">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <Link href="/" className="button-quiet -ml-2">
+              <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+              Back to desk
+            </Link>
+            <p className="meta">Relay passport / {relay.passcode}</p>
           </div>
 
-          <div className="flex items-center gap-2 font-mono text-xs uppercase tracking-[0.2em] text-on-surface-variant">
-            <span className="h-2 w-2 rounded-full bg-mint-accent animate-pulse" />
-            <span>Relay Active / {relay.passcode}</span>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="eyebrow">Choose a view</p>
+              <p className="body-copy mt-2 max-w-xl text-sm">
+                Keep the passport open to follow the route, or switch to carrier mode to find a letter nearby.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2" role="group" aria-label="Relay view">
+              <button
+                type="button"
+                onClick={() => setViewMode('sender')}
+                aria-pressed={viewMode === 'sender'}
+                className={viewMode === 'sender' ? 'button-primary' : 'button-secondary'}
+              >
+                <Package className="h-4 w-4" aria-hidden="true" />
+                Sender view
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('carrier')}
+                aria-pressed={viewMode === 'carrier'}
+                className={viewMode === 'carrier' ? 'button-primary' : 'button-secondary'}
+              >
+                <Navigation className="h-4 w-4" aria-hidden="true" />
+                Carrier mode
+              </button>
+            </div>
           </div>
         </header>
 
-        {/* ════════════════════════════════════════════
-            SENDER VIEW
-            ════════════════════════════════════════════ */}
-        {viewMode === 'sender' && (
+        {notice && (
+          <p className="notice mt-5" role="status" aria-live="polite">
+            {notice}
+          </p>
+        )}
+
+        {viewMode === 'sender' ? (
           <>
-            {/* Hero */}
-            <section className="grid min-w-0 items-start gap-10 border-b border-[#102a43]/[0.08] py-10 md:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)] md:py-14">
+            <section className="mt-12 grid gap-10 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
               <div className="min-w-0">
-                <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full border border-mint-accent/30 bg-mint-accent/10 font-mono text-[11px] uppercase tracking-[0.16em] text-mint-accent font-semibold mb-4">
-                  <span className="h-1.5 w-1.5 rounded-full bg-mint-accent" />
-                  Human Relay In Progress
-                </div>
-                <h1 className="font-headline-lg text-[clamp(2.2rem,4.5vw,4rem)] leading-[1.02] tracking-[-0.035em] text-ink-navy">
-                  The story between here and there.
-                </h1>
-                <p className="mt-5 max-w-[570px] font-body-lg text-base md:text-lg leading-relaxed text-on-surface-variant">
-                  <strong className="text-ink-navy font-semibold">{relay.subject}</strong> is traveling toward{' '}
-                  <strong className="text-ink-navy font-semibold">{relay.recipient}</strong> through voluntary human hands. Currently with{' '}
-                  <strong className="text-ink-navy">{relay.currentCarrierName ?? 'a carrier'}</strong> in{' '}
-                  <strong className="text-ink-navy">{relay.gpsWaypoints?.at(-1)?.neighborhood ?? 'transit'}</strong>.
+                <p className="eyebrow text-[#4f9d7a]">Human relay / in progress</p>
+                <h1 className="display-title mt-4 max-w-3xl">The story between here and there.</h1>
+                <p className="body-copy mt-5 max-w-2xl text-lg">
+                  <span className="text-ink-navy">“{relay.subject}”</span> is traveling toward{' '}
+                  <span className="text-ink-navy">{relay.recipient}</span> through willing hands. Follow the route without opening the letter.
                 </p>
 
-                {/* Stats row */}
-                <div className="mt-7 flex flex-wrap gap-5">
-                  {[
-                    { value: stats.carriers, label: 'People who carried it' },
-                    { value: relay.gpsWaypoints?.length ?? 0, label: 'GPS waypoints' },
-                    { value: `${stats.hours}h`, label: 'In transit' },
-                  ].map(({ value, label }) => (
-                    <div key={label} className="text-center">
-                      <p className="font-headline-md text-2xl text-ink-navy font-bold">{value}</p>
-                      <p className="font-mono text-[10px] uppercase tracking-wider text-on-surface-variant mt-0.5">{label}</p>
-                    </div>
-                  ))}
+                <div className="mt-8 grid gap-5 border-y border-[rgba(16,42,67,0.13)] py-5 sm:grid-cols-3">
+                  <div>
+                    <p className="font-headline-md text-3xl text-ink-navy">{stats.carriers}</p>
+                    <p className="meta mt-1">People recorded</p>
+                  </div>
+                  <div className="border-t border-[rgba(16,42,67,0.12)] pt-4 sm:border-l sm:border-t-0 sm:pl-5 sm:pt-0">
+                    <p className="font-headline-md text-3xl text-ink-navy">{waypoints.length}</p>
+                    <p className="meta mt-1">GPS waypoints</p>
+                  </div>
+                  <div className="border-t border-[rgba(16,42,67,0.12)] pt-4 sm:border-l sm:border-t-0 sm:pl-5 sm:pt-0">
+                    <p className="font-headline-md text-3xl text-ink-navy">{stats.hours}h</p>
+                    <p className="meta mt-1">Journey logged</p>
+                  </div>
                 </div>
 
-                <div className="mt-8 flex flex-wrap items-center gap-3.5">
+                <div className="mt-8 flex flex-wrap gap-3">
                   <button
                     type="button"
-                    onClick={() => setShowHandoff((c) => !c)}
-                    className="inline-flex items-center gap-2 bg-ink-navy text-white px-5 py-3 rounded-xl font-label-md text-xs uppercase tracking-[0.14em] hover:bg-ink-navy/90 active:scale-[0.99] transition-all shadow-md"
+                    onClick={() => {
+                      setShowHandoff((current) => !current);
+                      setFormError('');
+                    }}
+                    className="button-primary"
+                    aria-expanded={showHandoff}
+                    aria-controls="manual-handoff"
                   >
-                    <UsersRound className="h-4 w-4 text-mint-accent" />
-                    {showHandoff ? 'Close handoff form' : 'I carried this letter forward'}
+                    <UsersRound className="h-4 w-4" aria-hidden="true" />
+                    {showHandoff ? 'Close handoff form' : 'Record a handoff'}
                   </button>
-                  <Link
-                    href={`/journey?letter=${encodeURIComponent(letterId)}`}
-                    className="inline-flex items-center gap-2 border border-[#102a43]/[0.15] bg-white px-5 py-3 rounded-xl font-label-md text-xs uppercase tracking-[0.14em] text-ink-navy hover:bg-[#faf8f4] active:scale-[0.99] transition-all"
-                  >
-                    Full timeline <ArrowRight className="h-3.5 w-3.5" />
+                  <Link href={`/journey?letter=${encodeURIComponent(letterId)}`} className="button-secondary">
+                    <Route className="h-4 w-4" aria-hidden="true" />
+                    Open full journey
+                    <ArrowRight className="h-4 w-4" aria-hidden="true" />
                   </Link>
                 </div>
-                {notice && (
-                  <p className="mt-3 font-mono text-xs text-mint-accent font-medium" aria-live="polite">{notice}</p>
-                )}
 
-                {/* Handoff form */}
                 {showHandoff && (
-                  <form
-                    onSubmit={recordHandoff}
-                    className="mt-8 refero-card rounded-2xl p-6 md:p-8 bg-white border border-mint-accent/40 shadow-[0_8px_32px_rgba(43,138,107,0.08)]"
-                  >
+                  <form id="manual-handoff" onSubmit={recordHandoff} className="panel mt-8 p-5 sm:p-7">
                     <div className="flex items-start justify-between gap-4">
                       <div>
-                        <p className="font-mono text-xs uppercase tracking-[0.18em] text-mint-accent font-semibold">Carrier Log</p>
-                        <h3 className="mt-1 font-headline-md text-2xl text-ink-navy">Record your handoff</h3>
+                        <p className="eyebrow text-[#4f9d7a]">Carrier log</p>
+                        <h2 className="section-title mt-2 text-3xl">Record the next handoff.</h2>
+                        <p className="body-copy mt-3 max-w-xl text-sm">
+                          Add the person and neighborhood that move the sealed letter forward. The route is recorded; the words remain private.
+                        </p>
                       </div>
-                      <LockKeyhole className="h-5 w-5 text-mint-accent shrink-0" />
+                      <button
+                        type="button"
+                        onClick={() => setShowHandoff(false)}
+                        className="button-quiet -mr-2 -mt-2 shrink-0"
+                        aria-label="Close handoff form"
+                      >
+                        <X className="h-4 w-4" aria-hidden="true" />
+                      </button>
                     </div>
-                    <p className="mt-2 font-body-md text-sm leading-relaxed text-on-surface-variant">
-                      You do not need to read the letter. Just record that you held it, where you were, and where you passed it next.
-                    </p>
-                    <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                      <label className="block font-mono text-xs uppercase tracking-wider text-on-surface-variant">
-                        Your name
+
+                    {formError && (
+                      <p className="notice error-notice mt-5" role="alert" aria-live="assertive">
+                        {formError}
+                      </p>
+                    )}
+
+                    <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                      <label htmlFor="relay-carrier-name" className="field-label">
+                        Carrier name <span className="text-[#b84b3a]">*</span>
                         <input
+                          id="relay-carrier-name"
                           required
                           value={name}
-                          onChange={(e) => setName(e.target.value)}
-                          className="typewriter-input mt-1.5 text-base text-ink-navy bg-[#faf8f4] border border-[#102a43]/[0.12] rounded-lg p-3 w-full focus:bg-white transition-colors"
-                          placeholder="e.g. Maya"
+                          onChange={(event) => {
+                            setName(event.target.value);
+                            setFormError('');
+                          }}
+                          className="input-field mt-2"
+                          placeholder="Maya"
+                          autoComplete="name"
                         />
                       </label>
-                      <label className="block font-mono text-xs uppercase tracking-wider text-on-surface-variant">
-                        Your neighborhood / stop
+                      <label htmlFor="relay-carrier-location" className="field-label">
+                        Neighborhood or stop <span className="text-[#b84b3a]">*</span>
                         <input
+                          id="relay-carrier-location"
                           required
                           value={location}
-                          onChange={(e) => setLocation(e.target.value)}
-                          className="typewriter-input mt-1.5 text-base text-ink-navy bg-[#faf8f4] border border-[#102a43]/[0.12] rounded-lg p-3 w-full focus:bg-white transition-colors"
-                          placeholder="e.g. Dadar, Mumbai"
+                          onChange={(event) => {
+                            setLocation(event.target.value);
+                            setFormError('');
+                          }}
+                          className="input-field mt-2"
+                          placeholder="Dadar"
+                        />
+                      </label>
+                      <label htmlFor="relay-carrier-note" className="field-label sm:col-span-2">
+                        Field note <span className="font-normal text-on-surface-variant">(optional)</span>
+                        <textarea
+                          id="relay-carrier-note"
+                          value={note}
+                          onChange={(event) => setNote(event.target.value)}
+                          className="textarea-field mt-2 min-h-[6rem]"
+                          placeholder="A small detail from this part of the route…"
                         />
                       </label>
                     </div>
-                    <label className="mt-4 block font-mono text-xs uppercase tracking-wider text-on-surface-variant">
-                      A tiny memory or note (optional)
-                      <textarea
-                        value={note}
-                        onChange={(e) => setNote(e.target.value)}
-                        className="mt-1.5 min-h-[80px] w-full resize-none rounded-lg border border-[#102a43]/[0.12] bg-[#faf8f4] p-3 font-body-md text-sm text-ink-navy outline-none focus:bg-white focus:border-ink-navy transition-colors"
-                        placeholder="What did the moment feel like?"
-                      />
-                    </label>
-                    <div className="mt-5 flex flex-wrap items-center justify-between gap-4">
-                      <button
-                        type="submit"
-                        className="inline-flex items-center gap-2 bg-ink-navy text-white px-5 py-2.5 rounded-xl font-label-md text-xs uppercase tracking-[0.14em] hover:bg-ink-navy/90 transition-all"
-                      >
-                        Confirm handoff <ArrowRight className="h-3.5 w-3.5 text-mint-accent" />
+
+                    <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+                      <p className="field-help inline-flex items-center gap-2">
+                        <ShieldCheck className="h-4 w-4 text-[#4f9d7a]" aria-hidden="true" />
+                        Only the route is recorded.
+                      </p>
+                      <button type="submit" className="button-primary">
+                        Save handoff
+                        <ArrowRight className="h-4 w-4" aria-hidden="true" />
                       </button>
-                      <span className="font-mono text-xs text-on-surface-variant">🔒 Contents remain sealed</span>
                     </div>
                   </form>
                 )}
               </div>
 
-              <div className="flex min-w-0 justify-center">
-                <Interactive3DEnvelope
-                  recipient={relay.recipient}
-                  subject={relay.subject}
-                  monogram={relay.recipient.charAt(0)}
-                  waxColor="#991b1b"
-                />
-              </div>
-            </section>
-
-            {/* ── 3D Luminous City Route Map ── */}
-            <section className="py-10 border-b border-slate-200/80">
-              <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
-                <div>
-                  <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200/60 font-mono text-[10px] uppercase tracking-wider text-emerald-700 font-semibold mb-2">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    Live 3D City Route
+              <aside className="paper-card p-5 sm:p-6">
+                <div className="flex items-start justify-between gap-4 border-b border-[rgba(16,42,67,0.13)] pb-4">
+                  <div>
+                    <p className="eyebrow">Custody document</p>
+                    <h2 className="section-title mt-2 text-3xl">Relay passport.</h2>
                   </div>
-                  <h2 className="font-headline-md text-3xl text-slate-900 font-bold">Proof of movement.</h2>
-                  <p className="font-sans text-sm text-slate-500 mt-1">
-                    Watch the letter travel across neighborhoods in 3D. Move your mouse to pan and tilt.
-                  </p>
+                  <QrCode className="h-5 w-5 text-[#4f9d7a]" aria-hidden="true" />
                 </div>
-                <span className="px-3 py-1 rounded-full bg-slate-100 font-mono text-xs text-slate-600 font-medium">
-                  {waypoints.length} verified stops
-                </span>
-              </div>
-              <Luminous3DMap
-                waypoints={waypoints}
-                currentCarrier={relay.currentCarrierName || 'Priya'}
-                currentNeighborhood={relay.gpsWaypoints?.at(-1)?.neighborhood || 'Worli'}
-                destinationNeighborhood={relay.destinationNeighborhood || 'Colaba'}
-                className="w-full"
-              />
+
+                <div className="mt-6 flex flex-col items-center">
+                  <div
+                    className="flex h-56 w-56 max-w-full items-center justify-center border border-[rgba(16,42,67,0.16)] bg-white p-3"
+                    role="img"
+                    aria-label={`QR code for the ${relay.subject} carrier link`}
+                  >
+                    {origin ? (
+                      <QRCodeSVG value={shareLink} size={200} level="M" includeMargin={false} />
+                    ) : (
+                      <p className="meta text-center">Preparing the share code…</p>
+                    )}
+                  </div>
+                  <p className="meta mt-5 w-full">Share URL</p>
+                  <p className="mt-1 w-full break-all font-mono text-xs leading-relaxed text-ink-navy">{shareLink}</p>
+                  <button type="button" onClick={() => void copyRelayLink()} className="button-secondary mt-5 w-full">
+                    {copied ? <Check className="h-4 w-4 text-[#4f9d7a]" aria-hidden="true" /> : <Share2 className="h-4 w-4" aria-hidden="true" />}
+                    {copied ? 'Link copied' : 'Copy carrier link'}
+                  </button>
+                </div>
+
+                <div className="mt-6 space-y-4 border-t border-[rgba(16,42,67,0.13)] pt-5">
+                  <div className="flex items-start gap-3">
+                    <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#4f9d7a]" aria-hidden="true" />
+                    <p className="body-copy text-sm">The envelope stays sealed while it travels.</p>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-[#b84b3a]" aria-hidden="true" />
+                    <p className="body-copy text-sm">Only neighborhood-level locations appear in the passport.</p>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <Route className="mt-0.5 h-4 w-4 shrink-0 text-[#4f9d7a]" aria-hidden="true" />
+                    <p className="body-copy text-sm">Share this page when someone is ready to carry it forward.</p>
+                  </div>
+                </div>
+              </aside>
             </section>
 
-            {/* Chain + Passport */}
-            <section className="grid min-w-0 gap-8 py-10 md:grid-cols-[minmax(0,1.4fr)_minmax(300px,0.6fr)] md:py-12 border-b border-[#102a43]/[0.08]">
-              <div className="min-w-0 space-y-6">
-                <div className="refero-card rounded-2xl p-6 md:p-8 bg-white">
-                  <div className="flex flex-wrap items-end justify-between gap-4 border-b border-[#102a43]/[0.08] pb-5">
+            <section className="mt-16 grid gap-10 border-t border-[rgba(16,42,67,0.13)] pt-10 lg:grid-cols-[minmax(0,1fr)_minmax(260px,0.72fr)]">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-end justify-between gap-4">
+                  <div>
+                    <p className="eyebrow">Recorded route</p>
+                    <h2 className="section-title mt-2">Every hand leaves a stop.</h2>
+                  </div>
+                  <span className="meta">{waypoints.length} GPS waypoints</span>
+                </div>
+                <div className="panel mt-5 overflow-hidden p-0">
+                  <RouteMap
+                    waypoints={waypoints}
+                    destinationNeighborhood={relay.destinationNeighborhood || relay.recipient}
+                    currentCarrierName={relay.currentCarrierName}
+                  />
+                </div>
+
+                <div className="mt-10">
+                  <div className="flex flex-wrap items-end justify-between gap-4">
                     <div>
-                      <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-amber-accent font-semibold">Handoff chain</p>
-                      <h2 className="mt-1 font-headline-md text-2xl text-ink-navy">Every hand leaves a mark.</h2>
+                      <p className="eyebrow">Custody timeline</p>
+                      <h2 className="section-title mt-2">A record of the route.</h2>
                     </div>
-                    <span className="refero-pill font-mono text-xs">{completedHandoffs.length} recorded</span>
                   </div>
-                  <div className="mt-6">
-                    <RelayChain relay={relay} />
+                  <div className="panel mt-5 p-6 sm:p-8">
+                    <TrackingTimeline events={relayToTrackingEvents(relay)} />
                   </div>
-                  <div className="grid grid-cols-3 gap-4 pt-6 mt-6 border-t border-[#102a43]/[0.08]">
-                    {[
-                      { value: stats.carriers, label: 'Carriers' },
-                      { value: waypoints.length, label: 'GPS stops' },
-                      { value: `${stats.hours}h`, label: 'In transit' },
-                    ].map(({ value, label }) => (
-                      <div key={label} className="refero-card p-4 rounded-xl text-center bg-[#faf8f4]">
-                        <p className="font-headline-md text-2xl text-ink-navy font-bold">{value}</p>
-                        <p className="mt-0.5 font-mono text-[10px] uppercase tracking-wider text-on-surface-variant">{label}</p>
+                </div>
+              </div>
+
+              <aside className="space-y-8">
+                <div className="panel p-5 sm:p-6">
+                  <p className="eyebrow">At a glance</p>
+                  <dl className="mt-5 space-y-4">
+                    <div className="flex items-baseline justify-between gap-4 border-b border-[rgba(16,42,67,0.12)] pb-4">
+                      <dt className="body-copy text-sm">People in the chain</dt>
+                      <dd className="font-headline-md text-2xl text-ink-navy">{stats.carriers}</dd>
+                    </div>
+                    <div className="flex items-baseline justify-between gap-4 border-b border-[rgba(16,42,67,0.12)] pb-4">
+                      <dt className="body-copy text-sm">Route stops</dt>
+                      <dd className="font-headline-md text-2xl text-ink-navy">{stats.cities}</dd>
+                    </div>
+                    <div className="flex items-baseline justify-between gap-4">
+                      <dt className="body-copy text-sm">Time logged</dt>
+                      <dd className="font-headline-md text-2xl text-ink-navy">{stats.hours}h</dd>
+                    </div>
+                  </dl>
+                </div>
+
+                <div className="panel-muted p-5 sm:p-6">
+                  <p className="eyebrow">Custody log</p>
+                  <div className="mt-5 space-y-4">
+                    {completedHandoffs.slice().reverse().map((handoff) => (
+                      <div key={handoff.id} className="border-b border-[rgba(16,42,67,0.12)] pb-4 last:border-0 last:pb-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-headline-md text-lg text-ink-navy">{handoff.name}</p>
+                          <span className="meta">{handoff.role === 'sender' ? 'Origin' : 'Carrier'}</span>
+                        </div>
+                        <p className="body-copy mt-1 text-sm">{handoff.note}</p>
+                        <p className="meta mt-2 inline-flex items-center gap-1.5">
+                          <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
+                          {handoff.neighborhood || handoff.location}
+                        </p>
                       </div>
                     ))}
                   </div>
                 </div>
-              </div>
-
-              <aside className="min-w-0 flex flex-col gap-6">
-                <Card3DTilt>
-                  <div className="bg-white border border-slate-200/90 rounded-2xl p-6 md:p-7 shadow-xs relative overflow-hidden">
-                    <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-                      <div>
-                        <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-slate-400 font-bold">Custody Document</p>
-                        <p className="mt-0.5 font-headline-md text-lg text-slate-900 font-bold">Relay Passport</p>
-                      </div>
-                      <span className="font-mono text-xs font-bold text-slate-900 px-2.5 py-1 bg-slate-50 rounded border border-slate-200 shadow-2xs tracking-widest">
-                        {relay.passcode}
-                      </span>
-                    </div>
-                    <div className="mt-6 flex flex-col items-center">
-                      <div className="flex h-32 w-32 items-center justify-center border border-slate-200 bg-white p-2 rounded-2xl shadow-xs">
-                        <QRCodeSVG
-                          value={shareLink}
-                          size={112}
-                          level="M"
-                          includeMargin={false}
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={copyRelayLink}
-                        className="mt-5 w-full inline-flex items-center justify-center gap-2 border border-slate-200 bg-white py-2.5 px-4 rounded-xl font-sans text-xs uppercase tracking-wider font-semibold text-slate-800 hover:bg-slate-50 transition-all"
-                      >
-                        {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Share2 className="h-3.5 w-3.5" />}
-                        {copied ? 'Link Copied!' : 'Copy Handoff Link'}
-                      </button>
-                    </div>
-                    <div className="mt-6 space-y-4 border-t border-slate-100 pt-5">
-                      {[
-                        { icon: ShieldCheck, color: 'text-emerald-600', text: 'The envelope remains sealed until the designated recipient opens it.' },
-                        { icon: MapPin, color: 'text-amber-600', text: 'Locations are recorded as neighborhoods, never exact addresses.' },
-                        { icon: Clock3, color: 'text-amber-600', text: 'The deliberate pace becomes part of what the recipient holds.' },
-                      ].map(({ icon: Icon, color, text }) => (
-                        <div key={text} className="flex gap-3">
-                          <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${color}`} />
-                          <p className="font-sans text-xs leading-relaxed text-slate-600">{text}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </Card3DTilt>
               </aside>
             </section>
-
-            {/* Logbook */}
-            <section className="py-10 md:py-12">
-              <div className="flex items-end justify-between gap-4 border-b border-[#102a43]/[0.08] pb-5">
-                <div>
-                  <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-amber-accent font-semibold">Custody Log</p>
-                  <h2 className="mt-1 font-headline-md text-2xl text-ink-navy">A quiet record of the journey.</h2>
-                </div>
-                <span className="font-mono text-xs text-on-surface-variant">{completedHandoffs.length} entries</span>
-              </div>
-              <div className="mt-6 space-y-3">
-                {completedHandoffs.slice().reverse().map((handoff) => (
-                  <article
-                    key={handoff.id}
-                    className="refero-card rounded-xl p-5 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-                  >
-                    <div className="flex items-start gap-3.5">
-                      <span className={`mt-1 h-2.5 w-2.5 rounded-full shrink-0 ${handoff.role === 'sender' ? 'bg-amber-accent' : 'bg-mint-accent'}`} />
-                      <div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="font-headline-md text-base text-ink-navy font-bold">{handoff.name}</h3>
-                          <span className="font-mono text-[10px] uppercase tracking-wider px-2 py-0.5 rounded bg-black/5 text-on-surface-variant">
-                            {handoff.role === 'sender' ? 'Origin' : 'Carrier'}
-                          </span>
-                          {handoff.distanceClosedKm && (
-                            <span className="font-mono text-[10px] px-2 py-0.5 rounded bg-mint-accent/10 text-mint-accent border border-mint-accent/20">
-                              +{handoff.distanceClosedKm.toFixed(1)}km closer
-                            </span>
-                          )}
-                        </div>
-                        {handoff.note && (
-                          <p className="mt-1 font-serif text-sm italic text-on-surface-variant">&ldquo;{handoff.note}&rdquo;</p>
-                        )}
-                      </div>
-                    </div>
-                    <div className="inline-flex items-center gap-1.5 font-mono text-xs text-on-surface-variant shrink-0 bg-[#faf8f4] px-3 py-1.5 rounded-lg border border-[#102a43]/[0.08]">
-                      <MapPin className="h-3.5 w-3.5 text-amber-accent" />
-                      <span>{handoff.neighborhood ?? handoff.location}</span>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </section>
           </>
-        )}
-
-        {/* ════════════════════════════════════════════
-            CARRIER MODE VIEW
-            ════════════════════════════════════════════ */}
-        {viewMode === 'carrier' && (
-          <>
-            <section className="py-10 border-b border-[#102a43]/[0.08]">
-              <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-amber-accent/10 border border-amber-accent/30 font-mono text-[11px] uppercase tracking-[0.16em] text-amber-accent font-semibold mb-5">
-                <Zap className="h-3 w-3" /> Letters looking for a carrier
-              </div>
-              <h1 className="font-headline-lg text-[clamp(2rem,4vw,3.5rem)] leading-[1.05] tracking-[-0.03em] text-ink-navy">
-                Be the person who carries it.
-              </h1>
-              <p className="mt-4 max-w-[560px] font-body-lg text-base md:text-lg leading-relaxed text-on-surface-variant">
-                These letters are nearby and need a human carrier to move them closer to their destination. You carry it as far as you want — then pass it to the next person with a 4-digit PIN.
+        ) : (
+          <section className="mt-12">
+            <div className="max-w-3xl">
+              <p className="eyebrow text-[#b84b3a]">Carrier mode</p>
+              <h1 className="display-title mt-4">Be the person who carries it.</h1>
+              <p className="body-copy mt-5 max-w-2xl text-lg">
+                Choose a nearby letter, accept it with your GPS, and carry it as far as you can. When you are ready, pass it on with a QR code or a four-digit PIN.
               </p>
-            </section>
+            </div>
 
-            {/* Nearby letters list */}
-            <section className="py-8 space-y-4">
+            <div className="mt-8 grid gap-5">
               {nearbyLetters.map((letter) => (
-                <article
-                  key={letter.letterId}
-                  className="refero-card rounded-2xl p-6 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-5"
-                >
-                  <div className="space-y-2 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="font-headline-md text-xl text-ink-navy">&ldquo;{letter.subject}&rdquo;</h3>
-                      <span className="font-mono text-[10px] uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-amber-accent/10 border border-amber-accent/20 text-amber-accent">
-                        Waiting {letter.waitingMinutes}m
-                      </span>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                      <div className="flex items-center gap-1.5 font-mono text-xs text-on-surface-variant">
-                        <span className="h-1.5 w-1.5 rounded-full bg-mint-accent" />
-                        Currently in {letter.currentNeighborhood}
+                <article key={letter.letterId} className="panel p-5 sm:p-7">
+                  <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-2">
+                        <h2 className="section-title text-3xl">“{letter.subject}”</h2>
+                        <span className="status-mark pending">Available nearby</span>
                       </div>
-                      <div className="flex items-center gap-1.5 font-mono text-xs text-on-surface-variant">
-                        <MapPin className="h-3 w-3 text-amber-accent" />
-                        Heading to {letter.destinationNeighborhood}
+                      <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2">
+                        <p className="meta inline-flex items-center gap-2">
+                          <MapPin className="h-3.5 w-3.5 text-[#b84b3a]" aria-hidden="true" />
+                          From {letter.currentNeighborhood}
+                        </p>
+                        <p className="meta inline-flex items-center gap-2">
+                          <Navigation className="h-3.5 w-3.5 text-[#4f9d7a]" aria-hidden="true" />
+                          Toward {letter.destinationNeighborhood}
+                        </p>
                       </div>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-4">
-                      <div className="text-center">
-                        <p className="font-headline-md text-lg text-ink-navy font-bold">{formatDistance(letter.distanceKm)}</p>
-                        <p className="font-mono text-[9px] uppercase tracking-wider text-on-surface-variant">From you</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="font-headline-md text-lg text-ink-navy font-bold">{formatDistance(letter.remainingKm)}</p>
-                        <p className="font-mono text-[9px] uppercase tracking-wider text-on-surface-variant">To destination</p>
+                      <div className="mt-5 flex flex-wrap gap-6 border-t border-[rgba(16,42,67,0.12)] pt-4">
+                        <div>
+                          <p className="font-headline-md text-2xl text-ink-navy">{formatDistance(letter.distanceKm)}</p>
+                          <p className="meta mt-1">Approx. to pickup</p>
+                        </div>
+                        <div>
+                          <p className="font-headline-md text-2xl text-ink-navy">{formatDistance(letter.remainingKm)}</p>
+                          <p className="meta mt-1">Approx. to destination</p>
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="flex flex-col gap-2 shrink-0">
-                    <Link
-                      href={`/relay/carry?letter=${encodeURIComponent(letter.letterId)}&subject=${encodeURIComponent(letter.subject)}&dest=${encodeURIComponent(letter.destinationNeighborhood)}`}
-                      className="inline-flex items-center justify-center gap-2 bg-ink-navy text-white px-5 py-2.5 rounded-xl font-label-md text-xs uppercase tracking-[0.14em] hover:bg-ink-navy/90 active:scale-[0.99] transition-all shadow-sm"
-                    >
-                      <Navigation className="h-3.5 w-3.5 text-mint-accent" />
-                      Accept &amp; carry
-                    </Link>
-                    <Link
-                      href={`/relay?letter=${encodeURIComponent(letter.letterId)}`}
-                      className="inline-flex items-center justify-center gap-2 border border-[#102a43]/[0.12] bg-white px-5 py-2 rounded-xl font-label-md text-xs uppercase tracking-[0.12em] text-on-surface-variant hover:text-ink-navy hover:bg-[#faf8f4] transition-all"
-                    >
-                      View passport
-                    </Link>
+                    <div className="flex shrink-0 flex-col gap-2 sm:flex-row lg:flex-col">
+                      <Link
+                        href={`/relay/carry?letter=${encodeURIComponent(letter.letterId)}&subject=${encodeURIComponent(letter.subject)}&dest=${encodeURIComponent(letter.destinationNeighborhood)}`}
+                        className="button-primary"
+                      >
+                        <Navigation className="h-4 w-4" aria-hidden="true" />
+                        Accept and carry
+                      </Link>
+                      <Link href={`/relay?letter=${encodeURIComponent(letter.letterId)}`} className="button-secondary">
+                        View passport
+                        <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                      </Link>
+                    </div>
                   </div>
                 </article>
               ))}
+            </div>
 
-              {/* Enter PIN for existing handoff */}
-              <div className="refero-card rounded-2xl p-6 bg-[#faf8f4] border border-[#102a43]/[0.08] border-dashed">
-                <p className="font-mono text-[10px] uppercase tracking-widest text-on-surface-variant font-semibold mb-2">
-                  Already have a letter?
-                </p>
-                <p className="font-body-md text-sm text-on-surface-variant mb-4">
-                  If someone handed you a letter in person and gave you a PIN, verify it here to officially join the relay.
-                </p>
-                <Link
-                  href="/relay/handoff"
-                  className="inline-flex items-center gap-2 bg-ink-navy text-white px-5 py-2.5 rounded-xl font-label-md text-xs uppercase tracking-[0.14em] hover:bg-ink-navy/90 transition-all"
-                >
-                  Enter handoff PIN <ArrowRight className="h-3.5 w-3.5 text-mint-accent" />
-                </Link>
-              </div>
-            </section>
+            <div className="panel-muted mt-6 p-5 sm:p-6">
+              <p className="eyebrow">Already holding a letter?</p>
+              <p className="body-copy mt-3 max-w-2xl text-sm">
+                Use the manual handoff page when someone has given you the letter and a four-digit PIN in person.
+              </p>
+              <Link href="/relay/handoff" className="button-secondary mt-5">
+                Enter handoff PIN
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </Link>
+            </div>
 
-            {/* How it works */}
-            <section className="py-8 border-t border-[#102a43]/[0.08]">
-              <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-amber-accent font-semibold mb-6">How carrier mode works</p>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="mt-16 border-t border-[rgba(16,42,67,0.13)] pt-10">
+              <p className="eyebrow">The carrier loop</p>
+              <ol className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
                 {[
-                  { num: '①', title: 'Accept a letter', body: 'Pick one nearby. Your GPS neighborhood is stamped as a waypoint.' },
-                  { num: '②', title: 'Carry it forward', body: 'Walk, take a rickshaw, a train. The app watches you move closer.' },
-                  { num: '③', title: 'Generate a PIN', body: 'When ready to hand off, show the 4-digit PIN to the next person.' },
-                  { num: '④', title: 'They verify', body: 'They enter the PIN on their phone — handoff confirmed and logged.' },
-                ].map(({ num, title, body }) => (
-                  <div key={num} className="refero-card rounded-xl p-5 bg-white">
-                    <span className="font-headline-lg text-2xl text-mint-accent">{num}</span>
-                    <h3 className="mt-3 font-headline-md text-base text-ink-navy font-semibold">{title}</h3>
-                    <p className="mt-1.5 font-body-md text-sm text-on-surface-variant leading-relaxed">{body}</p>
-                  </div>
+                  ['01', 'Accept', 'Stamp your neighborhood and start carrying.'],
+                  ['02', 'Carry', 'Move the sealed letter as far as your route allows.'],
+                  ['03', 'Pass on', 'Generate a fresh QR code or share the PIN.'],
+                  ['04', 'Confirm', 'The next carrier accepts and the passport updates.'],
+                ].map(([number, title, text]) => (
+                  <li key={number} className="border-t border-[rgba(16,42,67,0.13)] pt-4">
+                    <span className="meta text-[#b84b3a]">{number}</span>
+                    <h2 className="mt-3 font-headline-md text-2xl text-ink-navy">{title}</h2>
+                    <p className="body-copy mt-2 text-sm">{text}</p>
+                  </li>
                 ))}
-              </div>
-            </section>
-          </>
+              </ol>
+            </div>
+          </section>
         )}
-
       </div>
     </main>
   );
 }
 
 export default function RelayPage() {
-  return <Suspense fallback={<main className="min-h-screen" />}><RelayContent /></Suspense>;
+  return (
+    <Suspense fallback={<main className="page-shell"><div className="page-container"><p className="meta">Loading the relay passport…</p></div></main>}>
+      <RelayContent />
+    </Suspense>
+  );
 }

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Mail, PenLine, UserRound, UsersRound } from 'lucide-react';
+import { ArrowUpRight, Mail, PenLine, Route, UserRound } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getLetterDraft } from '@/lib/letterStore';
 import { defaultUserProfile, getUserProfile } from '@/lib/userStore';
@@ -13,102 +13,85 @@ import { SoundToggle } from '@/components/SoundToggle';
 const navItems = [
   { href: '/', label: 'Desk', icon: PenLine },
   { href: '/mailbox', label: 'Mailbox', icon: Mail },
-  { href: '/journey', label: 'Journey', icon: UsersRound },
+  { href: '/journey', label: 'Journey', icon: Route },
   { href: '/profile', label: 'Profile', icon: UserRound },
 ];
 
+function isActivePath(pathname: string | null, href: string) {
+  return href === '/' ? pathname === '/' : Boolean(pathname?.startsWith(href));
+}
+
+function usesPrivateShell(pathname: string | null) {
+  return pathname === null || pathname === '/' || ['/mailbox', '/journey', '/profile', '/sent'].some((path) => pathname?.startsWith(path));
+}
+
 export function Sidebar() {
   const pathname = usePathname();
-  const [writeHref, setWriteHref] = useState('/compose');
-  const [writeLabel, setWriteLabel] = useState('Write a Letter');
   const [profile, setProfile] = useState(defaultUserProfile);
 
   useEffect(() => {
-    const draft = getLetterDraft();
+    let active = true;
     setProfile(getUserProfile());
     void getRemoteProfile().then((remoteProfile) => {
-      if (remoteProfile) setProfile(remoteProfile);
+      if (active && remoteProfile) setProfile(remoteProfile);
     });
-    if (draft.status === 'dispatched' || draft.status === 'delivered') {
-      setWriteHref('/compose?new=1');
-      setWriteLabel('Write a Letter');
-    }
+    // Read the current draft once so a new-letter link always has a valid destination.
+    getLetterDraft();
+    return () => {
+      active = false;
+    };
   }, []);
 
-  // Hide sidebar on compose and dispatch routes for focus
-  const hideNav = pathname?.startsWith('/compose') || pathname === '/sent';
+  if (pathname && !usesPrivateShell(pathname)) return null;
 
-  if (hideNav) return null;
+  const initials = profile.displayName
+    .split(' ')
+    .map((part) => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
 
   return (
     <>
-      {/* Desktop sidebar */}
-      <aside className="fixed left-0 top-0 z-40 hidden h-screen w-[228px] flex-col border-r border-slate-200/80 bg-white/95 backdrop-blur-md lg:flex">
-        {/* Brand Header */}
-        <div className="flex items-center justify-between px-5 pt-7 pb-5">
-          <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="relative flex h-8 w-8 items-center justify-center rounded-xl bg-slate-900 text-white shadow-xs transition-transform group-hover:scale-105">
-              <span className="font-sans text-xs select-none font-bold text-emerald-400">♥</span>
-            </div>
-            <div>
-              <p className="font-sans text-[15px] font-bold tracking-tight text-slate-900 leading-none">Dear.exe</p>
-              <p className="font-mono text-[9px] uppercase tracking-[0.18em] text-slate-400 mt-1">
-                human relay
-              </p>
-            </div>
-          </Link>
-          <span className="inline-flex h-2 w-2 rounded-full bg-emerald-500 ring-4 ring-emerald-500/20" title="Relay network online" />
-        </div>
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-[240px] flex-col border-r border-[rgba(16,42,67,0.1)] bg-[#f7f4ee] px-5 py-7 lg:flex">
+        <Link href="/" className="group inline-flex items-center gap-3" aria-label="Dear.exe home">
+          <span className="flex h-10 w-10 items-center justify-center border border-ink-navy bg-ink-navy text-white transition-transform duration-200 group-hover:-translate-y-0.5">
+            <Mail className="h-5 w-5" aria-hidden="true" />
+          </span>
+          <span>
+            <span className="block font-headline-md text-[1.55rem] leading-none tracking-[-0.04em] text-ink-navy">Dear.exe</span>
+            <span className="mt-1 block font-mono text-[0.62rem] uppercase tracking-[0.2em] text-on-surface-variant">Human relay</span>
+          </span>
+        </Link>
 
-        {/* Primary Action Button */}
-        <div className="px-3.5 py-2">
-          <Link
-            href={writeHref}
-            className="flex items-center justify-between rounded-xl bg-slate-900 px-3.5 py-2.5 font-sans text-xs font-semibold tracking-wide text-white shadow-xs transition-all duration-200 hover:bg-slate-800 active:scale-[0.99]"
-          >
-            <span className="flex items-center gap-2">
-              <PenLine className="h-3.5 w-3.5 text-emerald-400" />
-              <span>{writeLabel}</span>
-            </span>
-            <kbd className="rounded-md border border-white/20 px-1.5 py-0.5 font-mono text-[9px] text-white/70">N</kbd>
-          </Link>
-        </div>
+        <Link href="/compose?new=1" className="button-primary mt-10 w-full justify-between">
+          <span className="inline-flex items-center gap-2">
+            <PenLine className="h-4 w-4 text-[#8fd1ad]" aria-hidden="true" />
+            <span>Write a letter</span>
+          </span>
+          <ArrowUpRight className="h-4 w-4 text-[#8fd1ad]" aria-hidden="true" />
+        </Link>
 
-        {/* Navigation Items */}
-        <nav className="flex-1 px-3 py-3">
-          <p className="px-3 py-1.5 font-mono text-[9px] uppercase tracking-[0.22em] text-slate-400 font-semibold">
-            Postal Desk
-          </p>
-          <ul className="space-y-1 mt-1">
+        <nav aria-label="Primary navigation" className="mt-10">
+          <p className="eyebrow px-3">Your desk</p>
+          <ul className="mt-3 space-y-1">
             {navItems.map((item) => {
-              const isActive =
-                item.href === '/'
-                  ? pathname === '/'
-                  : pathname?.startsWith(item.href);
+              const active = isActivePath(pathname, item.href);
               const Icon = item.icon;
               return (
                 <li key={item.href}>
                   <Link
                     href={item.href}
+                    aria-current={active ? 'page' : undefined}
                     className={cn(
-                      'flex items-center justify-between rounded-xl px-3 py-2 text-xs font-medium transition-all duration-150',
-                      isActive
-                        ? 'bg-slate-100 text-slate-900 font-semibold shadow-2xs'
-                        : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+                      'flex min-h-11 items-center gap-3 border-l-2 px-3 text-sm font-semibold transition-colors duration-180',
+                      active
+                        ? 'border-[#4f9d7a] bg-white/55 text-ink-navy'
+                        : 'border-transparent text-on-surface-variant hover:border-[rgba(16,42,67,0.2)] hover:bg-white/45 hover:text-ink-navy'
                     )}
                   >
-                    <span className="flex items-center gap-2.5">
-                      <Icon
-                        className={cn(
-                          'h-4 w-4 transition-colors',
-                          isActive ? 'text-slate-900' : 'text-slate-400'
-                        )}
-                      />
-                      <span>{item.label}</span>
-                    </span>
-                    {isActive && (
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                    )}
+                    <Icon className="h-[18px] w-[18px]" aria-hidden="true" />
+                    <span>{item.label}</span>
                   </Link>
                 </li>
               );
@@ -116,44 +99,37 @@ export function Sidebar() {
           </ul>
         </nav>
 
-        {/* Profile & Settings Footer */}
-        <div className="border-t border-slate-100 p-3.5">
-          <div className="flex items-center gap-2">
-            <Link
-              href="/profile"
-              className="flex min-w-0 flex-1 items-center gap-2.5 rounded-xl p-1.5 transition-colors hover:bg-slate-50"
-            >
-              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-slate-100 text-[11px] font-semibold text-slate-700 shadow-2xs">
-                {profile.displayName.split(' ').map((part) => part[0]).join('').slice(0, 2)}
-              </div>
-              <div className="min-w-0">
-                <p className="truncate text-xs font-semibold text-slate-900 leading-tight">{profile.displayName}</p>
-                <p className="truncate font-mono text-[9px] text-slate-400">@{profile.username}</p>
-              </div>
+        <div className="mt-auto border-t border-[rgba(16,42,67,0.1)] pt-5">
+          <div className="flex items-center gap-3">
+            <Link href="/profile" className="flex min-w-0 flex-1 items-center gap-3" aria-label={`Open profile for ${profile.displayName}`}>
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[rgba(16,42,67,0.18)] bg-white font-mono text-xs font-bold text-ink-navy">
+                {initials || 'DE'}
+              </span>
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-semibold text-ink-navy">{profile.displayName}</span>
+                <span className="mt-0.5 block truncate font-mono text-[0.65rem] text-on-surface-variant">@{profile.username}</span>
+              </span>
             </Link>
             <SoundToggle />
           </div>
         </div>
       </aside>
 
-      {/* Mobile bottom tab bar */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 flex items-center justify-around border-t border-slate-200/80 bg-white/95 px-3 py-2 backdrop-blur-md lg:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-around border-t border-[rgba(16,42,67,0.12)] bg-[#f7f4ee]/95 px-2 pb-[max(0.55rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-md lg:hidden" aria-label="Primary navigation">
         {navItems.map((item) => {
-          const isActive =
-            item.href === '/'
-              ? pathname === '/'
-              : pathname?.startsWith(item.href);
+          const active = isActivePath(pathname, item.href);
           const Icon = item.icon;
           return (
             <Link
               key={item.href}
               href={item.href}
+              aria-current={active ? 'page' : undefined}
               className={cn(
-                'flex flex-col items-center gap-1 rounded-lg px-3 py-1 text-[11px] font-medium transition-colors',
-                isActive ? 'text-slate-900 font-semibold' : 'text-slate-400 hover:text-slate-700'
+                'flex min-h-11 min-w-[62px] flex-col items-center justify-center gap-1 px-2 text-[0.68rem] font-semibold transition-colors',
+                active ? 'text-ink-navy' : 'text-on-surface-variant hover:text-ink-navy'
               )}
             >
-              <Icon className="h-4 w-4" />
+              <Icon className={cn('h-[18px] w-[18px]', active && 'text-[#4f9d7a]')} aria-hidden="true" />
               <span>{item.label}</span>
             </Link>
           );

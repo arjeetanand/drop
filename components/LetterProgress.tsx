@@ -8,62 +8,41 @@ type LetterStep = 'write' | 'address' | 'send';
 
 const steps: Array<{ id: LetterStep; label: string; href: string }> = [
   { id: 'write', label: 'Write', href: '/compose' },
-  { id: 'address', label: 'Destination & Seal', href: '/compose/address' },
+  { id: 'address', label: 'Address & seal', href: '/compose/address' },
   { id: 'send', label: 'Dispatch', href: '/compose/dispatch' },
 ];
 
-export function LetterProgress({ current, dark = false }: { current: LetterStep; dark?: boolean }) {
+export function LetterProgress({ current }: { current: LetterStep }) {
   const currentIndex = steps.findIndex((step) => step.id === current);
 
   return (
-    <nav aria-label="Relay setup progress" className="flex items-center justify-center gap-2 sm:gap-3">
+    <nav aria-label="Letter setup progress" className="flex flex-wrap items-center gap-2">
       {steps.map((step, index) => {
         const isCurrent = step.id === current;
         const isComplete = index < currentIndex;
-
         return (
-          <div key={step.id} className="flex items-center gap-2 sm:gap-3">
+          <div key={step.id} className="flex items-center gap-2">
             <Link
               href={step.href}
               aria-current={isCurrent ? 'step' : undefined}
               className={cn(
-                'flex items-center gap-2 rounded-full px-2.5 py-1.5 font-caption text-caption transition-colors',
-                dark
-                  ? isCurrent
-                    ? 'bg-amber-accent text-ink-navy'
-                    : isComplete
-                      ? 'text-parchment'
-                      : 'text-parchment/45'
-                  : isCurrent
-                    ? 'bg-secondary-container text-on-secondary-container'
-                    : isComplete
-                      ? 'text-primary'
-                      : 'text-on-surface-variant/60'
+                'inline-flex min-h-11 items-center gap-2 rounded-sm px-2.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f7f4ee]',
+                isCurrent
+                  ? 'bg-ink-navy text-white'
+                  : isComplete
+                    ? 'text-ink-navy hover:bg-white/55'
+                    : 'text-on-surface-variant hover:bg-white/55'
               )}
             >
-              <span
-                className={cn(
-                  'flex h-5 w-5 items-center justify-center rounded-full border text-[10px]',
-                  dark
-                    ? isCurrent
-                      ? 'border-ink-navy/30'
-                      : isComplete
-                        ? 'border-parchment/50'
-                        : 'border-parchment/25'
-                    : isCurrent
-                      ? 'border-on-secondary-container/30'
-                      : isComplete
-                        ? 'border-primary/40'
-                        : 'border-outline-variant'
-                )}
-              >
-                {isComplete ? <Check className="h-3 w-3" /> : index + 1}
+              <span className={cn(
+                'flex h-5 w-5 items-center justify-center rounded-full border text-[0.65rem]',
+                isCurrent ? 'border-white/35' : isComplete ? 'border-[#4f9d7a] text-[#276a4d]' : 'border-[rgba(16,42,67,0.2)]'
+              )}>
+                {isComplete ? <Check className="h-3 w-3" aria-hidden="true" /> : index + 1}
               </span>
-              <span className="hidden sm:inline">{step.label}</span>
+              <span>{step.label}</span>
             </Link>
-            {index < steps.length - 1 && (
-              <span className={cn('h-px w-4 sm:w-8', dark ? 'bg-parchment/20' : 'bg-outline-variant')} />
-            )}
+            {index < steps.length - 1 && <span className="h-px w-5 bg-[rgba(16,42,67,0.16)]" aria-hidden="true" />}
           </div>
         );
       })}

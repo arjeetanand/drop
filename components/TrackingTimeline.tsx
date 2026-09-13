@@ -1,27 +1,31 @@
 'use client';
 
-import { TrackingEvent } from '@/data/mockData';
+import type { TrackingEvent } from '@/data/mockData';
 import { cn } from '@/lib/utils';
 
 export function TrackingTimeline({ events }: { events: TrackingEvent[] }) {
-  return <div className="relative pl-10">
-    <div className="absolute bottom-5 left-[11px] top-5 w-px bg-outline-variant" aria-hidden="true" />
-    {events.map((event) => (
-      <div key={event.id} className={cn('relative flex gap-md pb-xl last:pb-0', !event.done && 'opacity-40')}>
-        <div className={cn(
-          'absolute -left-10 top-0 z-10 flex h-6 w-6 items-center justify-center rounded-full border bg-surface',
-          event.current ? 'border-wax-red shadow-[0_0_0_5px_rgba(186,73,56,0.12)]' : event.done ? 'border-mint-accent' : 'border-outline-variant'
-        )}>
-          <span className={cn('h-2 w-2 rounded-full', event.current ? 'bg-wax-red animate-pulse' : event.done ? 'bg-mint-accent' : 'bg-outline-variant')} />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-baseline justify-between gap-sm">
-            <h3 className={cn('font-headline-md text-headline-md', event.current ? 'text-wax-red' : 'text-primary')}>{event.status}</h3>
-            <p className="font-caption text-caption text-on-surface-variant">{event.date} · {event.time}</p>
+  return (
+    <ol className="relative ml-2 border-l border-[rgba(16,42,67,0.18)] pl-7" aria-label="Letter journey timeline">
+      {events.map((event) => (
+        <li key={event.id} className={cn('relative pb-8 last:pb-0', !event.done && 'opacity-50')}>
+          <span
+            className={cn(
+              'absolute -left-[2.05rem] top-0.5 flex h-6 w-6 items-center justify-center rounded-full border-2 bg-[#f7f4ee]',
+              event.current ? 'border-[#b84b3a]' : event.done ? 'border-[#4f9d7a]' : 'border-[rgba(16,42,67,0.2)]'
+            )}
+            aria-hidden="true"
+          >
+            <span className={cn('h-2 w-2 rounded-full', event.current ? 'bg-[#b84b3a]' : event.done ? 'bg-[#4f9d7a]' : 'bg-[rgba(16,42,67,0.18)]')} />
+          </span>
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h3 className={cn('font-headline-md text-xl leading-tight', event.current ? 'text-[#8c3328]' : 'text-ink-navy')}>
+              {event.status}
+            </h3>
+            <p className="meta">{event.date} · {event.time}</p>
           </div>
-          <p className={cn('mt-xs font-body-md text-body-md leading-relaxed', event.current ? 'text-primary' : 'text-on-surface-variant')}>{event.note}</p>
-        </div>
-      </div>
-    ))}
-  </div>;
+          <p className="mt-2 font-body-md text-sm leading-relaxed text-on-surface-variant">{event.note}</p>
+        </li>
+      ))}
+    </ol>
+  );
 }

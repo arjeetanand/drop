@@ -6,6 +6,15 @@ export interface LatLng {
   lng: number;
 }
 
+function isValidLatLng(value: { lat: number; lng: number }): boolean {
+  return Number.isFinite(value.lat)
+    && Number.isFinite(value.lng)
+    && value.lat >= -90
+    && value.lat <= 90
+    && value.lng >= -180
+    && value.lng <= 180;
+}
+
 export interface GpsWaypoint {
   coords: LatLng;
   neighborhood: string;  // human-readable neighborhood, never exact address
@@ -79,7 +88,8 @@ export async function reverseGeocode(coords: LatLng): Promise<string> {
       'Unknown area'
     );
   } catch {
-    return `${coords.lat.toFixed(3)}, ${coords.lng.toFixed(3)}`;
+    // Never expose precise coordinates when reverse geocoding is unavailable.
+    return 'Nearby area';
   }
 }
 
@@ -187,6 +197,19 @@ export interface HandoffQRPayload {
   createdAt: string; // ISO string — used to enforce TTL
 }
 
+function encodeUtf8Base64(value: string): string {
+  const bytes = new TextEncoder().encode(value);
+  let binary = '';
+  bytes.forEach((byte) => { binary += String.fromCharCode(byte); });
+  return btoa(binary);
+}
+
+function decodeUtf8Base64(value: string): string {
+  const binary = atob(value);
+  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
 /**
  * Encode a handoff payload into a base64url string suitable for embedding in a URL.
  * The QR encodes the full URL: /relay/scan?d=<encoded>
@@ -194,8 +217,8 @@ export interface HandoffQRPayload {
 export function buildHandoffQRPayload(payload: HandoffQRPayload): string {
   try {
     const json = JSON.stringify(payload);
-    // btoa with URL-safe chars (replace +/= with -_~)
-    return btoa(json).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '~');
+    // Encode UTF-8 before base64 so subjects and destinations can contain any language.
+    return encodeUtf8Base64(json).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '~');
   } catch {
     return '';
   }
@@ -209,7 +232,7 @@ export function parseHandoffQRPayload(encoded: string): HandoffQRPayload | null 
   try {
     // Restore standard base64 chars
     const base64 = encoded.replace(/-/g, '+').replace(/_/g, '/').replace(/~/g, '=');
-    const json = atob(base64);
+    const json = decodeUtf8Base64(base64);
     const parsed = JSON.parse(json) as HandoffQRPayload;
     // Basic shape validation
     if (
@@ -218,7 +241,12 @@ export function parseHandoffQRPayload(encoded: string): HandoffQRPayload | null 
       typeof parsed.lat === 'number' &&
       typeof parsed.lng === 'number' &&
       typeof parsed.neighborhood === 'string' &&
-      typeof parsed.createdAt === 'string'
+      typeof parsed.subject === 'string' &&
+      typeof parsed.destination === 'string' &&
+      /^\d{4}$/.test(parsed.pin) &&
+      typeof parsed.createdAt === 'string' &&
+      !Number.isNaN(new Date(parsed.createdAt).getTime()) &&
+      isValidLatLng({ lat: parsed.lat, lng: parsed.lng })
     ) {
       return parsed;
     }
@@ -234,8 +262,10 @@ export function parseHandoffQRPayload(encoded: string): HandoffQRPayload | null 
 export function isHandoffQRExpired(createdAt: string, ttlMinutes = 10): boolean {
   try {
     const created = new Date(createdAt).getTime();
+    if (!Number.isFinite(created) || !Number.isFinite(ttlMinutes) || ttlMinutes <= 0) return true;
     const now = Date.now();
-    return now - created > ttlMinutes * 60 * 1000;
+    // A future-dated token is invalid rather than a way to extend its life.
+    return created > now + 60_000 || now - created > ttlMinutes * 60 * 1000;
   } catch {
     return true; // treat unparseable dates as expired
   }

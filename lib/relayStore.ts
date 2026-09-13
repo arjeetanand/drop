@@ -1,5 +1,5 @@
 import type { TrackingEvent } from '@/data/mockData';
-import type { LatLng, GpsWaypoint } from '@/lib/gpsUtils';
+import { getHandoffPin, type LatLng, type GpsWaypoint } from '@/lib/gpsUtils';
 
 const STORAGE_KEY = 'dear-exe:relay-state:v1';
 const DEFAULT_RELAY_ID = '3';
@@ -237,6 +237,7 @@ export function addRelayHandoff(
   const next = {
     ...current,
     handoffs: nextHandoffs,
+    currentCarrierName: handoff.name,
     durationHours: Math.max(current.durationHours, current.durationHours + 2),
   };
   return saveRelayState(next);
@@ -408,6 +409,14 @@ export function confirmHandoffFromQR(
   r2: { name: string; coords: LatLng; neighborhood: string; note?: string },
   relayDetails: RelayDetails = {}
 ): RelayState {
+  if (!/^\d{4}$/.test(r1.pin)) {
+    throw new Error('This handoff code is not valid. Ask the carrier to generate a fresh QR code.');
+  }
+  const storedPin = getHandoffPin(letterId);
+  if (storedPin && storedPin.pin !== r1.pin) {
+    throw new Error('This handoff code no longer matches the carrier. Ask them to generate a fresh QR code.');
+  }
+
   const current = getRelayState(letterId, relayDetails);
   const now = new Date();
 
@@ -477,4 +486,3 @@ export function confirmHandoffFromQR(
 
   return saveRelayState(next);
 }
-

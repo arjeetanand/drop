@@ -1,28 +1,33 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { ArrowLeft, ArrowRight, CheckCircle2, LockKeyhole, Sparkles } from 'lucide-react';
-import { dispatchLetter, getLetterDraft, saveLetterDraft, type LetterDraftState } from '@/lib/letterStore';
-import { syncLetterToBackend } from '@/lib/letterBackend';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { ArrowLeft, ArrowRight, Check, LockKeyhole } from 'lucide-react';
 import { LetterProgress } from '@/components/LetterProgress';
-import { WaxSealScene } from '@/components/WaxSealScene';
-import { playInterfaceSound } from '@/lib/interfaceSound';
+import { RelayEnvelope } from '@/components/RelayEnvelope';
+import { dispatchLetter, getLetterDraft, getLetterDraftById, saveLetterDraft, setActiveLetterDraft, type LetterDraftState } from '@/lib/letterStore';
+import { syncLetterToBackend } from '@/lib/letterBackend';
 
-export default function DispatchSequence() {
+function DispatchSequence() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [draft, setDraft] = useState<LetterDraftState | null>(null);
   const [sealed, setSealed] = useState(false);
   const [dispatching, setDispatching] = useState(false);
   const [ready, setReady] = useState(false);
+  const [missingLetter, setMissingLetter] = useState(false);
 
   useEffect(() => {
-    const currentDraft = getLetterDraft();
-    const hasAddress = Boolean(
-      currentDraft.address.name.trim() && currentDraft.address.city.trim() && currentDraft.address.country.trim()
-    );
-
+    const requestedId = searchParams.get('letter');
+    const currentDraft = requestedId ? getLetterDraftById(requestedId) : getLetterDraft();
+    if (!currentDraft) {
+      setMissingLetter(true);
+      setReady(true);
+      return;
+    }
+    if (requestedId && currentDraft.id !== getLetterDraft().id) setActiveLetterDraft(currentDraft);
+    const hasAddress = Boolean(currentDraft.address.name.trim() && currentDraft.address.city.trim() && currentDraft.address.country.trim());
     if (!currentDraft.content.trim()) {
       router.replace('/compose');
       return;
@@ -31,140 +36,118 @@ export default function DispatchSequence() {
       router.replace('/compose/address');
       return;
     }
-
     setDraft(currentDraft);
     setSealed(currentDraft.status === 'sealed' || currentDraft.status === 'dispatched');
     setReady(true);
-  }, [router]);
+  }, [router, searchParams]);
 
-  const handleSealPressed = () => {
+  const pressSeal = () => {
     if (sealed) return;
     setSealed(true);
+    setDraft((current) => current ? { ...current, status: 'sealed' } : current);
     saveLetterDraft({ status: 'sealed' });
   };
 
-  const handleDispatch = () => {
+  const handleDispatch = async () => {
     if (!sealed || dispatching) return;
     setDispatching(true);
-    playInterfaceSound('send');
-
-    const dispatched = dispatchLetter();
-    void syncLetterToBackend(dispatched);
-
-    window.setTimeout(() => {
-      router.push('/sent');
-    }, 700);
+    const dispatched = dispatchLetter(draft?.id);
+    setDraft(dispatched);
+    const synced = await syncLetterToBackend(dispatched);
+    router.push(`/sent?letter=${encodeURIComponent(dispatched.id)}&sync=${synced ? 'cloud' : 'local'}`);
   };
 
-  if (!ready || !draft) {
+  if (missingLetter) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-surface">
-        <p className="font-caption text-caption text-on-surface-variant">Preparing the ritual...</p>
-      </div>
+      <main className="page-shell page-enter">
+        <div className="page-container max-w-[680px]">
+          <div className="panel p-8 sm:p-10">
+            <p className="eyebrow">Dispatch unavailable</p>
+            <h1 className="section-title mt-3">That letter is no longer on this desk.</h1>
+            <p className="body-copy mt-4">Open the journey passport to follow it, or return to your mailbox and choose a letter saved on this device.</p>
+            <div className="mt-7 flex flex-wrap gap-3">
+              <Link href="/mailbox" className="button-primary">Back to mailbox <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
+              <Link href="/journey" className="button-secondary">Open journey</Link>
+            </div>
+          </div>
+        </div>
+      </main>
     );
   }
 
-  const recipientName = draft.address.name || draft.recipient || 'Your correspondent';
-  const destination = `${draft.address.city}, ${draft.address.country}`;
+  if (!ready || !draft) {
+    return <main className="page-shell"><div className="page-container max-w-[900px]"><p className="meta">Preparing your envelope…</p></div></main>;
+  }
+
+  const recipient = draft.address.name || draft.recipient || 'your correspondent';
+  const destination = [draft.address.city, draft.address.country].filter(Boolean).join(', ');
 
   return (
-    <div className="page-enter min-h-screen flex flex-col bg-surface">
-      {/* Header */}
-      <header className="px-margin-mobile md:px-margin-desktop py-lg border-b border-outline-variant bg-surface">
-        <div className="max-w-[1140px] mx-auto flex items-center justify-between">
-          <Link
-            href="/compose/address"
-            className="flex items-center gap-sm text-on-surface-variant hover:text-primary transition-colors"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            <span className="font-caption text-caption hidden sm:inline">Back to Destination</span>
-          </Link>
-          <h1 className="font-headline-md text-headline-md text-primary">The Sealing Ceremony</h1>
-          <div className="w-20" />
-        </div>
-        <div className="mx-auto mt-lg max-w-[1140px] border-t border-outline-variant/20 pt-md">
-          <LetterProgress current="send" />
-        </div>
-      </header>
-
-      {/* Main Ceremony Container */}
-      <main className="flex-grow flex flex-col items-center justify-center p-margin-mobile md:p-margin-desktop w-full max-w-[1020px] mx-auto">
-        {/* Stage Header */}
-        <div className="mb-8 text-center">
-          <p className="font-caption text-caption uppercase tracking-[0.2em] text-amber-accent">Stage 3 of 3</p>
-          <h1 className="mt-2 font-headline-lg text-[clamp(2.4rem,4.5vw,4.2rem)] leading-[1] tracking-[-0.03em] text-ink-navy">
-            Make it official.
-          </h1>
-          <p className="mt-3 font-body-lg text-body-lg text-on-surface-variant max-w-xl mx-auto leading-relaxed">
-            {sealed
-              ? 'Your words are sealed and locked behind unbroken wax. Dispatch the envelope to mint its human relay passport.'
-              : 'Press the brass die into the warm wax pool. Once stamped, the letter cannot be unread by any carrier along the way.'}
-          </p>
-
-          {/* Letter Info Capsule */}
-          <div className="mt-4 inline-flex items-center gap-2 border border-outline-variant/60 bg-surface-container-lowest px-4 py-1.5 font-caption text-caption text-on-surface-variant rounded-full">
-            <LockKeyhole className="h-3.5 w-3.5 text-mint-accent" />
-            <span>To <strong className="text-ink-navy">{recipientName}</strong> in {destination}</span>
-            <span>·</span>
-            <span>&ldquo;{draft.subject}&rdquo;</span>
+    <main className="page-shell page-enter">
+      <div className="page-container max-w-[980px]">
+        <header className="page-header flex-col gap-5">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <Link href="/compose/address" className="button-quiet -ml-2"><ArrowLeft className="h-4 w-4" aria-hidden="true" /> Back to address</Link>
+            <span className="meta inline-flex items-center gap-2"><LockKeyhole className="h-3.5 w-3.5 text-[#4f9d7a]" aria-hidden="true" /> {draft.content.trim().split(/\s+/).length} words protected</span>
           </div>
-        </div>
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="eyebrow">Dispatch</p>
+              <h1 className="section-title mt-3">Close the envelope. Let it go.</h1>
+              <p className="body-copy mt-3 max-w-xl">One last check, then your letter gets a relay passport you can share with its first carrier.</p>
+            </div>
+            <LetterProgress current="send" />
+          </div>
+        </header>
 
-        {/* The Tactile Sealing Desk */}
-        <div className="w-full">
-          <WaxSealScene
-            sealId={draft.sealId || 'fern'}
-            sealColor={draft.sealColor || '#991b1b'}
-            sealMonogram={draft.sealMonogram || 'E'}
-            recipientName={recipientName}
-            destinationCity={draft.address.city}
-            destinationCountry={draft.address.country}
-            isSealed={sealed}
-            onPressed={handleSealPressed}
-          />
-        </div>
-
-        {/* Action Controls */}
-        <div className="mt-8 w-full max-w-md flex flex-col items-center text-center">
-          {!sealed ? (
-            <>
-              <button
-                type="button"
-                onClick={handleSealPressed}
-                className="w-full inline-flex items-center justify-center gap-2 bg-ink-navy py-4 px-xl font-label-md text-label-md uppercase tracking-widest text-surface-bright transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg rounded-sm"
-              >
-                <Sparkles className="h-4 w-4 text-amber-accent" />
-                <span>Stamp the Wax Seal</span>
-              </button>
-              <p className="mt-3 font-caption text-caption text-on-surface-variant">
-                Click above or tap the brass die on the envelope to press.
-              </p>
-            </>
-          ) : (
-            <>
-              {/* Sealed Status Pill */}
-              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-mint-accent/50 bg-mint-accent/10 px-4 py-1.5 font-caption text-caption text-ink-navy">
-                <CheckCircle2 className="h-4 w-4 text-mint-accent" />
-                <span>Envelope wax-sealed & protected · 0 words exposed</span>
+        <div className="mt-10 grid gap-10 md:grid-cols-[minmax(0,1fr)_minmax(300px,0.78fr)] md:items-start">
+          <section className="paper-card p-6 sm:p-9">
+            <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[rgba(16,42,67,0.12)] pb-5">
+              <div>
+                <p className="eyebrow">Your letter</p>
+                <h2 className="mt-2 font-headline-md text-3xl text-ink-navy">{draft.subject || 'Untitled letter'}</h2>
               </div>
+              <span className={`status-mark ${sealed ? 'success' : 'pending'}`}><span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" /> {sealed ? 'Sealed' : 'Ready to seal'}</span>
+            </div>
+            <div className="mt-6 grid gap-4 text-sm sm:grid-cols-2">
+              <div><p className="meta">To</p><p className="mt-1 font-semibold text-ink-navy">{recipient}</p></div>
+              <div><p className="meta">Destination</p><p className="mt-1 font-semibold text-ink-navy">{destination}</p></div>
+            </div>
+            <div className="mt-7 border-t border-[rgba(16,42,67,0.1)] pt-7">
+              <div className="flex justify-center py-5">
+                <RelayEnvelope compact sealId={draft.sealId} sealMark={draft.sealMonogram || undefined} sealColor={draft.sealColor} />
+              </div>
+              <p className="mx-auto mt-5 max-w-md text-center font-literata text-lg leading-relaxed text-on-surface-variant">“{draft.content.slice(0, 220)}{draft.content.length > 220 ? '…' : ''}”</p>
+            </div>
+          </section>
 
-              {/* Final Dispatch Button */}
-              <button
-                type="button"
-                onClick={handleDispatch}
-                disabled={dispatching}
-                className="w-full inline-flex items-center justify-center gap-3 bg-amber-accent py-4 px-xl font-label-md text-label-md uppercase tracking-widest text-ink-navy transition-all duration-300 hover:-translate-y-0.5 hover:bg-amber-accent/90 hover:shadow-lg rounded-sm disabled:opacity-50"
-              >
-                <span>{dispatching ? 'Minting Relay Passport…' : 'Dispatch to Human Relay'}</span>
-                <ArrowRight className="h-4 w-4" />
-              </button>
-              <p className="mt-3 font-caption text-caption text-on-surface-variant">
-                Next: Share your relay passport link with the first person to carry it.
-              </p>
-            </>
-          )}
+          <aside className="panel p-6 sm:p-7">
+            <div className="flex items-start gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[rgba(79,157,122,0.12)] text-[#276a4d]"><LockKeyhole className="h-4 w-4" aria-hidden="true" /></span>
+              <div><h2 className="font-headline-md text-2xl text-ink-navy">Private by design</h2><p className="mt-2 text-sm leading-relaxed text-on-surface-variant">Carriers can move the envelope without seeing the message inside.</p></div>
+            </div>
+            <div className="mt-7 space-y-4 border-t border-[rgba(16,42,67,0.1)] pt-6 text-sm">
+              {['The letter is saved to your desk.', 'The seal marks the envelope as protected.', 'A relay passport lets people carry it forward.'].map((item) => <div key={item} className="flex items-start gap-3"><Check className="mt-0.5 h-4 w-4 shrink-0 text-[#4f9d7a]" aria-hidden="true" /><span className="leading-relaxed text-on-surface-variant">{item}</span></div>)}
+            </div>
+            {!sealed ? (
+              <button type="button" onClick={pressSeal} className="button-primary mt-8 w-full justify-between">Press the wax seal <ArrowRight className="h-4 w-4" aria-hidden="true" /></button>
+            ) : (
+              <div className="mt-8 space-y-3">
+                <div className="notice flex items-center gap-2"><Check className="h-4 w-4" aria-hidden="true" /> Envelope sealed. Nothing is exposed.</div>
+                <button type="button" onClick={() => void handleDispatch()} disabled={dispatching} className="button-primary w-full justify-between disabled:opacity-60">{dispatching ? 'Minting passport…' : 'Dispatch to human relay'} <ArrowRight className="h-4 w-4" aria-hidden="true" /></button>
+              </div>
+            )}
+          </aside>
         </div>
-      </main>
-    </div>
+      </div>
+    </main>
+  );
+}
+
+export default function DispatchPage() {
+  return (
+    <Suspense fallback={<main className="page-shell"><div className="page-container max-w-[900px]"><p className="meta">Preparing your envelope…</p></div></main>}>
+      <DispatchSequence />
+    </Suspense>
   );
 }

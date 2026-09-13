@@ -33,7 +33,7 @@ const courier = Courier_Prime({
 
 export const metadata: Metadata = {
   title: 'Dear.exe — Human Relay',
-  description: 'A quiet, human-powered way to send messages worth carrying.',
+  description: 'A quieter way to send something real through human hands.',
 };
 
 export default function RootLayout({
@@ -44,11 +44,16 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${inter.variable} ${playfair.variable} ${literata.variable} ${courier.variable} font-sans antialiased text-slate-900 bg-[#f8f9fa] selection:bg-emerald-500/20`}
+        className={`${inter.variable} ${playfair.variable} ${literata.variable} ${courier.variable} font-sans antialiased text-ink-navy bg-[#f7f4ee] selection:bg-emerald-500/20`}
       >
-        <div className="min-h-screen bg-[#f8f9fa] text-slate-900">
+        <a href="#main-content" className="skip-link">
+          Skip to content
+        </a>
+        <div className="min-h-screen bg-[#f7f4ee] text-slate-900">
           <Sidebar />
-          <MainContent>{children}</MainContent>
+          <MainContent>
+            <div id="main-content">{children}</div>
+          </MainContent>
         </div>
       </body>
     </html>

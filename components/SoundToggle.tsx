@@ -22,7 +22,7 @@ export function SoundToggle() {
       type="button"
       onClick={toggle}
       aria-label={muted ? 'Turn sound on' : 'Mute interface sounds'}
-      className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-outline-variant text-on-surface-variant transition-colors hover:border-primary hover:text-primary"
+      className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[rgba(16,42,67,0.16)] bg-white/45 text-on-surface-variant transition-colors hover:border-ink-navy hover:bg-white hover:text-ink-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f7f4ee]"
     >
       <Icon className="h-4 w-4" />
     </button>
