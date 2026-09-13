@@ -10,23 +10,9 @@ export interface MockLetter {
   excerpt: string;
   subject: string;
   teaser?: string[];
-}
-
-export interface MockSeal {
-  id: string;
-  name: string;
-  description: string;
-  emoji: string;
-}
-
-export interface TrackingEvent {
-  id: string;
-  status: string;
-  note: string;
-  date: string;
-  time: string;
-  done: boolean;
-  current?: boolean;
+  sealId?: string;
+  sealColor?: string;
+  sealMonogram?: string;
 }
 
 export const mockLetters: MockLetter[] = [
@@ -40,6 +26,8 @@ export const mockLetters: MockLetter[] = [
     excerpt: 'I kept the blue hour for you. It was hiding between the rain and the first streetlight, exactly where we left it.',
     subject: 'The blue hour',
     teaser: ['I kept the blue hour for you.', 'It was hiding between the rain…', 'Open when you want a small secret.'],
+    sealId: 'celestial',
+    sealColor: '#102a43',
   },
   {
     id: '1',
@@ -48,6 +36,8 @@ export const mockLetters: MockLetter[] = [
     status: 'delivered',
     excerpt: 'The garden has been overgrown since you left. I keep finding your notes in the margins of books I thought I had finished reading...',
     subject: 'The Garden in August',
+    sealId: 'fern',
+    sealColor: '#1e3a2b',
   },
   {
     id: '2',
@@ -56,6 +46,8 @@ export const mockLetters: MockLetter[] = [
     status: 'dispatched',
     excerpt: 'I have been thinking about what you said about the sea. How it remembers everything and nothing at once. I think I understand now...',
     subject: 'On the Sea and Memory',
+    sealId: 'compass',
+    sealColor: '#b45309',
   },
   {
     id: '3',
@@ -64,6 +56,8 @@ export const mockLetters: MockLetter[] = [
     status: 'draft',
     excerpt: 'Morning light through the kitchen window. The kettle is whistling and I am thinking of you. There is so much I want to say, but the pen feels heavy today...',
     subject: 'Morning Light',
+    sealId: 'rose',
+    sealColor: '#991b1b',
   },
   {
     id: '4',
@@ -72,6 +66,9 @@ export const mockLetters: MockLetter[] = [
     status: 'sealed',
     excerpt: 'Thank you for the photograph. The one from the pier. I had forgotten how young we looked, how certain we were that everything would stay...',
     subject: 'The Pier Photograph',
+    sealId: 'monogram',
+    sealColor: '#991b1b',
+    sealMonogram: 'I',
   },
   {
     id: '5',
@@ -80,6 +77,8 @@ export const mockLetters: MockLetter[] = [
     status: 'delivered',
     excerpt: 'Your last letter arrived on a Tuesday. I read it three times before breakfast. The part about the clock shop made me laugh, and then it made me cry...',
     subject: 'Tuesday Letters',
+    sealId: 'quill',
+    sealColor: '#991b1b',
   },
 ];
 
@@ -93,32 +92,114 @@ export const currentFocusDraft = {
   wordCount: 247,
 };
 
+export interface TrackingEvent {
+  id: string;
+  status: string;
+  note: string;
+  date: string;
+  time: string;
+  done: boolean;
+  current?: boolean;
+}
+
+export interface MockSeal {
+  id: string;
+  name: string;
+  subtitle: string;
+  description: string;
+  mark: string;
+  emoji: string; // backwards compatibility
+  defaultWaxColor: string;
+}
+
+export interface WaxColorOption {
+  id: string;
+  name: string;
+  hex: string;
+}
+
+export const waxColors: WaxColorOption[] = [
+  { id: 'crimson', name: 'Crimson Scarlet', hex: '#991b1b' },
+  { id: 'forest', name: 'Forest Moss', hex: '#1e3a2b' },
+  { id: 'midnight', name: 'Midnight Navy', hex: '#102a43' },
+  { id: 'amber', name: 'Antique Amber', hex: '#b45309' },
+];
+
 export const mockSeals: MockSeal[] = [
   {
     id: 'heart',
-    name: 'Heart',
-    description: 'A classic symbol of affection',
+    name: 'Sacred Heart',
+    subtitle: 'True Devotion',
+    description: 'For unspoken closeness, enduring affection, and tender truth.',
+    mark: '♥',
     emoji: '♥',
+    defaultWaxColor: '#991b1b',
   },
   {
     id: 'monogram',
-    name: 'Monogram',
-    description: 'Your initials, pressed in wax',
+    name: 'Intaglio Monogram',
+    subtitle: 'Personal Signet',
+    description: 'A bespoke brass initial pressed in wax, made solely for them.',
+    mark: 'M',
     emoji: 'M',
+    defaultWaxColor: '#991b1b',
   },
   {
     id: 'crest',
-    name: 'Crest',
-    description: 'A family crest, elegant and formal',
+    name: 'Guiding Crest',
+    subtitle: 'Steadfast Light',
+    description: 'For honor, safe journeys, and steadfast promises across miles.',
+    mark: '✦',
     emoji: '✦',
+    defaultWaxColor: '#102a43',
   },
   {
-    id: 'rose',
-    name: 'Rose',
-    description: 'A single rose, delicate and quiet',
+    id: 'blossom',
+    name: 'Wild Blossom',
+    subtitle: 'Quiet Grace',
+    description: 'For words written without rush, gratitude, and tender memory.',
+    mark: '✿',
     emoji: '✿',
+    defaultWaxColor: '#991b1b',
+  },
+  {
+    id: 'fern',
+    name: 'Botanical Fern',
+    subtitle: 'Quiet Growth',
+    description: 'For patience, resilience, and quiet endurance.',
+    mark: '🌿',
+    emoji: '🌿',
+    defaultWaxColor: '#1e3a2b',
+  },
+  {
+    id: 'compass',
+    name: "Wayfarer's Compass",
+    subtitle: 'Human Relay',
+    description: 'For letters crossing states and oceans through hands of strangers.',
+    mark: '🧭',
+    emoji: '🧭',
+    defaultWaxColor: '#b45309',
   },
 ];
+
+// Alias map for legacy IDs
+const legacySealAliases: Record<string, string> = {
+  celestial: 'crest',
+  rose: 'blossom',
+  quill: 'monogram',
+};
+
+export function getSealInfo(sealId?: string | null, monogram?: string | null, waxColor?: string | null) {
+  const resolvedId = (sealId && legacySealAliases[sealId]) || sealId;
+  const found = mockSeals.find((s) => s.id === resolvedId) || mockSeals[0];
+  const displayMark = found.id === 'monogram' && monogram ? monogram.toUpperCase().slice(0, 2) : found.mark;
+  const color = waxColor || found.defaultWaxColor;
+  return {
+    ...found,
+    displayMark,
+    color,
+  };
+}
 
 export const mockAddress = {
   name: 'Eleanor Hartwell',

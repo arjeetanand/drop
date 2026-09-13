@@ -77,49 +77,64 @@ function Composer() {
   }[alignment];
 
   return (
-    <div className="page-enter min-h-screen flex flex-col bg-background">
-      {/* Minimal toolbar */}
+    <div className="page-enter min-h-screen flex flex-col bg-[#f7f4ee]">
+      {/* Floating Zen Control Dock */}
       <div
         className={cn(
-          'fixed top-0 left-0 right-0 z-50 transition-transform duration-300 bg-surface/90 backdrop-blur-sm border-b border-outline-variant/30',
+          'fixed top-0 left-0 right-0 z-50 transition-transform duration-300 border-b border-[#102a43]/[0.08] bg-[#fbf9f4]/95 backdrop-blur-md',
           showToolbar ? 'translate-y-0' : '-translate-y-full'
         )}
       >
-        <div className="flex items-center justify-between px-margin-mobile md:px-margin-desktop py-sm">
-          <div className="flex items-center gap-md">
+        <div className="max-w-[1080px] mx-auto flex items-center justify-between px-4 sm:px-8 py-3">
+          <div className="flex items-center gap-3">
             <Link
               href="/"
-              className="flex items-center gap-sm text-on-surface-variant hover:text-primary transition-colors"
+              className="flex items-center gap-2 font-caption text-xs uppercase tracking-wider text-on-surface-variant hover:text-primary transition-colors"
             >
-              <ArrowLeft className="h-4 w-4" />
-              <span className="font-caption text-caption hidden sm:inline">Back to Desk</span>
+              <ArrowLeft className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Back to Desk</span>
             </Link>
           </div>
 
-          <div className="flex items-center gap-sm">
+          <div className="flex items-center gap-3">
+            {/* Auto-save status pill */}
+            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#102a43]/5 text-on-surface-variant font-mono text-[10px] tracking-wider">
+              {saved ? (
+                <>
+                  <Check className="h-3 w-3 text-emerald-600" />
+                  <span>Saved to desk</span>
+                </>
+              ) : (
+                <>
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                  <span>Autosaving…</span>
+                </>
+              )}
+            </div>
+
             {/* Font size controls */}
-            <div className="flex items-center gap-xs border border-outline-variant rounded-full px-sm py-xs">
+            <div className="flex items-center gap-1 border border-[#102a43]/15 bg-white rounded-full px-2 py-0.5 shadow-2xs">
               <button
                 onClick={() => setFontSize((s) => Math.max(14, s - 2))}
-                className="text-on-surface-variant hover:text-primary transition-colors"
+                className="p-1 text-on-surface-variant hover:text-primary transition-colors"
                 aria-label="Decrease font size"
               >
                 <Minus className="h-3 w-3" />
               </button>
-              <span className="font-caption text-caption text-on-surface-variant min-w-[24px] text-center">
+              <span className="font-mono text-xs text-on-surface-variant min-w-[20px] text-center font-medium">
                 {fontSize}
               </span>
               <button
                 onClick={() => setFontSize((s) => Math.min(28, s + 2))}
-                className="text-on-surface-variant hover:text-primary transition-colors"
+                className="p-1 text-on-surface-variant hover:text-primary transition-colors"
                 aria-label="Increase font size"
               >
-                <Plus className="h-4 w-4" />
+                <Plus className="h-3 w-3" />
               </button>
             </div>
 
             {/* Alignment controls */}
-            <div className="flex items-center gap-xs border border-outline-variant rounded-full px-sm py-xs">
+            <div className="flex items-center gap-0.5 border border-[#102a43]/15 bg-white rounded-full p-0.5 shadow-2xs">
               {([
                 { value: 'left', icon: AlignLeft },
                 { value: 'center', icon: AlignCenter },
@@ -129,36 +144,21 @@ function Composer() {
                   key={value}
                   onClick={() => setAlignment(value)}
                   className={cn(
-                    'transition-colors',
+                    'p-1.5 rounded-full transition-colors',
                     alignment === value
-                      ? 'text-primary'
+                      ? 'bg-ink-navy text-surface-bright shadow-xs'
                       : 'text-on-surface-variant hover:text-primary'
                   )}
                   aria-label={`Align ${value}`}
                 >
-                  <Icon className="h-4 w-4" />
+                  <Icon className="h-3.5 w-3.5" />
                 </button>
               ))}
             </div>
           </div>
         </div>
-        <div className="border-t border-outline-variant/20 px-margin-mobile py-2 md:px-margin-desktop">
+        <div className="border-t border-[#102a43]/[0.06] px-4 py-2 sm:px-8 max-w-[1080px] mx-auto">
           <LetterProgress current="write" />
-        </div>
-      </div>
-
-      {/* Auto-save indicator */}
-      <div className="fixed top-16 right-4 z-50">
-        <div
-          className={cn(
-            'flex items-center gap-sm px-sm py-xs bg-surface-container-lowest border border-outline-variant rounded-full transition-all duration-500',
-            saved ? 'opacity-100' : 'opacity-0 pointer-events-none'
-          )}
-        >
-          <Check className="h-3 w-3 text-green-700" />
-          <span className="font-caption text-caption text-on-surface-variant">
-            Saved to desk...
-          </span>
         </div>
       </div>
 
@@ -166,41 +166,45 @@ function Composer() {
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="flex-grow overflow-y-auto pt-20 pb-32"
+        className="flex-grow overflow-y-auto pt-28 pb-32"
       >
-        <div className="relative w-full max-w-[800px] mx-auto px-margin-mobile md:px-margin-desktop">
-          <div className="relative bg-surface-container-lowest border border-outline-variant/30 flex flex-col p-lg md:p-xl shadow-[0_0_40px_rgba(0,0,0,0.02)] card-depth min-h-[70vh]">
-            {/* Letter details */}
-            <div className="mb-xl grid grid-cols-1 gap-md border-b border-outline-variant/30 pb-lg sm:grid-cols-2">
-              <label className="font-caption text-caption text-on-surface-variant">
-                To (Recipient Name)
+        <div className="relative w-full max-w-[820px] mx-auto px-4 sm:px-6">
+          <div className="relative bg-white border border-[#102a43]/[0.08] flex flex-col p-8 sm:p-12 md:p-16 rounded-md shadow-[0_2px_8px_rgba(16,42,67,0.03),0_16px_36px_rgba(16,42,67,0.06)] min-h-[75vh]">
+            {/* Letter Header Fields */}
+            <div className="mb-8 grid grid-cols-1 gap-6 border-b border-[#102a43]/10 pb-6 sm:grid-cols-2">
+              <div>
+                <label className="block font-mono text-[10px] uppercase tracking-wider text-on-surface-variant/70 mb-1 font-medium">
+                  To (Recipient Name) <span className="text-red-600">*</span>
+                </label>
                 <input
                   value={recipient}
                   onChange={(event) => setRecipient(event.target.value)}
-                  className="typewriter-input mt-xs text-base text-primary"
-                  placeholder="Who is this for? (e.g. Eleanor)"
+                  className="typewriter-input text-lg font-medium text-ink-navy placeholder:text-ink-navy/30"
+                  placeholder="e.g. Eleanor Hartwell"
                   aria-label="Letter recipient"
                 />
-              </label>
-              <label className="font-caption text-caption text-on-surface-variant">
-                Subject (Envelope Title)
+              </div>
+              <div>
+                <label className="block font-mono text-[10px] uppercase tracking-wider text-on-surface-variant/70 mb-1 font-medium">
+                  Subject (Envelope Title) <span className="text-red-600">*</span>
+                </label>
                 <input
                   value={subject}
                   onChange={(event) => setSubject(event.target.value)}
-                  className="typewriter-input mt-xs text-base text-primary"
-                  placeholder="Give it a title (e.g. Morning Light)"
+                  className="typewriter-input text-lg font-medium text-ink-navy placeholder:text-ink-navy/30"
+                  placeholder="e.g. Morning Light"
                   aria-label="Letter subject"
                 />
-              </label>
+              </div>
             </div>
 
-            {/* Metadata */}
-            <div className="mb-lg flex items-center justify-between">
-              <span className="font-caption text-caption text-on-surface-variant">
-                {wordCount} {wordCount === 1 ? 'word' : 'words'} · about {readingMinutes} min read
+            {/* Reading metadata badge */}
+            <div className="mb-6 flex items-center justify-between border-b border-[#102a43]/5 pb-3 font-mono text-[11px] text-on-surface-variant/70">
+              <span>
+                {wordCount} {wordCount === 1 ? 'word' : 'words'} · ~{readingMinutes} min read
               </span>
-              <span className="font-caption text-caption text-on-surface-variant">
-                {saved ? 'Saved to desk · private' : ready ? 'Saving…' : 'Loading draft…'}
+              <span className="text-amber-accent font-medium">
+                Cotton Parchment · Heavyweight
               </span>
             </div>
 
@@ -210,32 +214,29 @@ function Composer() {
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 className={cn(
-                  'composer-textarea font-body-lg text-on-surface leading-[32px] placeholder:text-outline-variant placeholder:font-caption placeholder:text-caption placeholder:tracking-widest',
+                  'composer-textarea font-body-lg text-ink-navy leading-[32px] placeholder:text-[#102a43]/30 placeholder:font-caption placeholder:text-xs placeholder:tracking-widest',
                   alignClass
                 )}
                 style={{ fontSize: `${fontSize}px` }}
-                placeholder="Write the words that deserve a journey…"
+                placeholder="Write the words that deserve a journey through human hands…"
                 aria-label="Letter contents"
                 spellCheck={false}
                 autoFocus
               />
             </div>
-
-            {/* Decorative corner */}
-            <div className="absolute bottom-0 right-0 w-8 h-8 border-b border-r border-outline-variant/20 m-1 pointer-events-none" />
           </div>
         </div>
       </div>
 
-      {/* Seal Letter CTA */}
-      <div className="fixed bottom-4 left-4 right-4 z-50 sm:bottom-6 sm:left-auto sm:right-6">
+      {/* Seal Letter Primary Action Dock */}
+      <div className="fixed bottom-6 right-6 z-50">
         <button
           onClick={handleSealLetter}
           disabled={!ready || !content.trim() || !recipient.trim() || !subject.trim()}
-          className="flex w-full items-center justify-center gap-sm rounded-sm border border-primary/20 bg-secondary-container px-xl py-md font-label-md text-label-md uppercase tracking-widest text-on-secondary-container transition-all duration-300 hover:-translate-y-0.5 hover:bg-secondary-fixed hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
+          className="flex items-center gap-2 rounded-md bg-ink-navy px-6 py-3.5 font-label-md text-xs uppercase tracking-widest text-surface-bright shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl active:translate-y-0 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40"
         >
-          Next: Destination & Seal
-          <ArrowRight className="h-4 w-4" />
+          <span>Next: Destination & Seal</span>
+          <ArrowRight className="h-4 w-4 text-surface-bright" />
         </button>
       </div>
     </div>

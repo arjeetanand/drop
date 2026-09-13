@@ -1,4 +1,5 @@
 import type { TrackingEvent } from '@/data/mockData';
+import type { LatLng, GpsWaypoint } from '@/lib/gpsUtils';
 
 const STORAGE_KEY = 'dear-exe:relay-state:v1';
 const DEFAULT_RELAY_ID = '3';
@@ -13,6 +14,10 @@ export interface RelayHandoff {
   note: string;
   createdAt: string;
   next?: boolean;
+  // GPS proof-of-carry fields (optional — only present after GPS-verified handoff)
+  coords?: LatLng;
+  neighborhood?: string;
+  distanceClosedKm?: number;  // how much closer this carrier got the letter
 }
 
 export interface RelayState {
@@ -23,6 +28,9 @@ export interface RelayState {
   startedAt: string;
   durationHours: number;
   handoffs: RelayHandoff[];
+  gpsWaypoints?: GpsWaypoint[];          // ordered GPS trail for the journey map
+  destinationNeighborhood?: string;      // where the letter is ultimately heading
+  currentCarrierName?: string;           // name of person currently holding the letter
 }
 
 export interface RelayDetails {
@@ -41,41 +49,76 @@ const seededRelay: RelayState = {
   subject: 'Morning Light',
   recipient: 'Eleanor',
   passcode: 'MORNING-LIGHT',
-  startedAt: '2026-08-26T07:12:00.000Z',
-  durationHours: 14,
+  startedAt: '2026-09-13T07:12:00.000Z',
+  durationHours: 6,
+  destinationNeighborhood: 'Colaba',
+  currentCarrierName: 'Priya',
+  gpsWaypoints: [
+    {
+      coords: { lat: 19.0596, lng: 72.8295 },
+      neighborhood: 'Bandra West',
+      timestamp: '2026-09-13T07:12:00.000Z',
+      carrierName: 'You',
+      carrierNote: 'Sealed and started the relay at the café.',
+    },
+    {
+      coords: { lat: 19.0176, lng: 72.8562 },
+      neighborhood: 'Dadar',
+      timestamp: '2026-09-13T09:30:00.000Z',
+      carrierName: 'Arjun',
+      carrierNote: 'Picked it up after the morning market.',
+    },
+    {
+      coords: { lat: 18.9897, lng: 72.8307 },
+      neighborhood: 'Worli',
+      timestamp: '2026-09-13T11:45:00.000Z',
+      carrierName: 'Priya',
+      carrierNote: 'Currently carrying — heading south.',
+    },
+  ],
   handoffs: [
     {
       id: 'origin',
       name: 'You',
       role: 'sender',
-      location: 'Portland',
+      location: 'Bandra West',
       note: 'Sealed with care and started the relay.',
-      createdAt: '2026-08-26T07:12:00.000Z',
+      createdAt: '2026-09-13T07:12:00.000Z',
+      coords: { lat: 19.0596, lng: 72.8295 },
+      neighborhood: 'Bandra West',
     },
     {
-      id: 'maya',
-      name: 'Maya',
+      id: 'arjun',
+      name: 'Arjun',
       role: 'carrier',
-      location: 'Portland',
-      note: 'Carried it across town after the morning market.',
-      createdAt: '2026-08-26T09:04:00.000Z',
+      location: 'Dadar',
+      note: 'Carried it after the morning market.',
+      createdAt: '2026-09-13T09:30:00.000Z',
+      coords: { lat: 19.0176, lng: 72.8562 },
+      neighborhood: 'Dadar',
+      distanceClosedKm: 5.4,
     },
     {
-      id: 'jon',
-      name: 'Jon',
+      id: 'priya',
+      name: 'Priya',
       role: 'carrier',
-      location: 'Nashville',
-      note: 'Picked it up on the road and kept it moving.',
-      createdAt: '2026-08-26T16:58:00.000Z',
+      location: 'Worli',
+      note: 'Currently heading south toward Colaba.',
+      createdAt: '2026-09-13T11:45:00.000Z',
+      coords: { lat: 18.9897, lng: 72.8307 },
+      neighborhood: 'Worli',
+      distanceClosedKm: 3.2,
     },
     {
       id: 'recipient',
       name: 'Eleanor',
       role: 'recipient',
-      location: 'Nashville',
+      location: 'Colaba',
       note: 'The person this letter is trying to find.',
-      createdAt: '2026-08-27T01:12:00.000Z',
+      createdAt: '2026-09-13T07:12:00.000Z',
       next: true,
+      coords: { lat: 18.9220, lng: 72.8347 },
+      neighborhood: 'Colaba',
     },
   ],
 };
@@ -248,3 +291,190 @@ export function relayToTrackingEvents(relay: RelayState): TrackingEvent[] {
     };
   });
 }
+
+// --- Available letters for carriers to pick up ---
+
+export interface AvailableLetter {
+  letterId: string;
+  subject: string;
+  recipientFirstName: string;
+  destinationNeighborhood: string;
+  currentNeighborhood: string;
+  distanceKm: number;       // from carrier's current location to letter's current position
+  remainingKm: number;      // from letter's position to destination
+  waitingMinutes: number;   // how long letter has been waiting for a carrier
+}
+
+/** Mock letters awaiting a carrier near the user. In a real app this would be a server query. */
+export function getNearbyLetters(userNeighborhood = 'Worli'): AvailableLetter[] {
+  return [
+    {
+      letterId: DEFAULT_RELAY_ID,
+      subject: 'Morning Light',
+      recipientFirstName: 'Eleanor',
+      destinationNeighborhood: 'Colaba',
+      currentNeighborhood: userNeighborhood,
+      distanceKm: 0.3,
+      remainingKm: 8.2,
+      waitingMinutes: 22,
+    },
+    {
+      letterId: 'letter-ananya',
+      subject: 'A Sunday Recipe',
+      recipientFirstName: 'Ananya',
+      destinationNeighborhood: 'Churchgate',
+      currentNeighborhood: 'Prabhadevi',
+      distanceKm: 1.1,
+      remainingKm: 6.0,
+      waitingMinutes: 47,
+    },
+  ];
+}
+
+/**
+ * Record that a new carrier has accepted the letter.
+ * Adds a GPS-stamped carrier handoff and updates the currentCarrierName.
+ */
+export function acceptCarry(
+  letterId: string,
+  details: { name: string; neighborhood: string; coords?: LatLng; note?: string },
+  relayDetails: RelayDetails = {}
+): RelayState {
+  const current = getRelayState(letterId, relayDetails);
+  const now = new Date();
+
+  const waypoint: GpsWaypoint = {
+    coords: details.coords ?? { lat: 0, lng: 0 },
+    neighborhood: details.neighborhood,
+    timestamp: now.toISOString(),
+    carrierName: details.name,
+    carrierNote: details.note ?? 'Accepted the letter.',
+  };
+
+  const handoff: RelayHandoff = {
+    id: `handoff-${now.getTime()}`,
+    name: details.name,
+    role: 'carrier',
+    location: details.neighborhood,
+    note: details.note ?? 'Accepted the letter and started carrying.',
+    createdAt: now.toISOString(),
+    coords: details.coords,
+    neighborhood: details.neighborhood,
+  };
+
+  const recipientIndex = current.handoffs.findIndex((h) => h.role === 'recipient');
+  const nextHandoffs = [...current.handoffs];
+  if (recipientIndex >= 0) {
+    nextHandoffs.splice(recipientIndex, 0, handoff);
+  } else {
+    nextHandoffs.push(handoff);
+  }
+
+  const next: RelayState = {
+    ...current,
+    handoffs: nextHandoffs,
+    currentCarrierName: details.name,
+    gpsWaypoints: [...(current.gpsWaypoints ?? []), waypoint],
+    durationHours: current.durationHours + 0,
+  };
+
+  return saveRelayState(next);
+}
+
+/**
+ * Confirm a PIN-verified handoff between two carriers (legacy — kept as fallback).
+ * Appends the new carrier's GPS waypoint to the relay trail.
+ */
+export function confirmHandoff(
+  letterId: string,
+  details: { name: string; neighborhood: string; coords?: LatLng; note?: string },
+  relayDetails: RelayDetails = {}
+): RelayState {
+  return acceptCarry(letterId, details, relayDetails);
+}
+
+/**
+ * Confirm a QR-based seamless handoff.
+ *
+ * Stamps TWO GPS waypoints:
+ *   1. r1Coords — where the outgoing carrier was when they showed the QR
+ *   2. r2Coords — where the incoming carrier was when they scanned it
+ *
+ * Marks the outgoing carrier's handoff as done and inserts the new carrier.
+ */
+export function confirmHandoffFromQR(
+  letterId: string,
+  r1: { coords: LatLng; neighborhood: string; pin: string },
+  r2: { name: string; coords: LatLng; neighborhood: string; note?: string },
+  relayDetails: RelayDetails = {}
+): RelayState {
+  const current = getRelayState(letterId, relayDetails);
+  const now = new Date();
+
+  // Waypoint for the exact handoff moment (R1's location when QR was shown)
+  const r1Waypoint: GpsWaypoint = {
+    coords: r1.coords,
+    neighborhood: r1.neighborhood,
+    timestamp: now.toISOString(),
+    carrierName: current.currentCarrierName ?? 'Previous carrier',
+    carrierNote: `Handoff point — QR scanned by ${r2.name}.`,
+  };
+
+  // Waypoint for R2's location when they scanned (may differ slightly from R1)
+  const r2Waypoint: GpsWaypoint = {
+    coords: r2.coords,
+    neighborhood: r2.neighborhood,
+    timestamp: now.toISOString(),
+    carrierName: r2.name,
+    carrierNote: r2.note ?? 'Accepted via QR scan.',
+  };
+
+  // Compute how much closer R2 is to the destination than R1 was (inline haversine)
+  const destHandoff = current.handoffs.find((h) => h.role === 'recipient');
+  const destCoords = destHandoff?.coords;
+  let distanceClosedKm: number | undefined;
+  if (destCoords) {
+    const haversine = (a: LatLng, b: LatLng) => {
+      const dLat = (b.lat - a.lat) * Math.PI / 180;
+      const dLng = (b.lng - a.lng) * Math.PI / 180;
+      const s = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+      return 6371 * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s));
+    };
+    distanceClosedKm = Math.max(0, haversine(r1.coords, destCoords) - haversine(r2.coords, destCoords));
+  }
+
+  const newHandoff: RelayHandoff = {
+    id: `qr-handoff-${now.getTime()}`,
+    name: r2.name,
+    role: 'carrier',
+    location: r2.neighborhood,
+    note: r2.note ?? 'Accepted via QR scan.',
+    createdAt: now.toISOString(),
+    coords: r2.coords,
+    neighborhood: r2.neighborhood,
+    distanceClosedKm,
+  };
+
+  const recipientIndex = current.handoffs.findIndex((h) => h.role === 'recipient');
+  const nextHandoffs = [...current.handoffs];
+  if (recipientIndex >= 0) {
+    nextHandoffs.splice(recipientIndex, 0, newHandoff);
+  } else {
+    nextHandoffs.push(newHandoff);
+  }
+
+  const next: RelayState = {
+    ...current,
+    handoffs: nextHandoffs,
+    currentCarrierName: r2.name,
+    gpsWaypoints: [
+      ...(current.gpsWaypoints ?? []),
+      r1Waypoint,
+      r2Waypoint,
+    ],
+    durationHours: current.durationHours,
+  };
+
+  return saveRelayState(next);
+}
+

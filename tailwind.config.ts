@@ -118,6 +118,7 @@ const config: Config = {
         'margin-desktop': '64px',
       },
       fontFamily: {
+        'sans': ['var(--font-sans)', 'sans-serif'],
         'headline-lg': ['var(--font-playfair)', 'serif'],
         'headline-md': ['var(--font-playfair)', 'serif'],
         'headline-lg-mobile': ['var(--font-playfair)', 'serif'],

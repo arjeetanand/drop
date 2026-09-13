@@ -24,6 +24,8 @@ export interface LetterDraftState {
   alignment: LetterAlignment;
   address: LetterAddress;
   sealId: string | null;
+  sealColor?: string;
+  sealMonogram?: string;
   status: LetterStatus;
   updatedAt: string;
   dispatchedAt?: string;
@@ -44,7 +46,9 @@ function defaultDraft(): LetterDraftState {
     fontSize: 18,
     alignment: 'left',
     address: { ...mockAddress },
-    sealId: null,
+    sealId: 'fern',
+    sealColor: '#991b1b',
+    sealMonogram: 'E',
     status: 'draft',
     updatedAt: new Date().toISOString(),
   };
@@ -62,7 +66,9 @@ function blankDraft(): LetterDraftState {
     subject: '',
     content: '',
     address: blankAddress(),
-    sealId: null,
+    sealId: 'fern',
+    sealColor: '#991b1b',
+    sealMonogram: '',
     status: 'draft',
     updatedAt: new Date().toISOString(),
   };
@@ -204,6 +210,9 @@ export function draftAsLetter(draft: LetterDraftState): MockLetter {
     excerpt: draft.content.trim() || 'An empty letter, waiting for your words.',
     subject: draft.subject || 'Untitled Letter',
     direction: 'sent',
+    sealId: draft.sealId ?? undefined,
+    sealColor: draft.sealColor,
+    sealMonogram: draft.sealMonogram,
   };
 }
 

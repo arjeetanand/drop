@@ -4,31 +4,31 @@
 
 @layer base {
   :root {
-    --background: 40 33% 95%;
-    --foreground: 211 62% 23%;
-    --card: 40 30% 98%;
-    --card-foreground: 211 62% 23%;
-    --popover: 40 30% 98%;
-    --popover-foreground: 211 62% 23%;
-    --primary: 211 62% 23%;
-    --primary-foreground: 40 30% 97%;
-    --secondary: 40 20% 88%;
-    --secondary-foreground: 211 62% 23%;
-    --muted: 40 15% 90%;
-    --muted-foreground: 209 12% 45%;
-    --accent: 36 55% 52%;
+    --background: 210 20% 98%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 222 47% 11%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 160 84% 39%;
     --accent-foreground: 0 0% 100%;
-    --destructive: 10 65% 45%;
-    --destructive-foreground: 40 30% 97%;
-    --border: 37 17% 83%;
-    --input: 37 17% 84%;
-    --ring: 36 55% 52%;
-    --chart-1: 12 76% 61%;
-    --chart-2: 160 40% 52%;
-    --chart-3: 200 35% 50%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
-    --radius: 0.625rem;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 160 84% 39%;
+    --chart-1: 160 84% 39%;
+    --chart-2: 210 40% 50%;
+    --chart-3: 222 47% 11%;
+    --chart-4: 38 92% 50%;
+    --chart-5: 0 84% 60%;
+    --radius: 0.75rem;
   }
 }
 
@@ -42,12 +42,12 @@
   }
 }
 
-/* --- Warm bright surface --- */
+/* --- Clean modern light surface --- */
 .parchment-surface {
-  background-color: #F6F2EA;
+  background-color: #f8f9fa;
   background-image:
-    radial-gradient(at 15% 20%, rgba(201, 149, 67, 0.05) 0%, transparent 48%),
-    radial-gradient(at 85% 80%, rgba(156, 204, 183, 0.05) 0%, transparent 50%);
+    radial-gradient(at 15% 15%, rgba(16, 185, 129, 0.03) 0%, transparent 40%),
+    radial-gradient(at 85% 85%, rgba(15, 23, 42, 0.02) 0%, transparent 50%);
 }
 
 /* --- Ruled line texture for composer --- */
@@ -67,6 +67,47 @@
     0 1px 2px rgba(45, 42, 38, 0.03),
     0 4px 12px rgba(45, 42, 38, 0.05),
     0 12px 32px rgba(45, 42, 38, 0.04);
+}
+
+/* --- Refero-grade layered elevation & craft --- */
+.refero-card {
+  background: #FFFFFF;
+  border: 1px solid rgba(16, 42, 67, 0.08);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    0 1px 2px rgba(16, 42, 67, 0.03),
+    0 6px 16px -2px rgba(16, 42, 67, 0.05);
+  transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 200ms cubic-bezier(0.16, 1, 0.3, 1), border-color 200ms ease;
+}
+
+.refero-card:hover {
+  border-color: rgba(16, 42, 67, 0.16);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 2px 4px rgba(16, 42, 67, 0.04),
+    0 12px 28px -4px rgba(16, 42, 67, 0.08);
+}
+
+.refero-dock {
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(16, 42, 67, 0.09);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 8px 32px -4px rgba(16, 42, 67, 0.08);
+}
+
+.refero-pill {
+  transition: all 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.rubber-stamp {
+  border: 2px dashed rgba(184, 75, 58, 0.65);
+  color: #B84B3A;
+  transform: rotate(-3deg);
+  mask-image: radial-gradient(circle at 50% 50%, black 85%, transparent 100%);
+  user-select: none;
 }
 
 /* --- Hatched dispatch slot --- */
@@ -115,13 +156,41 @@
   background: rgba(180, 160, 120, 0.55);
 }
 
-/* --- Wax seal shimmer --- */
+/* --- Wax seal shimmer & tactile relief --- */
 .wax-shimmer {
   background: radial-gradient(
     circle at 30% 30%,
     rgba(255, 220, 220, 0.3),
     transparent 60%
   );
+}
+
+.wax-seal-tactile {
+  position: relative;
+  border-radius: 50%;
+  box-shadow: 
+    0 8px 20px -4px rgba(0, 0, 0, 0.35),
+    inset 0 2px 4px rgba(255, 255, 255, 0.3),
+    inset 0 -3px 6px rgba(0, 0, 0, 0.45);
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.wax-seal-tactile::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 52% 48% 51% 49% / 49% 53% 47% 51%;
+  background: inherit;
+  filter: brightness(0.92);
+  z-index: -1;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+}
+.wax-intaglio {
+  filter: drop-shadow(0 1px 1px rgba(255, 255, 255, 0.25)) drop-shadow(0 -1px 1px rgba(0, 0, 0, 0.5));
+}
+.wax-bezel {
+  box-shadow: 
+    inset 0 1px 2px rgba(255, 255, 255, 0.4),
+    0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 /* --- Textarea reset for composer --- */
@@ -204,14 +273,68 @@
   50% { box-shadow: 0 12px 28px rgba(192, 57, 43, 0.3); }
 }
 
+/* --- Stitch Luminous 3D Utilities --- */
+.bg-dot-matrix {
+  background-image: radial-gradient(rgba(100, 116, 139, 0.2) 1.2px, transparent 1.2px);
+  background-size: 20px 20px;
+}
+
+.perspective-stage {
+  perspective: 1400px;
+  transform-style: preserve-3d;
+}
+
+.envelope-3d-card {
+  transform-style: preserve-3d;
+  transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes floatHero3D {
+  0%, 100% {
+    transform: rotateX(22deg) rotateY(-16deg) rotateZ(3deg) translateY(0px);
+  }
+  50% {
+    transform: rotateX(20deg) rotateY(-12deg) rotateZ(4deg) translateY(-12px);
+  }
+}
+
+.animate-float-envelope {
+  animation: floatHero3D 6s ease-in-out infinite;
+}
+
+@keyframes orbitRotate {
+  from { transform: rotateZ(0deg); }
+  to { transform: rotateZ(360deg); }
+}
+
+.animate-orbit-cw {
+  animation: orbitRotate 36s linear infinite;
+}
+
+.animate-orbit-ccw {
+  animation: orbitRotate 48s linear reverse infinite;
+}
+
+.glass-panel {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  box-shadow: 0 10px 30px -5px rgba(15, 23, 42, 0.04), 0 0 0 1px rgba(255, 255, 255, 0.8) inset;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .page-enter,
   .scene-wax,
   .hero-envelope,
-  .hero-envelope-seal {
+  .hero-envelope-seal,
+  .animate-float-envelope,
+  .animate-orbit-cw,
+  .animate-orbit-ccw {
     animation: none;
   }
   .reveal-line {
     transition: none;
   }
 }
+

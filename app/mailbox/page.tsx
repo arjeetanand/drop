@@ -98,56 +98,56 @@ export default function Mailbox() {
         </header>
 
         {/* Quick Postal Overview */}
-        <section className="grid grid-cols-2 gap-4 border-b border-outline-variant/70 py-6 md:grid-cols-4">
-          <div className="border border-outline-variant/50 bg-surface-container-lowest p-4">
-            <p className="font-caption text-caption uppercase tracking-[0.14em] text-on-surface-variant">Total Letters</p>
-            <p className="mt-1 font-headline-lg text-2xl text-ink-navy">{letters.length}</p>
+        <section className="grid grid-cols-2 gap-4 border-b border-[#102a43]/[0.08] py-6 md:grid-cols-4">
+          <div className="refero-card p-4 rounded-md">
+            <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-on-surface-variant/70 font-semibold">Total Letters</p>
+            <p className="mt-1 font-headline-md text-2xl text-ink-navy font-bold">{letters.length}</p>
           </div>
-          <div className="border border-outline-variant/50 bg-surface-container-lowest p-4">
-            <p className="font-caption text-caption uppercase tracking-[0.14em] text-mint-accent">In Transit</p>
-            <p className="mt-1 font-headline-lg text-2xl text-ink-navy">{transitCount}</p>
+          <div className="refero-card p-4 rounded-md">
+            <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-mint-accent font-semibold">In Transit</p>
+            <p className="mt-1 font-headline-md text-2xl text-ink-navy font-bold">{transitCount}</p>
           </div>
-          <div className="border border-outline-variant/50 bg-surface-container-lowest p-4">
-            <p className="font-caption text-caption uppercase tracking-[0.14em] text-on-surface-variant">Delivered / Received</p>
-            <p className="mt-1 font-headline-lg text-2xl text-ink-navy">{receivedCount + deliveredCount}</p>
+          <div className="refero-card p-4 rounded-md">
+            <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-on-surface-variant/70 font-semibold">Delivered / Received</p>
+            <p className="mt-1 font-headline-md text-2xl text-ink-navy font-bold">{receivedCount + deliveredCount}</p>
           </div>
-          <div className="border border-outline-variant/50 bg-surface-container-lowest p-4">
-            <p className="font-caption text-caption uppercase tracking-[0.14em] text-amber-accent">Drafts on Desk</p>
-            <p className="mt-1 font-headline-lg text-2xl text-ink-navy">{draftsCount}</p>
+          <div className="refero-card p-4 rounded-md">
+            <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-amber-accent font-semibold">Drafts on Desk</p>
+            <p className="mt-1 font-headline-md text-2xl text-ink-navy font-bold">{draftsCount}</p>
           </div>
         </section>
 
         {/* Filters & Search */}
-        <section className="mt-8 flex flex-col gap-4 border-b border-outline-variant/70 pb-4 md:flex-row md:items-center md:justify-between">
-          <div className="flex flex-wrap gap-2">
+        <section className="mt-8 flex flex-col gap-4 border-b border-[#102a43]/[0.08] pb-5 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-wrap gap-1.5 p-1 rounded-md bg-[#102a43]/[0.04] border border-[#102a43]/[0.06]">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
                 className={cn(
-                  'inline-flex items-center gap-1.5 px-3 py-1.5 font-label-md text-xs uppercase tracking-[0.12em] transition-colors',
+                  'inline-flex items-center gap-1.5 px-3 py-1.5 rounded font-label-md text-xs uppercase tracking-wider transition-all duration-150',
                   activeTab === tab.id
-                    ? 'bg-ink-navy text-surface-bright shadow-sm'
-                    : 'border border-outline-variant/70 text-on-surface-variant hover:border-ink-navy hover:text-ink-navy'
+                    ? 'bg-ink-navy text-surface-bright shadow-xs font-semibold'
+                    : 'text-on-surface-variant hover:text-ink-navy hover:bg-white/60'
                 )}
               >
-                {tab.label}{' '}
-                <span className={cn('text-[10px]', activeTab === tab.id ? 'text-surface-bright/80' : 'text-on-surface-variant/70')}>
+                <span>{tab.label}</span>
+                <span className={cn('text-[10px] font-mono', activeTab === tab.id ? 'text-surface-bright/80' : 'text-on-surface-variant/60')}>
                   ({tab.count})
                 </span>
               </button>
             ))}
           </div>
 
-          <div className="relative min-w-[240px] max-w-md">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-on-surface-variant" />
+          <div className="relative min-w-[260px] max-w-md">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-on-surface-variant/70" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by recipient, subject..."
-              className="w-full border border-outline-variant/70 bg-surface-container-lowest py-1.5 pl-9 pr-8 font-body-md text-sm text-ink-navy outline-none placeholder:text-on-surface-variant/60 focus:border-ink-navy"
+              placeholder="Search letters, recipients..."
+              className="w-full rounded-md border border-[#102a43]/15 bg-white py-2 pl-9 pr-8 font-body-md text-sm text-ink-navy outline-none placeholder:text-on-surface-variant/50 focus:border-ink-navy focus:ring-1 focus:ring-ink-navy shadow-2xs"
             />
             {searchQuery && (
               <button

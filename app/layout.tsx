@@ -1,7 +1,14 @@
 import './globals.css';
 import type { Metadata } from 'next';
-import { Playfair_Display, Literata, Courier_Prime } from 'next/font/google';
+import { Inter, Playfair_Display, Literata, Courier_Prime } from 'next/font/google';
 import { Sidebar } from '@/components/Sidebar';
+import { MainContent } from '@/components/MainContent';
+
+const inter = Inter({
+  subsets: ['latin'],
+  variable: '--font-sans',
+  display: 'swap',
+});
 
 const playfair = Playfair_Display({
   subsets: ['latin'],
@@ -37,11 +44,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${playfair.variable} ${literata.variable} ${courier.variable} font-body-md antialiased`}
+        className={`${inter.variable} ${playfair.variable} ${literata.variable} ${courier.variable} font-sans antialiased text-slate-900 bg-[#f8f9fa] selection:bg-emerald-500/20`}
       >
-        <div className="min-h-screen parchment-surface">
+        <div className="min-h-screen bg-[#f8f9fa] text-slate-900">
           <Sidebar />
-          <div className="lg:pl-[216px]">{children}</div>
+          <MainContent>{children}</MainContent>
         </div>
       </body>
     </html>

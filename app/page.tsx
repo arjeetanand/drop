@@ -2,9 +2,32 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowDown, ArrowRight, Clock3, Feather, HeartHandshake, LockKeyhole, Mail, MapPin, ShieldCheck, Sparkles, UsersRound } from 'lucide-react';
+import {
+  ArrowDown,
+  ArrowRight,
+  Clock3,
+  Feather,
+  HeartHandshake,
+  LockKeyhole,
+  Mail,
+  MapPin,
+  ShieldCheck,
+  Sparkles,
+  UsersRound,
+  Download,
+  History,
+  Check,
+  Bike,
+  Building,
+  KeyRound,
+  Fingerprint,
+  Radio,
+  FileText
+} from 'lucide-react';
 import { RelayChain } from '@/components/RelayChain';
-import { RelayEnvelope } from '@/components/RelayEnvelope';
+import { StitchHero3D } from '@/components/StitchHero3D';
+import { Card3DTilt } from '@/components/Card3DTilt';
+import { Luminous3DMap } from '@/components/Luminous3DMap';
 import { LetterCard } from '@/components/LetterCard';
 import { currentFocusDraft, mockLetters } from '@/data/mockData';
 import { getLetterDraft, getLettersWithDraft, type LetterDraftState } from '@/lib/letterStore';
@@ -43,237 +66,407 @@ export default function HomeDesk() {
   const relayStats = getRelayStats(relay);
 
   return (
-    <main className="page-enter min-h-screen pb-24 lg:pb-12">
-      <div className="mx-auto max-w-[1180px] px-margin-mobile py-lg md:px-12 md:py-xl xl:px-16">
-        {/* Top bar */}
-        <header className="flex items-center justify-between border-b border-outline-variant/70 pb-md">
-          <div className="flex items-center gap-sm">
-            <span className="font-headline-md text-sm text-ink-navy">Dear.exe</span>
-            <span className="font-caption text-caption text-on-surface-variant">/ Your Desk</span>
-          </div>
-          <div className="flex items-center gap-md">
-            <span className="inline-flex items-center gap-sm font-caption text-caption text-on-surface-variant">
-              <span className="h-2 w-2 rounded-full bg-mint-accent" />
-              {relayStats.carriers} carriers in motion
+    <main className="page-enter min-h-screen pb-32 bg-[#fafafa] text-slate-900 relative selection:bg-cyan-500 selection:text-white">
+      {/* ── Luminous Ambient Bloom & Micro-Dot Grid (Stitch System) ── */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+        <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[900px] h-[500px] bg-gradient-to-b from-cyan-500/10 via-emerald-500/5 to-transparent blur-3xl rounded-full opacity-70" />
+        <div className="absolute top-1/3 -left-48 w-[450px] h-[450px] bg-cyan-500/5 blur-3xl rounded-full" />
+        <div className="absolute top-1/2 -right-48 w-[500px] h-[500px] bg-emerald-500/5 blur-3xl rounded-full" />
+        <div className="absolute inset-0 bg-dot-matrix opacity-60" />
+      </div>
+
+      <div className="relative z-10 mx-auto max-w-[1360px] px-4 py-6 md:px-8 xl:px-12">
+        {/* ── Stitch Subheader: Network Telemetry Bar ── */}
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 text-xs border border-slate-200/80 rounded-xl px-4 py-2.5 bg-white/80 backdrop-blur-md shadow-xs">
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-[10px] text-slate-400 uppercase tracking-wider font-semibold">NETWORK TELEMETRY:</span>
+            <span className="inline-flex items-center gap-1.5 font-mono text-xs text-slate-800 font-semibold">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> 1,248 Letters in Motion
             </span>
           </div>
-        </header>
+          <div className="flex items-center gap-6 font-mono text-xs text-slate-500">
+            <span className="hidden sm:inline-flex items-center gap-1">
+              <span className="text-cyan-600">●</span> 99.98% Chain Custody
+            </span>
+            <span className="hidden md:inline-flex items-center gap-1">
+              <span className="text-emerald-600">●</span> Mumbai Metro Mesh Active (#BOM-7)
+            </span>
+            <span className="inline-flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded text-slate-800 font-semibold">
+              Current Block: #4,892,104
+            </span>
+          </div>
+        </div>
 
-        {/* Hero: Welcome & Core Action */}
-        <section className="grid min-w-0 items-center gap-10 border-b border-outline-variant/70 py-12 md:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)] md:py-16">
-          <div className="min-w-0 max-w-[580px]">
-            <p className="font-caption text-caption uppercase tracking-[0.22em] text-amber-accent">Slow Postal Network</p>
-            <h1 className="mt-3 font-headline-lg text-[clamp(2.75rem,5.5vw,5rem)] leading-[0.98] tracking-[-0.04em] text-ink-navy">
-              Letters that travel through human hands.
-            </h1>
-            <p className="mt-6 max-w-[500px] font-body-lg text-body-lg leading-relaxed text-on-surface-variant">
-              Write something thoughtful. Seal it with wax. Send it on a journey carried by real people from city to city. Carriers see the route, never your words.
-            </p>
+        {/* ── BENTO GRID: 3D Center Stage, Left Pipeline, Right Manifest ── */}
+        <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start mb-16">
+          {/* LEFT COLUMN: Custody Pipeline & Transit Vector (3 cols) */}
+          <aside className="lg:col-span-3 flex flex-col gap-5 order-2 lg:order-1">
+            {/* Custody Pipeline Card */}
+            <div className="glass-panel rounded-2xl p-5 flex flex-col gap-4 shadow-sm bg-white/85">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                  <span className="font-sans text-sm font-bold tracking-tight text-slate-900">Custody Pipeline</span>
+                </div>
+                <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-slate-100 font-semibold text-slate-600">
+                  LIVE CHAIN
+                </span>
+              </div>
 
-            <div className="mt-8 flex flex-wrap items-center gap-md">
+              {/* Step progression diagram */}
+              <div className="flex flex-col gap-3.5 relative before:absolute before:left-3.5 before:top-2 before:bottom-2 before:w-[2px] before:bg-slate-200">
+                {/* Step 1 */}
+                <div className="flex items-start gap-3 relative z-10">
+                  <div className="w-7 h-7 rounded-full bg-white border-2 border-emerald-500 flex items-center justify-center text-emerald-600 shadow-xs">
+                    <Check className="w-3.5 h-3.5" />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="font-sans text-xs font-semibold text-slate-800">Sender Verification</span>
+                    <span className="font-mono text-[11px] text-slate-400">Khar West • 10:14 IST</span>
+                  </div>
+                </div>
+
+                {/* Step 2 */}
+                <div className="flex items-start gap-3 relative z-10">
+                  <div className="w-7 h-7 rounded-full bg-white border-2 border-emerald-500 flex items-center justify-center text-emerald-600 shadow-xs">
+                    <Check className="w-3.5 h-3.5" />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="font-sans text-xs font-semibold text-slate-800">Bandra Depot #02</span>
+                    <span className="font-mono text-[11px] text-slate-400">Vaulted &amp; Wax Sealed</span>
+                  </div>
+                </div>
+
+                {/* Step 3 (Active) */}
+                <div className="flex items-start gap-3 relative z-10">
+                  <div className="w-7 h-7 rounded-full bg-slate-900 text-white flex items-center justify-center ring-4 ring-emerald-400/30 shadow-xs animate-pulse">
+                    <Bike className="w-3.5 h-3.5 text-emerald-400" />
+                  </div>
+                  <div className="flex flex-col">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-sans text-xs font-bold text-slate-900">Courier Vikram R.</span>
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                    </div>
+                    <span className="font-mono text-[11px] text-cyan-600 font-semibold">Sea Link Transit • 18 km/h</span>
+                  </div>
+                </div>
+
+                {/* Step 4 */}
+                <div className="flex items-start gap-3 relative z-10 opacity-60">
+                  <div className="w-7 h-7 rounded-full bg-slate-50 border border-slate-300 flex items-center justify-center text-slate-400">
+                    <Building className="w-3.5 h-3.5" />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="font-sans text-xs font-medium text-slate-600">Colaba Heritage Hub</span>
+                    <span className="font-mono text-[11px] text-slate-400">ETA: 42 mins</span>
+                  </div>
+                </div>
+
+                {/* Step 5 */}
+                <div className="flex items-start gap-3 relative z-10 opacity-40">
+                  <div className="w-7 h-7 rounded-full bg-slate-50 border border-slate-300 flex items-center justify-center text-slate-400">
+                    <Fingerprint className="w-3.5 h-3.5" />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="font-sans text-xs font-medium text-slate-600">Biometric Handshake</span>
+                    <span className="font-mono text-[11px] text-slate-400">Recipient Final OTP</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Transit Vector Preview */}
+            <div className="glass-panel rounded-2xl p-5 flex flex-col gap-3 shadow-sm bg-white/85">
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-[10px] text-slate-400 uppercase tracking-wider font-semibold">TRANSIT VECTOR</span>
+                <span className="font-mono text-[11px] text-emerald-600 font-bold">GPS LOCKED</span>
+              </div>
+              <div className="relative h-32 rounded-xl overflow-hidden border border-slate-200 bg-slate-100">
+                <img
+                  src="/concepts/modern-light-journey.jpg"
+                  alt="Transit Route Preview"
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 via-transparent to-transparent" />
+                <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between text-white">
+                  <span className="font-mono text-[10px] bg-black/60 backdrop-blur-sm px-2 py-0.5 rounded">
+                    Coastal Highway
+                  </span>
+                  <span className="font-mono text-[10px] bg-emerald-500 text-slate-900 px-1.5 py-0.5 rounded font-bold">
+                    12.4 km left
+                  </span>
+                </div>
+              </div>
+
+              {/* Protocol Security Metrics */}
+              <div className="grid grid-cols-2 gap-2 pt-1 font-mono text-[11px]">
+                <div className="p-2 rounded-lg bg-slate-50 border border-slate-200/70">
+                  <span className="text-slate-400 block text-[9px]">Tamper Sensor</span>
+                  <span className="font-semibold text-slate-800 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> 0.0g Shock
+                  </span>
+                </div>
+                <div className="p-2 rounded-lg bg-slate-50 border border-slate-200/70">
+                  <span className="text-slate-400 block text-[9px]">ZK Recipient</span>
+                  <span className="font-semibold text-slate-800 truncate">colaba-box#88</span>
+                </div>
+              </div>
+            </div>
+          </aside>
+
+          {/* CENTER STAGE: 3D Floating Envelope & Orbiting Telemetry (6 cols) */}
+          <section className="lg:col-span-6 flex flex-col items-center justify-center order-1 lg:order-2">
+            <StitchHero3D
+              recipient={focusRecipient}
+              subject={focusDraft.subject || 'Morning Light & Sea Air'}
+              excerpt={focusDraft.content || 'Morning light through the kitchen window. The kettle is whistling and I am thinking of you across the bay…'}
+              carrierName="Vikram R."
+              carrierRating="4.98"
+              trackingId="#DEL-8842-X"
+            />
+
+            {/* Core Action CTAs */}
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-3 w-full">
               <Link
                 href="/compose?new=1"
-                className="inline-flex items-center gap-sm bg-ink-navy px-xl py-md font-label-md text-label-md uppercase tracking-[0.12em] text-surface-bright transition-transform hover:-translate-y-0.5 hover:shadow-lg"
+                className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-6 py-3.5 font-sans text-xs uppercase tracking-wider font-semibold text-white shadow-sm transition-all duration-200 hover:bg-slate-800 hover:shadow-md active:scale-[0.99]"
               >
-                <Feather className="h-4 w-4" />
-                Write a Letter
+                <Feather className="h-4 w-4 text-emerald-400" />
+                <span>Write a Letter</span>
+                <kbd className="ml-2 rounded border border-white/20 px-1.5 py-0.5 font-mono text-[9px] text-white/70">N</kbd>
               </Link>
-              <a
-                href="#how-it-works"
-                className="inline-flex items-center gap-sm border border-outline px-lg py-md font-label-md text-label-md uppercase tracking-[0.12em] text-ink-navy transition-colors hover:bg-ink-navy/5"
+              <Link
+                href="/journey"
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3.5 font-sans text-xs uppercase tracking-wider font-semibold text-slate-700 transition-all hover:bg-slate-50 hover:border-slate-300 shadow-2xs"
               >
-                How It Works
-                <ArrowDown className="h-4 w-4" />
-              </a>
+                <Radio className="h-3.5 w-3.5 text-cyan-600" />
+                <span>Live 3D City Journey</span>
+                <ArrowRight className="h-3.5 w-3.5 text-slate-400" />
+              </Link>
+            </div>
+          </section>
+
+          {/* RIGHT COLUMN: Dispatch Manifest Glass Card (3 cols) */}
+          <aside className="lg:col-span-3 flex flex-col gap-5 order-3">
+            {/* Manifest Glass Card */}
+            <div className="glass-panel rounded-2xl p-5 flex flex-col gap-4 shadow-sm bg-white/85">
+              <div className="flex items-start justify-between border-b border-slate-100 pb-3">
+                <div className="flex flex-col">
+                  <span className="font-mono text-[10px] text-slate-400 uppercase tracking-wider font-semibold">DISPATCH MANIFEST</span>
+                  <span className="font-sans text-base font-extrabold text-slate-900">#DEL-8842-X</span>
+                </div>
+                <span className="flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                  <LockKeyhole className="w-3 h-3" /> Locked
+                </span>
+              </div>
+
+              {/* Manifest Attributes Grid */}
+              <div className="flex flex-col gap-2 font-sans text-xs">
+                <div className="flex justify-between items-center py-1.5 border-b border-slate-100">
+                  <span className="text-slate-500">Sealed Content</span>
+                  <span className="font-mono font-semibold text-slate-800">Cotton Bond (42g)</span>
+                </div>
+                <div className="flex justify-between items-center py-1.5 border-b border-slate-100">
+                  <span className="text-slate-500">Security Protocol</span>
+                  <span className="font-mono font-semibold text-emerald-600">Level 4 Biometric</span>
+                </div>
+                <div className="flex justify-between items-center py-1.5 border-b border-slate-100">
+                  <span className="text-slate-500">Origin Depot</span>
+                  <span className="font-mono font-semibold text-slate-800">Bandra West #02</span>
+                </div>
+                <div className="flex justify-between items-center py-1.5 border-b border-slate-100">
+                  <span className="text-slate-500">Target Node</span>
+                  <span className="font-mono font-semibold text-slate-800">Colaba Heritage</span>
+                </div>
+                <div className="flex justify-between items-center py-1.5 border-b border-slate-100">
+                  <span className="text-slate-500">Carrier Custody Key</span>
+                  <span className="font-mono font-semibold text-cyan-600">0x8F4...C19B</span>
+                </div>
+
+                {/* Recipient Handshake OTP Box */}
+                <div className="mt-2 p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col items-center justify-center gap-1 text-center">
+                  <span className="font-mono text-[10px] text-slate-400 font-bold tracking-wider uppercase">
+                    RECIPIENT HANDSHAKE ONE-TIME PIN
+                  </span>
+                  <div className="flex items-center gap-2 mt-1 font-mono text-2xl font-bold tracking-widest text-slate-900">
+                    <span className="px-2.5 py-1 bg-white rounded-lg border border-slate-200 shadow-xs">7</span>
+                    <span className="px-2.5 py-1 bg-white rounded-lg border border-slate-200 shadow-xs">4</span>
+                    <span className="px-2.5 py-1 bg-white rounded-lg border border-slate-200 shadow-xs">2</span>
+                    <span className="px-2.5 py-1 bg-white rounded-lg border border-slate-200 shadow-xs">3</span>
+                  </div>
+                  <span className="font-mono text-[10px] text-slate-400 mt-0.5">
+                    Expires upon recipient iris/touch confirmation
+                  </span>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-col gap-2 pt-1">
+                <button
+                  onClick={() => alert('Proof of Custody certificate exported to cryptographic PDF.')}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 transition-all shadow-xs active:scale-[0.98]"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Download Proof of Custody</span>
+                </button>
+                <Link
+                  href="/journey"
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-xs font-semibold hover:bg-slate-200 transition-all border border-slate-200/70 active:scale-[0.98]"
+                >
+                  <History className="w-3.5 h-3.5 text-slate-500" />
+                  <span>View Biometric Audit Log</span>
+                </Link>
+              </div>
             </div>
 
-            <div className="mt-6 flex items-center gap-lg font-caption text-caption text-on-surface-variant">
-              <span className="inline-flex items-center gap-xs">
-                <LockKeyhole className="h-3.5 w-3.5 text-mint-accent" /> Sealed until arrival
-              </span>
-              <span className="inline-flex items-center gap-xs">
-                <UsersRound className="h-3.5 w-3.5 text-amber-accent" /> Human-powered relay
-              </span>
+            {/* Active Relay Node Stake Card */}
+            <div className="glass-panel rounded-2xl p-4 flex items-center gap-3 bg-white/85">
+              <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-200">
+                <Radio className="w-4 h-4" />
+              </div>
+              <div className="flex flex-col">
+                <span className="font-sans text-xs font-bold text-slate-900">Active Relay Node #BOM-7</span>
+                <span className="font-mono text-[11px] text-slate-500">Custody bonded with 10 ETH stake</span>
+              </div>
             </div>
-          </div>
-
-          <div className="flex flex-col items-center justify-center border-l border-outline-variant/70 pl-0 md:pl-10">
-            <RelayEnvelope />
-            <p className="mt-4 font-caption text-[11px] uppercase tracking-[0.2em] text-on-surface-variant">
-              Sealed with wax · Private in transit
-            </p>
-          </div>
+          </aside>
         </section>
 
-        {/* How It Works: 3-Step Clear Explainer */}
-        <section id="how-it-works" className="border-b border-outline-variant/70 py-12 md:py-16">
+        {/* ── LIVE 3D CITY ROUTE TELEMETRY (Luminous3DMap) ── */}
+        <section className="border-t border-slate-200/80 py-12 md:py-16">
+          <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
+            <div>
+              <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200/60 font-mono text-[10px] uppercase tracking-wider text-emerald-700 font-semibold mb-2">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Live 3D City Wireframe
+              </div>
+              <h2 className="font-sans font-bold text-2xl md:text-3xl text-slate-900 tracking-tight">
+                Track Letters in Motion
+              </h2>
+              <p className="font-sans text-sm text-slate-500 mt-1">
+                Real-time 3D architectural city telemetry. Move your cursor to pan and tilt the route.
+              </p>
+            </div>
+            <Link
+              href={`/relay?letter=${encodeURIComponent(relay.letterId)}`}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 font-sans text-xs uppercase tracking-wider font-semibold text-slate-700 hover:bg-slate-50 transition-colors shadow-2xs"
+            >
+              <span>Full Relay Dashboard</span>
+              <ArrowRight className="h-3.5 w-3.5 text-emerald-600" />
+            </Link>
+          </div>
+          <Luminous3DMap
+            currentCarrier={relay.currentCarrierName || 'Vikram R.'}
+            currentNeighborhood={relay.gpsWaypoints?.at(-1)?.neighborhood || 'Sea Link Transit'}
+            destinationNeighborhood={relay.destinationNeighborhood || 'Colaba Heritage'}
+          />
+        </section>
+
+        {/* ── HOW IT WORKS: 3-STEP CLEAR EXPLAINER ── */}
+        <section id="how-it-works" className="border-t border-slate-200/80 py-12 md:py-16">
           <div className="text-center max-w-xl mx-auto">
-            <p className="font-caption text-caption uppercase tracking-[0.2em] text-amber-accent">The Philosophy</p>
-            <h2 className="mt-2 font-headline-md text-headline-md text-ink-navy">How Dear.exe Works</h2>
-            <p className="mt-3 font-body-md text-body-md text-on-surface-variant">
+            <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-emerald-600 font-semibold">
+              The Philosophy
+            </p>
+            <h2 className="mt-2 font-sans font-extrabold text-2xl md:text-3xl text-slate-900 tracking-tight">
+              How Dear.exe Works
+            </h2>
+            <p className="mt-2 font-sans text-sm text-slate-500">
               In a world of instant messages, we make words travel slower so they carry more meaning.
             </p>
           </div>
 
           <div className="mt-10 grid gap-6 sm:grid-cols-3">
             {/* Step 1 */}
-            <div className="paper-layer p-lg card-depth rounded-sm border border-outline-variant/50 flex flex-col justify-between">
-              <div>
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-ink-navy text-surface-bright mb-md">
-                  <Feather className="h-5 w-5" />
-                </div>
-                <p className="font-caption text-caption uppercase tracking-wider text-amber-accent">Step 1</p>
-                <h3 className="mt-1 font-headline-md text-[20px] text-ink-navy">Pen Your Letter</h3>
-                <p className="mt-3 font-body-md text-body-md leading-relaxed text-on-surface-variant">
-                  A tranquil typewriter canvas on warm parchment. Autosaved to your desk so you can write at your own pace.
-                </p>
-              </div>
-              <div className="mt-6 pt-4 border-t border-outline-variant/40 font-caption text-caption text-on-surface-variant">
-                Private drafting
-              </div>
-            </div>
-
-            {/* Step 2 */}
-            <div className="paper-layer p-lg card-depth rounded-sm border border-outline-variant/50 flex flex-col justify-between">
-              <div>
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-wax-red text-surface-bright mb-md">
-                  <LockKeyhole className="h-5 w-5" />
-                </div>
-                <p className="font-caption text-caption uppercase tracking-wider text-wax-red">Step 2</p>
-                <h3 className="mt-1 font-headline-md text-[20px] text-ink-navy">Seal with Wax</h3>
-                <p className="mt-3 font-body-md text-body-md leading-relaxed text-on-surface-variant">
-                  Choose a custom wax seal and press it. Once stamped, the contents are permanently locked and hidden.
-                </p>
-              </div>
-              <div className="mt-6 pt-4 border-t border-outline-variant/40 font-caption text-caption text-on-surface-variant">
-                Zero words exposed
-              </div>
-            </div>
-
-            {/* Step 3 */}
-            <div className="paper-layer p-lg card-depth rounded-sm border border-outline-variant/50 flex flex-col justify-between">
-              <div>
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#102a43] text-mint-accent mb-md">
-                  <HeartHandshake className="h-5 w-5" />
-                </div>
-                <p className="font-caption text-caption uppercase tracking-wider text-mint-accent">Step 3</p>
-                <h3 className="mt-1 font-headline-md text-[20px] text-ink-navy">The Human Relay</h3>
-                <p className="mt-3 font-body-md text-body-md leading-relaxed text-on-surface-variant">
-                  Share the passport with friends or couriers. Each carrier logs their stop without opening the letter, building a living route.
-                </p>
-              </div>
-              <div className="mt-6 pt-4 border-t border-outline-variant/40 font-caption text-caption text-on-surface-variant">
-                A route remembered
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Featured Active Journey */}
-        <section className="border-b border-outline-variant/70 py-12 md:py-16">
-          <div className="flex flex-wrap items-end justify-between gap-md border-b border-outline-variant/70 pb-md">
-            <div>
-              <p className="font-caption text-caption uppercase tracking-[0.2em] text-mint-accent">
-                <span className="h-2 w-2 rounded-full bg-mint-accent inline-block mr-2" />
-                Active on the Road
-              </p>
-              <h2 className="mt-2 font-headline-md text-headline-md text-ink-navy">
-                Track a Letter in Motion
-              </h2>
-            </div>
-            <Link
-              href={`/journey?letter=${encodeURIComponent(relay.letterId)}`}
-              className="inline-flex items-center gap-sm font-label-md text-label-md uppercase tracking-[0.12em] text-ink-navy hover:underline"
-            >
-              Open Full Journey Tracker <ArrowRight className="h-4 w-4" />
-            </Link>
-          </div>
-
-          <div className="mt-8 grid gap-8 md:grid-cols-[minmax(0,1.4fr)_minmax(280px,0.6fr)]">
-            <div className="paper-layer p-lg md:p-xl card-depth rounded-sm border border-outline-variant/50">
-              <div className="flex items-start justify-between gap-md">
+            <Card3DTilt className="h-full">
+              <div className="h-full bg-white border border-slate-200/90 rounded-2xl p-6 flex flex-col justify-between shadow-xs">
                 <div>
-                  <h3 className="font-headline-lg text-headline-lg text-ink-navy">{relay.subject}</h3>
-                  <p className="mt-1 font-body-md text-body-md text-on-surface-variant">
-                    Heading to {relay.recipient} · Sealed from view
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900 text-white mb-4 shadow-xs">
+                    <Feather className="h-4 w-4 text-emerald-400" />
+                  </div>
+                  <p className="font-mono text-[10px] uppercase tracking-wider text-emerald-600 font-semibold">Step 1</p>
+                  <h3 className="mt-1 font-sans text-lg font-bold text-slate-900">Pen Your Letter</h3>
+                  <p className="mt-2.5 font-sans text-xs leading-relaxed text-slate-500">
+                    A tranquil typewriter canvas on clean cotton paper. Autosaved to your desk so you can write at your own pace.
                   </p>
                 </div>
-                <span className="font-caption text-caption uppercase tracking-wider text-amber-accent bg-amber-accent/10 px-sm py-xs rounded-full">
-                  {relayStats.hours}h travelling
-                </span>
-              </div>
-
-              <div className="mt-8 border-y border-outline-variant/60 py-6">
-                <RelayChain relay={relay} />
-              </div>
-
-              <div className="mt-6 flex flex-wrap items-center justify-between gap-md">
-                <div className="flex gap-lg font-caption text-caption text-on-surface-variant">
-                  <span><strong className="font-headline-md text-base text-ink-navy">{relayStats.carriers}</strong> people carried it</span>
-                  <span><strong className="font-headline-md text-base text-ink-navy">{relayStats.cities}</strong> cities visited</span>
+                <div className="mt-6 pt-3 border-t border-slate-100 font-mono text-[10px] uppercase tracking-wider text-slate-400">
+                  Private drafting
                 </div>
-                <Link
-                  href={`/journey?letter=${encodeURIComponent(relay.letterId)}`}
-                  className="inline-flex items-center gap-sm bg-ink-navy px-md py-sm font-label-md text-[11px] uppercase tracking-[0.12em] text-surface-bright hover:bg-ink-navy/90"
-                >
-                  View Route Logbook <ArrowRight className="h-3.5 w-3.5" />
-                </Link>
               </div>
-            </div>
+            </Card3DTilt>
 
-            <aside className="flex flex-col justify-between border border-outline-variant/70 bg-[#f8f5ee] p-lg rounded-sm">
-              <div>
-                <p className="font-caption text-caption uppercase tracking-widest text-on-surface-variant">Relay Passport</p>
-                <p className="mt-2 font-mono text-sm tracking-[0.14em] text-ink-navy break-all">{relay.passcode}</p>
-                <div className="mt-5 flex h-20 w-20 items-center justify-center border border-ink-navy/40 bg-surface-container-lowest p-2">
-                  <div className="qr-grid" aria-hidden="true" />
+            {/* Step 2 */}
+            <Card3DTilt className="h-full">
+              <div className="h-full bg-white border border-slate-200/90 rounded-2xl p-6 flex flex-col justify-between shadow-xs">
+                <div>
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900 text-white mb-4 shadow-xs">
+                    <LockKeyhole className="h-4 w-4 text-emerald-400" />
+                  </div>
+                  <p className="font-mono text-[10px] uppercase tracking-wider text-emerald-600 font-semibold">Step 2</p>
+                  <h3 className="mt-1 font-sans text-lg font-bold text-slate-900">Seal with Wax</h3>
+                  <p className="mt-2.5 font-sans text-xs leading-relaxed text-slate-500">
+                    Choose a custom wax signet and press the brass die. Once stamped, the contents are permanently sealed.
+                  </p>
                 </div>
-                <p className="mt-4 font-body-md text-sm leading-relaxed text-on-surface-variant">
-                  Have this envelope in hand? You can record your city and pass it forward without opening it.
-                </p>
+                <div className="mt-6 pt-3 border-t border-slate-100 font-mono text-[10px] uppercase tracking-wider text-slate-400">
+                  Zero words exposed
+                </div>
               </div>
-              <Link
-                href={`/journey?letter=${encodeURIComponent(relay.letterId)}&join=1`}
-                className="mt-6 inline-flex items-center justify-center gap-sm border border-ink-navy bg-white py-sm px-md font-label-md text-[11px] uppercase tracking-[0.12em] text-ink-navy hover:bg-ink-navy hover:text-surface-bright transition-colors"
-              >
-                I Carried This Letter <ArrowRight className="h-3.5 w-3.5" />
-              </Link>
-            </aside>
+            </Card3DTilt>
+
+            {/* Step 3 */}
+            <Card3DTilt className="h-full">
+              <div className="h-full bg-white border border-slate-200/90 rounded-2xl p-6 flex flex-col justify-between shadow-xs">
+                <div>
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900 text-emerald-400 mb-4 shadow-xs">
+                    <HeartHandshake className="h-4 w-4" />
+                  </div>
+                  <p className="font-mono text-[10px] uppercase tracking-wider text-emerald-600 font-semibold">Step 3</p>
+                  <h3 className="mt-1 font-sans text-lg font-bold text-slate-900">The Human Relay</h3>
+                  <p className="mt-2.5 font-sans text-xs leading-relaxed text-slate-500">
+                    Share the passport with carriers. Each person logs their GPS stop without opening the envelope, building a living route.
+                  </p>
+                </div>
+                <div className="mt-6 pt-3 border-t border-slate-100 font-mono text-[10px] uppercase tracking-wider text-slate-400">
+                  GPS-verified handoffs
+                </div>
+              </div>
+            </Card3DTilt>
           </div>
         </section>
 
-        {/* Your Correspondence Overview */}
+        {/* ── RECENT LETTERS & CORRESPONDENCE OVERVIEW ── */}
         <section className="mt-12 grid gap-10 md:mt-16 md:grid-cols-[minmax(0,1fr)_320px]">
-          {/* Recent Letters & Drafts */}
           <div>
-            <div className="flex items-end justify-between gap-md border-b border-outline-variant/70 pb-md">
+            <div className="flex items-end justify-between border-b border-slate-200/80 pb-3">
               <div>
-                <p className="font-caption text-caption uppercase tracking-[0.2em] text-amber-accent">Your Desk</p>
-                <h2 className="mt-1 font-headline-md text-headline-md text-ink-navy">Recent Letters</h2>
+                <p className="font-mono text-[10px] uppercase tracking-wider text-emerald-600 font-semibold">Your Desk</p>
+                <h2 className="mt-1 font-sans font-extrabold text-2xl text-slate-900">Recent Letters</h2>
               </div>
-              <Link href="/mailbox" className="font-caption text-caption text-on-surface-variant hover:text-ink-navy">
+              <Link href="/mailbox" className="font-mono text-xs text-slate-500 hover:text-slate-900">
                 Open All in Mailbox →
               </Link>
             </div>
 
             {/* In-progress Draft if any */}
             {focusDraft && (
-              <div className="border-b border-outline-variant/70 py-6">
-                <div className="flex flex-col gap-sm sm:flex-row sm:items-center sm:justify-between">
+              <div className="border-b border-slate-200/80 py-6">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <span className="font-caption text-[10px] uppercase tracking-wider text-amber-accent bg-amber-accent/15 px-2 py-0.5 rounded">
+                    <span className="font-mono text-[10px] uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">
                       Unfinished Draft
                     </span>
-                    <h3 className="mt-2 font-headline-md text-xl text-ink-navy">
+                    <h3 className="mt-2 font-sans font-bold text-xl text-slate-900">
                       {focusDraft.subject || 'Untitled Letter'}
                     </h3>
-                    <p className="mt-1 font-body-md text-sm text-on-surface-variant">
+                    <p className="mt-1 font-sans text-sm text-slate-500">
                       To {focusRecipient} · {focusDraft.content.trim() ? `${focusDraft.content.trim().split(/\s+/).length} words written` : 'Empty draft'}
                     </p>
                   </div>
                   <Link
                     href="/compose"
-                    className="inline-flex shrink-0 items-center gap-sm border border-ink-navy px-md py-sm font-label-md text-[11px] uppercase tracking-[0.12em] text-ink-navy hover:bg-ink-navy/5"
+                    className="inline-flex shrink-0 items-center gap-2 border border-slate-900 px-4 py-2 font-sans text-xs uppercase tracking-wider font-semibold text-slate-900 rounded-lg hover:bg-slate-900 hover:text-white transition-colors"
                   >
                     Continue Writing <ArrowRight className="h-3.5 w-3.5" />
                   </Link>
@@ -282,28 +475,28 @@ export default function HomeDesk() {
             )}
 
             {/* List of recent letters */}
-            <div className="divide-y divide-outline-variant/50">
+            <div className="divide-y divide-slate-100">
               {recentLetters.map((letter) => (
                 <LetterCard key={letter.id} letter={letter} />
               ))}
               {!recentLetters.length && (
-                <p className="py-8 font-body-md text-body-md text-on-surface-variant">
+                <p className="py-8 font-sans text-sm text-slate-400">
                   No other letters yet. Start writing your first one!
                 </p>
               )}
             </div>
           </div>
 
-          {/* Incoming Letter / Arrival Highlight */}
-          <aside className="border-l border-outline-variant/70 pl-0 md:pl-8">
-            <div className="paper-layer p-lg card-depth rounded-sm border border-outline-variant/60">
-              <div className="flex items-center gap-sm font-caption text-caption uppercase tracking-[0.16em] text-mint-accent">
+          {/* Incoming Letter Highlight */}
+          <aside className="border-l border-slate-200/80 pl-0 md:pl-8">
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
+              <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-wider text-emerald-600 font-bold">
                 <ShieldCheck className="h-4 w-4" /> Letter Arrival
               </div>
-              <h3 className="mt-3 font-headline-md text-headline-md text-ink-navy">
+              <h3 className="mt-3 font-sans font-bold text-xl text-slate-900">
                 {incoming ? 'A note arrived for you.' : 'Your Mailbox is Quiet.'}
               </h3>
-              <p className="mt-2 font-body-md text-body-md leading-relaxed text-on-surface-variant">
+              <p className="mt-2 font-sans text-xs leading-relaxed text-slate-500">
                 {incoming
                   ? `From ${incoming.sender || 'a correspondent'}. The envelope traveled across cities and is sealed with wax.`
                   : 'When someone sends a letter to your username, it will appear here.'}
@@ -312,29 +505,67 @@ export default function HomeDesk() {
               {incoming && (
                 <Link
                   href={`/letter/${incoming.id}`}
-                  className="mt-6 inline-flex w-full items-center justify-center gap-sm bg-mint-accent px-lg py-sm font-label-md text-label-md uppercase tracking-widest text-ink-navy hover:bg-mint-accent/80 transition-colors"
+                  className="mt-6 inline-flex w-full items-center justify-center gap-2 bg-slate-900 text-white px-4 py-2.5 rounded-xl font-sans text-xs uppercase tracking-wider font-semibold hover:bg-slate-800 transition-colors shadow-xs"
                 >
-                  <Sparkles className="h-4 w-4" />
-                  Open & Break Seal
+                  <Sparkles className="h-3.5 w-3.5 text-emerald-400" />
+                  Open &amp; Break Seal
                 </Link>
               )}
             </div>
 
-            <div className="mt-8 space-y-4 border-t border-outline-variant/70 pt-6">
-              <p className="font-caption text-caption uppercase tracking-wider text-on-surface-variant">Your Postal Link</p>
-              <p className="font-body-md text-sm text-ink-navy break-all">
+            <div className="mt-6 space-y-3 border-t border-slate-100 pt-6">
+              <p className="font-mono text-[10px] uppercase tracking-wider text-slate-400">Your Postal Link</p>
+              <p className="font-sans text-xs text-slate-700 break-all">
                 Share <strong>@{profile.username}</strong> with friends so they can write to you.
               </p>
               <Link
                 href="/profile"
-                className="inline-flex items-center gap-sm font-caption text-caption text-ink-navy hover:underline"
+                className="inline-flex items-center gap-1 font-sans text-xs text-emerald-600 font-semibold hover:underline"
               >
-                Edit your profile & share link →
+                Edit your profile &amp; share link →
               </Link>
             </div>
           </aside>
         </section>
       </div>
+
+      {/* ── LINEAR / APPLE FLOATING FROSTED DOCK (Bottom Navbar) ── */}
+      <nav className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1 p-1.5 rounded-full bg-white/90 backdrop-blur-xl border border-slate-200/90 shadow-2xl">
+        <Link
+          href="/compose?new=1"
+          className="flex items-center gap-1.5 px-4 py-2 rounded-full font-sans text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 transition-all"
+        >
+          <Feather className="w-3.5 h-3.5 text-slate-500" />
+          <span>Compose</span>
+        </Link>
+        <Link
+          href="/sent"
+          className="flex items-center gap-1.5 px-4 py-2 rounded-full font-sans text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 transition-all"
+        >
+          <Mail className="w-3.5 h-3.5 text-slate-500" />
+          <span>Dispatch</span>
+        </Link>
+        <button
+          className="flex items-center gap-1.5 px-4 py-2 rounded-full font-sans text-xs font-bold bg-slate-900 text-white shadow-sm transition-all"
+        >
+          <Radio className="w-3.5 h-3.5 text-emerald-400" />
+          <span>Telemetry</span>
+        </button>
+        <Link
+          href="/relay"
+          className="flex items-center gap-1.5 px-4 py-2 rounded-full font-sans text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 transition-all"
+        >
+          <KeyRound className="w-3.5 h-3.5 text-slate-500" />
+          <span>Keys</span>
+        </Link>
+        <Link
+          href="/journey"
+          className="flex items-center gap-1.5 px-4 py-2 rounded-full font-sans text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 transition-all"
+        >
+          <FileText className="w-3.5 h-3.5 text-slate-500" />
+          <span>Audit</span>
+        </Link>
+      </nav>
     </main>
   );
 }

@@ -93,85 +93,197 @@ function ProfileContent() {
   };
 
   return (
-    <main className="page-enter min-h-screen pb-24 lg:pb-0">
-      <div className="mx-auto max-w-[980px] px-margin-mobile py-xl md:px-margin-desktop md:py-xxl">
-        <header className="mb-xl flex items-center justify-between">
-          <Link href="/" className="inline-flex items-center gap-sm font-caption text-caption text-on-surface-variant hover:text-primary">
-            <ArrowLeft className="h-4 w-4" /> Back to desk
+    <main className="page-enter min-h-screen pb-24 lg:pb-12 bg-surface text-ink-navy">
+      <div className="mx-auto max-w-[1120px] px-margin-mobile py-6 md:px-12 md:py-10 xl:px-16">
+        {/* Header */}
+        <header className="flex items-center justify-between pb-6 border-b border-[#102a43]/[0.08]">
+          <Link
+            href="/"
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-[#102a43]/[0.1] bg-white/70 backdrop-blur-sm text-xs font-mono tracking-wider uppercase text-on-surface-variant hover:text-ink-navy hover:bg-white transition-all shadow-[0_1px_2px_rgba(0,0,0,0.03)]"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" /> Back to desk
           </Link>
-          <span className="font-caption text-caption uppercase tracking-[0.2em] text-on-surface-variant">Your identity</span>
+          <span className="font-mono text-xs uppercase tracking-[0.2em] text-on-surface-variant">
+            Correspondent Identity
+          </span>
         </header>
 
-        <section className="grid gap-xl md:grid-cols-[minmax(0,1.1fr)_minmax(260px,0.9fr)]">
-          <div className="paper-layer p-xl card-depth md:p-xxl">
-            <div className="mb-lg flex h-14 w-14 items-center justify-center rounded-full bg-ink-navy text-xl text-surface-bright">
-              {profile.displayName.split(' ').map((part) => part[0]).join('').slice(0, 2)}
+        <section className="mt-8 grid gap-8 md:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)] items-start">
+          {/* Main Profile Editor Card */}
+          <div className="refero-card rounded-2xl p-6 md:p-10 bg-white border border-[#102a43]/[0.08] shadow-[0_12px_40px_-8px_rgba(16,42,67,0.07)]">
+            <div className="flex items-center gap-4 mb-6">
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-ink-navy text-2xl font-serif text-white shadow-[0_4px_16px_rgba(16,42,67,0.2)]">
+                {profile.displayName.split(' ').map((part) => part[0]).join('').slice(0, 2)}
+              </div>
+              <div>
+                <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-amber-accent font-semibold block">
+                  Public Alias
+                </span>
+                <h2 className="font-headline-md text-2xl text-ink-navy font-bold">
+                  {profile.displayName || 'Correspondent'}
+                </h2>
+              </div>
             </div>
-            <p className="font-caption text-caption uppercase tracking-[0.2em] text-amber-accent">Your relay identity</p>
-            <h1 className="mt-sm font-headline-lg text-headline-lg text-primary md:text-display-lg">Give your relay a name.</h1>
-            <p className="mt-md max-w-xl font-body-md text-body-md leading-relaxed text-on-surface-variant">
-              Your username is the tiny address people use to hand you a moment. Keep it short, warm, and unmistakably you.
+
+            <h1 className="font-headline-lg text-[clamp(2rem,3.8vw,3.2rem)] leading-[1.05] tracking-[-0.03em] text-ink-navy">
+              Give your relay a name.
+            </h1>
+            <p className="mt-3 font-body-md text-base leading-relaxed text-on-surface-variant">
+              Your handle is the unique address fellow carriers use to route letters into your hands. Keep it warm, memorable, and unmistakably you.
             </p>
 
-            <div className="mt-xl space-y-lg">
-              <label className="block font-caption text-caption uppercase tracking-widest text-on-surface-variant">
-                Display name
-                <input value={profile.displayName} onChange={(event) => update('displayName', event.target.value)} className="typewriter-input mt-xs text-lg text-primary" />
-              </label>
-              <label className="block font-caption text-caption uppercase tracking-widest text-on-surface-variant">
-                Username
-                <div className="mt-xs flex items-center gap-sm border-b border-parchment-deep/50">
-                  <span className="font-body-md text-body-md text-amber-accent">@</span>
-                  <input value={profile.username} onChange={(event) => update('username', event.target.value)} className="typewriter-input text-lg text-primary" aria-label="Username" />
+            <div className="mt-8 space-y-6">
+              <div>
+                <label className="block font-mono text-xs uppercase tracking-wider text-on-surface-variant mb-1.5 font-medium">
+                  Display Name
+                </label>
+                <input
+                  value={profile.displayName}
+                  onChange={(event) => update('displayName', event.target.value)}
+                  className="typewriter-input text-lg text-ink-navy bg-[#faf8f4] border border-[#102a43]/[0.12] rounded-xl p-3.5 w-full focus:bg-white focus:border-ink-navy transition-colors"
+                  placeholder="e.g. Eleanor Vance"
+                />
+              </div>
+
+              <div>
+                <label className="block font-mono text-xs uppercase tracking-wider text-on-surface-variant mb-1.5 font-medium">
+                  Relay Handle
+                </label>
+                <div className="flex items-center rounded-xl border border-[#102a43]/[0.12] bg-[#faf8f4] px-3.5 focus-within:bg-white focus-within:border-ink-navy transition-colors">
+                  <span className="font-mono text-base text-amber-accent font-bold pr-1">@</span>
+                  <input
+                    value={profile.username}
+                    onChange={(event) => update('username', event.target.value)}
+                    className="typewriter-input text-lg text-ink-navy bg-transparent py-3.5 w-full outline-none"
+                    aria-label="Username"
+                    placeholder="eleanor"
+                  />
                 </div>
-              </label>
-              <label className="block font-caption text-caption uppercase tracking-widest text-on-surface-variant">
-                One-line bio
-                <textarea value={profile.bio} onChange={(event) => update('bio', event.target.value)} className="mt-xs min-h-[84px] w-full resize-none border border-outline-variant bg-transparent p-md font-body-md text-body-md text-primary outline-none focus:border-primary" />
-              </label>
+              </div>
+
+              <div>
+                <label className="block font-mono text-xs uppercase tracking-wider text-on-surface-variant mb-1.5 font-medium">
+                  One-line Bio
+                </label>
+                <textarea
+                  value={profile.bio}
+                  onChange={(event) => update('bio', event.target.value)}
+                  className="min-h-[90px] w-full resize-none rounded-xl border border-[#102a43]/[0.12] bg-[#faf8f4] p-3.5 font-body-md text-sm text-ink-navy outline-none focus:bg-white focus:border-ink-navy transition-colors"
+                  placeholder="e.g. Architect living between old paper notebooks and new cities."
+                />
+              </div>
             </div>
 
-            <div className="mt-xl flex flex-wrap items-center gap-md">
-              <button type="button" onClick={save} className="inline-flex items-center gap-sm rounded-sm bg-secondary-container px-lg py-sm font-label-md text-label-md uppercase tracking-widest text-on-secondary-container hover:bg-secondary-fixed">
-                {saved ? <Check className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
-                {saved ? 'Saved' : 'Save identity'}
+            <div className="mt-8 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={save}
+                className="inline-flex items-center gap-2 bg-ink-navy text-white px-6 py-3 rounded-xl font-label-md text-xs uppercase tracking-[0.14em] hover:bg-ink-navy/90 active:scale-[0.99] transition-all shadow-[0_2px_8px_rgba(16,42,67,0.15)]"
+              >
+                {saved ? <Check className="h-4 w-4 text-mint-accent" /> : <Sparkles className="h-4 w-4 text-amber-accent" />}
+                <span>{saved ? 'Identity Saved' : 'Save Identity'}</span>
               </button>
-              <button type="button" onClick={copyProfileLink} className="inline-flex items-center gap-sm border border-primary px-lg py-sm font-label-md text-label-md uppercase tracking-widest text-primary hover:bg-secondary-container/30">
-                {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                {copied ? 'Copied' : 'Share profile'}
+              <button
+                type="button"
+                onClick={copyProfileLink}
+                className="inline-flex items-center gap-2 border border-[#102a43]/[0.15] bg-white px-5 py-3 rounded-xl font-label-md text-xs uppercase tracking-[0.14em] text-ink-navy hover:bg-[#faf8f4] transition-all"
+              >
+                {copied ? <Check className="h-4 w-4 text-mint-accent" /> : <Copy className="h-4 w-4" />}
+                <span>{copied ? 'Link Copied' : 'Share Profile'}</span>
               </button>
             </div>
-            {notice && <p className="mt-md font-caption text-caption text-on-surface-variant" aria-live="polite">{notice}</p>}
+            {notice && (
+              <p className="mt-3 font-mono text-xs text-mint-accent font-medium" aria-live="polite">
+                {notice}
+              </p>
+            )}
           </div>
 
-          <aside className="flex flex-col gap-lg">
-            <div className="paper-layer p-lg card-depth">
-              <p className="font-caption text-caption uppercase tracking-widest text-on-surface-variant">Your public link</p>
-              <p className="mt-sm break-all font-body-md text-body-md text-primary">dear.exe{profileUrl(profile.username)}</p>
-              <div className="mt-lg flex items-center justify-between border-t border-outline-variant/40 pt-md">
-                <span className="inline-flex items-center gap-sm font-caption text-caption text-on-surface-variant"><Link2 className="h-4 w-4" /> Shareable by design</span>
-                <button type="button" onClick={copyProfileLink} aria-label="Copy profile link" className="text-primary hover:text-amber-accent"><Copy className="h-4 w-4" /></button>
+          {/* Aside Column */}
+          <aside className="space-y-6">
+            {/* Public Link Card */}
+            <div className="refero-card rounded-2xl p-6 bg-white border border-[#102a43]/[0.08]">
+              <p className="font-mono text-[10px] uppercase tracking-widest text-on-surface-variant font-bold">
+                Your Public Postbox
+              </p>
+              <p className="mt-2 break-all font-mono text-sm text-ink-navy font-semibold bg-[#faf8f4] p-3 rounded-lg border border-[#102a43]/[0.08]">
+                dear.exe{profileUrl(profile.username)}
+              </p>
+              <div className="mt-4 flex items-center justify-between border-t border-[#102a43]/[0.08] pt-3">
+                <span className="inline-flex items-center gap-1.5 font-mono text-xs text-on-surface-variant">
+                  <Link2 className="h-3.5 w-3.5 text-mint-accent" /> Shareable Link
+                </span>
+                <button
+                  type="button"
+                  onClick={copyProfileLink}
+                  aria-label="Copy profile link"
+                  className="font-mono text-xs text-ink-navy hover:text-amber-accent inline-flex items-center gap-1"
+                >
+                  <Copy className="h-3.5 w-3.5" /> Copy
+                </button>
               </div>
             </div>
-            <div className="paper-layer p-lg card-depth">
-              <div className="flex items-start justify-between gap-md">
+
+            {/* Account Sync Card */}
+            <div className="refero-card rounded-2xl p-6 bg-white border border-[#102a43]/[0.08]">
+              <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="font-caption text-caption uppercase tracking-widest text-on-surface-variant">Account access</p>
-                  <h2 className="mt-xs font-headline-md text-headline-md text-primary">Keep your letters with you.</h2>
+                  <p className="font-mono text-[10px] uppercase tracking-widest text-amber-accent font-bold">
+                    Account Sync
+                  </p>
+                  <h3 className="mt-1 font-headline-md text-xl text-ink-navy">
+                    Keep your letters with you.
+                  </h3>
                 </div>
-                <LogIn className="h-5 w-5 text-amber-accent" />
+                <LogIn className="h-5 w-5 text-amber-accent shrink-0" />
               </div>
-              <p className="mt-md break-words font-body-md text-body-md leading-relaxed text-on-surface-variant">{signedInEmail ? `Signed in as ${signedInEmail}. Your letters can follow you across devices.` : googleConfigured ? 'Use Google to keep your letters with you across devices.' : 'Google sign-in is not connected in this local build yet.'}</p>
-              <button type="button" onClick={connectGoogle} disabled={googleLoading} className="mt-lg flex min-h-12 w-full items-center justify-center gap-sm border border-primary px-lg py-sm text-center font-label-md text-label-md uppercase tracking-widest text-primary transition-colors hover:bg-secondary-container/30 disabled:cursor-wait disabled:opacity-60">
-                <span className="font-bold">G</span>
-                {googleLoading ? 'Opening Google…' : googleConfigured ? 'Continue with Google' : 'Set up Google sign-in'}
+              <p className="mt-2 font-body-md text-xs leading-relaxed text-on-surface-variant">
+                {signedInEmail
+                  ? `Signed in as ${signedInEmail}. Your letters sync automatically across your devices.`
+                  : googleConfigured
+                  ? 'Connect Google to back up your written drafts and journey logbooks.'
+                  : 'Google sign-in is optional for this local development build.'}
+              </p>
+              <button
+                type="button"
+                onClick={connectGoogle}
+                disabled={googleLoading}
+                className="mt-5 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-[#102a43]/[0.15] bg-[#faf8f4] px-4 py-2.5 text-center font-label-md text-xs uppercase tracking-[0.14em] text-ink-navy hover:bg-white transition-all disabled:cursor-wait disabled:opacity-60"
+              >
+                <span className="font-bold text-sm">G</span>
+                <span>
+                  {googleLoading
+                    ? 'Opening Google…'
+                    : googleConfigured
+                    ? 'Continue with Google'
+                    : 'Set up Google sign-in'}
+                </span>
               </button>
-              {!googleConfigured && <div className="mt-md space-y-xs border border-outline-variant bg-surface p-md"><p className="break-words font-caption text-caption font-semibold text-primary">To activate it</p><p className="break-words font-caption text-caption leading-relaxed text-on-surface-variant">Add <code>NEXT_PUBLIC_SUPABASE_URL</code> and <code>NEXT_PUBLIC_SUPABASE_ANON_KEY</code> to <code>.env.local</code>, run the SQL migration, enable Google in Supabase, then restart Next.js.</p></div>}
-              {accountNotice && <p className="mt-md break-words font-caption text-caption leading-relaxed text-on-surface-variant" aria-live="polite">{accountNotice}</p>}
+              {accountNotice && (
+                <p className="mt-3 font-mono text-xs text-on-surface-variant" aria-live="polite">
+                  {accountNotice}
+                </p>
+              )}
             </div>
-            <div className="grid grid-cols-2 gap-md">
-              <div className="border border-outline-variant/60 bg-surface-container-lowest p-md"><p className="font-caption text-caption text-on-surface-variant">Relays started</p><p className="mt-xs font-headline-md text-headline-md text-primary">{profile.lettersSent}</p></div>
-              <div className="border border-outline-variant/60 bg-surface-container-lowest p-md"><p className="font-caption text-caption text-on-surface-variant">Arrivals received</p><p className="mt-xs font-headline-md text-headline-md text-primary">{profile.lettersReceived}</p></div>
+
+            {/* Statistics */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="refero-card rounded-2xl p-5 bg-white text-center">
+                <p className="font-mono text-[10px] uppercase tracking-wider text-on-surface-variant">
+                  Relays Started
+                </p>
+                <p className="mt-1 font-headline-md text-2xl text-ink-navy font-bold">
+                  {profile.lettersSent}
+                </p>
+              </div>
+              <div className="refero-card rounded-2xl p-5 bg-white text-center">
+                <p className="font-mono text-[10px] uppercase tracking-wider text-on-surface-variant">
+                  Letters Held
+                </p>
+                <p className="mt-1 font-headline-md text-2xl text-ink-navy font-bold">
+                  {profile.lettersReceived}
+                </p>
+              </div>
             </div>
           </aside>
         </section>
