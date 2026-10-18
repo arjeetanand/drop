@@ -24,6 +24,7 @@ import {
   reverseGeocode,
 } from '@/lib/gpsUtils';
 import { confirmHandoffFromQR, getRelayState } from '@/lib/relayStore';
+import { getLocalAccountId, isCurrentLocalAccount, localAccountStorageKey } from '@/lib/localAccountScope';
 
 type ScanPhase = 'preview' | 'locating' | 'confirmed' | 'expired' | 'invalid' | 'error';
 
@@ -34,19 +35,21 @@ function replayKey(payload: { letterId: string; pin: string; createdAt: string }
   return `${QR_REPLAY_PREFIX}${payload.letterId}:${payload.pin}:${payload.createdAt}`;
 }
 
-function hasBeenAccepted(key: string) {
-  if (acceptedQrPayloads.has(key)) return true;
+function hasBeenAccepted(key: string, accountId: string | null) {
+  const scopedKey = localAccountStorageKey(key, accountId);
+  if (acceptedQrPayloads.has(scopedKey)) return true;
   try {
-    return window.localStorage.getItem(key) === 'accepted';
+    return window.localStorage.getItem(scopedKey) === 'accepted';
   } catch {
     return false;
   }
 }
 
-function markAccepted(key: string) {
-  acceptedQrPayloads.add(key);
+function markAccepted(key: string, accountId: string | null) {
+  const scopedKey = localAccountStorageKey(key, accountId);
+  acceptedQrPayloads.add(scopedKey);
   try {
-    window.localStorage.setItem(key, 'accepted');
+    window.localStorage.setItem(scopedKey, 'accepted');
   } catch {
     // The in-memory marker still prevents a same-session replay.
   }
@@ -105,6 +108,7 @@ function ScanContent() {
 
   const handleAccept = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    const accountId = getLocalAccountId();
 
     if (!payload) {
       setPhase('invalid');
@@ -117,7 +121,7 @@ function ScanContent() {
     }
 
     const qrReplayKey = replayKey(payload);
-    if (hasBeenAccepted(qrReplayKey)) {
+    if (hasBeenAccepted(qrReplayKey, accountId)) {
       setErrorMsg('This handoff code has already been accepted. Ask the current carrier to generate a fresh QR code.');
       setPhase('error');
       focusErrorSummary();
@@ -140,6 +144,7 @@ function ScanContent() {
         throw new Error('You are more than 50 m from the current carrier. Move closer and try again so the handoff can be verified.');
       }
       const area = await reverseGeocode(position);
+      if (!isCurrentLocalAccount(accountId)) throw new Error('Your account changed during this handoff. Start again in the active account.');
       setR2Neighborhood(area);
       confirmHandoffFromQR(
         payload.letterId,
@@ -156,7 +161,7 @@ function ScanContent() {
         },
         { subject: payload.subject, recipient: payload.destination },
       );
-      markAccepted(qrReplayKey);
+      markAccepted(qrReplayKey, accountId);
       setPhase('confirmed');
     } catch (error) {
       setErrorMsg(error instanceof Error ? error.message : 'The GPS handoff could not be completed.');

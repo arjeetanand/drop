@@ -1,3 +1,5 @@
+import { getLocalAccountId, localAccountStorageKey } from './localAccountScope.ts';
+
 // GPS utilities for the human relay system.
 // Uses browser-native geolocation + Nominatim for reverse geocoding (no API key).
 
@@ -161,14 +163,14 @@ export interface PinRecord {
 export function storeHandoffPin(record: PinRecord): void {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.setItem(PIN_STORAGE_KEY, JSON.stringify(record));
+    window.localStorage.setItem(localAccountStorageKey(PIN_STORAGE_KEY), JSON.stringify(record));
   } catch { /* storage full or blocked */ }
 }
 
 export function getHandoffPin(letterId: string): PinRecord | null {
   if (typeof window === 'undefined') return null;
   try {
-    const stored = window.localStorage.getItem(PIN_STORAGE_KEY);
+    const stored = window.localStorage.getItem(localAccountStorageKey(PIN_STORAGE_KEY));
     if (!stored) return null;
     const record = JSON.parse(stored) as PinRecord;
     return record.letterId === letterId ? record : null;
@@ -180,7 +182,7 @@ export function getHandoffPin(letterId: string): PinRecord | null {
 export function clearHandoffPin(): void {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.removeItem(PIN_STORAGE_KEY);
+    window.localStorage.removeItem(localAccountStorageKey(PIN_STORAGE_KEY));
   } catch { /* ignore */ }
 }
 
@@ -287,17 +289,17 @@ export interface ActiveCarry {
   successorExpiresAt?: string;
 }
 
-export function saveActiveCarry(carry: ActiveCarry): void {
+export function saveActiveCarry(carry: ActiveCarry, accountId = getLocalAccountId()): void {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.setItem(ACTIVE_CARRY_KEY, JSON.stringify(carry));
+    window.localStorage.setItem(localAccountStorageKey(ACTIVE_CARRY_KEY, accountId), JSON.stringify(carry));
   } catch { /* ignore */ }
 }
 
-export function getActiveCarry(): ActiveCarry | null {
+export function getActiveCarry(accountId = getLocalAccountId()): ActiveCarry | null {
   if (typeof window === 'undefined') return null;
   try {
-    const stored = window.localStorage.getItem(ACTIVE_CARRY_KEY);
+    const stored = window.localStorage.getItem(localAccountStorageKey(ACTIVE_CARRY_KEY, accountId));
     if (!stored) return null;
     return JSON.parse(stored) as ActiveCarry;
   } catch {
@@ -305,9 +307,9 @@ export function getActiveCarry(): ActiveCarry | null {
   }
 }
 
-export function clearActiveCarry(): void {
+export function clearActiveCarry(accountId = getLocalAccountId()): void {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.removeItem(ACTIVE_CARRY_KEY);
+    window.localStorage.removeItem(localAccountStorageKey(ACTIVE_CARRY_KEY, accountId));
   } catch { /* ignore */ }
 }

@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { Inter, Playfair_Display, Literata, Courier_Prime } from 'next/font/google';
 import { Sidebar } from '@/components/Sidebar';
 import { MainContent } from '@/components/MainContent';
+import { LocalAccountProvider } from '@/components/LocalAccountProvider';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -49,12 +50,14 @@ export default function RootLayout({
         <a href="#main-content" className="skip-link">
           Skip to content
         </a>
-        <div className="min-h-screen bg-[#f7f4ee] text-slate-900">
-          <Sidebar />
-          <MainContent>
-            <div id="main-content">{children}</div>
-          </MainContent>
-        </div>
+        <LocalAccountProvider>
+          <div className="min-h-screen bg-[#f7f4ee] text-slate-900">
+            <Sidebar />
+            <MainContent>
+              <div id="main-content">{children}</div>
+            </MainContent>
+          </div>
+        </LocalAccountProvider>
       </body>
     </html>
   );

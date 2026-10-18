@@ -1,5 +1,6 @@
 import type { TrackingEvent } from '@/data/mockData';
 import { getHandoffPin, type LatLng, type GpsWaypoint } from '@/lib/gpsUtils';
+import { localAccountStorageKey } from '@/lib/localAccountScope';
 import { getSupabaseBrowserClient } from '@/lib/supabaseBrowser';
 import { isRelayToken, validateRelayHandoff, type RelayHandoffSubmission } from '@/lib/relayValidation';
 
@@ -222,7 +223,7 @@ function readStoredRelays(): Record<string, RelayState> {
   if (!canUseStorage()) return {};
 
   try {
-    const stored = window.localStorage.getItem(STORAGE_KEY);
+    const stored = window.localStorage.getItem(localAccountStorageKey(STORAGE_KEY));
     if (!stored) return {};
     const parsed = JSON.parse(stored) as Record<string, RelayState>;
     return parsed && typeof parsed === 'object' ? parsed : {};
@@ -236,7 +237,7 @@ function saveStoredRelay(relay: RelayState) {
 
   try {
     const relays = readStoredRelays();
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...relays, [relay.letterId]: relay }));
+    window.localStorage.setItem(localAccountStorageKey(STORAGE_KEY), JSON.stringify({ ...relays, [relay.letterId]: relay }));
   } catch {
     // The relay remains usable in memory when storage is blocked or full.
   }

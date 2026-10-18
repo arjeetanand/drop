@@ -8,7 +8,7 @@ import { getSealInfo } from '@/data/mockData';
 import type { LetterDraftState } from '@/lib/letterStore';
 import { getLetterDraftById, saveLocalDemoDrop } from '@/lib/letterStore';
 import { getDraftAttachment } from '@/lib/letterMediaStore';
-import { getUserProfile } from '@/lib/userStore';
+import { getUserProfileForCurrentAccount } from '@/lib/userStore';
 import { normalizeDropRecipient } from '@/lib/dropValidation';
 import { cn } from '@/lib/utils';
 import { ReducedMotionGif } from '@/components/ReducedMotionGif';
@@ -71,7 +71,7 @@ function RecipientPreview() {
   }
 
   const recipient = draft.recipient.trim() || 'your person';
-  const sender = getUserProfile().displayName.trim() || 'You';
+  const sender = getUserProfileForCurrentAccount().displayName.trim() || 'You';
   const seal = getSealInfo(draft.sealId, draft.sealMonogram, draft.sealColor);
   const payloadLabel = draft.payloadKind === 'gif' ? 'GIF' : draft.payloadKind === 'image' ? 'Photo or meme' : 'Note';
   const editHref = `/compose?letter=${encodeURIComponent(draft.id)}`;

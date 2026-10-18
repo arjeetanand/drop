@@ -26,6 +26,7 @@ import {
   type LatLng,
 } from '@/lib/gpsUtils';
 import { confirmHandoff, getRelayState } from '@/lib/relayStore';
+import { getLocalAccountId, isCurrentLocalAccount, localAccountStorageKey } from '@/lib/localAccountScope';
 
 type HandoffPhase = 'enter' | 'locating' | 'confirmed' | 'error';
 type FieldErrors = Partial<Record<'letterId' | 'pin' | 'name', string>>;
@@ -37,19 +38,21 @@ function replayKey(letterId: string, pin: string, createdAt: string) {
   return `${HANDOFF_REPLAY_PREFIX}${letterId}:${pin}:${createdAt}`;
 }
 
-function wasAccepted(key: string) {
-  if (acceptedHandoffs.has(key)) return true;
+function wasAccepted(key: string, accountId: string | null) {
+  const scopedKey = localAccountStorageKey(key, accountId);
+  if (acceptedHandoffs.has(scopedKey)) return true;
   try {
-    return window.localStorage.getItem(key) === 'accepted';
+    return window.localStorage.getItem(scopedKey) === 'accepted';
   } catch {
     return false;
   }
 }
 
-function markAccepted(key: string) {
-  acceptedHandoffs.add(key);
+function markAccepted(key: string, accountId: string | null) {
+  const scopedKey = localAccountStorageKey(key, accountId);
+  acceptedHandoffs.add(scopedKey);
   try {
-    window.localStorage.setItem(key, 'accepted');
+    window.localStorage.setItem(scopedKey, 'accepted');
   } catch {
     // The in-memory marker still prevents a same-session replay.
   }
@@ -100,6 +103,7 @@ function HandoffContent() {
 
   const handleConfirm = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    const accountId = getLocalAccountId();
     const normalizedLetterId = letterId.trim();
     const normalizedPin = pin.trim();
     const normalizedName = name.trim();
@@ -162,7 +166,7 @@ function HandoffContent() {
       }
 
       const handoffReplayKey = replayKey(normalizedLetterId, normalizedPin, createdAt);
-      if (wasAccepted(handoffReplayKey)) {
+      if (wasAccepted(handoffReplayKey, accountId)) {
         throw new Error('This handoff has already been accepted. Ask the carrier to generate a fresh code.');
       }
 
@@ -172,6 +176,7 @@ function HandoffContent() {
       }
 
       const area = await reverseGeocode(position);
+      if (!isCurrentLocalAccount(accountId)) throw new Error('Your account changed during this handoff. Start again in the active account.');
       const relay = getRelayState(normalizedLetterId, {
         subject: handoffPayload?.subject || querySubject,
         recipient: handoffPayload?.destination || queryDestination,
@@ -186,7 +191,7 @@ function HandoffContent() {
         },
         { subject: relay.subject, recipient: relay.recipient },
       );
-      markAccepted(handoffReplayKey);
+      markAccepted(handoffReplayKey, accountId);
       setCoords(position);
       setNeighborhood(area);
       setConfirmedRelay({ subject: relay.subject, recipient: relay.recipient });

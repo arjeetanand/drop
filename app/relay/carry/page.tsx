@@ -7,6 +7,7 @@ import { ArrowLeft, ArrowRight, CheckCircle2, Clock3, Copy, MapPin, Package, QrC
 import { QRCodeSVG } from 'qrcode.react';
 import { clearActiveCarry, getActiveCarry, type ActiveCarry } from '@/lib/gpsUtils';
 import { getRelayHandoffStatus, issueRelayPassFromCarrier, type RelayHandoffStatus, type IssuedRelayToken } from '@/lib/relayStore';
+import { getLocalAccountId, isCurrentLocalAccount } from '@/lib/localAccountScope';
 
 type CarryPhase = 'loading' | 'carrying' | 'pass-on' | 'confirmed' | 'unavailable';
 
@@ -24,7 +25,7 @@ function CarryContent() {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    const activeCarry = getActiveCarry();
+    const activeCarry = getActiveCarry(getLocalAccountId());
     if (activeCarry && (!requestedLetterId || activeCarry.letterId === requestedLetterId)) {
       setCarry(activeCarry);
       setPhase('carrying');
@@ -36,6 +37,7 @@ function CarryContent() {
 
   useEffect(() => {
     if ((phase !== 'pass-on' && phase !== 'carrying') || !pass) return;
+    const accountId = getLocalAccountId();
     setNow(Date.now());
     const countdown = window.setInterval(() => setNow(Date.now()), 1000);
     let active = true;
@@ -43,8 +45,9 @@ function CarryContent() {
       if (Date.parse(pass.expiresAt) <= Date.now()) return;
       const status: RelayHandoffStatus | null = await getRelayHandoffStatus(pass.token);
       if (!active || !status?.accepted) return;
+      clearActiveCarry(accountId);
+      if (!isCurrentLocalAccount(accountId)) return;
       setAcceptedBy(status.acceptedBy || 'the next carrier');
-      clearActiveCarry();
       setPhase('confirmed');
     };
     void checkAcceptance();

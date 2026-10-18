@@ -6,6 +6,8 @@ import { ArrowLeft } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getSupabaseBrowserClient } from '@/lib/supabaseBrowser';
 import { safeInternalPath } from '@/lib/safeInternalPath';
+import { copyGuestDraftAttachmentToAccount, deleteDraftAttachment } from '@/lib/letterMediaStore';
+import { copyGuestDraftToAccount, getGuestDraftById } from '@/lib/letterStore';
 
 const AUTH_RETURN_KEY = 'dear-exe:auth-return';
 
@@ -50,19 +52,22 @@ function AuthCallbackContent() {
       }
 
       const code = searchParams.get('code');
+      let signedInUserId = '';
       try {
         if (code) {
-          const { error } = await supabase.auth.exchangeCodeForSession(code);
-          if (error) {
-            redirectWithError(error.message || 'The sign-in code could not be exchanged.');
+          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+          if (error || !data.session) {
+            redirectWithError(error?.message || 'The sign-in code could not be exchanged.');
             return;
           }
+          signedInUserId = data.session.user.id;
         } else {
           const { data, error } = await supabase.auth.getSession();
           if (error || !data.session) {
             redirectWithError('The sign-in return did not include a valid session.');
             return;
           }
+          signedInUserId = data.session.user.id;
         }
 
         if (active) setMessage('Signed in. Opening your profile…');
@@ -71,6 +76,26 @@ function AuthCallbackContent() {
           nextPath = safeInternalPath(window.sessionStorage.getItem(AUTH_RETURN_KEY), window.location.origin);
           window.sessionStorage.removeItem(AUTH_RETURN_KEY);
         } catch { /* Storage may be disabled; return to the profile. */ }
+        if (nextPath && signedInUserId) {
+          const returnUrl = new URL(nextPath, window.location.origin);
+          const draftId = returnUrl.pathname === '/compose' ? returnUrl.searchParams.get('letter') : null;
+          if (draftId && getGuestDraftById(draftId)) {
+            const draft = await copyGuestDraftToAccount(
+              draftId,
+              signedInUserId,
+              copyGuestDraftAttachmentToAccount,
+              deleteDraftAttachment,
+            );
+            if (!draft) {
+              if (active) setMessage('Your draft is still saved on this device, but it could not be copied into this account. Open your profile and sign out to return to it.');
+              return;
+            }
+            if (draft.id !== draftId) {
+              returnUrl.searchParams.set('letter', draft.id);
+              nextPath = `${returnUrl.pathname}${returnUrl.search}${returnUrl.hash}`;
+            }
+          }
+        }
         router.replace(nextPath || '/profile');
       } catch {
         redirectWithError('The sign-in return could not be verified. Please try again.');

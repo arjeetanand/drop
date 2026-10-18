@@ -1,7 +1,8 @@
-import { currentFocusDraft, mockAddress, mockFieldNotes, mockLetters } from '@/data/mockData';
-import type { DropDeliveryMode, DropPayloadKind, LetterStatus, MockLetter } from '@/data/mockData';
-import { getDemoReactions } from '@/lib/demoReactionStore';
-import { normalizeDropRecipient } from '@/lib/dropValidation';
+import { currentFocusDraft, mockAddress, mockFieldNotes, mockLetters } from '../data/mockData.ts';
+import type { DropDeliveryMode, DropPayloadKind, LetterStatus, MockLetter } from '../data/mockData.ts';
+import { getDemoReactions } from './demoReactionStore.ts';
+import { normalizeDropRecipient } from './dropValidation.ts';
+import { getLocalAccountId, localAccountStorageKey } from './localAccountScope.ts';
 
 const STORAGE_KEY = 'dear-exe:active-letter:v1';
 const NOTES_STORAGE_KEY = 'dear-exe:journey-notes:v1';
@@ -102,25 +103,29 @@ function canUseStorage() {
   return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
 }
 
-export function getLetterDraft(): LetterDraftState {
-  if (!canUseStorage()) return defaultDraft();
+function readStoredLetterDraft(accountId = getLocalAccountId()): LetterDraftState | null {
+  if (!canUseStorage()) return null;
 
   try {
-    const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (!stored) return defaultDraft();
+    const stored = window.localStorage.getItem(localAccountStorageKey(STORAGE_KEY, accountId));
+    if (!stored) return null;
 
     const parsed = JSON.parse(stored) as Partial<LetterDraftState>;
     return hydrateDraft(parsed);
   } catch {
-    return defaultDraft();
+    return null;
   }
 }
 
-function getDraftHistory(): LetterDraftState[] {
+export function getLetterDraft(accountId = getLocalAccountId()): LetterDraftState {
+  return readStoredLetterDraft(accountId) ?? defaultDraft();
+}
+
+function getDraftHistory(accountId = getLocalAccountId()): LetterDraftState[] {
   if (!canUseStorage()) return [];
 
   try {
-    const stored = window.localStorage.getItem(DRAFT_HISTORY_STORAGE_KEY);
+    const stored = window.localStorage.getItem(localAccountStorageKey(DRAFT_HISTORY_STORAGE_KEY, accountId));
     if (!stored) return [];
     const parsed = JSON.parse(stored) as Array<Partial<LetterDraftState>>;
     return Array.isArray(parsed) ? parsed.map(hydrateDraft) : [];
@@ -129,21 +134,24 @@ function getDraftHistory(): LetterDraftState[] {
   }
 }
 
-function saveDraftHistory(drafts: LetterDraftState[]) {
-  if (!canUseStorage()) return;
+function saveDraftHistory(drafts: LetterDraftState[], accountId = getLocalAccountId()) {
+  if (!canUseStorage()) return false;
   try {
-    window.localStorage.setItem(DRAFT_HISTORY_STORAGE_KEY, JSON.stringify(drafts));
+    window.localStorage.setItem(localAccountStorageKey(DRAFT_HISTORY_STORAGE_KEY, accountId), JSON.stringify(drafts));
+    return true;
   } catch {
     // The active letter remains usable when storage is blocked or full.
+    return false;
   }
 }
 
 /** Return a complete local draft, including an older letter saved before a new one was started. */
-export function getLetterDraftById(id: string): LetterDraftState | null {
-  const active = getLetterDraft();
-  if (active.id === id) return active;
-  const saved = getDraftHistory().find((draft) => draft.id === id);
+export function getLetterDraftById(id: string, accountId = getLocalAccountId()): LetterDraftState | null {
+  const active = readStoredLetterDraft(accountId);
+  if (active?.id === id) return active;
+  const saved = getDraftHistory(accountId).find((draft) => draft.id === id);
   if (saved) return saved;
+  if (!active && id === currentFocusDraft.id) return defaultDraft();
 
   // Older seeded letters pre-date the complete local draft format. Hydrate the
   // small amount of information needed to continue their flow instead of
@@ -164,12 +172,65 @@ export function getLetterDraftById(id: string): LetterDraftState | null {
   });
 }
 
+export function getGuestDraftById(id: string): LetterDraftState | null {
+  const active = readStoredLetterDraft(null);
+  return active?.id === id ? active : getDraftHistory(null).find((item) => item.id === id) ?? null;
+}
+
+export async function copyGuestDraftToAccount(
+  id: string,
+  accountId: string,
+  copyAttachment?: (draftId: string, accountId: string, targetDraftId: string) => Promise<'copied' | 'existing' | false>,
+  rollbackAttachment?: (draftId: string, accountId: string) => Promise<void>,
+): Promise<LetterDraftState | null> {
+  if (!accountId || !canUseStorage()) return null;
+  const draft = getGuestDraftById(id);
+  if (!draft) return null;
+
+  const activeTarget = readStoredLetterDraft(accountId);
+  const targetDrafts = getDraftHistory(accountId);
+  const historyCopy = targetDrafts.find((item) => item.id === id);
+  const alreadyTransferred = activeTarget?.id !== id
+    && historyCopy
+    && JSON.stringify(historyCopy) === JSON.stringify(draft);
+  const transferredDraft = alreadyTransferred
+    ? historyCopy
+    : activeTarget?.id === id || historyCopy
+      ? { ...draft, id: `draft-${crypto.randomUUID()}` }
+      : draft;
+
+  let copiedAttachment = false;
+  if (draft.payloadKind !== 'text') {
+    try {
+      if (!copyAttachment) return null;
+      const result = await copyAttachment(id, accountId, transferredDraft.id);
+      if (!result) return null;
+      copiedAttachment = result === 'copied';
+    } catch {
+      return null;
+    }
+  }
+
+  const preservedDrafts = activeTarget
+    ? [...targetDrafts.filter((item) => item.id !== activeTarget.id), activeTarget]
+    : targetDrafts;
+  const nextDrafts = alreadyTransferred ? preservedDrafts : [...preservedDrafts, transferredDraft];
+  if (saveDraftHistory(nextDrafts, accountId)) return transferredDraft;
+
+  if (copiedAttachment && rollbackAttachment) {
+    try {
+      await rollbackAttachment(transferredDraft.id, accountId);
+    } catch { /* A leftover private blob is safer than obscuring the transfer failure. */ }
+  }
+  return null;
+}
+
 /** Make a complete draft the active working letter for a focused flow such as dispatch. */
 export function setActiveLetterDraft(draft: LetterDraftState): LetterDraftState {
   const next = hydrateDraft(draft);
   if (canUseStorage()) {
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      window.localStorage.setItem(localAccountStorageKey(STORAGE_KEY), JSON.stringify(next));
     } catch {
       // The caller can continue with the in-memory copy.
     }
@@ -188,7 +249,7 @@ export function saveLetterDraft(
 
   if (canUseStorage()) {
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      window.localStorage.setItem(localAccountStorageKey(STORAGE_KEY), JSON.stringify(next));
     } catch {
       // The app remains usable when storage is blocked or full.
     }
@@ -201,7 +262,7 @@ function getLetterHistory(): MockLetter[] {
   if (!canUseStorage()) return [];
 
   try {
-    const stored = window.localStorage.getItem(HISTORY_STORAGE_KEY);
+    const stored = window.localStorage.getItem(localAccountStorageKey(HISTORY_STORAGE_KEY));
     if (!stored) return [];
     const parsed = JSON.parse(stored) as MockLetter[];
     return Array.isArray(parsed) ? parsed : [];
@@ -213,7 +274,7 @@ function getLetterHistory(): MockLetter[] {
 function saveLetterHistory(letters: MockLetter[]) {
   if (!canUseStorage()) return;
   try {
-    window.localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(letters));
+    window.localStorage.setItem(localAccountStorageKey(HISTORY_STORAGE_KEY), JSON.stringify(letters));
   } catch {
     // The active letter remains usable when storage is blocked or full.
   }
@@ -235,7 +296,7 @@ export function startNewLetter(): LetterDraftState {
   const next = blankDraft();
   if (canUseStorage()) {
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      window.localStorage.setItem(localAccountStorageKey(STORAGE_KEY), JSON.stringify(next));
     } catch {
       // The new letter still works for the current session.
     }
@@ -247,7 +308,7 @@ function getStoredNotes(): Record<string, JourneyNote[]> {
   if (!canUseStorage()) return {};
 
   try {
-    const stored = window.localStorage.getItem(NOTES_STORAGE_KEY);
+    const stored = window.localStorage.getItem(localAccountStorageKey(NOTES_STORAGE_KEY));
     if (!stored) return {};
     const parsed = JSON.parse(stored) as Record<string, JourneyNote[]> | JourneyNote[];
     // Migrate the original single-list format to the seeded letter only.
@@ -273,7 +334,7 @@ export function getJourneyNotes(letterId = currentFocusDraft.id): JourneyNote[] 
 export function saveJourneyNotes(notes: JourneyNote[], letterId = currentFocusDraft.id) {
   if (canUseStorage()) {
     try {
-      window.localStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify({ ...getStoredNotes(), [letterId]: notes }));
+      window.localStorage.setItem(localAccountStorageKey(NOTES_STORAGE_KEY), JSON.stringify({ ...getStoredNotes(), [letterId]: notes }));
     } catch {
       // The journal remains usable for the current session.
     }

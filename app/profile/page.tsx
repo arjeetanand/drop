@@ -2,11 +2,12 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, ArrowRight, Check, Copy, LogIn } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Copy, LogIn, LogOut } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getRemoteProfileState, saveRemoteProfile, type SaveRemoteProfileResult } from '@/lib/letterBackend';
 import { normalizeDropRecipient } from '@/lib/dropValidation';
 import { getSupabaseBrowserClient, isGoogleAuthConfigured } from '@/lib/supabaseBrowser';
+import { getLocalAccountId } from '@/lib/localAccountScope';
 import { safeInternalPath } from '@/lib/safeInternalPath';
 import { clearPendingRemoteProfile, defaultUserProfile, getFirstUseProfile, getPendingRemoteProfileSnapshot, getUserProfile, getUserProfileForAccount, getUserProfileOwnerId, hasCustomizedUserIdentity, hasUnmatchedLocalProfile, markPendingRemoteProfileSynced, preserveUserProfileForAccount, profileUrl, savePendingRemoteProfile, saveUserProfile, type UserProfile } from '@/lib/userStore';
 
@@ -33,6 +34,7 @@ function ProfileContent() {
   const [accountNoticeIsError, setAccountNoticeIsError] = useState(false);
   const [copied, setCopied] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [signOutLoading, setSignOutLoading] = useState(false);
   const [signedInEmail, setSignedInEmail] = useState('');
   const [remoteProfileAvailable, setRemoteProfileAvailable] = useState(false);
   const [remoteProfileMissing, setRemoteProfileMissing] = useState(false);
@@ -169,7 +171,7 @@ function ProfileContent() {
         setAccountNoticeIsError(false);
       } else if (state.status === 'signed-out' || state.status === 'unavailable') {
         setRemoteProfileBase(null);
-        setProfile(getUserProfile());
+        setProfile(localOwnerId ? defaultUserProfile : getUserProfile());
         setPendingRevisionToReplace(null);
         setCanRestorePendingProfile(false);
         setLegacyPendingConflict(false);
@@ -286,7 +288,7 @@ function ProfileContent() {
         return;
       }
     }
-    const savedProfile = saveUserProfile(nextProfile, remoteUserId || undefined);
+    const savedProfile = saveUserProfile(nextProfile, remoteUserId || null);
     setProfile(savedProfile);
 
     let syncResult: SaveRemoteProfileResult = { ok: false, reason: 'signed-out' };
@@ -382,6 +384,27 @@ function ProfileContent() {
     }
   };
 
+  const signOut = async () => {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) return;
+    setSignOutLoading(true);
+    setAccountNotice('Signing out…');
+    setAccountNoticeIsError(false);
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      setAccountStatus('signed-out');
+      setSignedInEmail('');
+      setRemoteUserId('');
+      setAccountNotice('Signed out. This account’s saved drops stay separate on this device.');
+      setSignOutLoading(false);
+    } catch {
+      setSignOutLoading(false);
+      setAccountNotice('Could not sign out. Please try again.');
+      setAccountNoticeIsError(true);
+    }
+  };
+
   const copyProfileLink = async () => {
     const username = normalizeDropRecipient(profile.username);
     if (!username) {
@@ -403,6 +426,7 @@ function ProfileContent() {
   const username = normalizeDropRecipient(profile.username);
   const publicPath = username ? profileUrl(username) : null;
   const initials = profile.displayName.trim().split(/\s+/).filter(Boolean).map((part) => part[0]).join('').slice(0, 2).toUpperCase() || 'DE';
+  const accountConnected = accountStatus === 'signed-in' || Boolean(getLocalAccountId());
   const accountStatusText = signedInEmail
     ? `Connected as ${signedInEmail}.`
     : accountStatus === 'checking'
@@ -665,15 +689,28 @@ function ProfileContent() {
               </p>
               <p className="meta mt-5" role="status" aria-live="polite">{accountStatusText}</p>
               {googleConfigured && accountStatus !== 'unavailable' ? (
-                <button
-                  type="button"
-                  onClick={() => void connectGoogle()}
-                  disabled={googleLoading || accountStatus === 'signed-in'}
-                  className="button-secondary mt-5 w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f7f4ee] disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  <span aria-hidden="true" className="font-sans text-base font-bold">G</span>
-                  {googleLoading ? 'Opening Google…' : accountStatus === 'signed-in' ? 'Google connected' : 'Continue with Google'}
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() => void connectGoogle()}
+                    disabled={googleLoading || accountConnected || signOutLoading}
+                    className="button-secondary mt-5 w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f7f4ee] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <span aria-hidden="true" className="font-sans text-base font-bold">G</span>
+                    {googleLoading ? 'Opening Google…' : accountStatus === 'signed-in' ? 'Google connected' : accountConnected ? 'Account connected' : 'Continue with Google'}
+                  </button>
+                  {accountConnected && (
+                    <button
+                      type="button"
+                      onClick={() => void signOut()}
+                      disabled={signOutLoading}
+                      className="button-quiet mt-2 w-full disabled:opacity-60"
+                    >
+                      <LogOut className="h-4 w-4" aria-hidden="true" />
+                      {signOutLoading ? 'Signing out…' : 'Sign out'}
+                    </button>
+                  )}
+                </>
               ) : (
                 <p className="notice mt-5" role="status">Sign-in isn’t available in this preview. Drafts stay on this device.</p>
               )}

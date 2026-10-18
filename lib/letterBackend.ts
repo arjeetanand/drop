@@ -4,6 +4,7 @@ import type { JourneyNote, LetterDraftState } from '@/lib/letterStore';
 import type { UserProfile } from '@/lib/userStore';
 import { getPendingRemoteProfileSnapshot, suggestedDropUsername, withPendingRemoteProfileLock } from '@/lib/userStore';
 import { getSupabaseBrowserClient } from '@/lib/supabaseBrowser';
+import { isCurrentLocalAccount } from '@/lib/localAccountScope';
 import { normalizeDropRecipient, validateDropMedia } from '@/lib/dropValidation';
 import { createStagedDropMediaPath, isDropMediaFinalPath, resolveDropMediaPaths } from '@/lib/dropMediaStorage';
 import { mergeDropReactions, type DropReactionRow } from '@/lib/mergeDropReactions';
@@ -344,9 +345,13 @@ function eventsForDraft(draft: LetterDraftState): TrackingEvent[] {
   }));
 }
 
-export async function syncDropToBackend(draft: LetterDraftState, confirmedRecipientId: string, mediaFile?: File): Promise<{ ok: boolean; error?: string; mediaPath?: string; mediaMimeType?: string; mediaSizeBytes?: number; dispatchedAt?: string }> {
+export async function syncDropToBackend(draft: LetterDraftState, confirmedRecipientId: string, expectedAccountId: string | null, mediaFile?: File): Promise<{ ok: boolean; error?: string; mediaPath?: string; mediaMimeType?: string; mediaSizeBytes?: number; dispatchedAt?: string }> {
+  if (!expectedAccountId) return { ok: false, error: 'Connect an account in Your profile before sending a private drop.' };
   const context = await getAuthenticatedClient();
   if (!context) return { ok: false, error: 'Connect an account in Your profile before sending a private drop.' };
+  if (context.user.id !== expectedAccountId || !isCurrentLocalAccount(expectedAccountId)) {
+    return { ok: false, error: 'Your account changed while you were preparing this drop. Review it and try again.' };
+  }
 
   const recipientUsername = normalizeDropRecipient(draft.recipient);
   if (!recipientUsername) {
@@ -552,6 +557,10 @@ export async function syncDropToBackend(draft: LetterDraftState, confirmedRecipi
   if (recipientLookup.recipient.id !== confirmedRecipientId) {
     await cleanupUploadedMedia();
     return { ok: false, error: 'This handle now belongs to a different account. Check it again before sending.' };
+  }
+  if (!isCurrentLocalAccount(expectedAccountId)) {
+    await cleanupUploadedMedia();
+    return { ok: false, error: 'Your account changed while you were preparing this drop. Review it and try again.' };
   }
   const recipientProfile = recipientLookup.recipient;
 

@@ -8,7 +8,7 @@ import { LetterCard } from '@/components/LetterCard';
 import { mockLetters, writingPrompts, type MockLetter } from '@/data/mockData';
 import { getRemoteLetters, getRemoteProfile } from '@/lib/letterBackend';
 import { getLetterDraft, getLettersWithDraft } from '@/lib/letterStore';
-import { defaultUserProfile, getUserProfile, type UserProfile } from '@/lib/userStore';
+import { defaultUserProfile, getUserProfileForCurrentAccount, type UserProfile } from '@/lib/userStore';
 
 export default function HomeDesk() {
   const [letters, setLetters] = useState<MockLetter[]>(mockLetters);
@@ -23,7 +23,7 @@ export default function HomeDesk() {
       const merged = new Map(getLettersWithDraft(getLetterDraft()).map((letter) => [letter.id, letter]));
       remoteLetters?.forEach((letter) => merged.set(letter.id, letter));
       setLetters(Array.from(merged.values()));
-      setProfile(remoteProfile || getUserProfile());
+      setProfile(remoteProfile || getUserProfileForCurrentAccount());
     }).catch(() => {
       if (active) setLetters(getLettersWithDraft(getLetterDraft()));
     });

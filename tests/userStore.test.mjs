@@ -7,6 +7,7 @@ import {
   getPendingRemoteProfileSnapshot,
   getUserProfile,
   getUserProfileForAccount,
+  getUserProfileForCurrentAccount,
   getUserProfileOwnerId,
   hasCustomizedUserIdentity,
   hasUnmatchedLocalProfile,
@@ -17,6 +18,7 @@ import {
   suggestedDropUsername,
   withPendingRemoteProfileLock,
 } from '../lib/userStore.ts';
+import { setLocalAccountId } from '../lib/localAccountScope.ts';
 
 test('suggests a valid, stable, account-specific first-use handle', () => {
   const first = suggestedDropUsername('123e4567-e89b-12d3-a456-426614174000');
@@ -52,6 +54,58 @@ test('preserves a customized local identity when creating a first account profil
 test('distinguishes a customized local identity from the seeded profile', () => {
   assert.equal(hasCustomizedUserIdentity(defaultUserProfile), false);
   assert.equal(hasCustomizedUserIdentity({ ...defaultUserProfile, username: 'mina.p' }), true);
+});
+
+test('shows a local profile only in its matching account scope', () => {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const values = new Map();
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { localStorage: { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) } },
+  });
+  try {
+    const profile = { ...defaultUserProfile, displayName: 'Mina Park', username: 'mina.p' };
+    saveUserProfile(profile, 'account-one');
+    setLocalAccountId('account-one');
+    assert.deepEqual(getUserProfileForCurrentAccount(), profile);
+    setLocalAccountId('account-two');
+    assert.deepEqual(getUserProfileForCurrentAccount(), defaultUserProfile);
+    setLocalAccountId(null);
+    assert.deepEqual(getUserProfileForCurrentAccount(), defaultUserProfile);
+  } finally {
+    setLocalAccountId(null);
+    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
+    else delete globalThis.window;
+  }
+});
+
+test('a signed-out profile edit clears account ownership and preserves the old account snapshot', () => {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const values = new Map();
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: {
+      localStorage: {
+        getItem: (key) => values.get(key) ?? null,
+        setItem: (key, value) => values.set(key, value),
+        removeItem: (key) => values.delete(key),
+      },
+    },
+  });
+  try {
+    const accountProfile = { ...defaultUserProfile, displayName: 'Mina Park', username: 'mina.p' };
+    const guestProfile = { ...defaultUserProfile, displayName: 'Guest', username: 'guest.drop' };
+    saveUserProfile(accountProfile, 'account-one');
+    setLocalAccountId(null);
+    saveUserProfile(guestProfile, null);
+    assert.equal(getUserProfileOwnerId(), '');
+    assert.deepEqual(getUserProfileForAccount('account-one'), accountProfile);
+    assert.deepEqual(getUserProfileForCurrentAccount(), guestProfile);
+  } finally {
+    setLocalAccountId(null);
+    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
+    else delete globalThis.window;
+  }
 });
 
 test('keeps a signed-out edit visible beside a different saved account snapshot', () => {

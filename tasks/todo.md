@@ -6,7 +6,7 @@ Tasks are ordered by dependency. Progress is recorded at each tested and pushed 
 
 - The foundation, mobile drop flow, draft handoff, secure relay, and reduced-motion GIF work are pushed separately: `04cc01f`, `047c6b9`, `b062dbe`, `6b43271`, and `4f38e0e`.
 - Follow-up commits are pushed: `27db56c` restricts letter update/delete access to unsent rows and uses insert-once sends; `0190b7d` routes relay invites through the secure passport; `59988d0` adds a local recipient preview.
-- Verification passes `npm test` (32/32), lint, typecheck, and an isolated scratch Next.js/Turbopack production build after the reduced-motion frame cap was added. Browser checks confirmed no horizontal overflow at 360px, 390px, and 430px on the desk, profile, and mailbox; the composer preview was checked at 390px. A photo draft survived the account-options detour and reload, and a GIF preview loaded at 390px.
+- Verification passes `npm test` (47/47), lint, typecheck, and an isolated scratch Next.js/Webpack production build after the account-isolation fixes. Browser checks confirmed no horizontal overflow at 360px, 390px, and 430px on the desk, profile, and mailbox; the composer preview was checked at 390px. A photo draft survived the account-options detour and reload, and a GIF preview loaded at 390px.
 - The new recipient preview was checked in-browser for text, recipient handle, sign-off, and return-to-edit persistence. Local PNG and GIF attachments saved in IndexedDB and appeared in the recipient view; the GIF remained available after a page reload. Unsupported and over-8 MB fixtures showed visible errors while the draft text remained. The home prompt, note sign-off choices, and seeded `/letter/1` reveal flow remain reachable. The relay send CTA was checked through to the passport, including its sign-in requirement without Supabase credentials. A local PostgreSQL transaction confirmed sent letters cannot be changed or deleted by the sender, while an unsent draft can still be sent; the transaction rolled back. The latest scratch production build includes `/compose/preview`.
 - Relay handoffs now use short-lived server-issued capabilities; the migration keeps carrier access to route details and excludes message text/media. The migrations are not deployed because no hosted Supabase project exists, so hosted OAuth, account-to-account send/media/reaction, and cross-device handoff remain unverified. The local PostgreSQL policy smoke test does not verify hosted Storage policies. The browser setup also could not emulate `prefers-reduced-motion`; that branch was reviewed but not exercised in-browser.
 - A pinned Supabase CLI and local-only config now reproduce the Supabase stack. The first reset exposed duplicate migration version prefixes; after assigning unique ordered versions, `npm run supabase:reset` applied every migration cleanly. Local authenticated text send/open/react now passes in the browser; Google OAuth, media UI delivery, and hosted behavior remain open.
@@ -20,7 +20,7 @@ Tasks are ordered by dependency. Progress is recorded at each tested and pushed 
 - A signed-out recipient opening a shared drop now gets a sign-in action that returns to the same drop. The local browser check verified the encoded return URL, the account section link, and the return link label/navigation. Google OAuth itself remains unverified without the configured Supabase project.
 - Recipient preview now uses the saved text size and alignment and shows the local sender name. A browser check set 20px/right alignment and confirmed both styles, the sender/recipient line, and the not-sent preview notice. The temporary note content was cleared and the seeded draft restored.
 - Recipient handles now show local format feedback, expose `aria-invalid`/help text, and only satisfy the send completeness check when the existing handle validator accepts them. An isolated browser check confirmed a one-character handle errors and a valid handle clears the error; no recipient lookup runs while typing.
-- The composer now requires an explicit handle check, shows the matched display name and handle, distinguishes not-found from lookup failure, and binds confirmation to the normalized handle and recipient ID. Sending rechecks the recipient before media upload and before insert. Unit tests (32/32), lint, typecheck, production build, local Supabase identity lookup, send/media smoke checks, and the authenticated text browser flow pass. Google OAuth and hosted two-account send remain unverified because no hosted Supabase project is configured.
+- The composer now requires an explicit handle check, shows the matched display name and handle, distinguishes not-found from lookup failure, and binds confirmation to the normalized handle and recipient ID. Sending rechecks the recipient before media upload and before insert. Unit tests (36/36), lint, typecheck, production build, local Supabase identity lookup, send/media smoke checks, and the authenticated text browser flow pass. Google OAuth and hosted two-account send remain unverified because no hosted Supabase project is configured.
 - A new database check ties payload kind to media type and presence: text rows have no media, image rows use static image MIME types, and GIF rows use `image/gif`. The transactional PostgreSQL smoke test rejects mismatched text, image, and GIF rows as well as image/GIF rows missing MIME types before they can be stored.
 - Received drops with a known sender handle now offer an optional “Drop back” action that opens a fresh, addressed draft. The local seeded sender-to-composer flow was checked in-browser; no message was copied or sent. The Supabase profile join for sender handles still needs verification against a configured project.
 - Mailbox filters are now exposed as a labeled group of toggle buttons instead of an incomplete tab pattern. Browser checks confirmed the pressed state changes for Sent and Drafts and that Tab plus Return operates the filters.
@@ -33,6 +33,7 @@ Tasks are ordered by dependency. Progress is recorded at each tested and pushed 
 - Same-device instant demos now complete note, photo, and GIF preview → recipient reveal/open → reaction → sender copy. Photo/GIF fixtures stayed visible after reload, and reactions remained on sender copies. The UI clearly says the demos stay on this device and nothing was sent. This does not verify authenticated account-to-account UI or hosted delivery. Photo/GIF checks used the isolated in-app browser at 855px; narrow viewports and reduced-motion mode were not exercised in that session.
 - Reduced-motion GIF stills now cap their longest edge at 1600px to keep canvas and PNG data-URL memory bounded for large accepted GIFs. Dimension math has a unit test; reduced-motion browser behavior and lower-memory device performance still need verification.
 - The composer’s Desk link now saves immediately before navigation, and rejecting an invalid replacement file preserves the existing attachment. A fast browser edit → Desk → reopen check retained the edit. The native file picker did not open reliably, so replacement preservation was reviewed in code but not exercised in-browser; unit tests (24/24), lint, build, and typecheck pass.
+- Local account data now uses per-user storage keys for drafts, sent copies, notes, relay/location state, reactions, and media attachment IDs. The root waits for Supabase session resolution and reloads on account changes; Profile includes sign-out and signed-out views hide account-owned profile identity. Legacy unscoped data remains in the guest/device bucket, and the composer sign-in return transfers only its selected draft after a required attachment copy succeeds, remaps ID collisions, refreshes the preserved destination draft, restores missing attachments on retry without replacing existing account media, and rolls back only newly copied media when draft persistence fails. IndexedDB operations, send completion, and GPS handoffs stay pinned to the account scope that started them; replay markers are account-scoped. Unit tests (47/47), lint, typecheck, isolated production build, and local Supabase smoke pass; the local browser confirmed sign-out and retained the guest “Tiny cat test” draft. A→B→A local content/media switching and hosted OAuth remain unverified.
 
 ## Git Delivery
 
@@ -198,6 +199,28 @@ Commit each completed code change separately with a descriptive message and push
 **Files likely touched:** `app/globals.css`, shared drop/card components, affected routes and shell components.
 
 **Estimated scope:** Small to medium.
+
+## Task 8: Isolate local data when accounts change
+
+**Description:** Partition browser-local drafts and related private data by the authenticated account. Keep existing unscoped data recoverable in the guest/device bucket, wait for auth state before reading private local content, and let people sign out.
+
+**Acceptance criteria:**
+- [x] Signed-in local drafts, sent copies, journey notes, relay/location data, reactions, and attachments use account-specific storage.
+- [x] Existing unscoped data stays available as guest/device data and is not shown to another signed-in account.
+- [x] Signing in from the composer copies only the selected guest draft and its attachment into the new account scope.
+- [x] Auth state is resolved before private routes render, and account changes reload the app under the new scope.
+- [x] Profile provides sign-out and signed-out views do not display the prior account's profile identity.
+
+**Verification:**
+- [x] Unit tests cover stable, separate account namespaces and preserve the guest reaction copy.
+- [x] Unit test confirms a selected guest draft copies into one account while remaining recoverable in the guest bucket.
+- [x] Unit tests cover starter draft precedence, destination draft preservation, draft ID collisions, missing-attachment transfer retry and rollback, IndexedDB remapping/preservation, account changes during media operations, failed attachment transfer, collision rollback, and signed-out profile ownership.
+- [x] Local browser sign-out returns to the signed-out profile.
+- [ ] Switch A→B→A and verify active drafts, sent history, notes, and attachments restore only for their owner.
+
+**Dependencies:** Tasks 1–7.
+
+**Estimated scope:** Small.
 
 ### Checkpoint: Complete
 

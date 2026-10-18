@@ -10,6 +10,7 @@ import { lookupDropRecipient, syncDropToBackend } from '@/lib/letterBackend';
 import { getSupabaseBrowserClient } from '@/lib/supabaseBrowser';
 import { isDropRecipientConfirmed, normalizeDropRecipient, validateDropMedia } from '@/lib/dropValidation';
 import { deleteDraftAttachment, getDraftAttachment, saveDraftAttachment } from '@/lib/letterMediaStore';
+import { getLocalAccountId, isCurrentLocalAccount } from '@/lib/localAccountScope';
 import { ReducedMotionGif } from '@/components/ReducedMotionGif';
 import { cn } from '@/lib/utils';
 
@@ -153,6 +154,7 @@ function Composer() {
   const handleFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const selected = event.target.files?.[0] || null;
     if (!selected) return;
+    const accountId = getLocalAccountId();
     attachmentChosenRef.current = true;
     const validationError = validateDropMedia(selected);
     if (validationError) {
@@ -167,6 +169,7 @@ function Composer() {
     try {
       if (!draft) throw new Error('Draft unavailable');
       await saveDraftAttachment(draft.id, selected);
+      if (!isCurrentLocalAccount(accountId)) return;
       const updatedDraft = saveLetterDraft({ payloadKind: selected.type === 'image/gif' ? 'gif' : 'image' });
       setDraft(updatedDraft);
       setAttachmentSaved(true);
@@ -251,6 +254,7 @@ function Composer() {
     setError('');
     setNotice('');
     setSending(true);
+    const accountId = getLocalAccountId();
     const next = makeDraft();
     if (!next) {
       setSending(false);
@@ -258,7 +262,8 @@ function Composer() {
     }
     setDraft(next);
     try {
-      const result = await syncDropToBackend(next, confirmedRecipient.id, file || undefined);
+      const result = await syncDropToBackend(next, confirmedRecipient.id, accountId, file || undefined);
+      if (!isCurrentLocalAccount(accountId)) return;
       if (!result.ok) {
         setError(result.error || 'This drop could not be sent. Your draft is safe to retry.');
         setRecipientCheck({ status: 'idle', username: null });
@@ -271,6 +276,7 @@ function Composer() {
       const sent = dispatchLetter(storedDraft.id, status, result.dispatchedAt);
       router.push(`/sent?letter=${encodeURIComponent(sent.id)}&sync=cloud&mode=${deliveryMode}`);
     } catch {
+      if (!isCurrentLocalAccount(accountId)) return;
       setError('Something interrupted the send. Your draft is still here—try again.');
       setRecipientCheck({ status: 'idle', username: null });
       setSending(false);

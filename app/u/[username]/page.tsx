@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { ArrowLeft, ArrowRight, Check, Copy, Mail } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { getSupabaseBrowserClient } from '@/lib/supabaseBrowser';
-import { getUserProfile, profileUrl, type UserProfile } from '@/lib/userStore';
+import { getUserProfileForCurrentAccount, profileUrl, type UserProfile } from '@/lib/userStore';
 
 type PublicProfile = Pick<UserProfile, 'displayName' | 'username' | 'bio'>;
 
@@ -41,7 +41,7 @@ export default function PublicProfilePage() {
 
   useEffect(() => {
     let active = true;
-    const localProfile = getUserProfile();
+    const localProfile = getUserProfileForCurrentAccount();
     const localMatch = localProfile.username.toLowerCase() === username;
     const localPublicProfile = localMatch
       ? {

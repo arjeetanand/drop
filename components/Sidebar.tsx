@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import { ArrowUpRight, Mail, PenLine, Plus, Route, Sparkles, UserRound } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getLetterDraft } from '@/lib/letterStore';
-import { defaultUserProfile, getUserProfile } from '@/lib/userStore';
+import { defaultUserProfile, getUserProfileForCurrentAccount } from '@/lib/userStore';
 import { getRemoteProfile } from '@/lib/letterBackend';
 import { SoundToggle } from '@/components/SoundToggle';
 
@@ -31,7 +31,7 @@ export function Sidebar() {
 
   useEffect(() => {
     let active = true;
-    setProfile(getUserProfile());
+    setProfile(getUserProfileForCurrentAccount());
     void getRemoteProfile().then((remoteProfile) => {
       if (active && remoteProfile) setProfile(remoteProfile);
     });

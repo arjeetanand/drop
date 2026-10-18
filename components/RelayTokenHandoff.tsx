@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { ArrowRight, MapPin, Navigation, ShieldCheck } from 'lucide-react';
 import { acceptRelayHandoffToken } from '@/lib/relayStore';
 import { getCurrentPosition, reverseGeocode, saveActiveCarry } from '@/lib/gpsUtils';
+import { getLocalAccountId, isCurrentLocalAccount } from '@/lib/localAccountScope';
 import { isRelayToken } from '@/lib/relayValidation';
 
 interface RelayTokenHandoffProps {
@@ -58,6 +59,7 @@ export function RelayTokenHandoff({ token, destination, backHref, method }: Rela
       return;
     }
 
+    const accountId = getLocalAccountId();
     setAccepting(true);
     try {
       // Keep this ID for retries so a lost response cannot create a duplicate handoff.
@@ -80,10 +82,13 @@ export function RelayTokenHandoff({ token, destination, backHref, method }: Rela
         destinationNeighborhood: destination || 'Recipient area',
         successorToken: result.successorToken,
         successorExpiresAt: result.successorExpiresAt,
-      });
+      }, accountId);
+      if (!isCurrentLocalAccount(accountId)) return;
       setAccepted(true);
     } catch (acceptError) {
-      setError(acceptError instanceof Error ? acceptError.message : 'This handoff could not be accepted. Try the invite again.');
+      if (isCurrentLocalAccount(accountId)) {
+        setError(acceptError instanceof Error ? acceptError.message : 'This handoff could not be accepted. Try the invite again.');
+      }
     } finally {
       setAccepting(false);
     }

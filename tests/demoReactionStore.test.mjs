@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { getDemoReactions, saveDemoReaction } from '../lib/demoReactionStore.ts';
+import { setLocalAccountId } from '../lib/localAccountScope.ts';
 
 function withLocalStorage(run, initial = {}) {
   const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'window');
@@ -17,6 +18,7 @@ function withLocalStorage(run, initial = {}) {
   try {
     run(values);
   } finally {
+    setLocalAccountId(null);
     if (descriptor) Object.defineProperty(globalThis, 'window', descriptor);
     else delete globalThis.window;
   }
@@ -61,4 +63,20 @@ test('ignores invalid stored reaction data and reports storage failures', () => 
     if (descriptor) Object.defineProperty(globalThis, 'window', descriptor);
     else delete globalThis.window;
   }
+});
+
+test('keeps local reactions isolated by account while preserving the guest copy', () => {
+  withLocalStorage((values) => {
+    assert.equal(saveDemoReaction('incoming-1', '🫶'), true);
+    setLocalAccountId('user/one');
+    assert.deepEqual(getDemoReactions(), {});
+    assert.equal(saveDemoReaction('incoming-1', '🔥'), true);
+    setLocalAccountId('user-two');
+    assert.deepEqual(getDemoReactions(), {});
+    setLocalAccountId('user/one');
+    assert.deepEqual(getDemoReactions(), { 'incoming-1': '🔥' });
+    setLocalAccountId(null);
+    assert.deepEqual(getDemoReactions(), { 'incoming-1': '🫶' });
+    assert.equal([...values.keys()].filter((key) => key.includes(':account:')).length, 1);
+  });
 });

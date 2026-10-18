@@ -1,3 +1,5 @@
+import { getLocalAccountId } from './localAccountScope.ts';
+
 export interface UserProfile {
   displayName: string;
   username: string;
@@ -271,6 +273,10 @@ export function getUserProfileOwnerId() {
   }
 }
 
+export function getUserProfileForCurrentAccount() {
+  return (getUserProfileOwnerId() || null) === getLocalAccountId() ? getUserProfile() : defaultUserProfile;
+}
+
 export function getUserProfileForAccount(userId: string): UserProfile | null {
   if (!canUseStorage()) return null;
   try {
@@ -293,13 +299,16 @@ export function preserveUserProfileForAccount(userId: string, profile: UserProfi
   }
 }
 
-export function saveUserProfile(updates: Partial<UserProfile>, ownerId?: string) {
+export function saveUserProfile(updates: Partial<UserProfile>, ownerId?: string | null) {
   const next = { ...getUserProfile(), ...updates };
   if (canUseStorage()) {
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-      if (ownerId) window.localStorage.setItem(PROFILE_OWNER_KEY, ownerId);
-      const profileOwnerId = ownerId || getUserProfileOwnerId();
+      if (ownerId !== undefined) {
+        if (ownerId) window.localStorage.setItem(PROFILE_OWNER_KEY, ownerId);
+        else window.localStorage.removeItem(PROFILE_OWNER_KEY);
+      }
+      const profileOwnerId = ownerId === undefined ? getUserProfileOwnerId() : ownerId;
       if (profileOwnerId) preserveUserProfileForAccount(profileOwnerId, next);
     } catch {
       // The profile remains usable for the current session.
