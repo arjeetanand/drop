@@ -231,4 +231,4 @@ Commit each completed code change separately with a descriptive message and push
 
 - [x] Mark legacy seeded inbox examples as samples, exclude them from real counts and normal mailbox filters, keep sample reactions device-only, and feature the newest real inbox drop on Home when one exists. Unit coverage and a local browser pass confirm the photo/GIF examples remain openable.
 - [ ] Verify the photo/GIF send-open-react flow at a phone viewport with two disposable local accounts; hosted account verification is unavailable until a hosted Supabase project is configured.
-- [ ] Make photo/GIF retries recover safely when a retry gets a fresh staging path: compare the authorized committed object’s bytes and metadata before treating a prior send as complete.
+- [x] Verify photo/GIF retry recovery with a fresh staging path; the server reuses the committed object only when its MIME type, size, and bytes match.
