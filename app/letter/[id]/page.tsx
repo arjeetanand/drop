@@ -7,6 +7,7 @@ import { useParams } from 'next/navigation';
 import type { MockLetter } from '@/data/mockData';
 import { getRemoteLetterById, getRemoteLetters, saveRemoteReaction } from '@/lib/letterBackend';
 import { getLetterById } from '@/lib/letterStore';
+import { getSupabaseBrowserClient, isGoogleAuthConfigured } from '@/lib/supabaseBrowser';
 import { ReducedMotionGif } from '@/components/ReducedMotionGif';
 
 function LoadingLetter() {
@@ -23,7 +24,7 @@ function LoadingLetter() {
   );
 }
 
-function MissingLetter() {
+function MissingLetter({ signInHref }: { signInHref?: string }) {
   return (
     <main className="page-shell page-enter">
       <div className="page-container max-w-[760px]">
@@ -37,18 +38,37 @@ function MissingLetter() {
           </Link>
         </header>
         <section className="panel mt-12 p-7 sm:p-10">
-          <p className="eyebrow">Letter not found</p>
-          <h1 className="section-title mt-3">This letter has not reached this desk.</h1>
-          <p className="body-copy mt-4 max-w-xl">
-            The address may be out of date, or the letter may still be finding its way through the relay.
-          </p>
-          <Link
-            href="/mailbox"
-            className="button-primary mt-7 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-white"
-          >
-            Open mailbox
-            <ArrowRight className="h-4 w-4" aria-hidden="true" />
-          </Link>
+          {signInHref ? (
+            <>
+              <p className="eyebrow">A private drop is waiting</p>
+              <h1 className="section-title mt-3">Sign in to check this drop.</h1>
+              <p className="body-copy mt-4 max-w-xl">
+                Sign in with the account it was sent to. We’ll bring you back here when you’re done.
+              </p>
+              <Link
+                href={signInHref}
+                className="button-primary mt-7 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+              >
+                Sign in to check this drop
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </Link>
+            </>
+          ) : (
+            <>
+              <p className="eyebrow">Drop not found</p>
+              <h1 className="section-title mt-3">This drop isn’t available from this link.</h1>
+              <p className="body-copy mt-4 max-w-xl">
+                Check the address or ask the sender to share it again.
+              </p>
+              <Link
+                href="/mailbox"
+                className="button-primary mt-7 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+              >
+                Open mailbox
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </Link>
+            </>
+          )}
         </section>
       </div>
     </main>
@@ -59,6 +79,7 @@ export default function LetterArrivalPage() {
   const params = useParams<{ id?: string | string[] }>();
   const letterId = Array.isArray(params.id) ? params.id[0] : params.id;
   const [letter, setLetter] = useState<MockLetter | null>(null);
+  const [signInRequired, setSignInRequired] = useState(false);
   const [fullContentAvailable, setFullContentAvailable] = useState(false);
   const [loading, setLoading] = useState(true);
   const [revealed, setRevealed] = useState(false);
@@ -69,6 +90,11 @@ export default function LetterArrivalPage() {
   const [savingReaction, setSavingReaction] = useState(false);
 
   useEffect(() => {
+    setLoading(true);
+    setLetter(null);
+    setSignInRequired(false);
+    setFullContentAvailable(false);
+
     if (!letterId) {
       setLoading(false);
       return;
@@ -90,6 +116,13 @@ export default function LetterArrivalPage() {
       try {
         const remoteLetters = await getRemoteLetters();
         const remoteLetter = remoteLetters?.find((candidate) => candidate.id === letterId) || null;
+        if (!remoteLetters && isGoogleAuthConfigured()) {
+          const supabase = getSupabaseBrowserClient();
+          if (supabase) {
+            const { data, error } = await supabase.auth.getSession();
+            if (active && !error && !data.session) setSignInRequired(true);
+          }
+        }
         if (active) {
           setLetter(remoteLetter);
           setFullContentAvailable(false);
@@ -172,7 +205,12 @@ export default function LetterArrivalPage() {
   }, [letter]);
 
   if (loading) return <LoadingLetter />;
-  if (!letter) return <MissingLetter />;
+  if (!letter) {
+    const signInHref = signInRequired && letterId
+      ? `/profile?next=${encodeURIComponent(`/letter/${encodeURIComponent(letterId)}`)}#account`
+      : undefined;
+    return <MissingLetter signInHref={signInHref} />;
+  }
 
   const sender = letter.sender || 'A correspondent';
   const isReceived = letter.direction === 'received';

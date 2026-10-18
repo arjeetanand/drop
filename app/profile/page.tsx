@@ -396,7 +396,7 @@ function ProfileContent() {
               ) : (
                 <p className="notice mt-5" role="status">Sign-in isn’t available in this preview. Drafts stay on this device.</p>
               )}
-              {nextPath && <Link href={nextPath} className="button-secondary mt-3 w-full">Back to your draft</Link>}
+              {nextPath && <Link href={nextPath} className="button-secondary mt-3 w-full">{nextPath.startsWith('/letter/') ? 'Back to this drop' : 'Back to your draft'}</Link>}
               {accountNotice && (
                 <p className={`notice mt-4 ${accountNoticeIsError ? 'error-notice' : ''}`} role={accountNoticeIsError ? 'alert' : 'status'} aria-live="polite">
                   {accountNotice}
