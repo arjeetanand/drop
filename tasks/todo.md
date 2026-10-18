@@ -4,8 +4,10 @@ Tasks are ordered by dependency. Progress is recorded at each tested and pushed 
 
 ## Current Checkpoint — 2026-10-18
 
-- The mixed-payload/private-media foundation is pushed as `04cc01f`. The mobile-first desk, inbox, composer, and received-drop/reaction UI are implemented and locally verified: 3 unit tests, lint, typecheck, production build, plus browser checks at 463px and desktop width.
-- Remote account-to-account send, media access, and reactions still need a configured Supabase project and applied migrations. Relay handoffs currently use the existing browser-local store, so shared multi-device relay behavior remains future work. The in-app browser clamps mobile width to 463px, so exact 360px, 390px, and 430px checks are pending.
+- The foundation, mobile drop flow, draft handoff, secure relay, and reduced-motion GIF work are pushed separately: `04cc01f`, `047c6b9`, `b062dbe`, `6b43271`, and `4f38e0e`.
+- Verification now passes `npm test` (11/11), lint, typecheck, and a production build in an isolated scratch copy using webpack. Browser checks confirmed no horizontal overflow at 360px, 390px, and 430px on the desk, profile, and mailbox; the composer preview was checked at 390px. A photo draft survived the account-options detour and reload, and a GIF preview loaded at 390px.
+- Relay handoffs now use short-lived server-issued capabilities; the migration keeps carrier access to route details and excludes message text/media. The Supabase migration is not deployed here, and there is no Supabase configuration in this environment, so OAuth, real account-to-account send/media/reaction, and cross-device handoff still need a configured project. A local PostgreSQL smoke run could not start because the sandbox denies shared memory. The browser setup also could not emulate `prefers-reduced-motion`; that branch was reviewed but not exercised in-browser.
+- Exact mobile keyboard/safe-area behavior and real-device accessibility remain unverified. The preview correctly keeps sending unavailable until remote persistence is configured.
 
 ## Git Delivery
 
