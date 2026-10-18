@@ -99,7 +99,7 @@ function RecipientPreview() {
           </div>
 
           {mediaUrl && <div className="relative mt-5 aspect-[4/3] max-h-[520px] overflow-hidden rounded-xl bg-[#ede8df]">
-            <ReducedMotionGif src={mediaUrl} alt={`${payloadLabel} for ${recipient}`} animated={draft.payloadKind === 'gif'} sizes="(max-width: 760px) 100vw, 700px" className="object-contain" />
+            <ReducedMotionGif src={mediaUrl} alt={draft.content.trim() ? '' : `${payloadLabel} for ${recipient}`} animated={draft.payloadKind === 'gif'} sizes="(max-width: 760px) 100vw, 700px" className="object-contain" />
           </div>}
           {mediaUnavailable && <p className="notice error-notice mt-5" role="status">The attachment is not saved on this device. Go back to editing and add it again to preview it.</p>}
 

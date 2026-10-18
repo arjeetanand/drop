@@ -275,7 +275,7 @@ function Composer() {
             <section className="overflow-hidden rounded-2xl border border-[rgba(16,42,67,.14)] bg-white/60">
               {previewUrl ? (
                 <div className="relative aspect-[4/3] max-h-[430px] overflow-hidden bg-[#ede8df]">
-                  <ReducedMotionGif src={previewUrl} alt={`Preview of your ${payloadKind === 'gif' ? 'GIF' : 'photo'}`} animated={payloadKind === 'gif'} sizes="(max-width: 760px) 100vw, 760px" className="object-contain" />
+                  <ReducedMotionGif src={previewUrl} alt={content.trim() ? '' : `Preview of your ${payloadKind === 'gif' ? 'GIF' : 'photo'}`} animated={payloadKind === 'gif'} sizes="(max-width: 760px) 100vw, 760px" className="object-contain" />
                   <button type="button" aria-label="Remove attachment" disabled={attachmentSaving} onClick={() => { setFile(null); setAttachmentSaved(false); if (draft) void deleteDraftAttachment(draft.id).catch(() => undefined); if (fileInputRef.current) fileInputRef.current.value = ''; }} className="absolute right-3 top-3 flex h-11 w-11 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/75 disabled:opacity-50"><X className="h-4 w-4" aria-hidden="true" /></button>
                 </div>
               ) : (
@@ -294,8 +294,8 @@ function Composer() {
             <input id="drop-subject" value={subject} onChange={(event) => { setSubject(event.target.value); setSaved(false); }} className="input-field mt-2 !rounded-xl !border-0 !bg-[#f5f1e9]" placeholder={isText ? 'A thought for later' : 'This made me think of you'} maxLength={100} />
             <div className="mt-4 border-t border-[rgba(16,42,67,.1)] pt-4">
               {writingPrompt && <div className="mb-4 rounded-xl border-l-2 border-[#dc7951] bg-[#fff4e7] px-3 py-2.5"><p className="font-mono text-[0.6rem] font-bold uppercase tracking-[0.12em] text-[#9a5037]">A thought to start with</p><p className="mt-1 font-literata text-sm leading-relaxed text-ink-navy">{writingPrompt}</p></div>}
-              <label htmlFor="drop-content" className="field-label">{isText ? 'Your note' : 'Add a caption'} <span className="font-normal text-on-surface-variant">{isText ? '' : '(optional)'}</span></label>
-              <textarea id="drop-content" value={content} onChange={(event) => { setContent(event.target.value); setSaved(false); }} className={cn('textarea-field mt-2 min-h-[150px] !rounded-xl !border-0 !bg-[#f5f1e9] font-literata leading-relaxed text-ink-navy placeholder:font-sans placeholder:text-sm sm:min-h-[190px]', isText && alignClass)} style={isText ? { fontSize: `${fontSize}px` } : undefined} placeholder={isText ? 'Say the thing you wanted them to know…' : 'Add a little context if you want.'} maxLength={5000} />
+              <label htmlFor="drop-content" className="field-label">{isText ? 'Your note' : 'Add a caption or description'} <span className="font-normal text-on-surface-variant">{isText ? '' : '(optional)'}</span></label>
+              <textarea id="drop-content" value={content} onChange={(event) => { setContent(event.target.value); setSaved(false); }} className={cn('textarea-field mt-2 min-h-[150px] !rounded-xl !border-0 !bg-[#f5f1e9] font-literata leading-relaxed text-ink-navy placeholder:font-sans placeholder:text-sm sm:min-h-[190px]', isText && alignClass)} style={isText ? { fontSize: `${fontSize}px` } : undefined} placeholder={isText ? 'Say the thing you wanted them to know…' : 'Describe the moment or add a little context.'} maxLength={5000} />
               {isText && <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
                 <span className="meta">{wordCount} {wordCount === 1 ? 'word' : 'words'}</span>
                 <div className="flex items-center gap-1 rounded-xl border border-[rgba(16,42,67,.1)] bg-white/70 p-0.5">
