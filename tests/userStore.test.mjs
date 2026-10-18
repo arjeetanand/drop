@@ -6,10 +6,12 @@ import {
   getFirstUseProfile,
   getPendingRemoteProfileSnapshot,
   getUserProfile,
+  getUserProfileForAccount,
   getUserProfileOwnerId,
   hasCustomizedUserIdentity,
   hasUnmatchedLocalProfile,
   markPendingRemoteProfileSynced,
+  preserveUserProfileForAccount,
   savePendingRemoteProfile,
   saveUserProfile,
   suggestedDropUsername,
@@ -67,6 +69,7 @@ test('keeps unsynced profiles separate by account and clears only the synced acc
   const previousNavigator = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
   const values = new Map();
   const lockTails = new Map();
+  let failAccountProfileWrites = false;
   Object.defineProperty(globalThis, 'navigator', {
     configurable: true,
     value: {
@@ -82,7 +85,10 @@ test('keeps unsynced profiles separate by account and clears only the synced acc
   globalThis.window = {
     localStorage: {
       getItem: (key) => values.get(key) ?? null,
-      setItem: (key, value) => values.set(key, value),
+      setItem: (key, value) => {
+        if (failAccountProfileWrites && key === 'dear-exe:user-profile:v1:account:blocked') throw new Error('storage full');
+        values.set(key, value);
+      },
       removeItem: (key) => values.delete(key),
     },
   };
@@ -110,6 +116,12 @@ test('keeps unsynced profiles separate by account and clears only the synced acc
     saveUserProfile({ bio: 'Edited while signed out.' });
     assert.equal(getUserProfileOwnerId(), 'account-1');
     assert.equal(getFirstUseProfile('account-2', 'New Person', getUserProfile(), getUserProfileOwnerId()).username, suggestedDropUsername('account-2'));
+    const accountOneLocalEdits = getUserProfile();
+    saveUserProfile(secondProfile, 'account-2');
+    assert.deepEqual(getUserProfileForAccount('account-1'), accountOneLocalEdits, 'Switching the shared profile to another account keeps the previous account’s signed-out edits recoverable');
+    failAccountProfileWrites = true;
+    assert.equal(preserveUserProfileForAccount('blocked', firstProfile), false, 'A storage failure must stop an account switch from overwriting the only local copy');
+    failAccountProfileWrites = false;
     const firstPending = await savePendingRemoteProfile('account-1', firstProfile);
     const secondPending = await savePendingRemoteProfile('account-2', secondProfile);
     assert.equal(firstPending.ok, true);
@@ -257,7 +269,7 @@ test('keeps unsynced profiles separate by account and clears only the synced acc
     values.set('dear-exe:pending-profile-sync:v1:alsoBroken', JSON.stringify({ username: 42 }));
     assert.equal(getPendingRemoteProfileSnapshot('broken'), null);
     assert.equal(getPendingRemoteProfileSnapshot('alsoBroken'), null);
-    assert.equal(getUserProfile().username, firstProfile.username);
+    assert.equal(getUserProfile().username, secondProfile.username);
   } finally {
     if (previousWindow === undefined) delete globalThis.window;
     else globalThis.window = previousWindow;

@@ -8,7 +8,7 @@ import { getRemoteProfileState, saveRemoteProfile, type SaveRemoteProfileResult 
 import { normalizeDropRecipient } from '@/lib/dropValidation';
 import { getSupabaseBrowserClient, isGoogleAuthConfigured } from '@/lib/supabaseBrowser';
 import { safeInternalPath } from '@/lib/safeInternalPath';
-import { clearPendingRemoteProfile, defaultUserProfile, getFirstUseProfile, getPendingRemoteProfileSnapshot, getUserProfile, getUserProfileOwnerId, hasCustomizedUserIdentity, hasUnmatchedLocalProfile, markPendingRemoteProfileSynced, profileUrl, savePendingRemoteProfile, saveUserProfile, type UserProfile } from '@/lib/userStore';
+import { clearPendingRemoteProfile, defaultUserProfile, getFirstUseProfile, getPendingRemoteProfileSnapshot, getUserProfile, getUserProfileForAccount, getUserProfileOwnerId, hasCustomizedUserIdentity, hasUnmatchedLocalProfile, markPendingRemoteProfileSynced, preserveUserProfileForAccount, profileUrl, savePendingRemoteProfile, saveUserProfile, type UserProfile } from '@/lib/userStore';
 
 type AccountStatus = 'checking' | 'signed-out' | 'signed-in' | 'unavailable' | 'error';
 
@@ -41,6 +41,7 @@ function ProfileContent() {
   const [canRestorePendingProfile, setCanRestorePendingProfile] = useState(false);
   const [legacyPendingConflict, setLegacyPendingConflict] = useState(false);
   const [localProfileConflict, setLocalProfileConflict] = useState(false);
+  const [identityUnverified, setIdentityUnverified] = useState(false);
   const [pendingRevisionToReplace, setPendingRevisionToReplace] = useState<string | null>(null);
   const [profileLookupFailed, setProfileLookupFailed] = useState(false);
   const [accountStatus, setAccountStatus] = useState<AccountStatus>('checking');
@@ -56,6 +57,39 @@ function ProfileContent() {
     const loadProfile = async () => {
       const state = await getRemoteProfileState();
       if (!active) return;
+      let localProfile = getUserProfile();
+      let localOwnerId = getUserProfileOwnerId();
+      let preservedPreviousAccountProfile = false;
+      const stateUserId = ('userId' in state ? state.userId : '') || '';
+      const addPreviousAccountNotice = (message: string) => [
+        message,
+        preservedPreviousAccountProfile ? 'Your previous account’s profile edits are saved separately on this device.' : '',
+      ].filter(Boolean).join(' ');
+
+      if ((state.status === 'found' || state.status === 'missing' || state.status === 'error')
+        && stateUserId && localOwnerId && localOwnerId !== stateUserId) {
+        if (hasCustomizedUserIdentity(localProfile) && !preserveUserProfileForAccount(localOwnerId, localProfile)) {
+          setProfile(defaultUserProfile);
+          setProfileLookupFailed(true);
+          setRemoteUserId('');
+          setAccountStatus('error');
+          setIdentityUnverified(true);
+          setRemoteProfileAvailable(false);
+          setAccountNotice('This device could not preserve the profile from your previous account, so it has not switched profiles. Check device storage and try again.');
+          setAccountNoticeIsError(true);
+          setProfileLoaded(true);
+          return;
+        }
+        preservedPreviousAccountProfile = hasCustomizedUserIdentity(localProfile);
+        const accountProfile = getUserProfileForAccount(stateUserId);
+        if (accountProfile) {
+          localProfile = accountProfile;
+          localOwnerId = stateUserId;
+        } else {
+          localProfile = defaultUserProfile;
+          localOwnerId = '';
+        }
+      }
 
       if (state.status === 'found') {
         setRemoteProfileBase(state.profile);
@@ -66,8 +100,6 @@ function ProfileContent() {
           || pendingProfile.username !== state.profile.username
           || pendingProfile.bio !== state.profile.bio
         )));
-        const localProfile = getUserProfile();
-        const localOwnerId = getUserProfileOwnerId();
         const hasLocalConflict = hasUnmatchedLocalProfile(localProfile, localOwnerId, state.userId, state.profile, pendingProfile || undefined);
         if (pendingSnapshot && !pendingConflict) {
           markPendingRemoteProfileSynced(state.userId, pendingSnapshot.revision);
@@ -79,6 +111,7 @@ function ProfileContent() {
         setProfile(profileToShow);
         setSignedInEmail(state.email);
         setRemoteUserId(state.userId);
+        setIdentityUnverified(false);
         setCanRestorePendingProfile(Boolean(pendingConflict && pendingSnapshot));
         setLegacyPendingConflict(Boolean(pendingSnapshot?.legacyConflict));
         setLocalProfileConflict(hasLocalConflict);
@@ -86,24 +119,25 @@ function ProfileContent() {
         setAccountStatus('signed-in');
         setRemoteProfileAvailable(!hasLocalConflict);
         if (pendingConflict) {
-          setAccountNotice(hasLocalConflict
+          setAccountNotice(addPreviousAccountNotice(hasLocalConflict
             ? 'A signed-out edit and a saved account edit are both on this device. Choose which copy to keep before saving.'
             : pendingSnapshot?.legacyConflict
             ? 'Different profile edits are saved in another open tab. Choose which saved copy to keep before saving.'
             : pendingSnapshot?.synced
               ? 'Your account profile has changed since this device last synced. The fields below show the current account version; restore your saved edits to review this device’s copy.'
-              : 'Your saved edits differ from the profile on your account. Review it below, or restore your saved edits before choosing Save.');
+              : 'Your saved edits differ from the profile on your account. Review it below, or restore your saved edits before choosing Save.'));
           setAccountNoticeIsError(false);
         } else if (hasLocalConflict) {
-          setAccountNotice('A profile saved while signed out is ready on this device. Save identity to use it on this account, or choose the account version.');
+          setAccountNotice(addPreviousAccountNotice('A profile saved while signed out is ready on this device. Save identity to use it on this account, or choose the account version.'));
+          setAccountNoticeIsError(false);
+        } else {
+          setAccountNotice(addPreviousAccountNotice(''));
           setAccountNoticeIsError(false);
         }
       } else if (state.status === 'missing') {
         setRemoteProfileBase(null);
         const pendingSnapshot = getPendingRemoteProfileSnapshot(state.userId);
         const pendingProfile = pendingSnapshot?.profile ?? null;
-        const localProfile = getUserProfile();
-        const localOwnerId = getUserProfileOwnerId();
         const hasSavedGuestIdentity = (!localOwnerId || localOwnerId === state.userId) && hasCustomizedUserIdentity(localProfile);
         const hasLocalConflict = Boolean(pendingProfile
           && hasUnmatchedLocalProfile(localProfile, localOwnerId, state.userId, undefined, pendingProfile));
@@ -115,13 +149,14 @@ function ProfileContent() {
         setProfile(nextProfile);
         setSignedInEmail(state.email);
         setRemoteUserId(state.userId);
+        setIdentityUnverified(false);
         setCanRestorePendingProfile(Boolean(pendingSnapshot && (pendingSnapshot.legacyConflict || hasLocalConflict)));
         setLegacyPendingConflict(Boolean(pendingSnapshot?.legacyConflict));
         setLocalProfileConflict(hasLocalConflict);
         setRemoteProfileMissing(true);
         setAccountStatus('signed-in');
         setRemoteProfileAvailable(false);
-        setAccountNotice(hasLocalConflict
+        const firstUseNotice = hasLocalConflict
           ? 'A newer profile edit and an account edit are both saved on this device. Choose which copy to keep before creating your account profile.'
           : pendingSnapshot?.legacyConflict
             ? 'Different profile edits are saved in another open tab. Choose which saved copy to keep before saving.'
@@ -129,7 +164,8 @@ function ProfileContent() {
             ? 'A profile change saved on this device is waiting to sync. Review it before saving to your account.'
           : hasSavedGuestIdentity
             ? 'A saved profile from this device is ready to use. Review it before linking it to your account.'
-            : 'No profile is linked to this account yet. Review your editable handle, then save to create it.');
+            : 'No profile is linked to this account yet. Review your editable handle, then save to create it.';
+        setAccountNotice(addPreviousAccountNotice(firstUseNotice));
         setAccountNoticeIsError(false);
       } else if (state.status === 'signed-out' || state.status === 'unavailable') {
         setRemoteProfileBase(null);
@@ -141,14 +177,15 @@ function ProfileContent() {
         setSignedInEmail('');
         setRemoteUserId('');
         setRemoteProfileMissing(false);
+        setIdentityUnverified(false);
         setAccountStatus(state.status === 'unavailable' ? 'unavailable' : 'signed-out');
         setRemoteProfileAvailable(false);
       } else {
         setRemoteProfileBase(null);
         const pendingSnapshot = state.userId ? getPendingRemoteProfileSnapshot(state.userId) : null;
         const pendingProfile = pendingSnapshot?.profile ?? null;
-        const localProfile = getUserProfile();
-        const localOwnerId = getUserProfileOwnerId();
+        const unidentifiedOwnedProfile = !stateUserId && Boolean(localOwnerId);
+        if (unidentifiedOwnedProfile) localProfile = defaultUserProfile;
         const hasLocalConflict = Boolean(pendingProfile
           && hasUnmatchedLocalProfile(localProfile, localOwnerId, state.userId || '', undefined, pendingProfile));
         if (pendingProfile && !hasLocalConflict && state.userId) saveUserProfile(pendingProfile, state.userId);
@@ -159,9 +196,12 @@ function ProfileContent() {
         setCanRestorePendingProfile(Boolean(pendingSnapshot && (pendingSnapshot.legacyConflict || hasLocalConflict)));
         setLegacyPendingConflict(Boolean(pendingSnapshot?.legacyConflict));
         setLocalProfileConflict(hasLocalConflict);
+        setIdentityUnverified(unidentifiedOwnedProfile);
         setAccountStatus('error');
         setRemoteProfileAvailable(false);
-        setAccountNotice('We could not check your account profile. Your edits can stay on this device; account sync is paused to protect your profile. Refresh to try again.');
+        setAccountNotice(unidentifiedOwnedProfile
+          ? 'We could not verify which account is connected. Profile editing is paused so this device does not change the wrong account. Refresh to try again.'
+          : addPreviousAccountNotice('We could not check your account profile. Your edits can stay on this device; account sync is paused to protect your profile. Refresh to try again.'));
         setAccountNoticeIsError(true);
       }
       setProfileLoaded(true);
@@ -169,7 +209,8 @@ function ProfileContent() {
 
     void loadProfile().catch(() => {
       if (!active) return;
-      setProfile(getUserProfile());
+      const ownedProfile = Boolean(getUserProfileOwnerId());
+      setProfile(ownedProfile ? defaultUserProfile : getUserProfile());
       setRemoteProfileBase(null);
       setPendingRevisionToReplace(null);
       setCanRestorePendingProfile(false);
@@ -177,9 +218,12 @@ function ProfileContent() {
       setLocalProfileConflict(false);
       setProfileLookupFailed(true);
       setRemoteUserId('');
+      setIdentityUnverified(ownedProfile);
       setAccountStatus('error');
       setRemoteProfileAvailable(false);
-      setAccountNotice('We could not check your account profile. Your edits can stay on this device; account sync is paused to protect your profile. Refresh to try again.');
+      setAccountNotice(ownedProfile
+        ? 'We could not verify which account is connected. Profile editing is paused so this device does not change the wrong account. Refresh to try again.'
+        : 'We could not check your account profile. Your edits can stay on this device; account sync is paused to protect your profile. Refresh to try again.');
       setAccountNoticeIsError(true);
       setProfileLoaded(true);
     });
@@ -211,6 +255,11 @@ function ProfileContent() {
     const username = normalizeDropRecipient(profile.username);
     if (!username) {
       setProfileError('Use 2–24 letters, numbers, periods, underscores, or hyphens.');
+      return;
+    }
+    if (identityUnverified) {
+      setAccountNotice('We could not verify which account is connected. Refresh before editing your profile.');
+      setAccountNoticeIsError(true);
       return;
     }
 
@@ -463,7 +512,7 @@ function ProfileContent() {
                   className="input-field mt-2"
                   placeholder="Eleanor Vance"
                   autoComplete="name"
-                  disabled={saving || accountStatus === 'checking'}
+                  disabled={saving || accountStatus === 'checking' || identityUnverified}
                 />
               </div>
 
@@ -477,7 +526,7 @@ function ProfileContent() {
                   placeholder="eleanor"
                   autoComplete="username"
                   spellCheck={false}
-                  disabled={saving || accountStatus === 'checking'}
+                  disabled={saving || accountStatus === 'checking' || identityUnverified}
                   aria-describedby={profileError ? 'username-help username-error' : 'username-help'}
                   aria-invalid={Boolean(profileError)}
                 />
@@ -494,14 +543,14 @@ function ProfileContent() {
                   className="textarea-field mt-2"
                   placeholder="Collecting small moments and sending them forward."
                   rows={4}
-                  disabled={saving || accountStatus === 'checking'}
+                  disabled={saving || accountStatus === 'checking' || identityUnverified}
                 />
               </div>
 
               <div className="flex flex-wrap items-center gap-3 border-t border-[rgba(16,42,67,0.1)] pt-6">
                 <button
                   type="submit"
-                  disabled={saving || accountStatus === 'checking'}
+                  disabled={saving || accountStatus === 'checking' || identityUnverified}
                   className="button-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#fcfaf6] disabled:opacity-60"
                 >
                   {saved ? <Check className="h-4 w-4" aria-hidden="true" /> : null}

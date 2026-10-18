@@ -8,6 +8,7 @@ export interface UserProfile {
 
 const STORAGE_KEY = 'dear-exe:user-profile:v1';
 const PROFILE_OWNER_KEY = 'dear-exe:user-profile-owner:v1';
+const ACCOUNT_PROFILE_KEY = 'dear-exe:user-profile:v1:account:';
 const PENDING_SYNC_KEY = 'dear-exe:pending-profile-sync:v1:';
 const LEGACY_PENDING_SYNC_KEY = 'dear-exe:pending-profile-sync:v1';
 const SYNCED_PENDING_KEY = 'dear-exe:synced-profile-revision:v1:';
@@ -66,6 +67,10 @@ function syncedPendingProfileKey(userId: string) {
 
 function syncedLegacyPendingProfileKey(userId: string) {
   return `${SYNCED_LEGACY_PENDING_KEY}${encodeURIComponent(userId)}`;
+}
+
+function accountProfileKey(userId: string) {
+  return `${ACCOUNT_PROFILE_KEY}${encodeURIComponent(userId)}`;
 }
 
 interface StoredPendingRemoteProfileSnapshot {
@@ -266,12 +271,36 @@ export function getUserProfileOwnerId() {
   }
 }
 
+export function getUserProfileForAccount(userId: string): UserProfile | null {
+  if (!canUseStorage()) return null;
+  try {
+    const stored: unknown = JSON.parse(window.localStorage.getItem(accountProfileKey(userId)) || 'null');
+    return isUserProfile(stored) ? stored : null;
+  } catch {
+    return null;
+  }
+}
+
+export function preserveUserProfileForAccount(userId: string, profile: UserProfile) {
+  if (!canUseStorage()) return false;
+  try {
+    const serialized = JSON.stringify(profile);
+    const key = accountProfileKey(userId);
+    if (window.localStorage.getItem(key) !== serialized) window.localStorage.setItem(key, serialized);
+    return window.localStorage.getItem(key) === serialized;
+  } catch {
+    return false;
+  }
+}
+
 export function saveUserProfile(updates: Partial<UserProfile>, ownerId?: string) {
   const next = { ...getUserProfile(), ...updates };
   if (canUseStorage()) {
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
       if (ownerId) window.localStorage.setItem(PROFILE_OWNER_KEY, ownerId);
+      const profileOwnerId = ownerId || getUserProfileOwnerId();
+      if (profileOwnerId) preserveUserProfileForAccount(profileOwnerId, next);
     } catch {
       // The profile remains usable for the current session.
     }
