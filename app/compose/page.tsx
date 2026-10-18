@@ -1,7 +1,6 @@
 'use client';
 
 import { Suspense, useEffect, useRef, useState } from 'react';
-import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AlignCenter, AlignLeft, AlignRight, ArrowLeft, Check, FileImage, ImagePlus, Minus, Plus, Send, Type, X } from 'lucide-react';
@@ -11,6 +10,7 @@ import { syncDropToBackend } from '@/lib/letterBackend';
 import { getSupabaseBrowserClient } from '@/lib/supabaseBrowser';
 import { validateDropMedia } from '@/lib/dropValidation';
 import { deleteDraftAttachment, getDraftAttachment, saveDraftAttachment } from '@/lib/letterMediaStore';
+import { ReducedMotionGif } from '@/components/ReducedMotionGif';
 import { cn } from '@/lib/utils';
 
 function Composer() {
@@ -273,7 +273,7 @@ function Composer() {
             <section className="overflow-hidden rounded-2xl border border-[rgba(16,42,67,.14)] bg-white/60">
               {previewUrl ? (
                 <div className="relative aspect-[4/3] max-h-[430px] overflow-hidden bg-[#ede8df]">
-                  <Image src={previewUrl} alt={`Preview of your ${payloadKind === 'gif' ? 'GIF' : 'photo'}`} fill unoptimized sizes="(max-width: 760px) 100vw, 760px" className="object-contain" />
+                  <ReducedMotionGif src={previewUrl} alt={`Preview of your ${payloadKind === 'gif' ? 'GIF' : 'photo'}`} animated={payloadKind === 'gif'} sizes="(max-width: 760px) 100vw, 760px" className="object-contain" />
                   <button type="button" aria-label="Remove attachment" disabled={attachmentSaving} onClick={() => { setFile(null); setAttachmentSaved(false); if (draft) void deleteDraftAttachment(draft.id).catch(() => undefined); if (fileInputRef.current) fileInputRef.current.value = ''; }} className="absolute right-3 top-3 flex h-11 w-11 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/75 disabled:opacity-50"><X className="h-4 w-4" aria-hidden="true" /></button>
                 </div>
               ) : (
