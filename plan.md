@@ -12,6 +12,7 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 - The core mobile sharing, receive, reaction, and optional relay flows have local implementations. Detailed code and browser checks are recorded in `tasks/todo.md`.
 - Seeded demo reactions now persist on this device and appear on the mailbox card; they are clearly marked as local and do not notify a sender.
 - Signed-in mailbox cards now show participant-visible reactions on sent drops; hosted account-to-account verification remains open.
+- Browser media uploads now use private staging, server-side format/decode limits, metadata-stripping re-encoding, and database checks that bind stored media to its drop; hosted Supabase verification remains open.
 - Hosted account-to-account sending, storage privacy, reactions, and relay still need verification because this checkout has no Supabase project configuration. Real-device safe-area, keyboard, and reduced-motion checks also remain open.
 
 ## Workspace and Delivery

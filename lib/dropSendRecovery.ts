@@ -31,10 +31,3 @@ export function matchesStoredDropMetadata(stored: StoredDropSend, intent: DropSe
       ? Boolean(stored.mediaPath) && stored.mediaMimeType === intent.mediaMimeType && stored.mediaSizeBytes === intent.mediaSizeBytes
       : !stored.mediaPath && !stored.mediaMimeType && stored.mediaSizeBytes === null);
 }
-
-export function sameMediaBytes(stored: ArrayBuffer, candidate: ArrayBuffer) {
-  const storedBytes = new Uint8Array(stored);
-  const candidateBytes = new Uint8Array(candidate);
-  return storedBytes.length === candidateBytes.length
-    && storedBytes.every((byte, index) => byte === candidateBytes[index]);
-}

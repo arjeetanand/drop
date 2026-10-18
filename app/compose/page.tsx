@@ -222,7 +222,7 @@ function Composer() {
         setSending(false);
         return;
       }
-      const storedDraft = saveLetterDraft({ mediaPath: result.mediaPath, mediaMimeType: file?.type, mediaSizeBytes: file?.size });
+      const storedDraft = saveLetterDraft({ mediaPath: result.mediaPath, mediaMimeType: result.mediaMimeType, mediaSizeBytes: result.mediaSizeBytes });
       void deleteDraftAttachment(next.id).catch(() => undefined);
       const status = deliveryMode === 'instant' ? 'delivered' : 'dispatched';
       const sent = dispatchLetter(storedDraft.id, status, result.dispatchedAt);

@@ -5,8 +5,9 @@ import type { UserProfile } from '@/lib/userStore';
 import { defaultUserProfile } from '@/lib/userStore';
 import { getSupabaseBrowserClient } from '@/lib/supabaseBrowser';
 import { normalizeDropRecipient, validateDropMedia } from '@/lib/dropValidation';
+import { createStagedDropMediaPath, isDropMediaFinalPath, resolveDropMediaPaths } from '@/lib/dropMediaStorage';
 import { mergeDropReactions, type DropReactionRow } from '@/lib/mergeDropReactions';
-import { matchesStoredDropMetadata, sameMediaBytes, type DropSendIntent, type StoredDropSend } from '@/lib/dropSendRecovery';
+import { matchesStoredDropMetadata, type DropSendIntent, type StoredDropSend } from '@/lib/dropSendRecovery';
 
 type LetterRow = {
   id: string;
@@ -181,7 +182,7 @@ function eventsForDraft(draft: LetterDraftState): TrackingEvent[] {
   }));
 }
 
-export async function syncDropToBackend(draft: LetterDraftState, mediaFile?: File): Promise<{ ok: boolean; error?: string; mediaPath?: string; dispatchedAt?: string }> {
+export async function syncDropToBackend(draft: LetterDraftState, mediaFile?: File): Promise<{ ok: boolean; error?: string; mediaPath?: string; mediaMimeType?: string; mediaSizeBytes?: number; dispatchedAt?: string }> {
   const context = await getAuthenticatedClient();
   if (!context) return { ok: false, error: 'Connect an account in Your profile before sending a private drop.' };
 
@@ -200,6 +201,67 @@ export async function syncDropToBackend(draft: LetterDraftState, mediaFile?: Fil
   }
 
   const instant = draft.deliveryMode !== 'relay';
+  let mediaPath: string | null = null;
+  let stagedMediaPath: string | null = null;
+  let mediaMimeType: string | null = mediaFile?.type || null;
+  let mediaSizeBytes: number | null = mediaFile?.size || null;
+  if (mediaFile) {
+    const stagedPath = createStagedDropMediaPath(context.user.id, draft.id, crypto.randomUUID());
+    if (!stagedPath) return { ok: false, error: 'This draft cannot accept an image attachment. Start a new draft and try again.' };
+    stagedMediaPath = stagedPath;
+    const { error } = await context.supabase.storage.from('drop-media').upload(stagedPath, mediaFile, {
+      contentType: mediaFile.type,
+      upsert: false,
+    });
+    if (error) return { ok: false, error: 'The image did not finish uploading. Your draft is still here—try again.' };
+    const removeStagedMedia = async () => {
+      try {
+        await context.supabase.storage.from('drop-media').remove([stagedPath]);
+      } catch {
+        // A failed cleanup leaves only an inaccessible staging object.
+      }
+    };
+
+    try {
+      const { data: { session } } = await context.supabase.auth.getSession();
+      if (!session?.access_token) {
+        await removeStagedMedia();
+        return { ok: false, error: 'Sign in again before sending this image drop.' };
+      }
+      const response = await fetch('/api/drop-media/finalize', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stagedPath, payloadKind: draft.payloadKind === 'gif' ? 'gif' : 'image' }),
+      });
+      const result = await response.json().catch(() => null) as {
+        error?: string;
+        mediaPath?: string;
+        mediaMimeType?: string;
+        mediaSizeBytes?: number;
+      } | null;
+      const expectedPath = resolveDropMediaPaths(stagedPath, context.user.id)?.finalPath;
+      const validMediaPath = result?.mediaPath === expectedPath || isDropMediaFinalPath(result?.mediaPath, context.user.id, draft.id);
+      if (!response.ok || !result || typeof result.mediaPath !== 'string' || !validMediaPath || typeof result.mediaMimeType !== 'string' || typeof result.mediaSizeBytes !== 'number') {
+        await removeStagedMedia();
+        return { ok: false, error: result?.error || 'The image could not be validated. Your draft is still here—try again.' };
+      }
+      mediaPath = result.mediaPath;
+      mediaMimeType = result.mediaMimeType;
+      mediaSizeBytes = result.mediaSizeBytes;
+    } catch {
+      await removeStagedMedia();
+      return { ok: false, error: 'The image could not be validated. Your draft is still here—try again.' };
+    }
+  }
+  const cleanupUploadedMedia = async (removeFinal = true) => {
+    const paths = [removeFinal ? mediaPath : null, stagedMediaPath].filter((path): path is string => Boolean(path));
+    if (!paths.length) return;
+    try {
+      await context.supabase.storage.from('drop-media').remove(paths);
+    } catch {
+      // Cleanup is best effort; retrying remains safe because the final object is not linked yet.
+    }
+  };
   const intent: DropSendIntent = {
     senderId: context.user.id,
     recipientUsername,
@@ -208,8 +270,8 @@ export async function syncDropToBackend(draft: LetterDraftState, mediaFile?: Fil
     sealId: draft.sealId,
     payloadKind: draft.payloadKind,
     deliveryMode: instant ? 'instant' : 'relay',
-    mediaMimeType: mediaFile?.type || null,
-    mediaSizeBytes: mediaFile?.size || null,
+    mediaMimeType,
+    mediaSizeBytes,
     status: instant ? 'delivered' : 'dispatched',
   };
   type ExistingSendRow = {
@@ -258,13 +320,7 @@ export async function syncDropToBackend(draft: LetterDraftState, mediaFile?: Fil
         return { state: 'conflict', senderId: data.sender_id, mediaPath: data.media_path };
       }
       if (mediaFile) {
-        if (!data.media_path) return { state: 'conflict', senderId: data.sender_id, mediaPath: null };
-        const { data: storedMedia, error: mediaError } = await context.supabase.storage.from('drop-media').download(data.media_path);
-        if (mediaError || !storedMedia) return { state: 'unavailable' };
-        const [storedBytes, candidateBytes] = await Promise.all([storedMedia.arrayBuffer(), mediaFile.arrayBuffer()]);
-        if (!sameMediaBytes(storedBytes, candidateBytes)) {
-          return { state: 'conflict', senderId: data.sender_id, mediaPath: data.media_path };
-        }
+        if (!data.media_path || data.media_path !== mediaPath) return { state: 'conflict', senderId: data.sender_id, mediaPath: data.media_path };
       }
       if (!data.dispatched_at) return { state: 'conflict', senderId: data.sender_id, mediaPath: data.media_path };
       return { state: 'same', mediaPath: data.media_path, dispatchedAt: data.dispatched_at };
@@ -274,12 +330,15 @@ export async function syncDropToBackend(draft: LetterDraftState, mediaFile?: Fil
   };
   const existing = await checkExistingSend();
   if (existing.state === 'same') {
+    await cleanupUploadedMedia(mediaPath !== existing.mediaPath);
     return { ok: true, mediaPath: existing.mediaPath || undefined, dispatchedAt: existing.dispatchedAt };
   }
   if (existing.state === 'conflict') {
+    await cleanupUploadedMedia();
     return { ok: false, error: 'This draft ID is already tied to a different drop. Check Sent before sending this edit.' };
   }
   if (existing.state === 'unavailable') {
+    await cleanupUploadedMedia();
     return { ok: false, error: 'I could not confirm whether this drop was already sent. Check Sent before retrying.' };
   }
 
@@ -292,7 +351,10 @@ export async function syncDropToBackend(draft: LetterDraftState, mediaFile?: Fil
       username: `user_${context.user.id.slice(0, 8)}`,
     };
     const created = await saveRemoteProfile(generatedProfile);
-    if (!created) return { ok: false, error: 'Your profile could not be set up. Check the account settings and try again.' };
+    if (!created) {
+      await cleanupUploadedMedia();
+      return { ok: false, error: 'Your profile could not be set up. Check the account settings and try again.' };
+    }
     profile = await getRemoteProfile();
   }
   const { data: recipientProfile, error: recipientError } = await context.supabase
@@ -300,17 +362,9 @@ export async function syncDropToBackend(draft: LetterDraftState, mediaFile?: Fil
     .select('id, display_name')
     .eq('username', recipientUsername)
     .maybeSingle<{ id: string; display_name: string }>();
-  if (recipientError || !recipientProfile) return { ok: false, error: `No Drop account found for @${recipientUsername}. Check the username and try again.` };
-
-  let mediaPath: string | null = null;
-  if (mediaFile) {
-    const safeDraftId = draft.id.replace(/[^a-z0-9._-]/gi, '-');
-    mediaPath = `${context.user.id}/${safeDraftId}/${crypto.randomUUID()}`;
-    const { error } = await context.supabase.storage.from('drop-media').upload(mediaPath, mediaFile, {
-      contentType: mediaFile.type,
-      upsert: false,
-    });
-    if (error) return { ok: false, error: 'The image did not finish uploading. Your draft is still here—try again.' };
+  if (recipientError || !recipientProfile) {
+    await cleanupUploadedMedia();
+    return { ok: false, error: `No Drop account found for @${recipientUsername}. Check the username and try again.` };
   }
 
   const sentAt = new Date().toISOString();
@@ -338,8 +392,8 @@ export async function syncDropToBackend(draft: LetterDraftState, mediaFile?: Fil
       payload_kind: draft.payloadKind,
       delivery_mode: intent.deliveryMode,
       media_path: mediaPath,
-      media_mime_type: mediaFile?.type || null,
-      media_size_bytes: mediaFile?.size || null,
+      media_mime_type: mediaMimeType,
+      media_size_bytes: mediaSizeBytes,
     });
     insertError = error;
   } catch {
@@ -347,20 +401,19 @@ export async function syncDropToBackend(draft: LetterDraftState, mediaFile?: Fil
   }
   if (insertError || insertWasAmbiguous) {
     if (insertError?.code && insertError.code !== '23505') {
-      if (mediaPath) await context.supabase.storage.from('drop-media').remove([mediaPath]);
+      await cleanupUploadedMedia();
       return { ok: false, error: 'Drop could not be saved. Your draft is still here—try again.' };
     }
     const recovery = await checkExistingSend();
     if (recovery.state === 'same') {
-      if (mediaPath && mediaPath !== recovery.mediaPath) await context.supabase.storage.from('drop-media').remove([mediaPath]);
+      await cleanupUploadedMedia(mediaPath !== recovery.mediaPath);
       return { ok: true, mediaPath: recovery.mediaPath || undefined, dispatchedAt: recovery.dispatchedAt };
     }
     if (recovery.state === 'conflict') {
-      if (mediaPath && mediaPath !== recovery.mediaPath && recovery.senderId === context.user.id) {
-        await context.supabase.storage.from('drop-media').remove([mediaPath]);
-      }
+      await cleanupUploadedMedia(mediaPath !== recovery.mediaPath && recovery.senderId === context.user.id);
       return { ok: false, error: 'This draft ID is already tied to a different drop. Check Sent before sending this edit.' };
     }
+    await cleanupUploadedMedia(false);
     return {
       ok: false,
       error: recovery.state === 'missing'
@@ -382,7 +435,8 @@ export async function syncDropToBackend(draft: LetterDraftState, mediaFile?: Fil
     }));
     await context.supabase.from('letter_events').upsert(events, { onConflict: 'letter_id,event_key' });
   }
-  return { ok: true, mediaPath: mediaPath || undefined, dispatchedAt: sentAt };
+  await cleanupUploadedMedia(false);
+  return { ok: true, mediaPath: mediaPath || undefined, mediaMimeType: mediaMimeType || undefined, mediaSizeBytes: mediaSizeBytes || undefined, dispatchedAt: sentAt };
 }
 
 export async function saveRemoteReaction(letterId: string, emoji: string) {

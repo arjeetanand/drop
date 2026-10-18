@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { matchesStoredDropMetadata, sameMediaBytes } from '../lib/dropSendRecovery.ts';
+import { matchesStoredDropMetadata } from '../lib/dropSendRecovery.ts';
 
 const textIntent = {
   senderId: 'sender-1',
@@ -38,10 +38,4 @@ test('requires matching media metadata and bytes before recovering a media drop'
   assert.equal(matchesStoredDropMetadata(storedMedia, mediaIntent), true);
   assert.equal(matchesStoredDropMetadata(storedMedia, { ...mediaIntent, mediaSizeBytes: 4 }), false);
   assert.equal(matchesStoredDropMetadata({ ...storedMedia, mediaPath: null }, mediaIntent), false);
-});
-
-test('compares binary media exactly, including same-length files', () => {
-  assert.equal(sameMediaBytes(Uint8Array.from([1, 2, 3]).buffer, Uint8Array.from([1, 2, 3]).buffer), true);
-  assert.equal(sameMediaBytes(Uint8Array.from([1, 2, 3]).buffer, Uint8Array.from([1, 2, 4]).buffer), false);
-  assert.equal(sameMediaBytes(Uint8Array.from([1, 2]).buffer, Uint8Array.from([1, 2, 3]).buffer), false);
 });
