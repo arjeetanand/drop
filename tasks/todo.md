@@ -9,7 +9,8 @@ Tasks are ordered by dependency. Progress is recorded at each tested and pushed 
 - Verification now passes `npm test` (24/24), lint, typecheck, and the default Next.js/Turbopack production build. Browser checks confirmed no horizontal overflow at 360px, 390px, and 430px on the desk, profile, and mailbox; the composer preview was checked at 390px. A photo draft survived the account-options detour and reload, and a GIF preview loaded at 390px.
 - The new recipient preview was checked in-browser for text, recipient handle, sign-off, and return-to-edit persistence. Local PNG and GIF attachments saved in IndexedDB and appeared in the recipient view; the GIF remained available after a page reload. Unsupported and over-8 MB fixtures showed visible errors while the draft text remained. The home prompt, note sign-off choices, and seeded `/letter/1` reveal flow remain reachable. The relay send CTA was checked through to the passport, including its sign-in requirement without Supabase credentials. A local PostgreSQL transaction confirmed sent letters cannot be changed or deleted by the sender, while an unsent draft can still be sent; the transaction rolled back. The latest scratch production build includes `/compose/preview`.
 - Relay handoffs now use short-lived server-issued capabilities; the migration keeps carrier access to route details and excludes message text/media. The migrations are not deployed because no hosted Supabase project exists, so hosted OAuth, account-to-account send/media/reaction, and cross-device handoff remain unverified. The local PostgreSQL policy smoke test does not verify hosted Storage policies. The browser setup also could not emulate `prefers-reduced-motion`; that branch was reviewed but not exercised in-browser.
-- A pinned Supabase CLI and local-only config now reproduce the Supabase stack. The first reset exposed duplicate migration version prefixes; after assigning unique ordered versions, `npm run supabase:reset` applied every migration cleanly. A local two-account app-flow test and hosted behavior remain open.
+- A pinned Supabase CLI and local-only config now reproduce the Supabase stack. The first reset exposed duplicate migration version prefixes; after assigning unique ordered versions, `npm run supabase:reset` applied every migration cleanly. Browser sign-in, the full composer flow, and hosted behavior remain open.
+- A disposable local three-account smoke test now covers authenticated text insert/read, recipient-only reaction writes, outsider denial, validated GIF staging/finalization, and sender/recipient-only media downloads and signed URLs. It cleans up its accounts/media and refuses non-loopback projects. Hosted OAuth and hosted project behavior remain open.
 - A disposable local PostgreSQL smoke test now applies the sent-letter, media, and integrity migrations together. It confirms draft edits remain available, sender updates cannot promote or change sent drops, linked media cannot be deleted, unlinked upload cleanup still works, and sender/recipient media reads stay allowed while unrelated reads are denied. The SQL changes are not yet applied to a hosted Supabase project.
 - A second disposable PostgreSQL smoke test now covers relay pass issuance, sender authorization, one-time handoff and exact retry recovery, carrier-pass rotation and revocation, coordinate-free and coordinate-bearing handoffs, participant-only route reads, and private token-table denial. The script and repeatable command are documented in `SUPABASE_SETUP.md`; hosted RPC behavior remains unverified.
 - The relay regression check now hands off a private GIF drop without coordinates and confirms the carrier RPC result omits message text and media metadata. The browser QR/manual flow and hosted RPC behavior still need verification.
@@ -56,11 +57,11 @@ Commit each completed code change separately with a descriptive message and push
 
 **Acceptance criteria:**
 - [x] Only the chosen image formats and GIF are accepted, with a visible size limit and upload error state.
-- [ ] Storage policies allow the sender and addressed recipient to read the attachment, while unrelated users cannot.
+- [x] Storage policies allow the sender and addressed recipient to read the attachment, while unrelated users cannot.
 - [ ] A failed upload leaves the draft intact and does not report the drop as sent.
 
 **Verification:**
-- [ ] Test upload and read with the sender account, then verify access with an unrelated account is denied.
+- [x] Test upload and read with sender and recipient accounts, then verify access with an unrelated account is denied.
 - [x] Unsupported type and over-limit files show validation errors while preserving the draft. Remote upload failure recovery still needs a configured Supabase project.
 
 **Dependencies:** Task 1.
@@ -131,7 +132,7 @@ Commit each completed code change separately with a descriptive message and push
 
 **Verification:**
 - [ ] Open a text, image, and GIF drop as the recipient and verify the sender sees the reaction.
-- [ ] Verify an unrelated account cannot open protected content or react.
+- [x] Verify an unrelated account cannot open protected content or react.
 
 **Dependencies:** Tasks 1–4.
 

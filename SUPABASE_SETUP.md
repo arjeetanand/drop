@@ -17,6 +17,8 @@ The Supabase CLI is pinned in `package.json`; Node.js 20+ and a Docker-compatibl
 
 The local stack is for development and testing only. Do not expose it to external traffic.
 
+With the local stack running and `.env.local` filled from its CLI output, run `npm run test:local-supabase`. The smoke test starts a temporary Next.js server, creates three disposable local accounts, exercises text insert/read, reaction RLS, the real private GIF finalize route, and participant storage reads, then removes its test objects and accounts. It refuses any Supabase URL that does not resolve to this machine. It tests the backend boundaries directly, not browser sign-in or the full composer flow, and does not verify hosted OAuth or hosted project settings.
+
 ## Local policy smoke test
 
 With local PostgreSQL tools available, run the policy test against a disposable database from the repository root:
