@@ -11,10 +11,11 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 - Task 1 is complete. The mixed-payload model, default text behavior for older drafts, and compatible recipient routes are in place.
 - The core mobile sharing, receive, reaction, and optional relay flows have local implementations. Detailed code and browser checks are recorded in `todo.md`.
 - Same-device text, photo, and GIF demos have been checked through recipient reveal/open, reaction, sender copy, and reload. This verifies local media persistence and reaction presentation, not authenticated account-to-account delivery.
+- A local authenticated browser check sent a text drop through the composer, opened and reacted as the recipient, and confirmed the sender mailbox reaction. The database drop, reaction, and two disposable local Supabase accounts were removed; the browser keeps its local sent-copy history. Google OAuth and hosted account behavior remain unverified.
 - Seeded demo reactions now persist on this device and appear on the mailbox card; they are clearly marked as local and do not notify a sender.
 - Signed-in mailbox cards now show participant-visible reactions on sent drops; hosted account-to-account verification remains open.
 - First-use profile setup preserves customized local identity, suggests an editable account-specific handle, and only creates a sender profile after confirmed absence. Per-account unsynced edits survive lookup recovery, and handle conflicts stay recoverable on-device. The local smoke test verifies rejected updates and duplicate first-use inserts leave existing profiles unchanged. Authenticated browser onboarding remains unverified.
-- Hosted account-to-account sending, storage privacy, reactions, and relay still need verification because no hosted Supabase project exists. The local CLI and three-account smoke test cover Auth, row/reaction policies, private GIF finalization, participant-only storage reads, and handle uniqueness, but not browser sign-in or the full composer flow. Real-device safe-area, keyboard, and reduced-motion checks also remain open.
+- Hosted account-to-account sending, storage privacy, reactions, and relay still need verification because no hosted Supabase project exists. The local CLI smoke test covers Auth, row/reaction policies, private GIF finalization, participant-only storage reads, and handle uniqueness; the separate authenticated browser pass covers text send/open/react only. Google OAuth, account-to-account photo/GIF UI, and real-device safe-area, keyboard, and reduced-motion checks remain open.
 
 ## Workspace and Delivery
 
@@ -49,7 +50,7 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 ### Phase 1: Data and Media Foundation
 
 - [x] Task 1: Add the mixed-payload model with backward-compatible text defaults.
-- [ ] Task 2: Add private image/GIF upload and recipient-authorized reads.
+- [x] Task 2: Add private image/GIF upload and recipient-authorized reads.
 
 ### Checkpoint: Foundation
 
@@ -59,8 +60,8 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 
 ### Phase 2: Mobile Sharing Flow
 
-- [ ] Task 3: Rework the mobile home, mailbox, and navigation around drops.
-- [ ] Task 4: Turn the composer into a single mobile-first drop flow.
+- [x] Task 3: Rework the mobile home, mailbox, and navigation around drops.
+- [x] Task 4: Turn the composer into a single mobile-first drop flow.
 
 ### Checkpoint: Sending
 
@@ -70,8 +71,8 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 
 ### Phase 3: Receiving and Relay
 
-- [ ] Task 5: Make received drops open in the right media format and support a private reaction.
-- [ ] Task 6: Keep the existing human relay as an optional mode for any supported drop.
+- [x] Task 5: Make received drops open in the right media format and support a private reaction.
+- [x] Task 6: Keep the existing human relay as an optional mode for any supported drop.
 
 ### Checkpoint: End-to-End
 
