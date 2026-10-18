@@ -6,6 +6,12 @@ Rework Dear.exe into a mobile-first private sharing app where a person can send 
 
 The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailbox, and relay foundations. Existing letters continue to work as text drops, and their routes and saved content remain readable. The build covers the end-to-end mobile flow: choose content, attach an image or GIF, choose a recipient, send, open, react, and optionally follow a relay.
 
+## Implementation Status — 2026-10-18
+
+- Task 1 is complete. The mixed-payload model, default text behavior for older drafts, and compatible recipient routes are in place.
+- The core mobile sharing, receive, reaction, and optional relay flows have local implementations. Detailed code and browser checks are recorded in `todo.md`.
+- Hosted account-to-account sending, storage privacy, reactions, and relay still need verification because this checkout has no Supabase project configuration. Real-device safe-area, keyboard, and reduced-motion checks also remain open.
+
 ## Product Scope and Decisions
 
 - **Core payloads:** text/letter, photo or meme image, and GIF. A meme is an image with an optional caption. Upload from the device first; defer a searchable third-party GIF catalog until a provider is selected.
@@ -31,7 +37,7 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 
 ### Phase 1: Data and Media Foundation
 
-- [ ] Task 1: Add the mixed-payload model with backward-compatible text defaults.
+- [x] Task 1: Add the mixed-payload model with backward-compatible text defaults.
 - [ ] Task 2: Add private image/GIF upload and recipient-authorized reads.
 
 ### Checkpoint: Foundation
