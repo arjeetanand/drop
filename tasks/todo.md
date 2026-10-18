@@ -28,7 +28,7 @@ Tasks are ordered by dependency. Progress is recorded at each tested and pushed 
 - Sending now reconciles an existing draft ID before retrying and after ambiguous insert failures. Text recovery checks sender, recipient, content, subject, seal, mode, and status before reusing the original send time. Media recovery also checks type/size metadata, but a retry creates a fresh staged path and can still be reported as a conflict after the first send committed. Same-file media retry recovery and live Supabase timeout behavior remain open for a later slice.
 - Media captions are now prompted as descriptions, and visible captions serve as the text alternative without being announced twice; uncaptained media keeps a fallback image label. A local photo draft was checked in the composer and recipient preview with and without a caption.
 - Browser checks confirmed the desk, mailbox, composer, recipient preview, and opened received drop have no horizontal overflow at exact 360px, 390px, and 430px CSS widths. Composer typography and seal-color controls measure 44px. Exact mobile keyboard/safe-area behavior, reduced-motion browser behavior, and real-device accessibility remain unverified; preview mode still blocks real cloud sending until remote persistence is configured.
-- A same-device instant demo now completes text preview → recipient reveal → reaction → sender copy. The reaction remains after reload, the mailbox card says “Demo · not sent” and “On this device,” and the Sent filter/count exclude it. This does not verify photo/GIF demo rendering or any hosted delivery. The smoke test used an isolated local browser profile at its default viewport.
+- Same-device instant demos now complete note, photo, and GIF preview → recipient reveal/open → reaction → sender copy. Photo/GIF fixtures stayed visible after reload, and reactions remained on sender copies. The UI clearly says the demos stay on this device and nothing was sent. This does not verify authenticated account-to-account UI or hosted delivery. Photo/GIF checks used the isolated in-app browser at 855px; narrow viewports and reduced-motion mode were not exercised in that session.
 - The composer’s Desk link now saves immediately before navigation, and rejecting an invalid replacement file preserves the existing attachment. A fast browser edit → Desk → reopen check retained the edit. The native file picker did not open reliably, so replacement preservation was reviewed in code but not exercised in-browser; unit tests (24/24), lint, build, and typecheck pass.
 
 ## Git Delivery
@@ -138,6 +138,7 @@ Commit each completed code change separately with a descriptive message and push
 
 **Verification:**
 - [ ] Open a text, image, and GIF drop as the recipient and verify the sender sees the reaction.
+- [x] Same-device text, photo, and GIF demos render, accept a reaction, and retain the media and reaction on the sender copy after reload.
 - [x] Verify an unrelated account cannot open protected content or react.
 
 **Dependencies:** Tasks 1–4.
