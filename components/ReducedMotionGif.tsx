@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
+import { getReducedMotionFrameSize } from '@/lib/reducedMotionFrame';
 
 interface ReducedMotionGifProps {
   src: string;
@@ -47,12 +48,14 @@ export function ReducedMotionGif({ src, alt, animated, sizes, className }: Reduc
     image.onload = () => {
       if (!active) return;
       try {
+        const frameSize = getReducedMotionFrameSize(image.naturalWidth, image.naturalHeight);
+        if (!frameSize) throw new Error('Still frame unavailable');
         const canvas = document.createElement('canvas');
-        canvas.width = image.naturalWidth;
-        canvas.height = image.naturalHeight;
+        canvas.width = frameSize.width;
+        canvas.height = frameSize.height;
         const context = canvas.getContext('2d');
-        if (!context || !canvas.width || !canvas.height) throw new Error('Still frame unavailable');
-        context.drawImage(image, 0, 0);
+        if (!context) throw new Error('Still frame unavailable');
+        context.drawImage(image, 0, 0, frameSize.width, frameSize.height);
         setStillSrc(canvas.toDataURL('image/png'));
       } catch {
         // Never fall back to animated media when reduced motion is requested.
