@@ -5,6 +5,7 @@ import type { UserProfile } from '@/lib/userStore';
 import { defaultUserProfile } from '@/lib/userStore';
 import { getSupabaseBrowserClient } from '@/lib/supabaseBrowser';
 import { normalizeDropRecipient, validateDropMedia } from '@/lib/dropValidation';
+import { mergeDropReactions, type DropReactionRow } from '@/lib/mergeDropReactions';
 import { matchesStoredDropMetadata, sameMediaBytes, type DropSendIntent, type StoredDropSend } from '@/lib/dropSendRecovery';
 
 type LetterRow = {
@@ -122,7 +123,19 @@ export async function getRemoteLetters(): Promise<MockLetter[] | null> {
     .returns<LetterRow[]>();
 
   if (error || !data) return null;
-  return data.map((row) => rowToLetter(row, context.user.id));
+  const letters = data.map((row) => rowToLetter(row, context.user.id));
+  if (!letters.length) return letters;
+
+  try {
+    const { data: reactions, error: reactionError } = await context.supabase
+      .from('letter_reactions')
+      .select('letter_id, emoji')
+      .in('letter_id', letters.map((letter) => letter.id))
+      .returns<DropReactionRow[]>();
+    return reactionError || !reactions ? letters : mergeDropReactions(letters, reactions);
+  } catch {
+    return letters;
+  }
 }
 
 export async function getRemoteLetterById(letterId: string): Promise<MockLetter | null> {

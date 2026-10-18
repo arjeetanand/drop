@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { ArrowUpRight, CheckCircle2, Clock3, FileEdit, Image as ImageIcon, Mail, PackageCheck, Type } from 'lucide-react';
+import { ArrowUpRight, CheckCircle2, Clock3, FileEdit, Image as ImageIcon, Mail, PackageCheck, Sparkles, Type } from 'lucide-react';
 import type { LetterStatus, MockLetter } from '@/data/mockData';
 import { cn } from '@/lib/utils';
 
@@ -18,7 +18,7 @@ export function LetterCard({ letter, showExcerpt = false }: { letter: MockLetter
   const config = isReceived
     ? { label: 'Received', icon: Mail, tone: 'text-[#276a4d]' }
     : statusConfig[letter.status] || statusConfig.draft;
-  const Icon = config.icon;
+  const Icon = letter.reaction && !isReceived ? Sparkles : config.icon;
   const href = isReceived
     ? `/letter/${encodeURIComponent(letter.id)}`
     : letter.status === 'draft'
@@ -64,7 +64,7 @@ export function LetterCard({ letter, showExcerpt = false }: { letter: MockLetter
           )}
           <span className={cn('mt-2 inline-flex items-center gap-1.5 meta font-semibold', config.tone)}>
             <Icon className="h-3.5 w-3.5" aria-hidden="true" />
-            {isReceived && letter.reaction ? `Reacted ${letter.reaction}` : config.label}
+            {isReceived && letter.reaction ? `Reacted ${letter.reaction}` : letter.reaction ? `They reacted ${letter.reaction}` : config.label}
           </span>
         </span>
       </div>

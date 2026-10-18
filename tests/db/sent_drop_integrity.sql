@@ -47,6 +47,7 @@ insert into storage.objects (bucket_id, name) values
 grant usage on schema auth, public, storage to drop_policy_smoke_authenticated;
 grant select on public.letters to drop_policy_smoke_authenticated;
 grant update on public.letters to drop_policy_smoke_authenticated;
+grant select, insert, update on public.letter_reactions to drop_policy_smoke_authenticated;
 grant select, delete on storage.objects to drop_policy_smoke_authenticated;
 grant execute on function auth.uid() to drop_policy_smoke_authenticated;
 
@@ -57,6 +58,7 @@ do $$
 declare
   actual_status text;
   actual_content text;
+  actual_emoji text;
   visible_media integer;
 begin
   update public.letters set status = 'sealed', content = 'edited draft' where id = 'draft';
@@ -101,6 +103,35 @@ begin
   perform set_config('request.jwt.claim.sub', '33333333-3333-4333-8333-333333333333', true);
   select count(*) into visible_media from storage.objects where name = '11111111-1111-4111-8111-111111111111/sent/photo.png';
   if visible_media <> 0 then raise exception 'unrelated user could read linked media'; end if;
+
+  begin
+    insert into public.letter_reactions (letter_id, recipient_id, emoji)
+    values ('sent', '33333333-3333-4333-8333-333333333333', '🔥');
+    raise exception 'unrelated user added a reaction';
+  exception when insufficient_privilege then
+    null;
+  end;
+  if exists (select 1 from public.letter_reactions where letter_id = 'sent') then
+    raise exception 'unrelated user could read a reaction';
+  end if;
+
+  perform set_config('request.jwt.claim.sub', '22222222-2222-4222-8222-222222222222', true);
+  insert into public.letter_reactions (letter_id, recipient_id, emoji)
+  values ('sent', '22222222-2222-4222-8222-222222222222', '🫶');
+  update public.letter_reactions set emoji = '🔥' where letter_id = 'sent';
+  select emoji into actual_emoji from public.letter_reactions where letter_id = 'sent';
+  if actual_emoji <> '🔥' then raise exception 'recipient could not add or change a reaction'; end if;
+
+  perform set_config('request.jwt.claim.sub', '11111111-1111-4111-8111-111111111111', true);
+  select emoji into actual_emoji from public.letter_reactions where letter_id = 'sent';
+  if actual_emoji <> '🔥' then raise exception 'sender could not read the recipient reaction'; end if;
+  begin
+    insert into public.letter_reactions (letter_id, recipient_id, emoji)
+    values ('draft', '11111111-1111-4111-8111-111111111111', '😂');
+    raise exception 'sender added a reaction';
+  exception when insufficient_privilege then
+    null;
+  end;
 end
 $$;
 
