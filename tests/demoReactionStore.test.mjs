@@ -33,6 +33,17 @@ test('saves and reloads only allowed demo reactions for incoming drops', () => {
   });
 });
 
+test('keeps local demo reactions private to this device and reloadable', () => {
+  withLocalStorage((values) => {
+    assert.equal(saveDemoReaction('3', '🫶', true), true);
+    assert.deepEqual(getDemoReactions(), { '3': '🫶' });
+    assert.equal(saveDemoReaction('3', '💥', true), false);
+    assert.equal(saveDemoReaction('sent-1', '🔥'), false);
+    assert.deepEqual(getDemoReactions(), { '3': '🫶' });
+    assert.ok(values.get('dear-exe:demo-reactions:v1').includes('local-demo:3'));
+  });
+});
+
 test('ignores invalid stored reaction data and reports storage failures', () => {
   withLocalStorage((values) => {
     values.set('dear-exe:demo-reactions:v1', JSON.stringify({ 'incoming-1': '💥', 'sent-1': '🔥' }));

@@ -1,6 +1,7 @@
 import { currentFocusDraft, mockAddress, mockFieldNotes, mockLetters } from '@/data/mockData';
 import type { DropDeliveryMode, DropPayloadKind, LetterStatus, MockLetter } from '@/data/mockData';
 import { getDemoReactions } from '@/lib/demoReactionStore';
+import { normalizeDropRecipient } from '@/lib/dropValidation';
 
 const STORAGE_KEY = 'dear-exe:active-letter:v1';
 const NOTES_STORAGE_KEY = 'dear-exe:journey-notes:v1';
@@ -36,6 +37,7 @@ export interface LetterDraftState {
   status: LetterStatus;
   updatedAt: string;
   dispatchedAt?: string;
+  localDemo?: boolean;
 }
 
 export interface JourneyNote {
@@ -292,6 +294,13 @@ export function dispatchLetter(letterId = getLetterDraft().id, status: LetterSta
   return dispatched;
 }
 
+export function saveLocalDemoDrop(letterId: string): LetterDraftState | null {
+  const source = getLetterDraftById(letterId);
+  if (!canUseStorage() || !source || source.status !== 'draft' || source.deliveryMode !== 'instant' || !normalizeDropRecipient(source.recipient) || (source.payloadKind === 'text' && !source.content.trim())) return null;
+  setActiveLetterDraft({ ...source, localDemo: true });
+  return dispatchLetter(source.id, 'delivered');
+}
+
 function formatDate(isoDate: string) {
   return new Intl.DateTimeFormat('en-US', {
     month: 'short',
@@ -307,7 +316,7 @@ export function draftAsLetter(draft: LetterDraftState): MockLetter {
     date: formatDate(draft.dispatchedAt ?? draft.updatedAt),
     status: draft.status,
     excerpt: draft.content.trim() || (draft.payloadKind === 'text' ? 'An empty letter, waiting for your words.' : 'A little moment worth sharing.'),
-    subject: draft.subject || 'Untitled Letter',
+    subject: draft.subject || 'A little moment',
     direction: 'sent',
     sealId: draft.sealId ?? undefined,
     sealColor: draft.sealColor,
@@ -317,12 +326,16 @@ export function draftAsLetter(draft: LetterDraftState): MockLetter {
     mediaPath: draft.mediaPath,
     mediaMimeType: draft.mediaMimeType,
     mediaSizeBytes: draft.mediaSizeBytes,
+    localDemo: draft.localDemo,
   };
 }
 
 export function getLettersWithDraft(draft = getLetterDraft()): MockLetter[] {
   const activeLetter = draftAsLetter(draft);
   const demoReactions = getDemoReactions();
+  const withLocalReaction = (letter: MockLetter) => letter.localDemo && demoReactions[letter.id]
+    ? { ...letter, reaction: demoReactions[letter.id] }
+    : letter;
   const letters = new Map(mockLetters.map((letter) => [
     letter.id,
     letter.direction === 'received' && demoReactions[letter.id]
@@ -333,9 +346,9 @@ export function getLettersWithDraft(draft = getLetterDraft()): MockLetter[] {
   // Once the original seeded draft becomes a new letter, the stale seed should
   // not keep appearing beside the user's real history.
   if (draft.id !== currentFocusDraft.id) letters.delete(currentFocusDraft.id);
-  getLetterHistory().forEach((letter) => letters.set(letter.id, letter));
-  getDraftHistory().forEach((savedDraft) => letters.set(savedDraft.id, draftAsLetter(savedDraft)));
-  letters.set(activeLetter.id, activeLetter);
+  getLetterHistory().forEach((letter) => letters.set(letter.id, withLocalReaction(letter)));
+  getDraftHistory().forEach((savedDraft) => letters.set(savedDraft.id, withLocalReaction(draftAsLetter(savedDraft))));
+  letters.set(activeLetter.id, withLocalReaction(activeLetter));
 
   return Array.from(letters.values()).sort((a, b) => {
     if (a.id === activeLetter.id) return -1;

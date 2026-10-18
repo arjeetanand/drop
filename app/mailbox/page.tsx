@@ -40,7 +40,7 @@ export default function Mailbox() {
   const counts = useMemo(() => ({
     transit: letters.filter((letter) => letter.status === 'dispatched').length,
     received: letters.filter((letter) => letter.direction === 'received').length,
-    sent: letters.filter((letter) => letter.direction !== 'received' && letter.status !== 'draft' && letter.status !== 'sealed').length,
+    sent: letters.filter((letter) => !letter.localDemo && letter.direction !== 'received' && letter.status !== 'draft' && letter.status !== 'sealed').length,
     drafts: letters.filter((letter) => letter.status === 'draft' || letter.status === 'sealed').length,
   }), [letters]);
 
@@ -57,7 +57,7 @@ export default function Mailbox() {
     return letters.filter((letter) => {
       if (activeTab === 'transit' && letter.status !== 'dispatched') return false;
       if (activeTab === 'received' && letter.direction !== 'received') return false;
-      if (activeTab === 'sent' && (letter.direction === 'received' || letter.status === 'draft' || letter.status === 'sealed')) return false;
+      if (activeTab === 'sent' && (letter.localDemo || letter.direction === 'received' || letter.status === 'draft' || letter.status === 'sealed')) return false;
       if (activeTab === 'drafts' && letter.status !== 'draft' && letter.status !== 'sealed') return false;
       if (!query) return true;
       return [letter.subject, letter.recipient, letter.sender, letter.excerpt]

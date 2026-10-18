@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { ArrowUpRight, CheckCircle2, Clock3, FileEdit, Image as ImageIcon, Mail, PackageCheck, Sparkles, Type } from 'lucide-react';
+import { ArrowUpRight, CheckCircle2, Clock3, Eye, FileEdit, Image as ImageIcon, Mail, PackageCheck, Sparkles, Type } from 'lucide-react';
 import type { LetterStatus, MockLetter } from '@/data/mockData';
 import { cn } from '@/lib/utils';
 
@@ -15,12 +15,16 @@ const statusConfig: Record<LetterStatus, { label: string; icon: typeof Mail; ton
 
 export function LetterCard({ letter, showExcerpt = false }: { letter: MockLetter; showExcerpt?: boolean }) {
   const isReceived = letter.direction === 'received';
-  const config = isReceived
-    ? { label: 'Received', icon: Mail, tone: 'text-[#276a4d]' }
-    : statusConfig[letter.status] || statusConfig.draft;
+  const config = letter.localDemo
+    ? { label: 'Demo · not sent', icon: Eye, tone: 'text-[#8a611b]' }
+    : isReceived
+      ? { label: 'Received', icon: Mail, tone: 'text-[#276a4d]' }
+      : statusConfig[letter.status] || statusConfig.draft;
   const Icon = letter.reaction && !isReceived ? Sparkles : config.icon;
-  const href = isReceived
-    ? `/letter/${encodeURIComponent(letter.id)}`
+  const href = letter.localDemo
+    ? `/letter/${encodeURIComponent(letter.id)}?view=sender`
+    : isReceived
+      ? `/letter/${encodeURIComponent(letter.id)}`
     : letter.status === 'draft'
       ? `/compose?letter=${encodeURIComponent(letter.id)}`
       : letter.status === 'sealed'
@@ -28,8 +32,10 @@ export function LetterCard({ letter, showExcerpt = false }: { letter: MockLetter
         : letter.deliveryMode === 'relay' || letter.status === 'dispatched'
           ? `/journey?letter=${encodeURIComponent(letter.id)}`
           : `/letter/${encodeURIComponent(letter.id)}`;
-  const action = isReceived
-    ? 'Open drop'
+  const action = letter.localDemo
+    ? 'View sender copy'
+    : isReceived
+      ? 'Open drop'
     : letter.status === 'draft'
       ? 'Keep making it'
       : letter.status === 'sealed'
@@ -56,7 +62,10 @@ export function LetterCard({ letter, showExcerpt = false }: { letter: MockLetter
             </span>
             <span className="meta">{isReceived ? `From ${letter.sender || 'a correspondent'}` : `To ${letter.recipient}`}</span>
           </span>
-          <span className="mt-1 inline-flex rounded-full bg-[#f2eee5] px-2 py-0.5 font-mono text-[0.58rem] font-bold uppercase tracking-[0.1em] text-on-surface-variant">{kind === 'text' ? 'Note' : kind === 'gif' ? 'GIF' : 'Photo'}</span>
+          <span className="mt-1 inline-flex flex-wrap gap-1.5">
+            <span className="rounded-full bg-[#f2eee5] px-2 py-0.5 font-mono text-[0.58rem] font-bold uppercase tracking-[0.1em] text-on-surface-variant">{kind === 'text' ? 'Note' : kind === 'gif' ? 'GIF' : 'Photo'}</span>
+            {letter.localDemo && <span className="rounded-full bg-[#fff4dc] px-2 py-0.5 font-mono text-[0.58rem] font-bold uppercase tracking-[0.1em] text-[#76520d]">On this device</span>}
+          </span>
           {showExcerpt && letter.excerpt && (
             <span className="mt-1 block line-clamp-2 max-w-2xl font-body-md text-sm leading-relaxed text-on-surface-variant">
               “{letter.excerpt}”

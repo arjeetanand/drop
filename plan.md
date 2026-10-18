@@ -11,9 +11,11 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 - Task 1 is complete. The mixed-payload model, default text behavior for older drafts, and compatible recipient routes are in place.
 - The core mobile sharing, receive, reaction, and optional relay flows have local implementations. Detailed code and browser checks are recorded in `tasks/todo.md`.
 - Seeded demo reactions now persist on this device and appear on the mailbox card; they are clearly marked as local and do not notify a sender.
+- Preview now offers an explicit same-device demo for instant drops: recipient reveal, local reaction, then a sender copy. The mailbox labels it as a demo and excludes it from the Sent count; it is never represented as delivered or shared.
+- A disposable PostgreSQL regression test now covers relay token authorization, retry recovery, rotation/revocation, optional coordinates, participant-only route visibility, and private token-table denial.
 - Signed-in mailbox cards now show participant-visible reactions on sent drops; hosted account-to-account verification remains open.
 - Browser media uploads now use private staging, server-side format/decode limits, metadata-stripping re-encoding, and database checks that bind stored media to its drop; hosted Supabase verification remains open.
-- Hosted account-to-account sending, storage privacy, reactions, and relay still need verification because this checkout has no Supabase project configuration. Real-device safe-area, keyboard, and reduced-motion checks also remain open.
+- Hosted account-to-account sending, storage privacy, reactions, and relay still need verification because this checkout has no Supabase project configuration. The local PostgreSQL checks do not replace hosted two-account tests. Real-device safe-area, keyboard, and reduced-motion checks also remain open.
 
 ## Workspace and Delivery
 
@@ -28,7 +30,7 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 - **Sharing:** one recipient per drop for v1. Keep the interface ready for groups, but defer group data and permissions until the one-to-one flow is solid.
 - **Delivery:** instant is the default. Human relay is an explicit choice for a drop that should travel hand to hand. Map and route details appear only in relay mode.
 - **Privacy:** drops are private to sender and recipient. Media uses private storage and recipient-aware access. Do not expose public asset URLs or precise location in the normal sharing flow.
-- **Local demo:** seeded examples can demonstrate image/GIF cards. Real media delivery requires the configured Supabase account and private storage; drafts should clearly show if a file has not uploaded yet.
+- **Local demo:** seeded examples demonstrate image/GIF cards, and an explicit same-device instant-drop demo exercises recipient reveal and reactions without sending or sharing. Real media delivery requires the configured Supabase account and private storage; drafts should clearly show if a file has not uploaded yet.
 - **Out of scope for v1:** public feed, likes/follows, group chats, video/audio recording, GIF search provider, and a permanent brand rename.
 
 ## Architecture Decisions
@@ -94,7 +96,7 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 | Existing data and links are letter-specific. | Old drafts, mailbox cards, or shared links could disappear. | Make payload fields additive, default old records to text, and retain current routes and hydration behavior. |
 | Supabase currently stores letter text but has no media bucket. | Uploads could be inaccessible or leak through public URLs. | Add a private bucket and explicit storage policies for sender/recipient access; verify policies with two different accounts. |
 | Large or unsupported uploads can break mobile composition. | Slow uploads, storage waste, or failed sends. | Accept only image formats and GIF for v1, enforce a documented size cap, show upload progress/failure, and keep the draft recoverable. |
-| The current local demo has no durable media backend. | A local preview could look sent but vanish after reload. | Mark unuploaded media as local preview, offer seeded media in demo mode, and only report success after a persistent upload and drop save. |
+| The local demo has no cross-device backend. | A recipient could mistake a local simulation for a real delivery. | Label each local demo as on-device and not sent; only report real delivery after a persistent account save. |
 | Existing relay screens and their map/location model are more elaborate than instant sharing needs. | The default flow could feel slow or expose unnecessary location. | Keep relay optional and preserve map details only in that mode; request location only when the user starts a relay action. |
 | Existing user changes overlap the home and composer. | The redesign could erase current writing prompts or seal choices. | Integrate with the current working tree and inspect the diff before editing those files. |
 

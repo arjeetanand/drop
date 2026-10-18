@@ -23,6 +23,7 @@ export interface MockLetter {
   mediaSizeBytes?: number;
   mediaUrl?: string;
   reaction?: string;
+  localDemo?: boolean;
 }
 
 export const mockLetters: MockLetter[] = [

@@ -2,23 +2,27 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
-import { ArrowLeft, Eye } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { ArrowLeft, Eye, Sparkles } from 'lucide-react';
 import { getSealInfo } from '@/data/mockData';
 import type { LetterDraftState } from '@/lib/letterStore';
-import { getLetterDraftById } from '@/lib/letterStore';
+import { getLetterDraftById, saveLocalDemoDrop } from '@/lib/letterStore';
 import { getDraftAttachment } from '@/lib/letterMediaStore';
 import { getUserProfile } from '@/lib/userStore';
+import { normalizeDropRecipient } from '@/lib/dropValidation';
 import { cn } from '@/lib/utils';
 import { ReducedMotionGif } from '@/components/ReducedMotionGif';
 
 function RecipientPreview() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const letterId = searchParams.get('letter') || '';
   const [draft, setDraft] = useState<LetterDraftState | null>(null);
   const [mediaUrl, setMediaUrl] = useState('');
   const [ready, setReady] = useState(false);
   const [mediaUnavailable, setMediaUnavailable] = useState(false);
+  const [openingDemo, setOpeningDemo] = useState(false);
+  const [demoError, setDemoError] = useState('');
 
   useEffect(() => {
     let active = true;
@@ -72,6 +76,22 @@ function RecipientPreview() {
   const payloadLabel = draft.payloadKind === 'gif' ? 'GIF' : draft.payloadKind === 'image' ? 'Photo or meme' : 'Note';
   const editHref = `/compose?letter=${encodeURIComponent(draft.id)}`;
   const alignmentClass = draft.alignment === 'center' ? 'text-center' : draft.alignment === 'right' ? 'text-right' : 'text-left';
+  const canOpenDemo = draft.deliveryMode === 'instant'
+    && normalizeDropRecipient(draft.recipient) !== null
+    && (draft.payloadKind === 'text' ? Boolean(draft.content.trim()) : Boolean(mediaUrl) && !mediaUnavailable);
+
+  const openDemo = () => {
+    if (!canOpenDemo || openingDemo) return;
+    setOpeningDemo(true);
+    setDemoError('');
+    const demo = saveLocalDemoDrop(draft.id);
+    if (!demo) {
+      setDemoError('This demo could not be saved on this device. Your draft is still here.');
+      setOpeningDemo(false);
+      return;
+    }
+    router.push(`/letter/${encodeURIComponent(demo.id)}`);
+  };
 
   return (
     <main className="page-shell page-enter !pt-4 sm:!pt-8">
@@ -111,6 +131,21 @@ function RecipientPreview() {
             <span><span className="block font-semibold text-ink-navy">A little sign-off</span><span className="meta">{seal.name}</span></span>
           </footer>
         </article>
+
+        <section className="mt-5 rounded-2xl border border-[#d9e1ff] bg-[#f7f8ff] p-5 sm:p-6" aria-labelledby="local-demo-heading">
+          <p className="eyebrow text-[#2b45f7]" id="local-demo-heading">Try it on this device</p>
+          <p className="mt-2 text-sm leading-relaxed text-on-surface-variant">
+            Open the recipient view and try a reaction. This demo stays in this browser; nothing is sent or shared.
+          </p>
+          {demoError && <p className="error-notice mt-3" role="alert">{demoError}</p>}
+          {draft.deliveryMode === 'relay' && <p className="field-help mt-3">Local demos are for instant drops. A real relay needs a connected account.</p>}
+          {draft.deliveryMode === 'instant' && !canOpenDemo && <p className="field-help mt-3">Add a valid handle and your note or attachment to try the demo.</p>}
+          <button type="button" onClick={openDemo} disabled={!canOpenDemo || openingDemo} className="button-primary mt-4 w-full !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white disabled:opacity-45" aria-describedby="local-demo-hint">
+            {openingDemo ? 'Opening demo…' : 'Try as recipient'}
+            {openingDemo ? <Eye className="h-4 w-4" aria-hidden="true" /> : <Sparkles className="h-4 w-4" aria-hidden="true" />}
+          </button>
+          <span className="sr-only" id="local-demo-hint">Same-device demo only. It will not send or share this drop.</span>
+        </section>
 
         <Link href={editHref} className="button-secondary mt-5 w-full !min-h-12">Back to editing <ArrowLeft className="h-4 w-4" aria-hidden="true" /></Link>
       </div>
