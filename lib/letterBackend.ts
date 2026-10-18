@@ -83,6 +83,7 @@ export async function saveRemoteProfile(profile: UserProfile) {
 function rowToLetter(row: LetterRow, userId: string, revealContent = false): MockLetter {
   const content = row.content.trim();
   const teaser = row.teaser?.filter(Boolean).join(' ') || content.slice(0, 150);
+  const mediaFallback = row.payload_kind === 'gif' ? 'A GIF is waiting behind the seal.' : row.payload_kind === 'image' ? 'A photo is waiting behind the seal.' : 'A sealed letter waiting to be opened.';
   return {
     id: row.id,
     recipient: row.recipient_name || row.recipient_username || 'your correspondent',
@@ -94,8 +95,8 @@ function rowToLetter(row: LetterRow, userId: string, revealContent = false): Moc
     status: row.status,
     // Mailbox cards get a teaser only. Full content is fetched on the detail route after reveal.
     excerpt: revealContent
-      ? content || 'An empty letter, waiting for your words.'
-      : teaser ? `${teaser}${content.length > 150 ? '…' : ''}` : 'A sealed letter waiting to be opened.',
+      ? content || (row.payload_kind === 'text' || !row.payload_kind ? 'An empty letter, waiting for your words.' : '')
+      : teaser ? `${teaser}${content.length > 150 ? '…' : ''}` : mediaFallback,
     subject: row.subject || 'Untitled Letter',
     teaser: row.teaser || undefined,
     payloadKind: row.payload_kind || 'text',
@@ -165,7 +166,7 @@ function eventsForDraft(draft: LetterDraftState): TrackingEvent[] {
   }));
 }
 
-export async function syncDropToBackend(draft: LetterDraftState, mediaFile?: File): Promise<{ ok: boolean; error?: string }> {
+export async function syncDropToBackend(draft: LetterDraftState, mediaFile?: File): Promise<{ ok: boolean; error?: string; mediaPath?: string }> {
   const context = await getAuthenticatedClient();
   if (!context) return { ok: false, error: 'Connect an account in Your profile before sending a private drop.' };
 
@@ -257,11 +258,7 @@ export async function syncDropToBackend(draft: LetterDraftState, mediaFile?: Fil
     }));
     await context.supabase.from('letter_events').upsert(events, { onConflict: 'letter_id,event_key' });
   }
-  return { ok: true };
-}
-
-export async function syncLetterToBackend(draft: LetterDraftState) {
-  return (await syncDropToBackend(draft)).ok;
+  return { ok: true, mediaPath: mediaPath || undefined };
 }
 
 export async function saveRemoteReaction(letterId: string, emoji: string) {

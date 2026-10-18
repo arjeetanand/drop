@@ -6,17 +6,20 @@ alter table public.letters
   add column if not exists media_size_bytes integer;
 
 do $$ begin
-  if not exists (select 1 from pg_constraint where conname = 'letters_payload_kind_check') then
+  if not exists (select 1 from pg_constraint where conname = 'letters_payload_kind_check' and conrelid = 'public.letters'::regclass) then
     alter table public.letters add constraint letters_payload_kind_check check (payload_kind in ('text', 'image', 'gif'));
   end if;
-  if not exists (select 1 from pg_constraint where conname = 'letters_delivery_mode_check') then
+  if not exists (select 1 from pg_constraint where conname = 'letters_delivery_mode_check' and conrelid = 'public.letters'::regclass) then
     alter table public.letters add constraint letters_delivery_mode_check check (delivery_mode in ('instant', 'relay'));
   end if;
-  if not exists (select 1 from pg_constraint where conname = 'letters_media_size_bytes_check') then
+  if not exists (select 1 from pg_constraint where conname = 'letters_media_size_bytes_check' and conrelid = 'public.letters'::regclass) then
     alter table public.letters add constraint letters_media_size_bytes_check check (media_size_bytes is null or media_size_bytes between 1 and 8388608);
   end if;
-  if not exists (select 1 from pg_constraint where conname = 'letters_media_mime_type_check') then
+  if not exists (select 1 from pg_constraint where conname = 'letters_media_mime_type_check' and conrelid = 'public.letters'::regclass) then
     alter table public.letters add constraint letters_media_mime_type_check check (media_mime_type is null or media_mime_type in ('image/jpeg', 'image/png', 'image/webp', 'image/gif'));
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'letters_media_path_owner_check' and conrelid = 'public.letters'::regclass) then
+    alter table public.letters add constraint letters_media_path_owner_check check (media_path is null or split_part(media_path, '/', 1) = sender_id::text);
   end if;
 end $$;
 
@@ -56,7 +59,7 @@ create policy "Drop owners can upload their media" on storage.objects for insert
 create policy "Drop participants can read media" on storage.objects for select using (
   bucket_id = 'drop-media' and exists (
     select 1 from public.letters l
-    where l.media_path = name and (l.sender_id = auth.uid() or l.recipient_id = auth.uid())
+    where l.media_path = name and split_part(name, '/', 1) = l.sender_id::text and (l.sender_id = auth.uid() or l.recipient_id = auth.uid())
   )
 );
 create policy "Drop owners can remove media" on storage.objects for delete using (

@@ -22,6 +22,7 @@ function SentContent() {
 
   const letterId = draft?.id || currentFocusDraft.id;
   const syncedToCloud = searchParams.get('sync') === 'cloud';
+  const instant = searchParams.get('mode') === 'instant';
   const relay = getRelayState(letterId, {
     subject: draft?.subject || currentFocusDraft.subject,
     recipient: draft?.address.name || draft?.recipient || 'your correspondent',
@@ -30,6 +31,29 @@ function SentContent() {
   const shareLink = typeof window === 'undefined'
     ? `/relay?letter=${encodeURIComponent(letterId)}&join=1`
     : `${window.location.origin}/relay?letter=${encodeURIComponent(letterId)}&join=1`;
+
+  if (instant) {
+    return (
+      <main className="page-shell page-enter">
+        <div className="page-container max-w-[760px]">
+          <header className="flex items-center justify-between gap-4">
+            <Link href="/" className="button-quiet -ml-2">Back to desk <ArrowRight className="h-4 w-4 rotate-180" aria-hidden="true" /></Link>
+            <span className="status-mark success"><Check className="h-3.5 w-3.5" aria-hidden="true" /> Delivered</span>
+          </header>
+          <section className="mt-12 rounded-[1.5rem] bg-[#2b45f7] p-6 text-white sm:p-10">
+            <p className="font-mono text-[0.68rem] font-bold uppercase tracking-[0.16em] text-white/70">It landed ✨</p>
+            <h1 className="mt-3 font-headline-md text-4xl font-semibold leading-tight tracking-[-0.04em] sm:text-5xl">Your drop made it.</h1>
+            <p className="mt-4 max-w-lg text-sm leading-relaxed text-white/80 sm:text-base">“{draft?.subject || 'A little moment'}” just landed for {draft?.recipient || 'your person'}. Good timing, probably.</p>
+            <div className="mt-7 flex flex-col gap-2 sm:flex-row">
+              <Link href={`/letter/${encodeURIComponent(letterId)}`} className="button-secondary !min-h-12 !rounded-xl !border-white/20 !bg-white !text-[#223bdc]">Open your copy <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
+              <Link href="/compose?new=1" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-white/30 px-4 text-sm font-bold text-white hover:bg-white/10">Make another drop</Link>
+            </div>
+          </section>
+          <p className="mt-5 text-center text-xs text-on-surface-variant">Private between you and the person you chose.</p>
+        </div>
+      </main>
+    );
+  }
 
   const copyRelayLink = async () => {
     try {
@@ -51,8 +75,8 @@ function SentContent() {
             <span className="status-mark success"><Check className="h-3.5 w-3.5" aria-hidden="true" /> {syncedToCloud ? 'Synced to account' : 'Saved on this device'}</span>
           </div>
           <div>
-            <p className="eyebrow">Your letter is on its way</p>
-            <h1 className="display-title mt-4 max-w-3xl">Now let someone carry it forward.</h1>
+            <p className="eyebrow">Your drop is on its way</p>
+            <h1 className="display-title mt-4 max-w-3xl">Let someone carry it forward.</h1>
             <p className="body-copy mt-5 max-w-2xl text-lg">“{relay.subject}” is sealed and waiting for its first human handoff. Share the passport with someone heading in the right direction.</p>
             <p className="field-help mt-3">{syncedToCloud ? 'Your account has a copy of this letter.' : 'This local-first demo keeps the letter on this device. Sign in from Profile to sync across devices.'}</p>
           </div>
@@ -63,7 +87,7 @@ function SentContent() {
             <div className="panel p-6 sm:p-8">
               <div className="flex flex-wrap items-baseline justify-between gap-3 border-b border-[rgba(16,42,67,0.12)] pb-5">
                 <div><p className="eyebrow">Relay passport</p><h2 className="mt-2 font-headline-md text-3xl text-ink-navy">{relay.passcode}</h2></div>
-                <span className="meta">Letter {letterId}</span>
+                <span className="meta">Drop {letterId}</span>
               </div>
               <div className="mt-6 grid gap-6 sm:grid-cols-[180px_minmax(0,1fr)] sm:items-center">
                 <div className="flex justify-center"><RelayEnvelope compact sealId={draft?.sealId} sealMark={draft?.sealMonogram || undefined} sealColor={draft?.sealColor} /></div>

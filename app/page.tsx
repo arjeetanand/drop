@@ -1,255 +1,92 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
-import { ArrowRight, Mail, MapPin, PenLine, Route, ShieldCheck } from 'lucide-react';
-import { RelayChain } from '@/components/RelayChain';
-import { RouteMap } from '@/components/RouteMap';
+import { ArrowRight, ArrowUpRight, Camera, Mail, RefreshCw, Sparkles, Zap } from 'lucide-react';
 import { LetterCard } from '@/components/LetterCard';
-import { currentFocusDraft, mockLetters } from '@/data/mockData';
+import { mockLetters, writingPrompts, type MockLetter } from '@/data/mockData';
 import { getRemoteLetters, getRemoteProfile } from '@/lib/letterBackend';
-import { getLetterDraft, getLettersWithDraft, type LetterDraftState } from '@/lib/letterStore';
-import { getInitialRelayState, getRelayState, getRelayStats, type RelayState } from '@/lib/relayStore';
+import { getLetterDraft, getLettersWithDraft } from '@/lib/letterStore';
 import { defaultUserProfile, getUserProfile, type UserProfile } from '@/lib/userStore';
 
 export default function HomeDesk() {
-  const [draft, setDraft] = useState<LetterDraftState | null>(null);
-  const [letters, setLetters] = useState(mockLetters);
+  const [letters, setLetters] = useState<MockLetter[]>(mockLetters);
   const [profile, setProfile] = useState<UserProfile>(defaultUserProfile);
-  const [relay, setRelay] = useState<RelayState>(getInitialRelayState);
+  const [promptIndex, setPromptIndex] = useState(0);
 
   useEffect(() => {
+    setPromptIndex(Math.floor(Date.now() / 86_400_000) % writingPrompts.length);
     let active = true;
-    const loadDesk = async () => {
-      const localDraft = getLetterDraft();
-      const [remoteLetters, remoteProfile] = await Promise.all([getRemoteLetters(), getRemoteProfile()]);
+    void Promise.all([getRemoteLetters(), getRemoteProfile()]).then(([remoteLetters, remoteProfile]) => {
       if (!active) return;
-      setDraft(localDraft);
-      const localLetters = getLettersWithDraft(localDraft);
-      if (!remoteLetters?.length) {
-        setLetters(localLetters);
-      } else {
-        const merged = new Map(localLetters.map((letter) => [letter.id, letter]));
-        remoteLetters.forEach((letter) => merged.set(letter.id, letter));
-        setLetters(Array.from(merged.values()));
-      }
+      const merged = new Map(getLettersWithDraft(getLetterDraft()).map((letter) => [letter.id, letter]));
+      remoteLetters?.forEach((letter) => merged.set(letter.id, letter));
+      setLetters(Array.from(merged.values()));
       setProfile(remoteProfile || getUserProfile());
-      setRelay(getRelayState(localDraft.id, {
-        subject: localDraft.subject || currentFocusDraft.subject,
-        recipient: localDraft.address.name || localDraft.recipient || 'Eleanor',
-      }));
-    };
-    void loadDesk();
-    return () => {
-      active = false;
-    };
+    }).catch(() => {
+      if (active) setLetters(getLettersWithDraft(getLetterDraft()));
+    });
+    return () => { active = false; };
   }, []);
 
-  const focusDraft = draft ?? {
-    ...currentFocusDraft,
-    content: currentFocusDraft.excerpt,
-    status: 'draft' as const,
-    updatedAt: new Date().toISOString(),
-    fontSize: 18,
-    alignment: 'left' as const,
-    address: { name: 'Eleanor Hartwell', street: '', city: 'Cotswolds Village', postcode: '', country: 'United Kingdom' },
-    sealId: 'fern',
-  };
-  const incoming = letters.find((letter) => letter.direction === 'received') || mockLetters.find((letter) => letter.direction === 'received');
-  const recentLetters = letters.filter((letter) => letter.id !== focusDraft.id && letter.id !== incoming?.id).slice(0, 4);
-  const stats = getRelayStats(relay);
-  const wordCount = focusDraft.content.trim() ? focusDraft.content.trim().split(/\s+/).length : 0;
-  const hasDraft = focusDraft.status === 'draft';
-
-  const deskStats = useMemo(() => [
-    { value: letters.length, label: 'Letters in your desk' },
-    { value: stats.carriers, label: 'People in this relay' },
-    { value: `${stats.hours}h`, label: 'Time carried so far' },
-  ], [letters.length, stats.carriers, stats.hours]);
+  const incoming = letters.filter((letter) => letter.direction === 'received').slice(0, 2);
 
   return (
-    <main className="page-shell page-enter">
-      <div className="page-container">
-        <header className="page-header flex-col md:flex-row md:items-end">
-          <div className="max-w-3xl">
-            <p className="eyebrow">Your writing desk</p>
-            <h1 className="display-title mt-4 max-w-3xl">A quieter way to send something real.</h1>
-            <p className="body-copy mt-5 max-w-2xl text-lg">
-              Write a private letter, seal it, and let thoughtful people carry it forward. The words stay yours; the journey becomes part of the story.
-            </p>
-          </div>
-          <div className="flex shrink-0 flex-wrap gap-3 pt-2">
-            <Link href={hasDraft ? '/compose' : '/compose?new=1'} className="button-primary">
-              <PenLine className="h-4 w-4 text-[#8fd1ad]" aria-hidden="true" />
-              {hasDraft ? 'Continue writing' : 'Write a letter'}
-            </Link>
-            <Link href="/mailbox" className="button-secondary">
-              Open mailbox
-              <ArrowRight className="h-4 w-4" aria-hidden="true" />
-            </Link>
-          </div>
+    <main className="page-shell page-enter !pt-5 sm:!pt-8">
+      <div className="page-container max-w-[1080px]">
+        <header className="flex items-center justify-between gap-4">
+          <Link href="/" className="inline-flex items-center gap-3" aria-label="Dear.exe desk">
+            <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#2b45f7] text-white shadow-[0_5px_14px_rgba(43,69,247,.2)]"><Mail className="h-5 w-5" aria-hidden="true" /></span>
+            <span><span className="block font-headline-md text-xl font-semibold leading-none text-ink-navy">Dear.exe</span><span className="mt-1 block font-mono text-[0.58rem] uppercase tracking-[0.2em] text-on-surface-variant">small things, sent</span></span>
+          </Link>
+          <Link href="/profile" className="flex min-h-11 items-center gap-2 rounded-full border border-[rgba(16,42,67,.12)] bg-white/70 py-1 pl-1 pr-3 text-xs font-semibold text-ink-navy" aria-label={`Your profile, ${profile.displayName}`}>
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#f3d8c9] font-mono text-[0.65rem] font-bold text-ink-navy">{profile.displayName.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase()}</span>
+            <span className="max-w-24 truncate">@{profile.username}</span>
+          </Link>
         </header>
 
-        <section className="mt-12 grid gap-10 xl:grid-cols-[minmax(0,1fr)_280px]">
-          <div className="min-w-0">
-            <div className="paper-card overflow-hidden">
-              <div className="flex flex-wrap items-start justify-between gap-5 border-b border-[rgba(16,42,67,0.13)] px-5 py-5 sm:px-8">
-                <div>
-                  <p className="eyebrow">Active letter</p>
-                  <h2 className="mt-2 font-headline-md text-3xl tracking-[-0.03em] text-ink-navy">{focusDraft.subject || 'Untitled letter'}</h2>
-                </div>
-                <span className={`status-mark ${hasDraft ? 'pending' : 'success'}`}>
-                  <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
-                  {hasDraft ? 'Draft on desk' : focusDraft.status === 'dispatched' ? 'In relay' : 'Ready to move'}
-                </span>
-              </div>
-              <div className="grid gap-8 px-5 py-6 sm:px-8 sm:py-8 lg:grid-cols-[minmax(0,1fr)_240px]">
-                <div>
-                  <div className="flex flex-wrap gap-x-8 gap-y-2 meta">
-                    <span>To {focusDraft.address.name || focusDraft.recipient || 'someone special'}</span>
-                    <span>{wordCount} words</span>
-                    <span>{hasDraft ? 'Private draft' : '0 words exposed'}</span>
-                  </div>
-                  <p className="mt-8 max-w-2xl font-literata text-xl leading-[1.75] text-ink-navy sm:text-2xl">
-                    “{focusDraft.content || 'Your next letter is waiting for its first sentence.'}”
-                  </p>
-                  <div className="mt-8 flex flex-wrap items-center gap-3">
-                    <Link href={hasDraft ? '/compose' : `/journey?letter=${encodeURIComponent(focusDraft.id)}`} className="button-primary">
-                      {hasDraft ? 'Continue the letter' : 'Follow its journey'}
-                      <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                    </Link>
-                    <Link href={`/journey?letter=${encodeURIComponent(focusDraft.id)}`} className="button-quiet">
-                      <Route className="h-4 w-4" aria-hidden="true" /> Journey
-                    </Link>
-                  </div>
-                </div>
-                <aside className="border-t border-[rgba(16,42,67,0.12)] pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
-                  <p className="eyebrow">Why it matters</p>
-                  <p className="mt-3 font-literata text-base leading-relaxed text-on-surface-variant">
-                    Carriers see only the destination. Your words remain sealed until they reach the person you named.
-                  </p>
-                  <div className="mt-6 flex items-center gap-2 text-sm font-semibold text-[#276a4d]">
-                    <ShieldCheck className="h-4 w-4" aria-hidden="true" />
-                    No words exposed in transit
-                  </div>
-                </aside>
-              </div>
-            </div>
+        <section className="mt-7 grid gap-4 md:mt-12 md:grid-cols-[minmax(0,1fr)_minmax(250px,.72fr)] md:gap-5">
+          <div className="overflow-hidden rounded-[1.5rem] bg-[#2b45f7] p-6 text-white shadow-[0_16px_36px_rgba(43,69,247,.15)] sm:p-9">
+            <p className="font-mono text-[0.68rem] font-bold uppercase tracking-[0.16em] text-white/70">Your little corner of the internet</p>
+            <h1 className="mt-4 max-w-[12ch] font-headline-md text-4xl font-semibold leading-[1.02] tracking-[-0.045em] sm:text-5xl">Drop a little something.</h1>
+            <p className="mt-4 max-w-md text-sm leading-relaxed text-white/80 sm:text-base">A photo, a note, the meme that explains everything. Pick one person and make their day.</p>
+            <Link href="/compose?new=1" className="mt-7 inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[#fffaf2] px-5 text-sm font-bold text-[#223bdc] shadow-sm transition-transform hover:-translate-y-0.5 focus-visible:outline-white">
+              <Sparkles className="h-4 w-4" aria-hidden="true" /> Make a drop <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            </Link>
+            <p className="mt-6 flex items-center gap-2 text-xs text-white/70"><Zap className="h-3.5 w-3.5" aria-hidden="true" /> Instant by default · private between you two</p>
+          </div>
 
-            <div className="mt-10">
-              <div className="flex flex-wrap items-end justify-between gap-4">
-                <div>
-                  <p className="eyebrow">A living route</p>
-                  <h2 className="section-title mt-2">People make the distance.</h2>
-                </div>
-                <Link href={`/journey?letter=${encodeURIComponent(relay.letterId)}`} className="button-quiet">
-                  Open full journey <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                </Link>
-              </div>
-              <div className="mt-5 panel p-5 sm:p-7">
-                <RouteMap
-                  waypoints={relay.gpsWaypoints ?? []}
-                  destinationNeighborhood={relay.destinationNeighborhood || 'Colaba'}
-                  currentCarrierName={relay.currentCarrierName}
-                />
-                <div className="mt-7 border-t border-[rgba(16,42,67,0.1)] pt-5">
-                  <RelayChain relay={relay} compact />
-                </div>
-              </div>
+          <Link href="/letter/incoming-1" className="group relative min-h-[250px] overflow-hidden rounded-[1.5rem] bg-[#f1d5c5] p-5 text-ink-navy shadow-[0_12px_30px_rgba(16,42,67,.07)] sm:min-h-[300px] md:min-h-0">
+            <Image src="/demo-cat.png" alt="A tiny cat taking a curious look at the camera" fill sizes="(max-width: 767px) 100vw, 34vw" className="object-cover transition-transform duration-500 group-hover:scale-[1.03]" priority />
+            <span className="absolute left-4 top-4 rounded-full bg-[#fffaf2]/90 px-3 py-1.5 font-mono text-[0.62rem] font-bold uppercase tracking-[0.12em] text-ink-navy">A photo for you</span>
+            <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#15213f]/75 via-[#15213f]/25 to-transparent px-5 pb-5 pt-20 text-white">
+              <span className="block font-mono text-[0.62rem] uppercase tracking-[0.12em] text-white/75">From Mina Vale</span>
+              <span className="mt-1 block font-headline-md text-2xl font-semibold">The blue hour</span>
+              <span className="mt-1 inline-flex items-center gap-1 text-xs font-semibold">Open your mailbox <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" /></span>
+            </span>
+          </Link>
+        </section>
+
+        <section className="mt-8 grid gap-7 md:mt-10 md:grid-cols-[minmax(0,1fr)_300px] md:gap-10">
+          <div>
+            <div className="flex items-end justify-between gap-4">
+              <div><p className="eyebrow">Fresh from the mailbox</p><h2 className="mt-2 font-headline-md text-2xl font-semibold text-ink-navy">Little things from your people</h2></div>
+              <Link href="/mailbox" className="inline-flex min-h-11 items-center gap-1 text-xs font-bold text-[#2b45f7]">See all <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
+            </div>
+            <div className="mt-3 rounded-2xl border border-[rgba(16,42,67,.1)] bg-white/55 px-4 sm:px-6">
+              {incoming.length ? incoming.map((letter) => <LetterCard key={letter.id} letter={letter} showExcerpt />) : <p className="py-7 text-sm text-on-surface-variant">When someone sends you a drop, it will land here.</p>}
             </div>
           </div>
 
-          <aside className="space-y-6">
-            <div className="panel p-5">
-              <p className="eyebrow">At a glance</p>
-              <div className="mt-5 space-y-4">
-                {deskStats.map((stat) => (
-                  <div key={stat.label} className="flex items-baseline justify-between gap-3 border-b border-[rgba(16,42,67,0.1)] pb-4 last:border-0 last:pb-0">
-                    <span className="font-headline-md text-2xl text-ink-navy">{stat.value}</span>
-                    <span className="max-w-[135px] text-right text-xs leading-relaxed text-on-surface-variant">{stat.label}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {incoming && (
-              <div className="panel-muted p-5">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="eyebrow text-[#276a4d]">A note arrived</p>
-                    <h2 className="mt-2 font-headline-md text-2xl text-ink-navy">{incoming.subject}</h2>
-                  </div>
-                  <Mail className="h-5 w-5 text-[#4f9d7a]" aria-hidden="true" />
-                </div>
-                <p className="mt-3 font-body-md text-sm leading-relaxed text-on-surface-variant">
-                  From {incoming.sender || 'a correspondent'}. Open it when you are ready to receive the words.
-                </p>
-                <Link href={`/letter/${encodeURIComponent(incoming.id)}`} className="button-secondary mt-5 w-full">
-                  Open the letter <ArrowUpRightIcon />
-                </Link>
-              </div>
-            )}
-
-            <div className="border-t border-[rgba(16,42,67,0.12)] pt-5">
-              <p className="eyebrow">Your public postbox</p>
-              <p className="mt-2 break-all font-mono text-sm font-semibold text-ink-navy">@{profile.username}</p>
-              <Link href="/profile" className="mt-3 inline-flex items-center gap-1 text-xs font-bold uppercase tracking-[0.08em] text-ink-navy hover:text-[#276a4d]">
-                Edit profile <ArrowUpRightIcon />
-              </Link>
-            </div>
+          <aside className="rounded-2xl border border-[#ead5c6] bg-[#fff7ed] p-5 sm:p-6">
+            <div className="flex items-center justify-between gap-3"><p className="eyebrow text-[#aa5f42]">A tiny writing spark</p><Camera className="h-4 w-4 text-[#df7951]" aria-hidden="true" /></div>
+            <p className="mt-3 font-literata text-lg leading-relaxed text-ink-navy" aria-live="polite">{writingPrompts[promptIndex]}</p>
+            <Link href={`/compose?new=1&prompt=${encodeURIComponent(writingPrompts[promptIndex])}`} className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#152b43] px-4 text-xs font-bold text-white">Use this thought <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
+            <button type="button" className="mt-1 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl text-xs font-semibold text-ink-navy hover:bg-black/5" onClick={() => setPromptIndex((index) => (index + 1) % writingPrompts.length)}><RefreshCw className="h-3.5 w-3.5" aria-hidden="true" /> Another one</button>
           </aside>
         </section>
-
-        <section className="mt-20 grid gap-10 border-t border-[rgba(16,42,67,0.13)] pt-10 lg:grid-cols-[minmax(0,0.75fr)_minmax(0,1.25fr)]">
-          <div>
-            <p className="eyebrow">The idea</p>
-            <h2 className="section-title mt-2 max-w-md">The slower route is the point.</h2>
-            <p className="body-copy mt-4 max-w-md">
-              A message becomes memorable when it asks something of the world. Dear.exe keeps the private part private and lets the path collect the meaning.
-            </p>
-          </div>
-          <div className="grid gap-x-8 gap-y-8 sm:grid-cols-3">
-            {[
-              { number: '01', title: 'Write', text: 'Take your time on a private, autosaved letter.' },
-              { number: '02', title: 'Seal', text: 'Choose a signet and lock the message before it travels.' },
-              { number: '03', title: 'Relay', text: 'Share the passport and let people carry it closer.' },
-            ].map((step) => (
-              <div key={step.number}>
-                <span className="meta text-[#b88938]">{step.number}</span>
-                <h3 className="mt-3 font-headline-md text-2xl text-ink-navy">{step.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-on-surface-variant">{step.text}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="mt-20 border-t border-[rgba(16,42,67,0.13)] pt-10">
-          <div className="flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <p className="eyebrow">Your desk</p>
-              <h2 className="section-title mt-2">Recent letters.</h2>
-            </div>
-            <Link href="/mailbox" className="button-quiet">See the mailbox <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
-          </div>
-          <div className="mt-4">
-            {recentLetters.length ? recentLetters.map((letter) => <LetterCard key={letter.id} letter={letter} showExcerpt />) : (
-              <div className="panel-muted mt-4 p-8 text-center">
-                <p className="font-headline-md text-xl text-ink-navy">Your next story starts here.</p>
-                <p className="mt-2 text-sm text-on-surface-variant">Write a letter and give it a route through the world.</p>
-              </div>
-            )}
-          </div>
-        </section>
-
-        <footer className="mt-16 flex flex-wrap items-center justify-between gap-3 border-t border-[rgba(16,42,67,0.13)] pt-5">
-          <p className="meta">Dear.exe · human relay</p>
-          <span className="inline-flex items-center gap-2 text-xs text-on-surface-variant"><MapPin className="h-3.5 w-3.5" aria-hidden="true" /> Private by design</span>
-        </footer>
       </div>
     </main>
   );
-}
-
-function ArrowUpRightIcon() {
-  return <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />;
 }

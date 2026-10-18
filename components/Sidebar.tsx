@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ArrowUpRight, Mail, PenLine, Route, UserRound } from 'lucide-react';
+import { ArrowUpRight, Mail, PenLine, Plus, Route, Sparkles, UserRound } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getLetterDraft } from '@/lib/letterStore';
 import { defaultUserProfile, getUserProfile } from '@/lib/userStore';
@@ -12,9 +12,9 @@ import { SoundToggle } from '@/components/SoundToggle';
 
 const navItems = [
   { href: '/', label: 'Desk', icon: PenLine },
-  { href: '/mailbox', label: 'Mailbox', icon: Mail },
+  { href: '/mailbox', label: 'Inbox', icon: Mail },
   { href: '/journey', label: 'Journey', icon: Route },
-  { href: '/profile', label: 'Profile', icon: UserRound },
+  { href: '/profile', label: 'You', icon: UserRound },
 ];
 
 function isActivePath(pathname: string | null, href: string) {
@@ -60,16 +60,16 @@ export function Sidebar() {
           </span>
           <span>
             <span className="block font-headline-md text-[1.55rem] leading-none tracking-[-0.04em] text-ink-navy">Dear.exe</span>
-            <span className="mt-1 block font-mono text-[0.62rem] uppercase tracking-[0.2em] text-on-surface-variant">Human relay</span>
+            <span className="mt-1 block font-mono text-[0.62rem] uppercase tracking-[0.2em] text-on-surface-variant">Small things, sent</span>
           </span>
         </Link>
 
-        <Link href="/compose?new=1" className="button-primary mt-10 w-full justify-between">
+        <Link href="/compose?new=1" className="button-primary mt-10 w-full justify-between !rounded-xl !bg-[#2b45f7] !text-white !border-[#2b45f7]">
           <span className="inline-flex items-center gap-2">
-            <PenLine className="h-4 w-4 text-[#8fd1ad]" aria-hidden="true" />
-            <span>Write a letter</span>
+            <Sparkles className="h-4 w-4" aria-hidden="true" />
+            <span>Make a drop</span>
           </span>
-          <ArrowUpRight className="h-4 w-4 text-[#8fd1ad]" aria-hidden="true" />
+          <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
         </Link>
 
         <nav aria-label="Primary navigation" className="mt-10">
@@ -115,8 +115,8 @@ export function Sidebar() {
         </div>
       </aside>
 
-      <nav className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-around border-t border-[rgba(16,42,67,0.12)] bg-[#f7f4ee]/95 px-2 pb-[max(0.55rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-md lg:hidden" aria-label="Primary navigation">
-        {navItems.map((item) => {
+      <nav className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-around border-t border-[rgba(16,42,67,0.12)] bg-[#fffaf2]/95 px-2 pb-[max(0.45rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-md lg:hidden" aria-label="Primary navigation">
+        {[navItems[0], navItems[1]].map((item) => {
           const active = isActivePath(pathname, item.href);
           const Icon = item.icon;
           return (
@@ -130,6 +130,19 @@ export function Sidebar() {
               )}
             >
               <Icon className={cn('h-[18px] w-[18px]', active && 'text-[#4f9d7a]')} aria-hidden="true" />
+              <span>{item.label}</span>
+            </Link>
+          );
+        })}
+        <Link href="/compose?new=1" aria-label="Make a drop" className="-mt-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#2b45f7] text-white shadow-[0_7px_16px_rgba(43,69,247,.28)] transition-transform hover:-translate-y-0.5">
+          <Plus className="h-6 w-6" aria-hidden="true" />
+        </Link>
+        {navItems.slice(2).map((item) => {
+          const active = isActivePath(pathname, item.href);
+          const Icon = item.icon;
+          return (
+            <Link key={item.href} href={item.href} aria-current={active ? 'page' : undefined} className={cn('flex min-h-11 min-w-[54px] flex-col items-center justify-center gap-1 px-1 text-[0.66rem] font-semibold transition-colors', active ? 'text-[#2b45f7]' : 'text-on-surface-variant hover:text-ink-navy')}>
+              <Icon className={cn('h-[18px] w-[18px]', active && 'text-[#2b45f7]')} aria-hidden="true" />
               <span>{item.label}</span>
             </Link>
           );

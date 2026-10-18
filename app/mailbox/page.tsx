@@ -9,7 +9,7 @@ import { getRemoteLetters } from '@/lib/letterBackend';
 import { getLetterDraft, getLettersWithDraft } from '@/lib/letterStore';
 import { cn } from '@/lib/utils';
 
-type FilterTab = 'all' | 'transit' | 'received' | 'delivered' | 'drafts';
+type FilterTab = 'all' | 'transit' | 'received' | 'sent' | 'drafts';
 
 export default function Mailbox() {
   const [letters, setLetters] = useState<MockLetter[]>(mockLetters);
@@ -40,15 +40,15 @@ export default function Mailbox() {
   const counts = useMemo(() => ({
     transit: letters.filter((letter) => letter.status === 'dispatched').length,
     received: letters.filter((letter) => letter.direction === 'received').length,
-    delivered: letters.filter((letter) => letter.direction !== 'received' && letter.status === 'delivered').length,
+    sent: letters.filter((letter) => letter.direction !== 'received' && letter.status !== 'draft' && letter.status !== 'sealed').length,
     drafts: letters.filter((letter) => letter.status === 'draft' || letter.status === 'sealed').length,
   }), [letters]);
 
   const tabs: Array<{ id: FilterTab; label: string; count: number }> = [
-    { id: 'all', label: 'All letters', count: letters.length },
-    { id: 'transit', label: 'In relay', count: counts.transit },
+    { id: 'all', label: 'All drops', count: letters.length },
+    { id: 'transit', label: 'On a journey', count: counts.transit },
     { id: 'received', label: 'Received', count: counts.received },
-    { id: 'delivered', label: 'Delivered', count: counts.delivered },
+    { id: 'sent', label: 'Sent', count: counts.sent },
     { id: 'drafts', label: 'Drafts', count: counts.drafts },
   ];
 
@@ -57,7 +57,7 @@ export default function Mailbox() {
     return letters.filter((letter) => {
       if (activeTab === 'transit' && letter.status !== 'dispatched') return false;
       if (activeTab === 'received' && letter.direction !== 'received') return false;
-      if (activeTab === 'delivered' && (letter.direction === 'received' || letter.status !== 'delivered')) return false;
+      if (activeTab === 'sent' && (letter.direction === 'received' || letter.status === 'draft' || letter.status === 'sealed')) return false;
       if (activeTab === 'drafts' && letter.status !== 'draft' && letter.status !== 'sealed') return false;
       if (!query) return true;
       return [letter.subject, letter.recipient, letter.sender, letter.excerpt]
@@ -68,27 +68,25 @@ export default function Mailbox() {
 
   return (
     <main className="page-shell page-enter">
-      <div className="page-container">
+      <div className="page-container max-w-[1080px]">
         <header className="page-header flex-col gap-6 md:flex-row md:items-end">
           <div>
-            <p className="eyebrow">Mailbox & archive</p>
-            <h1 className="display-title mt-4 max-w-3xl">Every letter holds a journey.</h1>
-            <p className="body-copy mt-5 max-w-2xl text-lg">
-              Keep drafts close, follow letters in relay, and return to the words that have already arrived.
-            </p>
+            <p className="eyebrow">Your inbox & archive</p>
+            <h1 className="display-title mt-4 max-w-3xl">A mailbox for your people.</h1>
+            <p className="body-copy mt-4 max-w-2xl text-base">Photos, notes, GIFs, and the occasional long way around.</p>
           </div>
-          <Link href="/compose?new=1" className="button-primary shrink-0">
+          <Link href="/compose?new=1" className="button-primary shrink-0 !rounded-xl !bg-[#2b45f7] !text-white !border-[#2b45f7]">
             <PenLine className="h-4 w-4 text-[#8fd1ad]" aria-hidden="true" />
-            Write a letter
+            Make a drop
           </Link>
         </header>
 
         <section className="grid grid-cols-2 gap-0 border-b border-[rgba(16,42,67,0.13)] py-7 sm:grid-cols-4">
           {[
-            { label: 'Total letters', value: letters.length },
-            { label: 'In relay', value: counts.transit },
+            { label: 'Total drops', value: letters.length },
+            { label: 'On a journey', value: counts.transit },
             { label: 'Received', value: counts.received },
-            { label: 'On your desk', value: counts.drafts },
+            { label: 'Sent', value: counts.sent },
           ].map((stat, index) => (
             <div key={stat.label} className={cn('py-1', index > 0 && 'border-l border-[rgba(16,42,67,0.12)] pl-4 sm:pl-6')}>
               <p className="font-headline-md text-3xl text-ink-navy">{stat.value}</p>
@@ -98,7 +96,7 @@ export default function Mailbox() {
         </section>
 
         <section className="mt-8 flex flex-col gap-4 border-b border-[rgba(16,42,67,0.13)] pb-5 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-wrap gap-1" role="tablist" aria-label="Filter letters">
+          <div className="flex gap-1 overflow-x-auto pb-1" role="tablist" aria-label="Filter drops">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
@@ -107,7 +105,7 @@ export default function Mailbox() {
                 aria-selected={activeTab === tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={cn(
-                  'min-h-11 rounded-sm px-3 text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a]',
+                  'min-h-11 shrink-0 rounded-xl px-3 text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2b45f7]',
                   activeTab === tab.id ? 'bg-ink-navy text-white' : 'text-on-surface-variant hover:bg-white/55 hover:text-ink-navy'
                 )}
               >
@@ -117,13 +115,13 @@ export default function Mailbox() {
           </div>
           <div className="relative w-full lg:max-w-xs">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-on-surface-variant" aria-hidden="true" />
-            <label htmlFor="mailbox-search" className="sr-only">Search letters</label>
+            <label htmlFor="mailbox-search" className="sr-only">Search drops</label>
             <input
               id="mailbox-search"
               type="search"
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Search letters"
+              placeholder="Find a drop"
               className="input-field pl-10 pr-10"
             />
             {searchQuery && (
@@ -136,24 +134,24 @@ export default function Mailbox() {
 
         <section className="mt-2">
           {filteredLetters.length ? filteredLetters.map((letter) => <LetterCard key={letter.id} letter={letter} showExcerpt />) : (
-            <div className="panel-muted my-10 p-10 text-center">
+            <div className="panel-muted my-10 rounded-2xl p-8 text-center sm:p-10">
               <Mail className="mx-auto h-7 w-7 text-on-surface-variant" aria-hidden="true" />
-              <h2 className="mt-4 font-headline-md text-2xl text-ink-navy">Nothing here yet.</h2>
+              <h2 className="mt-4 font-headline-md text-2xl text-ink-navy">No drops in this little corner yet.</h2>
               <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-on-surface-variant">
-                {searchQuery ? 'Try a different search or clear the filter.' : 'Write a letter and give it a route through the world.'}
+                {searchQuery ? 'Try a different search or clear the filter.' : 'Send something small to get this started.'}
               </p>
               <div className="mt-5 flex flex-wrap justify-center gap-3">
                 {searchQuery && <button type="button" onClick={() => setSearchQuery('')} className="button-secondary">Clear search</button>}
-                <Link href="/compose?new=1" className="button-primary">Write a letter <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
+                <Link href="/compose?new=1" className="button-primary !rounded-xl !bg-[#2b45f7] !text-white !border-[#2b45f7]">Make a drop <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
               </div>
             </div>
           )}
         </section>
 
         <aside className="mt-14 grid gap-4 border-t border-[rgba(16,42,67,0.13)] pt-7 md:grid-cols-[auto_minmax(0,1fr)] md:items-start md:gap-8">
-          <p className="eyebrow text-[#b88938]">How relays move</p>
+          <p className="eyebrow text-[#b88938]">Want the scenic route?</p>
           <p className="max-w-2xl text-sm leading-relaxed text-on-surface-variant">
-            A sealed letter moves from person to person. Each carrier records a stop, never the words inside. Open a letter only when it reaches the person it was meant for.
+            Pick a journey when you want a drop to move hand to hand. Carriers can follow the route without opening the private part.
           </p>
         </aside>
       </div>

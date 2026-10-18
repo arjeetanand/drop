@@ -277,11 +277,11 @@ export function saveJourneyNotes(notes: JourneyNote[], letterId = currentFocusDr
   }
 }
 
-export function dispatchLetter(letterId = getLetterDraft().id): LetterDraftState {
+export function dispatchLetter(letterId = getLetterDraft().id, status: LetterStatus = 'dispatched'): LetterDraftState {
   const source = getLetterDraftById(letterId) ?? getLetterDraft();
   const activeSource = source.id === getLetterDraft().id ? source : setActiveLetterDraft(source);
   const dispatched = saveLetterDraft({
-    status: 'dispatched',
+    status,
     dispatchedAt: new Date().toISOString(),
   });
   const history = getLetterHistory().filter((letter) => letter.id !== dispatched.id);
@@ -305,7 +305,7 @@ export function draftAsLetter(draft: LetterDraftState): MockLetter {
     recipient: draft.address.name || draft.recipient,
     date: formatDate(draft.dispatchedAt ?? draft.updatedAt),
     status: draft.status,
-    excerpt: draft.content.trim() || 'An empty letter, waiting for your words.',
+    excerpt: draft.content.trim() || (draft.payloadKind === 'text' ? 'An empty letter, waiting for your words.' : 'A little moment worth sharing.'),
     subject: draft.subject || 'Untitled Letter',
     direction: 'sent',
     sealId: draft.sealId ?? undefined,

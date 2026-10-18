@@ -32,8 +32,8 @@ const courier = Courier_Prime({
 });
 
 export const metadata: Metadata = {
-  title: 'Dear.exe — Human Relay',
-  description: 'A quieter way to send something real through human hands.',
+  title: 'Dear.exe — Small things, sent',
+  description: 'Send a private note, photo, or GIF to one person. Make a journey optional.',
 };
 
 export default function RootLayout({
@@ -42,7 +42,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" data-scroll-behavior="smooth">
       <body
         className={`${inter.variable} ${playfair.variable} ${literata.variable} ${courier.variable} font-sans antialiased text-ink-navy bg-[#f7f4ee] selection:bg-emerald-500/20`}
       >

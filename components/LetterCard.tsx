@@ -1,14 +1,15 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowUpRight, CheckCircle2, Clock3, FileEdit, Mail, PackageCheck } from 'lucide-react';
+import Image from 'next/image';
+import { ArrowUpRight, CheckCircle2, Clock3, FileEdit, Image as ImageIcon, Mail, PackageCheck, Type } from 'lucide-react';
 import type { LetterStatus, MockLetter } from '@/data/mockData';
 import { cn } from '@/lib/utils';
 
 const statusConfig: Record<LetterStatus, { label: string; icon: typeof Mail; tone: string }> = {
   draft: { label: 'Draft', icon: FileEdit, tone: 'text-[#8a611b]' },
   sealed: { label: 'Sealed', icon: PackageCheck, tone: 'text-[#8a611b]' },
-  dispatched: { label: 'In relay', icon: Clock3, tone: 'text-[#276a4d]' },
+  dispatched: { label: 'On a journey', icon: Clock3, tone: 'text-[#276a4d]' },
   delivered: { label: 'Delivered', icon: CheckCircle2, tone: 'text-[#276a4d]' },
 };
 
@@ -21,17 +22,23 @@ export function LetterCard({ letter, showExcerpt = false }: { letter: MockLetter
   const href = isReceived
     ? `/letter/${encodeURIComponent(letter.id)}`
     : letter.status === 'draft'
-      ? '/compose'
+      ? `/compose?letter=${encodeURIComponent(letter.id)}`
       : letter.status === 'sealed'
-        ? `/compose/dispatch?letter=${encodeURIComponent(letter.id)}`
-        : `/journey?letter=${encodeURIComponent(letter.id)}`;
+        ? `/compose?letter=${encodeURIComponent(letter.id)}&mode=relay`
+        : letter.deliveryMode === 'relay' || letter.status === 'dispatched'
+          ? `/journey?letter=${encodeURIComponent(letter.id)}`
+          : `/letter/${encodeURIComponent(letter.id)}`;
   const action = isReceived
-    ? 'Open letter'
+    ? 'Open drop'
     : letter.status === 'draft'
-      ? 'Continue writing'
+      ? 'Keep making it'
       : letter.status === 'sealed'
-        ? 'Dispatch'
-        : 'View journey';
+        ? 'Send it'
+        : letter.deliveryMode === 'relay' || letter.status === 'dispatched'
+          ? 'View journey'
+          : 'Open sent drop';
+  const kind = letter.payloadKind || 'text';
+  const KindIcon = kind === 'text' ? Type : ImageIcon;
 
   return (
     <Link
@@ -39,8 +46,8 @@ export function LetterCard({ letter, showExcerpt = false }: { letter: MockLetter
       className="group grid gap-4 border-t border-[rgba(16,42,67,0.12)] py-5 transition-colors hover:bg-white/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-inset sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
     >
       <div className="flex min-w-0 items-start gap-3">
-        <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center border border-[rgba(16,42,67,0.16)] bg-white/60 text-ink-navy">
-          <Icon className={cn('h-4 w-4', config.tone)} aria-hidden="true" />
+        <span className="relative mt-0.5 flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-[rgba(16,42,67,0.12)] bg-[#f2eee5] text-ink-navy">
+          {letter.mediaUrl ? <Image src={letter.mediaUrl} alt="" fill sizes="48px" className="object-cover" /> : <KindIcon className={cn('h-4 w-4', config.tone)} aria-hidden="true" />}
         </span>
         <span className="min-w-0">
           <span className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -49,14 +56,15 @@ export function LetterCard({ letter, showExcerpt = false }: { letter: MockLetter
             </span>
             <span className="meta">{isReceived ? `From ${letter.sender || 'a correspondent'}` : `To ${letter.recipient}`}</span>
           </span>
+          <span className="mt-1 inline-flex rounded-full bg-[#f2eee5] px-2 py-0.5 font-mono text-[0.58rem] font-bold uppercase tracking-[0.1em] text-on-surface-variant">{kind === 'text' ? 'Note' : kind === 'gif' ? 'GIF' : 'Photo'}</span>
           {showExcerpt && letter.excerpt && (
             <span className="mt-1 block line-clamp-2 max-w-2xl font-body-md text-sm leading-relaxed text-on-surface-variant">
               “{letter.excerpt}”
             </span>
           )}
           <span className={cn('mt-2 inline-flex items-center gap-1.5 meta font-semibold', config.tone)}>
-            <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
-            {config.label}
+            <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+            {isReceived && letter.reaction ? `Reacted ${letter.reaction}` : config.label}
           </span>
         </span>
       </div>

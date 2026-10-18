@@ -1,6 +1,11 @@
 # Implementation Tasks: Mobile Drop Experience
 
-Tasks are ordered by dependency. No source code has been changed yet.
+Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
+
+## Current Checkpoint — 2026-10-18
+
+- The mixed-payload/private-media foundation is pushed as `04cc01f`. The mobile-first desk, inbox, composer, and received-drop/reaction UI are implemented and locally verified: 3 unit tests, lint, typecheck, production build, plus browser checks at 463px and desktop width.
+- Remote account-to-account send, media access, and reactions still need a configured Supabase project and applied migrations. Relay handoffs currently use the existing browser-local store, so shared multi-device relay behavior remains future work. The in-app browser clamps mobile width to 463px, so exact 360px, 390px, and 430px checks are pending.
 
 ## Git Delivery
 

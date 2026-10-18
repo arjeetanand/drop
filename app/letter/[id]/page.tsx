@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
-import { ArrowLeft, ArrowRight, Check, LockKeyhole, MailOpen } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, LockKeyhole, MailOpen, Sparkles } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import type { MockLetter } from '@/data/mockData';
-import { getRemoteLetterById, getRemoteLetters } from '@/lib/letterBackend';
+import { getRemoteLetterById, getRemoteLetters, saveRemoteReaction } from '@/lib/letterBackend';
 import { getLetterById } from '@/lib/letterStore';
 
 function LoadingLetter() {
@@ -64,6 +65,8 @@ export default function LetterArrivalPage() {
   const [opened, setOpened] = useState(false);
   const [contentLoading, setContentLoading] = useState(false);
   const [contentNotice, setContentNotice] = useState('');
+  const [reactionNotice, setReactionNotice] = useState('');
+  const [savingReaction, setSavingReaction] = useState(false);
 
   useEffect(() => {
     if (!letterId) {
@@ -76,8 +79,9 @@ export default function LetterArrivalPage() {
     const loadLetter = async () => {
       const localLetter = getLetterById(letterId);
       if (localLetter) {
+        const remoteDetail = localLetter.status === 'draft' ? null : await getRemoteLetterById(letterId);
         if (active) {
-          setLetter(localLetter);
+          setLetter(remoteDetail || localLetter);
           setFullContentAvailable(true);
           setLoading(false);
         }
@@ -128,6 +132,30 @@ export default function LetterArrivalPage() {
     }
 
     setRevealed(true);
+  };
+
+  const react = async (emoji: string) => {
+    if (!letter || savingReaction) return;
+    setSavingReaction(true);
+    setReactionNotice('');
+    if (letter.id.startsWith('incoming-')) {
+      setLetter({ ...letter, reaction: emoji });
+      setReactionNotice('Demo reaction added. Connect an account to save reactions across devices.');
+      setSavingReaction(false);
+      return;
+    }
+    try {
+      if (await saveRemoteReaction(letter.id, emoji)) {
+        setLetter({ ...letter, reaction: emoji });
+        setReactionNotice('Reaction sent.');
+      } else {
+        setReactionNotice('Could not save that reaction. Sign in as the recipient and try again.');
+      }
+    } catch {
+      setReactionNotice('Could not save that reaction. Try again in a moment.');
+    } finally {
+      setSavingReaction(false);
+    }
   };
 
   const teasers = useMemo(() => {
@@ -241,20 +269,28 @@ export default function LetterArrivalPage() {
               <section id="letter-body" className="mt-8 border-t border-[rgba(16,42,67,0.13)] pt-8" aria-live="polite">
                 <p className="eyebrow text-[#b84b3a]">Unsealed</p>
                 <div className="mt-4 border-l-2 border-[#b84b3a] bg-white px-6 py-7 sm:px-8">
-                  <p className="body-copy text-lg text-ink-navy">
-                    {fullContentAvailable
-                      ? letter.excerpt
-                      : 'This letter is still available as a sealed preview. Sign in as its recipient to read the full words.'}
-                  </p>
+                  {letter.mediaUrl && <div className="relative mb-5 aspect-[4/3] overflow-hidden rounded-xl bg-[#f1ede5]">
+                    <Image src={letter.mediaUrl} alt={letter.subject ? `${letter.subject}, sent by ${sender}` : `Drop from ${sender}`} fill unoptimized sizes="(max-width: 760px) 100vw, 700px" className="object-contain" />
+                    <span className="absolute left-3 top-3 rounded-full bg-[#fffaf2]/90 px-3 py-1 font-mono text-[0.62rem] font-bold uppercase tracking-[0.12em] text-ink-navy">{letter.payloadKind === 'gif' ? 'GIF' : 'Photo'}</span>
+                  </div>}
+                  {letter.payloadKind && letter.payloadKind !== 'text' && letter.mediaPath && !letter.mediaUrl && <p className="notice error-notice mb-5" role="status">The private attachment could not load. Check your connection and open the drop again.</p>}
+                  {letter.excerpt && letter.excerpt !== 'An empty letter, waiting for your words.' && <p className="body-copy text-lg text-ink-navy">{fullContentAvailable ? letter.excerpt : 'This drop is still available as a sealed preview. Sign in as its recipient to open it.'}</p>}
+                  {!letter.mediaUrl && (!letter.excerpt || letter.excerpt === 'An empty letter, waiting for your words.') && <p className="body-copy text-lg text-ink-navy">This drop is still available as a sealed preview. Sign in as its recipient to open it.</p>}
                   <p className="meta mt-6 border-t border-[rgba(16,42,67,0.1)] pt-4">From {sender}</p>
                 </div>
-                <Link
+                {isReceived && <section className="mt-6 rounded-xl border border-[rgba(16,42,67,.1)] bg-white/60 p-4" aria-labelledby="drop-reaction-heading">
+                  <h3 id="drop-reaction-heading" className="flex items-center gap-2 text-sm font-bold text-ink-navy"><Sparkles className="h-4 w-4 text-[#2b45f7]" aria-hidden="true" /> Send a little reaction</h3>
+                  <div className="mt-3 flex flex-wrap gap-2">{['💜', '🔥', '😂', '🥹', '🫶'].map((emoji) => <button key={emoji} type="button" onClick={() => void react(emoji)} disabled={savingReaction} aria-label={`React ${emoji}`} aria-pressed={letter.reaction === emoji} className={`flex h-11 min-w-11 items-center justify-center rounded-xl border text-lg transition-colors ${letter.reaction === emoji ? 'border-[#2b45f7] bg-[#2b45f7]/10' : 'border-[rgba(16,42,67,.12)] bg-white hover:bg-[#f5f1e9]'}`}>{emoji}</button>)}</div>
+                  {reactionNotice && <p className="mt-3 text-xs text-on-surface-variant" role="status" aria-live="polite">{reactionNotice}</p>}
+                </section>}
+                {!isReceived && letter.reaction && <p className="mt-5 inline-flex items-center gap-2 rounded-full bg-[#f2eee5] px-4 py-2 text-sm text-ink-navy"><Sparkles className="h-4 w-4 text-[#2b45f7]" aria-hidden="true" /> They reacted {letter.reaction}</p>}
+                {(letter.deliveryMode === 'relay' || letter.status === 'dispatched') && <Link
                   href={`/journey?letter=${encodedLetterId}`}
                   className="button-secondary mt-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#fcfaf6]"
                 >
-                  Follow the letter&apos;s journey
+                  Follow the drop&apos;s journey
                   <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                </Link>
+                </Link>}
               </section>
             )}
           </article>
@@ -281,7 +317,7 @@ export default function LetterArrivalPage() {
                 </div>
                 <div className="flex items-start justify-between gap-4 py-3">
                   <dt className="meta">Privacy</dt>
-                  <dd className="text-right text-sm font-semibold text-[#4f9d7a]">Words stay sealed in transit</dd>
+                  <dd className="text-right text-sm font-semibold text-[#4f9d7a]">{letter.deliveryMode === 'relay' || letter.status === 'dispatched' ? 'Sealed during the journey' : 'Private to you two'}</dd>
                 </div>
               </dl>
             </section>
