@@ -9,7 +9,7 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 ## Implementation Status — 2026-10-19
 
 - Task 1 is complete. The mixed-payload model, default text behavior for older drafts, and compatible recipient routes are in place.
-- The core mobile sharing, receive, reaction, and optional relay flows have local implementations. Detailed code and browser checks are recorded in `todo.md`.
+- The core mobile sharing, receive, reaction, and optional relay flows have local implementations. Relay remains in progress until the acceptance checks in `todo.md` are verified.
 - Same-device text, photo, and GIF demos have been checked through recipient reveal/open, reaction, sender copy, and reload. This verifies local media persistence and reaction presentation, not authenticated account-to-account delivery.
 - A local authenticated browser check sent a text drop through the composer, opened and reacted as the recipient, and confirmed the sender mailbox reaction. The database drop, reaction, and two disposable local Supabase accounts were removed; the browser keeps its local sent-copy history. Google OAuth and hosted account behavior remain unverified.
 - Seeded demo reactions now persist on this device and appear on the mailbox card; they are clearly marked as local and do not notify a sender.
@@ -17,7 +17,7 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 - Legacy seeded inbox examples (photo, GIF, and archival text) are labeled as samples, kept out of real counts, and available through an explicit Samples filter; the editable starter draft remains a draft. Sample reactions stay on this device.
 - First-use profile setup preserves customized local identity, suggests an editable account-specific handle, and only creates a sender profile after confirmed absence. Per-account unsynced edits survive lookup recovery, and handle conflicts stay recoverable on-device. The local smoke test verifies rejected updates and duplicate first-use inserts leave existing profiles unchanged. Authenticated browser onboarding remains unverified.
 - Local drafts and related notes, attachments, reactions, relay state, and location data are now partitioned by authenticated user ID. Existing unscoped data stays in the guest/device bucket; a root auth gate resolves the session before private local views render and profile supports sign-out. A local signed-out browser check passed; switching between two active accounts in-browser remains open.
-- Hosted account-to-account sending, storage privacy, reactions, and relay still need verification because no hosted Supabase project exists. The local CLI smoke test covers Auth, row/reaction policies, private GIF finalization (including exact retries with a fresh staging path), participant-only storage reads, and handle uniqueness; the separate authenticated browser pass covers text send/open/react only. Google OAuth, account-to-account photo/GIF UI, and real-device safe-area, keyboard, and reduced-motion checks remain open.
+- Hosted account-to-account sending, storage privacy, reactions, and relay still need verification because no hosted Supabase project exists. The local CLI smoke test covers Auth, row/reaction policies, private GIF finalization (including a sequential retry with a fresh staging path), participant-only storage reads, and handle uniqueness; the separate authenticated browser pass covers text send/open/react only. Google OAuth, account-to-account photo/GIF UI, and real-device safe-area, keyboard, and reduced-motion checks remain open. A finalizer lookup error or simultaneous sends are not covered by the retry smoke test.
 
 ## Workspace and Delivery
 
@@ -74,7 +74,7 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 ### Phase 3: Receiving and Relay
 
 - [x] Task 5: Make received drops open in the right media format and support a private reaction.
-- [x] Task 6: Keep the existing human relay as an optional mode for any supported drop.
+- [ ] Task 6: Keep the existing human relay as an optional mode for any supported drop.
 
 ### Checkpoint: End-to-End
 
