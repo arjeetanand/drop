@@ -16,7 +16,7 @@ Tasks are ordered by dependency. Progress is recorded at each tested and pushed 
 - Received drops with a known sender handle now offer an optional “Drop back” action that opens a fresh, addressed draft. The local seeded sender-to-composer flow was checked in-browser; no message was copied or sent. The Supabase profile join for sender handles still needs verification against a configured project.
 - Mailbox filters are now exposed as a labeled group of toggle buttons instead of an incomplete tab pattern. Browser checks confirmed the pressed state changes for Sent and Drafts and that Tab plus Return operates the filters.
 - Media captions are now prompted as descriptions, and visible captions serve as the text alternative without being announced twice; uncaptained media keeps a fallback image label. A local photo draft was checked in the composer and recipient preview with and without a caption.
-- The in-app browser ignored viewport overrides and remained at 765 CSS pixels, so the recipient preview route still needs checks at exact 360px, 390px, and 430px widths. Exact mobile keyboard/safe-area behavior, reduced-motion browser behavior, and real-device accessibility remain unverified. The preview correctly keeps sending unavailable until remote persistence is configured.
+- Browser checks confirmed the desk, mailbox, composer, recipient preview, and opened received drop have no horizontal overflow at exact 360px, 390px, and 430px CSS widths. Composer typography and seal-color controls measure 44px. Exact mobile keyboard/safe-area behavior, reduced-motion browser behavior, and real-device accessibility remain unverified; preview mode still keeps sending unavailable until remote persistence is configured.
 
 ## Git Delivery
 

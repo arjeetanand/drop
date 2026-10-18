@@ -223,7 +223,7 @@
   }
 
   .button-quiet {
-    min-height: 2.5rem;
+    min-height: 2.75rem;
     border: 1px solid transparent;
     color: var(--ink-soft);
     padding-inline: 0.65rem;
