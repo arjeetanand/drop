@@ -8,6 +8,9 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "supabase:start": "supabase start",
+    "supabase:reset": "supabase db reset --local",
+    "supabase:stop": "supabase stop",
     "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test tests/*.test.mjs",
     "ai:fix": "node scripts/openrouter-fix.mjs",
     "ai:repair": "node scripts/openrouter-fix.mjs"
@@ -79,5 +82,8 @@
     "typescript": "5.2.2",
     "vaul": "^0.9.9",
     "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "supabase": "2.121.0"
   }
 }

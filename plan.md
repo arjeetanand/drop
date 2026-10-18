@@ -15,7 +15,7 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 - A disposable PostgreSQL regression test now covers relay token authorization, retry recovery, rotation/revocation, optional coordinates, participant-only route visibility, and private token-table denial.
 - Signed-in mailbox cards now show participant-visible reactions on sent drops; hosted account-to-account verification remains open.
 - Browser media uploads now use private staging, server-side format/decode limits, metadata-stripping re-encoding, and database checks that bind stored media to its drop; hosted Supabase verification remains open.
-- Hosted account-to-account sending, storage privacy, reactions, and relay still need verification because this checkout has no Supabase project configuration. The local PostgreSQL checks do not replace hosted two-account tests. Real-device safe-area, keyboard, and reduced-motion checks also remain open.
+- Hosted account-to-account sending, storage privacy, reactions, and relay still need verification because no hosted Supabase project exists. The new local CLI setup can replay migrations but does not yet replace a local two-account app-flow test. Real-device safe-area, keyboard, and reduced-motion checks also remain open.
 
 ## Workspace and Delivery
 

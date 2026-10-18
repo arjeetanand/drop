@@ -9,6 +9,14 @@ Drop needs Supabase Auth, the existing `profiles` and `letters` schema, and the 
 
 The app accepts decodable JPG, PNG, WebP, and GIF uploads up to 8 MB, 40 million decoded pixels, and 120 GIF frames. The browser uploads into an unreadable staging path; the server checks and re-encodes the actual image, applies orientation, and strips source metadata before writing the final object. The database binds new media paths to their exact sender and drop ID, and verifies the stored MIME type and size. Attachments stay in the private `drop-media` bucket; the app stores a storage path and requests a one-minute signed URL only after Supabase returns an authorized letter row. Storage policies allow only the sender or addressed recipient to read a linked attachment and allow deletion only when no drop references the object. The recipient alone can add or change a reaction.
 
+## Local Supabase development
+
+The Supabase CLI is pinned in `package.json`; Node.js 20+ and a Docker-compatible runtime are required. Start the local Auth, Database, and Storage services with `npm run supabase:start`. The first start downloads the service images. The CLI prints a local project URL, anon key, and service-role key; copy those into `.env.local` using the variable names in `.env.example`. Keep the service-role key server-only.
+
+`npm run supabase:reset` recreates the local database from the migrations and clears local database data. Use this only for the local stack; do not add `--linked`. `npm run supabase:stop` stops the local services while retaining their data. Google OAuth still needs provider credentials; local email confirmation is disabled so test users can be created through Supabase Auth without a hosted mail provider.
+
+The local stack is for development and testing only. Do not expose it to external traffic.
+
 ## Local policy smoke test
 
 With local PostgreSQL tools available, run the policy test against a disposable database from the repository root:
@@ -35,6 +43,6 @@ The transaction checks sender-only relay starts, short-lived passes, one-time te
 
 ## Relay handoffs
 
-Apply `20261018_relay_handoff_tokens.sql` after the existing letter and media migrations. Relay invites are bearer links: the first invite expires after 10 minutes, and accepting it issues a carrier capability that lasts 30 days. A carrier capability can mint a fresh 10-minute handoff pass when its holder is ready to pass the drop on. Share each invite only with the intended next carrier. Carriers can add route events but cannot read the drop's text or media.
+Apply `20261018000100_relay_handoff_tokens.sql` after the existing letter and media migrations. Relay invites are bearer links: the first invite expires after 10 minutes, and accepting it issues a carrier capability that lasts 30 days. A carrier capability can mint a fresh 10-minute handoff pass when its holder is ready to pass the drop on. Share each invite only with the intended next carrier. Carriers can add route events but cannot read the drop's text or media.
 
 Without Supabase credentials, the app runs with local seeded examples and local text drafts. Real sends and cross-account media delivery are unavailable in that mode.

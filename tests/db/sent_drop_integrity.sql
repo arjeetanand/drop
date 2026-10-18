@@ -24,11 +24,11 @@ create table storage.objects (
 );
 alter table storage.objects enable row level security;
 
-\ir ../../supabase/migrations/20260823_dear_exe.sql
-\ir ../../supabase/migrations/20261018_drop_media_reactions.sql
-\ir ../../supabase/migrations/20261018_restrict_sent_letter_mutation.sql
-\ir ../../supabase/migrations/20261018_z_preserve_sent_drop_integrity.sql
-\ir ../../supabase/migrations/20261018_zz_validated_drop_media.sql
+\ir ../../supabase/migrations/20260823000000_dear_exe.sql
+\ir ../../supabase/migrations/20261018000000_drop_media_reactions.sql
+\ir ../../supabase/migrations/20261018000200_restrict_sent_letter_mutation.sql
+\ir ../../supabase/migrations/20261018000300_z_preserve_sent_drop_integrity.sql
+\ir ../../supabase/migrations/20261018000400_zz_validated_drop_media.sql
 
 insert into auth.users (id) values
   ('11111111-1111-4111-8111-111111111111'),

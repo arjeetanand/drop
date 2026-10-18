@@ -25,9 +25,9 @@ create table storage.objects (
 );
 alter table storage.objects enable row level security;
 
-\ir ../../supabase/migrations/20260823_dear_exe.sql
-\ir ../../supabase/migrations/20261018_drop_media_reactions.sql
-\ir ../../supabase/migrations/20261018_relay_handoff_tokens.sql
+\ir ../../supabase/migrations/20260823000000_dear_exe.sql
+\ir ../../supabase/migrations/20261018000000_drop_media_reactions.sql
+\ir ../../supabase/migrations/20261018000100_relay_handoff_tokens.sql
 
 insert into auth.users (id) values
   ('11111111-1111-4111-8111-111111111111'),
