@@ -96,13 +96,12 @@ export default function Mailbox() {
         </section>
 
         <section className="mt-8 flex flex-col gap-4 border-b border-[rgba(16,42,67,0.13)] pb-5 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex gap-1 overflow-x-auto pb-1" role="tablist" aria-label="Filter drops">
+          <div className="flex gap-1 overflow-x-auto pb-1" role="group" aria-label="Filter drops">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 type="button"
-                role="tab"
-                aria-selected={activeTab === tab.id}
+                aria-pressed={activeTab === tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={cn(
                   'min-h-11 shrink-0 rounded-xl px-3 text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2b45f7]',
