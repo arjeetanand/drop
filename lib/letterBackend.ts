@@ -2,7 +2,7 @@ import type { MockLetter, TrackingEvent } from '@/data/mockData';
 import type { DropDeliveryMode, DropPayloadKind } from '@/data/mockData';
 import type { JourneyNote, LetterDraftState } from '@/lib/letterStore';
 import type { UserProfile } from '@/lib/userStore';
-import { defaultUserProfile } from '@/lib/userStore';
+import { getPendingRemoteProfileSnapshot, suggestedDropUsername, withPendingRemoteProfileLock } from '@/lib/userStore';
 import { getSupabaseBrowserClient } from '@/lib/supabaseBrowser';
 import { normalizeDropRecipient, validateDropMedia } from '@/lib/dropValidation';
 import { createStagedDropMediaPath, isDropMediaFinalPath, resolveDropMediaPaths } from '@/lib/dropMediaStorage';
@@ -49,37 +49,118 @@ async function getAuthenticatedClient() {
   return { supabase, user: data.user };
 }
 
-export async function getRemoteProfile(): Promise<UserProfile | null> {
-  const context = await getAuthenticatedClient();
-  if (!context) return null;
+type AuthenticatedContext = NonNullable<Awaited<ReturnType<typeof getAuthenticatedClient>>>;
 
-  const { data, error } = await context.supabase
-    .from('profiles')
-    .select('id, username, display_name, bio, letters_sent, letters_received')
-    .eq('id', context.user.id)
-    .maybeSingle<ProfileRow>();
+export type RemoteProfileState =
+  | { status: 'unavailable' }
+  | { status: 'signed-out' }
+  | { status: 'error'; userId?: string }
+  | { status: 'missing'; userId: string; email: string; displayName: string }
+  | { status: 'found'; userId: string; email: string; displayName: string; profile: UserProfile };
 
-  if (error || !data) return null;
-  return {
-    displayName: data.display_name,
-    username: data.username,
-    bio: data.bio,
-    lettersSent: data.letters_sent,
-    lettersReceived: data.letters_received,
+async function getRemoteProfileForContext(context: AuthenticatedContext): Promise<RemoteProfileState> {
+  const identity = {
+    userId: context.user.id,
+    email: context.user.email || '',
+    displayName: typeof context.user.user_metadata?.full_name === 'string'
+      ? context.user.user_metadata.full_name
+      : typeof context.user.user_metadata?.name === 'string'
+        ? context.user.user_metadata.name
+        : context.user.email?.split('@')[0] || '',
   };
+
+  try {
+    const { data, error } = await context.supabase
+      .from('profiles')
+      .select('id, username, display_name, bio, letters_sent, letters_received')
+      .eq('id', context.user.id)
+      .maybeSingle<ProfileRow>();
+
+    if (error) return { status: 'error', userId: context.user.id };
+    if (!data) return { status: 'missing', ...identity };
+    return {
+      status: 'found',
+      ...identity,
+      profile: {
+        displayName: data.display_name,
+        username: data.username,
+        bio: data.bio,
+        lettersSent: data.letters_sent,
+        lettersReceived: data.letters_received,
+      },
+    };
+  } catch {
+    return { status: 'error', userId: context.user.id };
+  }
 }
 
-export async function saveRemoteProfile(profile: UserProfile) {
-  const context = await getAuthenticatedClient();
-  if (!context) return false;
+export async function getRemoteProfileState(): Promise<RemoteProfileState> {
+  try {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) return { status: 'unavailable' };
+    const { data, error } = await supabase.auth.getUser();
+    if (error) return { status: error.name === 'AuthSessionMissingError' ? 'signed-out' : 'error' };
+    if (!data.user) return { status: 'signed-out' };
+    return getRemoteProfileForContext({ supabase, user: data.user });
+  } catch {
+    return { status: 'error' };
+  }
+}
 
-  const { error } = await context.supabase.from('profiles').upsert({
-    id: context.user.id,
-    username: profile.username,
-    display_name: profile.displayName,
-    bio: profile.bio,
+export async function getRemoteProfile(): Promise<UserProfile | null> {
+  const state = await getRemoteProfileState();
+  return state.status === 'found' ? state.profile : null;
+}
+
+export type SaveRemoteProfileResult =
+  | { ok: true }
+  | { ok: false; reason: 'signed-out' | 'account-changed' | 'profile-changed' | 'username-taken' | 'profile-exists' | 'sync-failed' };
+
+async function writeRemoteProfile(context: AuthenticatedContext, profile: UserProfile, createOnly = false, expectedProfile?: UserProfile): Promise<SaveRemoteProfileResult> {
+  try {
+    const row = {
+      id: context.user.id,
+      username: profile.username,
+      display_name: profile.displayName,
+      bio: profile.bio,
+    };
+    if (createOnly) {
+      const { error } = await context.supabase.from('profiles').insert(row);
+      if (!error) return { ok: true };
+      if (error.code !== '23505') return { ok: false, reason: 'sync-failed' };
+      const currentProfile = await getRemoteProfileForContext(context);
+      if (currentProfile.status === 'found') return { ok: false, reason: 'profile-exists' };
+      if (currentProfile.status === 'error') return { ok: false, reason: 'sync-failed' };
+      return { ok: false, reason: 'username-taken' };
+    }
+    if (!expectedProfile) return { ok: false, reason: 'profile-changed' };
+    const { data, error } = await context.supabase.from('profiles')
+      .update({ username: row.username, display_name: row.display_name, bio: row.bio })
+      .eq('id', context.user.id)
+      .eq('username', expectedProfile.username)
+      .eq('display_name', expectedProfile.displayName)
+      .eq('bio', expectedProfile.bio)
+      .select('id')
+      .maybeSingle();
+    if (!error && data) return { ok: true };
+    if (!error) return { ok: false, reason: 'profile-changed' };
+    if (error.code !== '23505') return { ok: false, reason: 'sync-failed' };
+    return { ok: false, reason: 'username-taken' };
+  } catch {
+    return { ok: false, reason: 'sync-failed' };
+  }
+}
+
+export async function saveRemoteProfile(profile: UserProfile, expectedUserId: string, createOnly = false, pendingRevision?: string, expectedProfile?: UserProfile): Promise<SaveRemoteProfileResult> {
+  return withPendingRemoteProfileLock(expectedUserId, async () => {
+    if (pendingRevision && getPendingRemoteProfileSnapshot(expectedUserId)?.revision !== pendingRevision) {
+      return { ok: false, reason: 'profile-changed' };
+    }
+    const context = await getAuthenticatedClient();
+    if (!context) return { ok: false, reason: 'signed-out' };
+    if (context.user.id !== expectedUserId) return { ok: false, reason: 'account-changed' };
+    return writeRemoteProfile(context, profile, createOnly, expectedProfile);
   });
-  return !error;
 }
 
 function rowToLetter(row: LetterRow, userId: string, revealContent = false): MockLetter {
@@ -342,20 +423,38 @@ export async function syncDropToBackend(draft: LetterDraftState, mediaFile?: Fil
     return { ok: false, error: 'I could not confirm whether this drop was already sent. Check Sent before retrying.' };
   }
 
-  let profile = await getRemoteProfile();
-  if (!profile) {
-    const metadataName = context.user.user_metadata?.full_name || context.user.email?.split('@')[0] || defaultUserProfile.displayName;
+  const profileState = await getRemoteProfileForContext(context);
+  let profile: UserProfile | null = null;
+  if (profileState.status === 'found') {
+    profile = profileState.profile;
+  } else if (profileState.status === 'missing') {
     const generatedProfile: UserProfile = {
-      ...defaultUserProfile,
-      displayName: metadataName,
-      username: `user_${context.user.id.slice(0, 8)}`,
+      displayName: profileState.displayName || 'A correspondent',
+      username: suggestedDropUsername(context.user.id),
+      bio: '',
+      lettersSent: 0,
+      lettersReceived: 0,
     };
-    const created = await saveRemoteProfile(generatedProfile);
-    if (!created) {
-      await cleanupUploadedMedia();
-      return { ok: false, error: 'Your profile could not be set up. Check the account settings and try again.' };
+    const created = await writeRemoteProfile(context, generatedProfile, true);
+    if (created.ok) {
+      profile = generatedProfile;
+    } else {
+      const currentProfile = await getRemoteProfileForContext(context);
+      if (currentProfile.status === 'found') {
+        profile = currentProfile.profile;
+      } else {
+        await cleanupUploadedMedia();
+        return {
+          ok: false,
+          error: created.reason === 'username-taken'
+            ? 'Your suggested handle is already taken. Choose another in Your profile, then try again.'
+            : 'Your profile could not be set up. Your draft is still here—try again.',
+        };
+      }
     }
-    profile = await getRemoteProfile();
+  } else {
+    await cleanupUploadedMedia();
+    return { ok: false, error: 'I could not check your account profile. Your draft is still here—try again.' };
   }
   const { data: recipientProfile, error: recipientError } = await context.supabase
     .from('profiles')

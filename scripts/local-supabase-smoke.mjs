@@ -127,6 +127,80 @@ try {
     assert.ifError(error);
   }
 
+  const { error: takenHandleError } = await sender.client.from('profiles')
+    .update({ username: profiles[1].username })
+    .eq('id', sender.id);
+  assert.equal(takenHandleError?.code, '23505', 'A profile cannot claim another account’s handle');
+  const { data: senderAfterConflict, error: senderAfterConflictError } = await sender.client.from('profiles')
+    .select('username, display_name, bio')
+    .eq('id', sender.id)
+    .maybeSingle();
+  assert.ifError(senderAfterConflictError);
+  assert.deepEqual(senderAfterConflict, {
+    username: profiles[0].username,
+    display_name: profiles[0].display_name,
+    bio: profiles[0].bio,
+  }, 'A rejected handle update must leave the sender profile unchanged');
+  const { data: recipientAfterConflict, error: recipientAfterConflictError } = await recipient.client.from('profiles')
+    .select('username, display_name, bio')
+    .eq('id', recipient.id)
+    .maybeSingle();
+  assert.ifError(recipientAfterConflictError);
+  assert.deepEqual(recipientAfterConflict, {
+    username: profiles[1].username,
+    display_name: profiles[1].display_name,
+    bio: profiles[1].bio,
+  }, 'A rejected handle update must not modify the handle owner');
+
+  const { error: duplicateSenderError } = await sender.client.from('profiles').insert({
+    id: sender.id,
+    username: 'another.sender.handle',
+    display_name: 'Overwritten sender',
+    bio: 'This insert must fail.',
+  });
+  assert.equal(duplicateSenderError?.code, '23505', 'First-use inserts cannot overwrite a profile created concurrently');
+  const { data: senderAfterDuplicateInsert, error: senderAfterDuplicateInsertError } = await sender.client.from('profiles')
+    .select('username, display_name, bio')
+    .eq('id', sender.id)
+    .maybeSingle();
+  assert.ifError(senderAfterDuplicateInsertError);
+  assert.deepEqual(senderAfterDuplicateInsert, {
+    username: profiles[0].username,
+    display_name: profiles[0].display_name,
+    bio: profiles[0].bio,
+  }, 'A concurrent first-use insert must leave the current profile unchanged');
+
+  const { data: staleProfileUpdate, error: staleProfileUpdateError } = await sender.client.from('profiles')
+    .update({ bio: 'This stale update must not apply.' })
+    .eq('id', sender.id)
+    .eq('username', 'stale.sender.handle')
+    .eq('display_name', profiles[0].display_name)
+    .eq('bio', profiles[0].bio)
+    .select('id')
+    .maybeSingle();
+  assert.ifError(staleProfileUpdateError);
+  assert.equal(staleProfileUpdate, null, 'A stale profile baseline must not update a newer account profile');
+  const { data: currentProfileUpdate, error: currentProfileUpdateError } = await sender.client.from('profiles')
+    .update({ bio: 'Conditional update verified.' })
+    .eq('id', sender.id)
+    .eq('username', profiles[0].username)
+    .eq('display_name', profiles[0].display_name)
+    .eq('bio', profiles[0].bio)
+    .select('id')
+    .maybeSingle();
+  assert.ifError(currentProfileUpdateError);
+  assert.equal(currentProfileUpdate?.id, sender.id, 'A profile update with the current baseline should succeed');
+  const { data: restoredProfileUpdate, error: restoredProfileUpdateError } = await sender.client.from('profiles')
+    .update({ bio: profiles[0].bio })
+    .eq('id', sender.id)
+    .eq('username', profiles[0].username)
+    .eq('display_name', profiles[0].display_name)
+    .eq('bio', 'Conditional update verified.')
+    .select('id')
+    .maybeSingle();
+  assert.ifError(restoredProfileUpdateError);
+  assert.equal(restoredProfileUpdate?.id, sender.id, 'The temporary conditional update should be restored');
+
   const textDropId = randomUUID();
   const sentAt = new Date().toISOString();
   const { error: textInsertError } = await sender.client.from('letters').insert({

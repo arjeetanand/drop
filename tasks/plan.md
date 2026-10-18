@@ -12,7 +12,8 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 - The core mobile sharing, receive, reaction, and optional relay flows have local implementations. Detailed code and browser checks are recorded in `todo.md`.
 - Seeded demo reactions now persist on this device and appear on the mailbox card; they are clearly marked as local and do not notify a sender.
 - Signed-in mailbox cards now show participant-visible reactions on sent drops; hosted account-to-account verification remains open.
-- Hosted account-to-account sending, storage privacy, reactions, and relay still need verification because no hosted Supabase project exists. The new local CLI setup can replay migrations but does not yet replace a local two-account app-flow test. Real-device safe-area, keyboard, and reduced-motion checks also remain open.
+- First-use profile setup preserves customized local identity, suggests an editable account-specific handle, and only creates a sender profile after confirmed absence. Per-account unsynced edits survive lookup recovery, and handle conflicts stay recoverable on-device. The local smoke test verifies rejected updates and duplicate first-use inserts leave existing profiles unchanged. Authenticated browser onboarding remains unverified.
+- Hosted account-to-account sending, storage privacy, reactions, and relay still need verification because no hosted Supabase project exists. The local CLI and three-account smoke test cover Auth, row/reaction policies, private GIF finalization, participant-only storage reads, and handle uniqueness, but not browser sign-in or the full composer flow. Real-device safe-area, keyboard, and reduced-motion checks also remain open.
 
 ## Workspace and Delivery
 

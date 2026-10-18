@@ -4,11 +4,11 @@ import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, ArrowRight, Check, Copy, LogIn } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { getRemoteProfile, saveRemoteProfile } from '@/lib/letterBackend';
+import { getRemoteProfileState, saveRemoteProfile, type SaveRemoteProfileResult } from '@/lib/letterBackend';
 import { normalizeDropRecipient } from '@/lib/dropValidation';
 import { getSupabaseBrowserClient, isGoogleAuthConfigured } from '@/lib/supabaseBrowser';
 import { safeInternalPath } from '@/lib/safeInternalPath';
-import { defaultUserProfile, getUserProfile, profileUrl, saveUserProfile, type UserProfile } from '@/lib/userStore';
+import { clearPendingRemoteProfile, defaultUserProfile, getFirstUseProfile, getPendingRemoteProfileSnapshot, getUserProfile, getUserProfileOwnerId, hasCustomizedUserIdentity, hasUnmatchedLocalProfile, markPendingRemoteProfileSynced, profileUrl, savePendingRemoteProfile, saveUserProfile, type UserProfile } from '@/lib/userStore';
 
 type AccountStatus = 'checking' | 'signed-out' | 'signed-in' | 'unavailable' | 'error';
 
@@ -24,6 +24,7 @@ function ProfileLoading() {
 
 function ProfileContent() {
   const [profile, setProfile] = useState<UserProfile>(defaultUserProfile);
+  const [profileLoaded, setProfileLoaded] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState('');
@@ -34,6 +35,14 @@ function ProfileContent() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [signedInEmail, setSignedInEmail] = useState('');
   const [remoteProfileAvailable, setRemoteProfileAvailable] = useState(false);
+  const [remoteProfileMissing, setRemoteProfileMissing] = useState(false);
+  const [remoteProfileBase, setRemoteProfileBase] = useState<UserProfile | null>(null);
+  const [remoteUserId, setRemoteUserId] = useState('');
+  const [canRestorePendingProfile, setCanRestorePendingProfile] = useState(false);
+  const [legacyPendingConflict, setLegacyPendingConflict] = useState(false);
+  const [localProfileConflict, setLocalProfileConflict] = useState(false);
+  const [pendingRevisionToReplace, setPendingRevisionToReplace] = useState<string | null>(null);
+  const [profileLookupFailed, setProfileLookupFailed] = useState(false);
   const [accountStatus, setAccountStatus] = useState<AccountStatus>('checking');
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -45,26 +54,135 @@ function ProfileContent() {
     let active = true;
 
     const loadProfile = async () => {
-      try {
-        const remoteProfile = await getRemoteProfile();
-        if (!active) return;
-        const nextProfile = remoteProfile || getUserProfile();
-        if (remoteProfile) {
-          saveUserProfile(remoteProfile);
-          setRemoteProfileAvailable(true);
-        } else {
-          setRemoteProfileAvailable(false);
+      const state = await getRemoteProfileState();
+      if (!active) return;
+
+      if (state.status === 'found') {
+        setRemoteProfileBase(state.profile);
+        const pendingSnapshot = getPendingRemoteProfileSnapshot(state.userId);
+        const pendingProfile = pendingSnapshot?.profile ?? null;
+        const pendingConflict = Boolean(pendingSnapshot?.legacyConflict || (pendingProfile && (
+          pendingProfile.displayName !== state.profile.displayName
+          || pendingProfile.username !== state.profile.username
+          || pendingProfile.bio !== state.profile.bio
+        )));
+        const localProfile = getUserProfile();
+        const localOwnerId = getUserProfileOwnerId();
+        const hasLocalConflict = hasUnmatchedLocalProfile(localProfile, localOwnerId, state.userId, state.profile, pendingProfile || undefined);
+        if (pendingSnapshot && !pendingConflict) {
+          markPendingRemoteProfileSynced(state.userId, pendingSnapshot.revision);
+          await clearPendingRemoteProfile(state.userId, pendingSnapshot.revision);
         }
+        setPendingRevisionToReplace(null);
+        const profileToShow = hasLocalConflict ? localProfile : state.profile;
+        saveUserProfile(profileToShow, state.userId);
+        setProfile(profileToShow);
+        setSignedInEmail(state.email);
+        setRemoteUserId(state.userId);
+        setCanRestorePendingProfile(Boolean(pendingConflict && pendingSnapshot));
+        setLegacyPendingConflict(Boolean(pendingSnapshot?.legacyConflict));
+        setLocalProfileConflict(hasLocalConflict);
+        setRemoteProfileMissing(false);
+        setAccountStatus('signed-in');
+        setRemoteProfileAvailable(!hasLocalConflict);
+        if (pendingConflict) {
+          setAccountNotice(hasLocalConflict
+            ? 'A signed-out edit and a saved account edit are both on this device. Choose which copy to keep before saving.'
+            : pendingSnapshot?.legacyConflict
+            ? 'Different profile edits are saved in another open tab. Choose which saved copy to keep before saving.'
+            : pendingSnapshot?.synced
+              ? 'Your account profile has changed since this device last synced. The fields below show the current account version; restore your saved edits to review this device’s copy.'
+              : 'Your saved edits differ from the profile on your account. Review it below, or restore your saved edits before choosing Save.');
+          setAccountNoticeIsError(false);
+        } else if (hasLocalConflict) {
+          setAccountNotice('A profile saved while signed out is ready on this device. Save identity to use it on this account, or choose the account version.');
+          setAccountNoticeIsError(false);
+        }
+      } else if (state.status === 'missing') {
+        setRemoteProfileBase(null);
+        const pendingSnapshot = getPendingRemoteProfileSnapshot(state.userId);
+        const pendingProfile = pendingSnapshot?.profile ?? null;
+        const localProfile = getUserProfile();
+        const localOwnerId = getUserProfileOwnerId();
+        const hasSavedGuestIdentity = (!localOwnerId || localOwnerId === state.userId) && hasCustomizedUserIdentity(localProfile);
+        const hasLocalConflict = Boolean(pendingProfile
+          && hasUnmatchedLocalProfile(localProfile, localOwnerId, state.userId, undefined, pendingProfile));
+        const nextProfile = hasLocalConflict
+          ? localProfile
+          : pendingProfile || getFirstUseProfile(state.userId, state.displayName, localProfile, localOwnerId);
+        if (pendingProfile && !hasLocalConflict) saveUserProfile(pendingProfile, state.userId);
+        setPendingRevisionToReplace(pendingSnapshot?.legacyConflict || hasLocalConflict ? null : pendingSnapshot?.revision ?? null);
         setProfile(nextProfile);
-      } catch {
-        if (active) {
-          setRemoteProfileAvailable(false);
-          setProfile(getUserProfile());
-        }
+        setSignedInEmail(state.email);
+        setRemoteUserId(state.userId);
+        setCanRestorePendingProfile(Boolean(pendingSnapshot && (pendingSnapshot.legacyConflict || hasLocalConflict)));
+        setLegacyPendingConflict(Boolean(pendingSnapshot?.legacyConflict));
+        setLocalProfileConflict(hasLocalConflict);
+        setRemoteProfileMissing(true);
+        setAccountStatus('signed-in');
+        setRemoteProfileAvailable(false);
+        setAccountNotice(hasLocalConflict
+          ? 'A newer profile edit and an account edit are both saved on this device. Choose which copy to keep before creating your account profile.'
+          : pendingSnapshot?.legacyConflict
+            ? 'Different profile edits are saved in another open tab. Choose which saved copy to keep before saving.'
+          : pendingProfile
+            ? 'A profile change saved on this device is waiting to sync. Review it before saving to your account.'
+          : hasSavedGuestIdentity
+            ? 'A saved profile from this device is ready to use. Review it before linking it to your account.'
+            : 'No profile is linked to this account yet. Review your editable handle, then save to create it.');
+        setAccountNoticeIsError(false);
+      } else if (state.status === 'signed-out' || state.status === 'unavailable') {
+        setRemoteProfileBase(null);
+        setProfile(getUserProfile());
+        setPendingRevisionToReplace(null);
+        setCanRestorePendingProfile(false);
+        setLegacyPendingConflict(false);
+        setLocalProfileConflict(false);
+        setSignedInEmail('');
+        setRemoteUserId('');
+        setRemoteProfileMissing(false);
+        setAccountStatus(state.status === 'unavailable' ? 'unavailable' : 'signed-out');
+        setRemoteProfileAvailable(false);
+      } else {
+        setRemoteProfileBase(null);
+        const pendingSnapshot = state.userId ? getPendingRemoteProfileSnapshot(state.userId) : null;
+        const pendingProfile = pendingSnapshot?.profile ?? null;
+        const localProfile = getUserProfile();
+        const localOwnerId = getUserProfileOwnerId();
+        const hasLocalConflict = Boolean(pendingProfile
+          && hasUnmatchedLocalProfile(localProfile, localOwnerId, state.userId || '', undefined, pendingProfile));
+        if (pendingProfile && !hasLocalConflict && state.userId) saveUserProfile(pendingProfile, state.userId);
+        setPendingRevisionToReplace(pendingSnapshot?.legacyConflict || hasLocalConflict ? null : pendingSnapshot?.revision ?? null);
+        setProfile(hasLocalConflict ? localProfile : pendingProfile || localProfile);
+        setProfileLookupFailed(true);
+        setRemoteUserId(state.userId || '');
+        setCanRestorePendingProfile(Boolean(pendingSnapshot && (pendingSnapshot.legacyConflict || hasLocalConflict)));
+        setLegacyPendingConflict(Boolean(pendingSnapshot?.legacyConflict));
+        setLocalProfileConflict(hasLocalConflict);
+        setAccountStatus('error');
+        setRemoteProfileAvailable(false);
+        setAccountNotice('We could not check your account profile. Your edits can stay on this device; account sync is paused to protect your profile. Refresh to try again.');
+        setAccountNoticeIsError(true);
       }
+      setProfileLoaded(true);
     };
 
-    void loadProfile();
+    void loadProfile().catch(() => {
+      if (!active) return;
+      setProfile(getUserProfile());
+      setRemoteProfileBase(null);
+      setPendingRevisionToReplace(null);
+      setCanRestorePendingProfile(false);
+      setLegacyPendingConflict(false);
+      setLocalProfileConflict(false);
+      setProfileLookupFailed(true);
+      setRemoteUserId('');
+      setAccountStatus('error');
+      setRemoteProfileAvailable(false);
+      setAccountNotice('We could not check your account profile. Your edits can stay on this device; account sync is paused to protect your profile. Refresh to try again.');
+      setAccountNoticeIsError(true);
+      setProfileLoaded(true);
+    });
     return () => {
       active = false;
     };
@@ -77,39 +195,6 @@ function ProfileContent() {
     setAccountNoticeIsError(true);
     router.replace(`/profile${nextPath ? `?next=${encodeURIComponent(nextPath)}` : ''}`, { scroll: false });
   }, [authError, nextPath, router]);
-
-  useEffect(() => {
-    const supabase = getSupabaseBrowserClient();
-    if (!supabase) {
-      setAccountStatus('unavailable');
-      return;
-    }
-
-    let active = true;
-    void supabase.auth.getUser()
-      .then(({ data, error }) => {
-        if (!active) return;
-        if (error) {
-          setAccountStatus('error');
-          setAccountNotice('We could not check the Google connection. You can keep using the profile locally.');
-          setAccountNoticeIsError(true);
-          return;
-        }
-        const email = data.user?.email || '';
-        setSignedInEmail(email);
-        setAccountStatus(email ? 'signed-in' : 'signed-out');
-      })
-      .catch(() => {
-        if (!active) return;
-        setAccountStatus('error');
-        setAccountNotice('We could not check the Google connection. You can keep using the profile locally.');
-        setAccountNoticeIsError(true);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, []);
 
   const update = (field: keyof Pick<UserProfile, 'displayName' | 'username' | 'bio'>, value: string) => {
     const nextValue = field === 'username'
@@ -133,24 +218,82 @@ function ProfileContent() {
     setSaved(false);
     setProfileError('');
     setNotice('');
-    const nextProfile = saveUserProfile({ ...profile, username });
-    setProfile(nextProfile);
+    const nextProfile = { ...profile, username };
+    let pendingRevision: string | null = null;
+    if (remoteUserId) {
+      const pendingResult = await savePendingRemoteProfile(remoteUserId, nextProfile, pendingRevisionToReplace || undefined);
+      if (pendingResult.ok) {
+        pendingRevision = pendingResult.revision;
+      } else if (pendingResult.reason === 'conflict') {
+        setProfile(nextProfile);
+        setSaving(false);
+        setCanRestorePendingProfile(Boolean(getPendingRemoteProfileSnapshot(remoteUserId)));
+        setLegacyPendingConflict(Boolean(getPendingRemoteProfileSnapshot(remoteUserId)?.legacyConflict));
+        setAccountNotice(typeof navigator !== 'undefined' && !navigator.locks
+          ? 'This browser cannot safely replace a saved profile edit across tabs. Your current form has not been saved; open Drop in a browser with Web Locks to resolve the saved copy.'
+          : 'A different saved profile edit needs review before it can be replaced. Restore one of the saved copies first. Your current form has not been saved.');
+        setAccountNoticeIsError(false);
+        setNotice('Your current form is still here, but it has not been saved.');
+        return;
+      }
+    }
+    const savedProfile = saveUserProfile(nextProfile, remoteUserId || undefined);
+    setProfile(savedProfile);
 
-    let synced = false;
-    try {
-      synced = await saveRemoteProfile(nextProfile);
-    } catch {
-      synced = false;
+    let syncResult: SaveRemoteProfileResult = { ok: false, reason: 'signed-out' };
+    if (profileLookupFailed || accountStatus === 'error') {
+      syncResult = { ok: false, reason: 'sync-failed' };
+    } else if (accountStatus === 'signed-in') {
+      try {
+        syncResult = await saveRemoteProfile(nextProfile, remoteUserId, remoteProfileMissing, pendingRevision || undefined, remoteProfileBase || undefined);
+      } catch {
+        syncResult = { ok: false, reason: 'sync-failed' };
+      }
     }
 
+    if (syncResult.ok && remoteUserId && pendingRevision) {
+      markPendingRemoteProfileSynced(remoteUserId, pendingRevision);
+      await clearPendingRemoteProfile(remoteUserId, pendingRevision);
+      setPendingRevisionToReplace(null);
+      setCanRestorePendingProfile(false);
+      setLegacyPendingConflict(false);
+      setLocalProfileConflict(false);
+    } else if (remoteUserId && pendingRevision) {
+      setPendingRevisionToReplace(pendingRevision);
+      setCanRestorePendingProfile(false);
+      setLegacyPendingConflict(false);
+      setLocalProfileConflict(false);
+    }
+    if (syncResult.ok) {
+      setRemoteProfileBase(nextProfile);
+      setRemoteProfileMissing(false);
+      setAccountNotice('');
+      setAccountNoticeIsError(false);
+    }
     setSaved(true);
     setSaving(false);
-    setRemoteProfileAvailable(synced);
-    setNotice(synced
-      ? 'Saved on this device and synced to your account.'
-      : signedInEmail
-        ? 'Saved on this device. Account sync did not finish; check your connection or handle.'
-        : 'Saved on this device. Sign in to send private drops and sync across devices.');
+    setRemoteProfileAvailable(syncResult.ok);
+    setProfileError(syncResult.ok ? '' : syncResult.reason === 'username-taken' ? 'That handle is already taken. Try another.' : '');
+    let saveNotice = 'Saved on this device. Sign in to send private drops and sync across devices.';
+    if (syncResult.ok) {
+      saveNotice = 'Saved on this device and synced to your account.';
+    } else if (syncResult.reason === 'username-taken') {
+      saveNotice = 'Saved on this device only. Choose a different handle to make your profile available to friends.';
+    } else if (syncResult.reason === 'profile-exists') {
+      saveNotice = 'Saved on this device only. A profile appeared on your account while you were editing; reload to review the account version and choose which to keep.';
+    } else if (syncResult.reason === 'account-changed') {
+      saveNotice = 'Saved on this device only. Your sign-in changed; reload this page before syncing to the new account.';
+    } else if (syncResult.reason === 'profile-changed') {
+      saveNotice = 'Saved on this device only. Your account profile changed since this page loaded; reload to review the current version before syncing again.';
+      setAccountNotice(saveNotice);
+      setAccountNoticeIsError(false);
+      setCanRestorePendingProfile(Boolean(pendingRevision));
+    } else if (profileLookupFailed || accountStatus === 'error') {
+      saveNotice = 'Saved on this device only. Your account profile could not be checked, so this change was not synced.';
+    } else if (signedInEmail) {
+      saveNotice = 'Saved on this device only. Account sync did not finish; your profile link is not live yet.';
+    }
+    setNotice(saveNotice);
   };
 
   const connectGoogle = async () => {
@@ -220,6 +363,52 @@ function ProfileContent() {
         : accountStatus === 'error'
           ? 'Account status needs attention.'
           : 'Not connected. Your profile still works on this device.';
+  const saveButtonLabel = saving
+    ? 'Saving…'
+    : saved
+      ? remoteProfileAvailable ? 'Saved & synced' : 'Saved on this device'
+      : 'Save identity';
+
+  const restorePendingProfile = (source: 'current' | 'legacy' = 'current') => {
+    const pendingSnapshot = remoteUserId ? getPendingRemoteProfileSnapshot(remoteUserId) : null;
+    const selectedSnapshot = source === 'legacy' ? pendingSnapshot?.legacyConflict : pendingSnapshot;
+    if (!selectedSnapshot) return;
+    setProfile(selectedSnapshot.profile);
+    setPendingRevisionToReplace(selectedSnapshot.revision);
+    setCanRestorePendingProfile(false);
+    setLegacyPendingConflict(false);
+    setLocalProfileConflict(false);
+    setRemoteProfileAvailable(false);
+    setAccountNotice('Saved edits are restored. Save to replace the current account profile.');
+    setAccountNoticeIsError(false);
+    setNotice('Saving these edits will replace the profile currently on your account.');
+  };
+
+  const useAccountProfile = () => {
+    if (!remoteProfileBase) return;
+    const pendingSnapshot = remoteUserId ? getPendingRemoteProfileSnapshot(remoteUserId) : null;
+    setPendingRevisionToReplace(pendingSnapshot?.revision ?? null);
+    const nextProfile = saveUserProfile(remoteProfileBase, remoteUserId || undefined);
+    setProfile(nextProfile);
+    setLocalProfileConflict(false);
+    setRemoteProfileAvailable(true);
+    setAccountNotice(pendingSnapshot
+      ? 'Your account profile is shown. Saved device edits remain available to restore until you save this choice.'
+      : 'Your account profile is shown. Save only if you make another change.');
+    setAccountNoticeIsError(false);
+    setNotice('Account profile restored.');
+  };
+
+  const keepDeviceProfile = () => {
+    const pendingSnapshot = remoteUserId ? getPendingRemoteProfileSnapshot(remoteUserId) : null;
+    setPendingRevisionToReplace(pendingSnapshot?.revision ?? null);
+    setRemoteProfileAvailable(false);
+    setAccountNotice('Device edits selected. Save identity to replace the saved account edit with this version.');
+    setAccountNoticeIsError(false);
+    setNotice('Saving will keep these device edits and replace the other saved copy.');
+  };
+
+  if (!profileLoaded) return <ProfileLoading />;
 
   return (
     <main className="page-shell page-enter">
@@ -274,6 +463,7 @@ function ProfileContent() {
                   className="input-field mt-2"
                   placeholder="Eleanor Vance"
                   autoComplete="name"
+                  disabled={saving || accountStatus === 'checking'}
                 />
               </div>
 
@@ -287,10 +477,11 @@ function ProfileContent() {
                   placeholder="eleanor"
                   autoComplete="username"
                   spellCheck={false}
+                  disabled={saving || accountStatus === 'checking'}
                   aria-describedby={profileError ? 'username-help username-error' : 'username-help'}
                   aria-invalid={Boolean(profileError)}
                 />
-                <p id="username-help" className="field-help mt-2">Lowercase letters, numbers, periods, underscores, or hyphens. 2–24 characters.</p>
+                <p id="username-help" className="field-help mt-2">Your handle is editable. Use lowercase letters, numbers, periods, underscores, or hyphens; 2–24 characters.</p>
                 {profileError && <p id="username-error" className="error-notice mt-2" role="alert">{profileError}</p>}
               </div>
 
@@ -303,22 +494,63 @@ function ProfileContent() {
                   className="textarea-field mt-2"
                   placeholder="Collecting small moments and sending them forward."
                   rows={4}
+                  disabled={saving || accountStatus === 'checking'}
                 />
               </div>
 
               <div className="flex flex-wrap items-center gap-3 border-t border-[rgba(16,42,67,0.1)] pt-6">
                 <button
                   type="submit"
-                  disabled={saving}
+                  disabled={saving || accountStatus === 'checking'}
                   className="button-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#fcfaf6] disabled:opacity-60"
                 >
                   {saved ? <Check className="h-4 w-4" aria-hidden="true" /> : null}
-                  {saving ? 'Saving…' : saved ? 'Identity saved' : 'Save identity'}
+                  {saveButtonLabel}
                 </button>
+                {canRestorePendingProfile && (
                   <button
+                    type="button"
+                    onClick={() => restorePendingProfile()}
+                    disabled={saving}
+                    className="button-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#fcfaf6]"
+                  >
+                    Restore saved edits
+                  </button>
+                )}
+                {legacyPendingConflict && (
+                  <button
+                    type="button"
+                    onClick={() => restorePendingProfile('legacy')}
+                    disabled={saving}
+                    className="button-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#fcfaf6]"
+                  >
+                    Restore edits from another tab
+                  </button>
+                )}
+                {localProfileConflict && canRestorePendingProfile && (
+                  <button
+                    type="button"
+                    onClick={keepDeviceProfile}
+                    disabled={saving}
+                    className="button-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#fcfaf6]"
+                  >
+                    Keep device edits
+                  </button>
+                )}
+                {localProfileConflict && remoteProfileBase && (
+                  <button
+                    type="button"
+                    onClick={useAccountProfile}
+                    disabled={saving}
+                    className="button-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#fcfaf6]"
+                  >
+                    Use account profile
+                  </button>
+                )}
+                <button
                   type="button"
                   onClick={() => void copyProfileLink()}
-                    disabled={!remoteProfileAvailable}
+                  disabled={!remoteProfileAvailable}
                   className="button-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#fcfaf6]"
                 >
                   {copied ? <Check className="h-4 w-4" aria-hidden="true" /> : <Copy className="h-4 w-4" aria-hidden="true" />}
