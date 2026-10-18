@@ -7,7 +7,7 @@ Drop needs Supabase Auth, the existing `profiles` and `letters` schema, and the 
 3. Enable Google OAuth in Supabase Auth if you want the existing Google sign-in button to work, and allow `http://localhost:3000/auth/callback` as a redirect URL during local development.
 4. Sign in, save a unique username on Your profile, then send to a registered `@username`.
 
-The app accepts decodable JPG, PNG, WebP, and GIF uploads up to 8 MB, 40 million decoded pixels, and 120 GIF frames. The browser uploads into an unreadable staging path; the server checks and re-encodes the actual image, applies orientation, and strips source metadata before writing the final object. The database binds new media paths to their exact sender and drop ID, and verifies the stored MIME type and size. Attachments stay in the private `drop-media` bucket; the app stores a storage path and requests a one-minute signed URL only after Supabase returns an authorized letter row. Storage policies allow only the sender or addressed recipient to read a linked attachment and allow deletion only when no drop references the object. The recipient alone can add or change a reaction.
+The app accepts decodable JPG, PNG, WebP, and GIF uploads up to 8 MB, 40 million decoded pixels, and 120 GIF frames. The browser uploads into an unreadable staging path; the server checks and re-encodes the actual image, applies orientation, and strips source metadata before writing the final object. The database binds new media paths to their exact sender and drop ID, verifies the stored MIME type and size, and enforces that text drops have no media, image drops use a static image type, and GIF drops use `image/gif`. Attachments stay in the private `drop-media` bucket; the app stores a storage path and requests a one-minute signed URL only after Supabase returns an authorized letter row. Storage policies allow only the sender or addressed recipient to read a linked attachment and allow deletion only when no drop references the object. The recipient alone can add or change a reaction.
 
 ## Local Supabase development
 
@@ -29,7 +29,7 @@ psql -X -v ON_ERROR_STOP=1 -d drop-policy-smoke -f tests/db/sent_drop_integrity.
 dropdb drop-policy-smoke
 ```
 
-The script applies the relevant migrations, checks draft edits, sent-row immutability, linked-media deletion, failed-upload cleanup, and sender/recipient read access, then rolls back its changes. It tests PostgreSQL RLS behavior locally; it does not replace a two-account check against the configured Supabase project.
+The script applies the relevant migrations, checks payload/media consistency, draft edits, sent-row immutability, linked-media deletion, failed-upload cleanup, and sender/recipient read access, then rolls back its changes. It tests PostgreSQL RLS behavior locally; it does not replace a two-account check against the configured Supabase project.
 
 ## Relay capability smoke test
 

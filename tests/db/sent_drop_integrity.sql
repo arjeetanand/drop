@@ -29,6 +29,7 @@ alter table storage.objects enable row level security;
 \ir ../../supabase/migrations/20261018000200_restrict_sent_letter_mutation.sql
 \ir ../../supabase/migrations/20261018000300_z_preserve_sent_drop_integrity.sql
 \ir ../../supabase/migrations/20261018000400_zz_validated_drop_media.sql
+\ir ../../supabase/migrations/20261019000000_enforce_drop_payload_media_consistency.sql
 
 insert into auth.users (id) values
   ('11111111-1111-4111-8111-111111111111'),
@@ -41,35 +42,85 @@ insert into public.profiles (id, username) values
 insert into storage.objects (bucket_id, name, metadata) values
   ('drop-media', '11111111-1111-4111-8111-111111111111/sent/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', '{"mimetype":"image/png","size":123}'),
   ('drop-media', '11111111-1111-4111-8111-111111111111/orphan/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', '{"mimetype":"image/png","size":123}'),
-  ('drop-media', '11111111-1111-4111-8111-111111111111/bad/cccccccc-cccc-4ccc-8ccc-cccccccccccc', '{"mimetype":"image/png","size":123}');
-insert into public.letters (id, sender_id, recipient_id, subject, content, status, media_path, media_mime_type, media_size_bytes)
+  ('drop-media', '11111111-1111-4111-8111-111111111111/bad/cccccccc-cccc-4ccc-8ccc-cccccccccccc', '{"mimetype":"image/png","size":123}'),
+  ('drop-media', '11111111-1111-4111-8111-111111111111/sent/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', '{"mimetype":"image/png","size":123}'),
+  ('drop-media', '11111111-1111-4111-8111-111111111111/staging-path/dddddddd-dddd-4ddd-8ddd-dddddddddddd', '{"mimetype":"image/png","size":123}'),
+  ('drop-media', '11111111-1111-4111-8111-111111111111/pending/draft/photo.png', '{"mimetype":"image/png","size":123}'),
+  ('drop-media', '11111111-1111-4111-8111-111111111111/mismatch-image/eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', '{"mimetype":"image/gif","size":123}'),
+  ('drop-media', '11111111-1111-4111-8111-111111111111/mismatch-gif/ffffffff-ffff-4fff-8fff-ffffffffffff', '{"mimetype":"image/png","size":123}'),
+  ('drop-media', '11111111-1111-4111-8111-111111111111/gif-sent/88888888-8888-4888-8888-888888888888', '{"mimetype":"image/gif","size":123}'),
+  ('drop-media', '11111111-1111-4111-8111-111111111111/mismatch-text/99999999-9999-4999-8999-999999999999', '{"mimetype":"image/png","size":123}');
+insert into public.letters (id, sender_id, recipient_id, subject, content, status, media_path, media_mime_type, media_size_bytes, payload_kind, delivery_mode)
 values
-  ('draft', '11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222', 'Draft', 'draft body', 'draft', null, null, null),
-  ('sent', '11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222', 'Sent', 'sent body', 'delivered', '11111111-1111-4111-8111-111111111111/sent/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'image/png', 123);
+  ('draft', '11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222', 'Draft', 'draft body', 'draft', null, null, null, 'text', 'instant'),
+  ('sent', '11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222', 'Sent', 'sent body', 'delivered', '11111111-1111-4111-8111-111111111111/sent/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'image/png', 123, 'image', 'instant'),
+  ('gif-sent', '11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222', 'GIF sent', '', 'delivered', '11111111-1111-4111-8111-111111111111/gif-sent/88888888-8888-4888-8888-888888888888', 'image/gif', 123, 'gif', 'instant');
 
 do $$ begin
-  insert into public.letters (id, sender_id, recipient_id, subject, content, status, media_path, media_mime_type, media_size_bytes)
-  values ('bad', '11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222', 'Bad metadata', 'bad', 'delivered', '11111111-1111-4111-8111-111111111111/bad/cccccccc-cccc-4ccc-8ccc-cccccccccccc', 'image/jpeg', 123);
+  insert into public.letters (id, sender_id, recipient_id, subject, content, status, media_path, media_mime_type, media_size_bytes, payload_kind, delivery_mode)
+  values ('bad', '11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222', 'Bad metadata', 'bad', 'delivered', '11111111-1111-4111-8111-111111111111/bad/cccccccc-cccc-4ccc-8ccc-cccccccccccc', 'image/jpeg', 123, 'image', 'instant');
   raise exception 'a drop stored media metadata that disagrees with the object';
 exception when check_violation then
   null;
 end $$;
 
 do $$ begin
-  insert into public.letters (id, sender_id, recipient_id, subject, content, status, media_path, media_mime_type, media_size_bytes)
-  values ('bad-path', '11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222', 'Bad path', 'bad', 'delivered', '11111111-1111-4111-8111-111111111111/sent/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'image/png', 123);
+  insert into public.letters (id, sender_id, recipient_id, subject, content, status, media_path, media_mime_type, media_size_bytes, payload_kind, delivery_mode)
+  values ('bad-path', '11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222', 'Bad path', 'bad', 'delivered', '11111111-1111-4111-8111-111111111111/sent/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'image/png', 123, 'image', 'instant');
   raise exception 'a drop linked media under another draft ID';
 exception when check_violation then
   null;
 end $$;
 
 do $$ begin
-  insert into public.letters (id, sender_id, recipient_id, subject, content, status, media_path)
-  values ('staging-path', '11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222', 'Bad', 'bad', 'delivered', '11111111-1111-4111-8111-111111111111/pending/draft/photo.png');
+  insert into public.letters (id, sender_id, recipient_id, subject, content, status, media_path, media_mime_type, media_size_bytes, payload_kind, delivery_mode)
+  values ('staging-path', '11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222', 'Bad', 'bad', 'delivered', '11111111-1111-4111-8111-111111111111/pending/draft/photo.png', 'image/png', 123, 'image', 'instant');
   raise exception 'a sent drop linked to an unvalidated staging object';
 exception when check_violation then
   null;
 end $$;
+
+do $$ begin
+  insert into public.letters (id, sender_id, recipient_id, subject, content, status, media_path, media_mime_type, media_size_bytes, payload_kind, delivery_mode)
+  values ('mismatch-image', '11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222', 'Wrong image kind', '', 'delivered', '11111111-1111-4111-8111-111111111111/mismatch-image/eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', 'image/gif', 123, 'image', 'instant');
+  raise exception 'an image payload was saved with GIF media';
+exception when check_violation then
+  null;
+end $$;
+
+do $$ begin
+  insert into public.letters (id, sender_id, recipient_id, subject, content, status, media_path, media_mime_type, media_size_bytes, payload_kind, delivery_mode)
+  values ('mismatch-gif', '11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222', 'Wrong GIF kind', '', 'delivered', '11111111-1111-4111-8111-111111111111/mismatch-gif/ffffffff-ffff-4fff-8fff-ffffffffffff', 'image/png', 123, 'gif', 'instant');
+  raise exception 'a GIF payload was saved with static image media';
+exception when check_violation then
+  null;
+end $$;
+
+do $$ begin
+  insert into public.letters (id, sender_id, recipient_id, subject, content, status, media_path, media_mime_type, media_size_bytes, payload_kind, delivery_mode)
+  values ('mismatch-text', '11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222', 'Wrong text kind', 'text', 'delivered', '11111111-1111-4111-8111-111111111111/mismatch-text/99999999-9999-4999-8999-999999999999', 'image/png', 123, 'text', 'instant');
+  raise exception 'a text payload was saved with media attached';
+exception when check_violation then
+  null;
+end $$;
+
+alter table public.letters disable trigger letters_validate_drop_media_object;
+do $$ begin
+  insert into public.letters (id, sender_id, recipient_id, subject, content, status, media_path, media_size_bytes, payload_kind, delivery_mode)
+  values ('missing-image-mime', '11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222', 'Missing image MIME', '', 'delivered', '11111111-1111-4111-8111-111111111111/missing-image-mime/77777777-7777-4777-8777-777777777777', 123, 'image', 'instant');
+  raise exception 'an image payload was saved without a MIME type';
+exception when check_violation then
+  null;
+end $$;
+
+do $$ begin
+  insert into public.letters (id, sender_id, recipient_id, subject, content, status, media_path, media_size_bytes, payload_kind, delivery_mode)
+  values ('missing-gif-mime', '11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222', 'Missing GIF MIME', '', 'delivered', '11111111-1111-4111-8111-111111111111/missing-gif-mime/66666666-6666-4666-8666-666666666666', 123, 'gif', 'instant');
+  raise exception 'a GIF payload was saved without a MIME type';
+exception when check_violation then
+  null;
+end $$;
+alter table public.letters enable trigger letters_validate_drop_media_object;
 
 grant usage on schema auth, public, storage to drop_policy_smoke_authenticated;
 grant select on public.letters to drop_policy_smoke_authenticated;
