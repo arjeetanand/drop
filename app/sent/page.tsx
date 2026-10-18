@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { ArrowRight, Check, Route, Share2, UsersRound } from 'lucide-react';
+import { ArrowRight, Check, Route, UsersRound } from 'lucide-react';
 import { RelayEnvelope } from '@/components/RelayEnvelope';
 import { currentFocusDraft } from '@/data/mockData';
 import { getLetterDraft, getLetterDraftById, type LetterDraftState } from '@/lib/letterStore';
@@ -12,8 +12,6 @@ import { getRelayState, getRelayStats } from '@/lib/relayStore';
 function SentContent() {
   const searchParams = useSearchParams();
   const [draft, setDraft] = useState<LetterDraftState | null>(null);
-  const [copied, setCopied] = useState(false);
-  const [notice, setNotice] = useState('');
 
   useEffect(() => {
     const requestedId = searchParams.get('letter');
@@ -28,10 +26,6 @@ function SentContent() {
     recipient: draft?.address.name || draft?.recipient || 'your correspondent',
   });
   const stats = getRelayStats(relay);
-  const shareLink = typeof window === 'undefined'
-    ? `/relay?letter=${encodeURIComponent(letterId)}&join=1`
-    : `${window.location.origin}/relay?letter=${encodeURIComponent(letterId)}&join=1`;
-
   if (instant) {
     return (
       <main className="page-shell page-enter">
@@ -54,17 +48,6 @@ function SentContent() {
       </main>
     );
   }
-
-  const copyRelayLink = async () => {
-    try {
-      await navigator.clipboard.writeText(shareLink);
-      setCopied(true);
-      setNotice('The relay passport is ready to share.');
-      window.setTimeout(() => setCopied(false), 1800);
-    } catch {
-      setNotice(shareLink);
-    }
-  };
 
   return (
     <main className="page-shell page-enter">
@@ -95,10 +78,9 @@ function SentContent() {
                   <p className="meta">Destination</p>
                   <p className="mt-2 font-headline-md text-2xl text-ink-navy">{relay.recipient}</p>
                   <p className="mt-2 text-sm leading-relaxed text-on-surface-variant">The contents stay sealed until the designated recipient opens the envelope.</p>
-                  <button type="button" onClick={() => void copyRelayLink()} className="button-primary mt-5"><Share2 className="h-4 w-4 text-[#8fd1ad]" aria-hidden="true" /> {copied ? 'Link copied' : 'Copy handoff link'}</button>
+                  <Link href={`/relay?letter=${encodeURIComponent(letterId)}`} className="button-primary mt-5"><Route className="h-4 w-4 text-[#8fd1ad]" aria-hidden="true" /> Create a secure carrier invite</Link>
                 </div>
               </div>
-              {notice && <p className="notice mt-5" aria-live="polite">{notice}</p>}
             </div>
 
             <div className="mt-8 grid grid-cols-3 border-y border-[rgba(16,42,67,0.12)] py-5">
