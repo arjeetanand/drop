@@ -225,7 +225,7 @@ function Composer() {
       const storedDraft = saveLetterDraft({ mediaPath: result.mediaPath, mediaMimeType: file?.type, mediaSizeBytes: file?.size });
       void deleteDraftAttachment(next.id).catch(() => undefined);
       const status = deliveryMode === 'instant' ? 'delivered' : 'dispatched';
-      const sent = dispatchLetter(storedDraft.id, status);
+      const sent = dispatchLetter(storedDraft.id, status, result.dispatchedAt);
       router.push(`/sent?letter=${encodeURIComponent(sent.id)}&sync=cloud&mode=${deliveryMode}`);
     } catch {
       setError('Something interrupted the send. Your draft is still here—try again.');

@@ -69,7 +69,7 @@ function blankAddress(): LetterAddress {
 function blankDraft(): LetterDraftState {
   return {
     ...defaultDraft(),
-    id: `draft-${Date.now()}`,
+    id: `draft-${crypto.randomUUID()}`,
     recipient: '',
     subject: '',
     content: '',
@@ -277,12 +277,12 @@ export function saveJourneyNotes(notes: JourneyNote[], letterId = currentFocusDr
   }
 }
 
-export function dispatchLetter(letterId = getLetterDraft().id, status: LetterStatus = 'dispatched'): LetterDraftState {
+export function dispatchLetter(letterId = getLetterDraft().id, status: LetterStatus = 'dispatched', dispatchedAt = new Date().toISOString()): LetterDraftState {
   const source = getLetterDraftById(letterId) ?? getLetterDraft();
   const activeSource = source.id === getLetterDraft().id ? source : setActiveLetterDraft(source);
   const dispatched = saveLetterDraft({
     status,
-    dispatchedAt: new Date().toISOString(),
+    dispatchedAt,
   });
   const history = getLetterHistory().filter((letter) => letter.id !== dispatched.id);
   saveLetterHistory([...history, draftAsLetter(dispatched)]);
