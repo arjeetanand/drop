@@ -331,6 +331,23 @@ try {
     media_size_bytes: media.mediaSizeBytes,
   });
   assert.ifError(mediaInsertError);
+
+  const { error: retryStageError } = await sender.client.storage.from('drop-media').upload(stagedPath, new Blob([gifBytes], { type: 'image/gif' }), {
+    contentType: 'image/gif',
+    upsert: false,
+  });
+  assert.ifError(retryStageError);
+  const retryFinalizeResponse = await fetch(`${appUrl}/api/drop-media/finalize`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${sender.token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ stagedPath, payloadKind: 'gif' }),
+  });
+  assert.equal(retryFinalizeResponse.status, 200, 'An exact retry should reuse the linked GIF');
+  assert.deepEqual(await retryFinalizeResponse.json(), media, 'An exact retry should return the original media path and metadata');
+  const { data: retryStagedObjects, error: retryStagedLookupError } = await admin.storage.from('drop-media').list(`${sender.id}/pending/${mediaDropId}`, { search: uploadId });
+  assert.ifError(retryStagedLookupError);
+  assert.equal(retryStagedObjects?.length, 0, 'An exact retry should remove the duplicate staging object');
+
   for (const account of [sender, recipient]) {
     const { data, error } = await account.client.storage.from('drop-media').download(media.mediaPath);
     assert.ifError(error);
@@ -347,7 +364,7 @@ try {
   console.log('PASS: three disposable local accounts authenticate and create profiles.');
   console.log('PASS: sender and recipient read the drop; an unrelated account cannot read or edit it.');
   console.log('PASS: the recipient reacts; the sender sees the reaction; unrelated reaction access is denied.');
-  console.log('PASS: the local finalize route validates a GIF and private media stays limited to participants.');
+  console.log('PASS: the local finalize route validates a GIF, safely reuses an exact retry, and keeps media limited to participants.');
 } finally {
   let cleanupFailed = false;
   for (const path of mediaPaths) {
