@@ -11,7 +11,8 @@ Tasks are ordered by dependency. Progress is recorded at each tested and pushed 
 - Relay handoffs now use short-lived server-issued capabilities; the migration keeps carrier access to route details and excludes message text/media. The migrations are not deployed because no hosted Supabase project exists, so hosted OAuth, account-to-account send/media/reaction, and cross-device handoff remain unverified. The local PostgreSQL policy smoke test does not verify hosted Storage policies. The browser setup also could not emulate `prefers-reduced-motion`; that branch was reviewed but not exercised in-browser.
 - A pinned Supabase CLI and local-only config now reproduce the Supabase stack. The first reset exposed duplicate migration version prefixes; after assigning unique ordered versions, `npm run supabase:reset` applied every migration cleanly. Local authenticated text send/open/react now passes in the browser; Google OAuth, media UI delivery, and hosted behavior remain open.
 - A disposable local three-account smoke test now covers authenticated text insert/read, recipient-only reaction writes, outsider denial, validated GIF staging/finalization, exact finalize retries that reuse the linked file and remove duplicate staging data, sender/recipient-only media downloads and signed URLs, unique-handle conflicts, and duplicate first-use inserts that leave existing profiles unchanged. It cleans up its accounts/media and refuses non-loopback projects. Hosted OAuth and hosted project behavior remain open.
-- A local authenticated browser pass sent a text drop to a confirmed handle, revealed and opened it as a second account, saved a 🫶 reaction, and confirmed it on the sender mailbox card. Both disposable local accounts and the database drop/reaction were removed afterward; the browser keeps a local sent-copy history item. Google OAuth, hosted delivery, and account-to-account photo/GIF UI remain unverified.
+- A local authenticated browser pass sent a text drop to a confirmed handle, revealed and opened it as a second account, saved a 🫶 reaction, and confirmed it on the sender mailbox card. Both disposable local accounts and the database drop/reaction were removed afterward; the browser keeps a local sent-copy history item. Google OAuth and hosted delivery remain unverified.
+- A separate local browser pass received admin-seeded PNG/GIF drops as the recipient, opened both, confirmed each image rendered with descriptive alt text, saved 🫶/🥹 reactions, and confirmed both on the sender mailbox. The disposable accounts, rows, reactions, and media files were removed. The in-app browser file chooser did not open, so composer media upload remains unverified; its viewport bottomed out at 471 CSS px, leaving the 390px check open. The browser retains a local test draft, “Tiny cat test”; the app has no draft-delete control.
 - First-use profile onboarding now preserves customized local identity, avoids importing another account’s profile, suggests an editable per-account handle, and retains unsynced edits per account across lookup recovery. Account-scoped local copies preserve signed-out edits through account switches, including target-profile lookup failures; the switch stops if the old copy cannot be saved. Concurrent first-use writes cannot replace a profile that appeared in another tab. The local profile page was checked while signed out; authenticated browser onboarding and conflict resolution remain open.
 - A disposable local PostgreSQL smoke test now applies the sent-letter, media, and integrity migrations together. It confirms draft edits remain available, sender updates cannot promote or change sent drops, linked media cannot be deleted, unlinked upload cleanup still works, and sender/recipient media reads stay allowed while unrelated reads are denied. The SQL changes are not yet applied to a hosted Supabase project.
 - A second disposable PostgreSQL smoke test now covers relay pass issuance, sender authorization, one-time handoff and exact retry recovery, carrier-pass rotation and revocation, coordinate-free and coordinate-bearing handoffs, participant-only route reads, and private token-table denial. The script and repeatable command are documented in `SUPABASE_SETUP.md`; hosted RPC behavior remains unverified.
@@ -78,9 +79,9 @@ Commit each completed code change separately with a descriptive message and push
 
 ### Checkpoint: Foundation
 
-- [ ] `npm run typecheck` passes.
-- [ ] Legacy text data and routes still work.
-- [ ] Private media access works for sender/recipient only.
+- [x] `npm run typecheck` passes.
+- [x] Legacy text data and routes still work.
+- [x] Private media access works for sender/recipient only.
 
 ## Task 3: Rework mobile home, mailbox, and navigation around drops
 
@@ -117,7 +118,7 @@ Commit each completed code change separately with a descriptive message and push
 - [ ] Confirm a failed upload or save returns the person to a recoverable draft.
 - [x] Local authenticated browser flow sent a text drop to a confirmed recipient; Google OAuth and hosted behavior remain open.
 - [x] Unit coverage verifies confirmation only matches the current normalized handle; local Supabase smoke verifies exact and missing handle lookup results.
-- [ ] Verify the signed-in confirmation and recipient-change states in an authenticated browser session.
+- [x] Authenticated browser check confirmed a recipient handle, then verified changing it clears confirmation and disables sending.
 
 **Dependencies:** Tasks 1–3.
 
@@ -137,11 +138,11 @@ Commit each completed code change separately with a descriptive message and push
 
 **Acceptance criteria:**
 - [x] Existing letter URLs continue to open and text still uses its current reveal behavior.
-- [ ] Media is fetched only after authorization and has an accessible text fallback.
-- [ ] A recipient can add or change a reaction, and the sender can see it.
+- [x] Media is fetched only after authorization and has an accessible text fallback.
+- [x] A recipient can add or change a reaction, and the sender can see it.
 
 **Verification:**
-- [ ] Open a text, image, and GIF drop as the recipient and verify the sender sees the reaction.
+- [x] Opened text, image, and GIF drops as the recipient and verified the sender sees each reaction in local authenticated browser checks.
 - [x] Local authenticated browser flow opened a text drop as its recipient, saved a reaction, and showed it on the sender mailbox card.
 - [x] Same-device text, photo, and GIF demos render, accept a reaction, and retain the media and reaction on the sender copy after reload.
 - [x] Verify an unrelated account cannot open protected content or react.
