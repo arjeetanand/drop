@@ -21,6 +21,18 @@ dropdb drop-policy-smoke
 
 The script applies the relevant migrations, checks draft edits, sent-row immutability, linked-media deletion, failed-upload cleanup, and sender/recipient read access, then rolls back its changes. It tests PostgreSQL RLS behavior locally; it does not replace a two-account check against the configured Supabase project.
 
+## Relay capability smoke test
+
+Run the relay-token regression test against a separate disposable database:
+
+```bash
+createdb drop-relay-handoff-smoke
+psql -X -v ON_ERROR_STOP=1 -d drop-relay-handoff-smoke -f tests/db/relay_handoff_tokens.sql
+dropdb drop-relay-handoff-smoke
+```
+
+The transaction checks sender-only relay starts, short-lived passes, one-time handoff acceptance and exact retry recovery, pass rotation, optional coordinates, participant-only route visibility, and private token-table access. It rolls back all schema and data changes. This is local PostgreSQL coverage; it does not verify RPC behavior against a hosted Supabase project.
+
 ## Relay handoffs
 
 Apply `20261018_relay_handoff_tokens.sql` after the existing letter and media migrations. Relay invites are bearer links: the first invite expires after 10 minutes, and accepting it issues a carrier capability that lasts 30 days. A carrier capability can mint a fresh 10-minute handoff pass when its holder is ready to pass the drop on. Share each invite only with the intended next carrier. Carriers can add route events but cannot read the drop's text or media.
