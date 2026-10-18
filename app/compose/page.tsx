@@ -6,12 +6,16 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { AlignCenter, AlignLeft, AlignRight, ArrowLeft, Check, Eye, FileImage, ImagePlus, Minus, Plus, Send, Type, X } from 'lucide-react';
 import { getSealInfo, mockSeals, waxColors, writingPrompts, type DropDeliveryMode, type DropPayloadKind } from '@/data/mockData';
 import { dispatchLetter, getLetterDraft, getLetterDraftById, saveLetterDraft, setActiveLetterDraft, startNewLetter, type LetterDraftState, type LetterAlignment } from '@/lib/letterStore';
-import { syncDropToBackend } from '@/lib/letterBackend';
+import { lookupDropRecipient, syncDropToBackend } from '@/lib/letterBackend';
 import { getSupabaseBrowserClient } from '@/lib/supabaseBrowser';
-import { normalizeDropRecipient, validateDropMedia } from '@/lib/dropValidation';
+import { isDropRecipientConfirmed, normalizeDropRecipient, validateDropMedia } from '@/lib/dropValidation';
 import { deleteDraftAttachment, getDraftAttachment, saveDraftAttachment } from '@/lib/letterMediaStore';
 import { ReducedMotionGif } from '@/components/ReducedMotionGif';
 import { cn } from '@/lib/utils';
+
+type RecipientCheck =
+  | { status: 'idle' | 'checking' | 'not-found' | 'error'; username: string | null }
+  | { status: 'found'; username: string; id: string; displayName: string };
 
 function Composer() {
   const router = useRouter();
@@ -27,6 +31,8 @@ function Composer() {
   const [previewUrl, setPreviewUrl] = useState('');
   const [content, setContent] = useState('');
   const [recipient, setRecipient] = useState('');
+  const [recipientCheck, setRecipientCheck] = useState<RecipientCheck>({ status: 'idle', username: null });
+  const recipientCheckRequest = useRef(0);
   const [subject, setSubject] = useState('');
   const [fontSize, setFontSize] = useState(18);
   const [alignment, setAlignment] = useState<LetterAlignment>('left');
@@ -52,6 +58,8 @@ function Composer() {
     setDraft(current);
     setContent(current.content);
     setRecipient(searchParams.get('recipient') || current.recipient);
+    recipientCheckRequest.current += 1;
+    setRecipientCheck({ status: 'idle', username: null });
     setSubject(current.subject);
     setFontSize(current.fontSize);
     setAlignment(current.alignment);
@@ -125,8 +133,9 @@ function Composer() {
 
   const wordCount = content.trim() ? content.trim().split(/\s+/).length : 0;
   const recipientUsername = normalizeDropRecipient(recipient);
+  const confirmedRecipient = recipientCheck.status === 'found' && isDropRecipientConfirmed(recipientCheck, recipient) ? recipientCheck : null;
   const recipientHasValue = recipient.replace(/^@/, '').trim().length > 0;
-  const complete = Boolean(recipientUsername && (payloadKind === 'text' ? content.trim() : file));
+  const complete = Boolean(confirmedRecipient && recipientUsername && (payloadKind === 'text' ? content.trim() : file));
   const currentSeal = getSealInfo(sealId, sealMonogram, sealColor);
   const profileHref = draft ? `/profile?next=${encodeURIComponent(`/compose?letter=${encodeURIComponent(draft.id)}`)}#account` : '/profile#account';
 
@@ -206,9 +215,32 @@ function Composer() {
     setNotice(file && !attachmentSaved ? 'Your words are saved. Keep this screen open to keep the photo attached.' : 'Saved to your desk on this device.');
   };
 
+  const handleRecipientChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const next = `@${event.target.value.replace(/^@/, '')}`;
+    if (normalizeDropRecipient(next) !== recipientUsername) {
+      recipientCheckRequest.current += 1;
+      setRecipientCheck({ status: 'idle', username: null });
+    }
+    setRecipient(next);
+    setSaved(false);
+    setError('');
+  };
+
+  const checkRecipient = async () => {
+    if (!recipientUsername || recipientCheck.status === 'checking') return;
+    const request = ++recipientCheckRequest.current;
+    setRecipientCheck({ status: 'checking', username: recipientUsername });
+    setError('');
+    const result = await lookupDropRecipient(recipientUsername);
+    if (request !== recipientCheckRequest.current) return;
+    setRecipientCheck(result.status === 'found'
+      ? { status: 'found', username: result.recipient.username, id: result.recipient.id, displayName: result.recipient.displayName }
+      : { status: result.status, username: recipientUsername });
+  };
+
   const handleSend = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!complete || !draft || sending) return;
+    if (!complete || !confirmedRecipient || !draft || sending) return;
     if (payloadKind !== 'text') {
       const validationError = validateDropMedia(file);
       if (validationError) {
@@ -226,9 +258,10 @@ function Composer() {
     }
     setDraft(next);
     try {
-      const result = await syncDropToBackend(next, file || undefined);
+      const result = await syncDropToBackend(next, confirmedRecipient.id, file || undefined);
       if (!result.ok) {
         setError(result.error || 'This drop could not be sent. Your draft is safe to retry.');
+        setRecipientCheck({ status: 'idle', username: null });
         setSending(false);
         return;
       }
@@ -239,6 +272,7 @@ function Composer() {
       router.push(`/sent?letter=${encodeURIComponent(sent.id)}&sync=cloud&mode=${deliveryMode}`);
     } catch {
       setError('Something interrupted the send. Your draft is still here—try again.');
+      setRecipientCheck({ status: 'idle', username: null });
       setSending(false);
     }
   };
@@ -322,10 +356,15 @@ function Composer() {
             <label htmlFor="drop-recipient" className="field-label">Send to one person</label>
             <div className="mt-2 flex items-center rounded-xl border border-[rgba(16,42,67,.14)] bg-white px-3 focus-within:ring-2 focus-within:ring-[#2b45f7]/35">
               <span className="font-mono text-sm font-bold text-[#2b45f7]">@</span>
-              <input id="drop-recipient" value={recipient.replace(/^@/, '')} onChange={(event) => { setRecipient(`@${event.target.value.replace(/^@/, '')}`); setSaved(false); }} className="min-h-12 min-w-0 flex-1 border-0 bg-transparent px-2 text-base text-ink-navy outline-none placeholder:text-on-surface-variant/60" placeholder="their.username" autoCapitalize="none" autoCorrect="off" spellCheck={false} aria-invalid={recipientHasValue && !recipientUsername} aria-describedby={recipientHasValue && !recipientUsername ? 'drop-recipient-help drop-recipient-error' : 'drop-recipient-help'} />
+              <input id="drop-recipient" value={recipient.replace(/^@/, '')} onChange={handleRecipientChange} disabled={sending} className="min-h-12 min-w-0 flex-1 border-0 bg-transparent px-2 text-base text-ink-navy outline-none placeholder:text-on-surface-variant/60 disabled:opacity-60" placeholder="their.username" autoCapitalize="none" autoCorrect="off" spellCheck={false} aria-invalid={recipientHasValue && !recipientUsername} aria-describedby={recipientHasValue && !recipientUsername ? 'drop-recipient-help drop-recipient-error' : 'drop-recipient-help'} />
             </div>
             <p id="drop-recipient-help" className="field-help mt-2">They need a Drop account so the note stays between you two. Handles use 2–24 letters, numbers, periods, underscores, or hyphens.</p>
             {recipientHasValue && !recipientUsername && <p id="drop-recipient-error" className="error-notice mt-2" role="status" aria-live="polite">Enter a valid Drop handle to send.</p>}
+            <button type="button" onClick={checkRecipient} disabled={!recipientUsername || recipientCheck.status === 'checking' || accountState !== 'connected' || sending} className="button-secondary mt-3 !min-h-12 w-full !rounded-xl disabled:opacity-45">{recipientCheck.status === 'checking' ? 'Checking…' : recipientCheck.status === 'found' ? 'Check again' : recipientCheck.status === 'idle' ? 'Check handle' : 'Try again'}</button>
+            {recipientCheck.status === 'checking' && recipientCheck.username === recipientUsername && <p className="field-help mt-2" role="status" aria-live="polite">Checking @{recipientUsername}…</p>}
+            {confirmedRecipient && <p className="mt-2 text-sm font-semibold text-[#26734f]" role="status" aria-live="polite">Recipient confirmed: {confirmedRecipient.displayName} (@{confirmedRecipient.username})</p>}
+            {recipientCheck.status === 'not-found' && recipientCheck.username === recipientUsername && <p className="error-notice mt-2" role="status" aria-live="polite">No Drop account found for @{recipientUsername}.</p>}
+            {recipientCheck.status === 'error' && recipientCheck.username === recipientUsername && <p className="error-notice mt-2" role="status" aria-live="polite">Couldn’t check that handle. Try again.</p>}
           </section>
 
           <fieldset className="rounded-2xl border border-[rgba(16,42,67,.12)] bg-white/55 p-4 sm:p-6">

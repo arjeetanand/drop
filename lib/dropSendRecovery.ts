@@ -1,5 +1,6 @@
 export type StoredDropSend = {
   senderId: string;
+  recipientId: string | null;
   recipientUsername: string | null;
   subject: string;
   content: string | null;
@@ -13,13 +14,14 @@ export type StoredDropSend = {
   dispatchedAt: string | null;
 };
 
-export type DropSendIntent = Omit<StoredDropSend, 'mediaPath' | 'status' | 'dispatchedAt'> & {
+export type DropSendIntent = Omit<StoredDropSend, 'mediaPath' | 'status' | 'dispatchedAt' | 'recipientId'> & {
+  recipientId: string;
   status: 'delivered' | 'dispatched';
 };
 
 export function matchesStoredDropMetadata(stored: StoredDropSend, intent: DropSendIntent) {
   return stored.senderId === intent.senderId
-    && stored.recipientUsername === intent.recipientUsername
+    && stored.recipientId === intent.recipientId
     && stored.subject === intent.subject
     && stored.content === intent.content
     && stored.sealId === intent.sealId

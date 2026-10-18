@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { MAX_DROP_MEDIA_BYTES, normalizeDropRecipient, validateDropMedia } from '../lib/dropValidation.ts';
+import { isDropRecipientConfirmed, MAX_DROP_MEDIA_BYTES, normalizeDropRecipient, validateDropMedia } from '../lib/dropValidation.ts';
 
 test('accepts supported image types within the upload limit', () => {
   for (const type of ['image/jpeg', 'image/png', 'image/webp', 'image/gif']) {
@@ -12,6 +12,14 @@ test('normalizes valid recipient handles and rejects display names', () => {
   assert.equal(normalizeDropRecipient(' @Sunny.Stories '), 'sunny.stories');
   assert.equal(normalizeDropRecipient('Eleanor Hartwell'), null);
   assert.equal(normalizeDropRecipient('@x'), null);
+});
+
+test('only confirms the same account for the currently normalized handle', () => {
+  const confirmation = { id: 'user-1', username: 'sunny.stories' };
+  assert.equal(isDropRecipientConfirmed(confirmation, ' @Sunny.Stories '), true);
+  assert.equal(isDropRecipientConfirmed(confirmation, '@other.person'), false);
+  assert.equal(isDropRecipientConfirmed(confirmation, 'invalid name'), false);
+  assert.equal(isDropRecipientConfirmed(null, '@sunny.stories'), false);
 });
 
 test('rejects missing, unsafe, empty, and oversized files', () => {

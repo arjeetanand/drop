@@ -6,6 +6,10 @@ export function normalizeDropRecipient(value: string): string | null {
   const username = value.trim().replace(/^@/, '').toLowerCase();
   return /^[a-z0-9._-]{2,24}$/.test(username) ? username : null;
 }
+
+export function isDropRecipientConfirmed(confirmation: { id: string; username: string } | null, value: string): boolean {
+  return Boolean(confirmation?.id && confirmation.username === normalizeDropRecipient(value));
+}
 // shortcut: browser MIME is declarative; add server-side decoding before accepting untrusted media beyond private image serving.
 export function validateDropMedia(file: Pick<File, 'type' | 'size'> | null): string | null {
   if (!file) return 'Choose a photo or GIF to attach.';

@@ -127,6 +127,23 @@ try {
     assert.ifError(error);
   }
 
+  const { data: recipientLookup, error: recipientLookupError } = await sender.client.from('profiles')
+    .select('id, username, display_name')
+    .eq('username', profiles[1].username)
+    .maybeSingle();
+  assert.ifError(recipientLookupError);
+  assert.deepEqual(recipientLookup, {
+    id: recipient.id,
+    username: profiles[1].username,
+    display_name: profiles[1].display_name,
+  }, 'A handle lookup should return only the target account identity needed for confirmation');
+  const { data: missingRecipient, error: missingRecipientError } = await sender.client.from('profiles')
+    .select('id, username, display_name')
+    .eq('username', 'unknown.drop.handle')
+    .maybeSingle();
+  assert.ifError(missingRecipientError);
+  assert.equal(missingRecipient, null, 'A missing handle should be distinguishable from a query failure');
+
   const { error: takenHandleError } = await sender.client.from('profiles')
     .update({ username: profiles[1].username })
     .eq('id', sender.id);

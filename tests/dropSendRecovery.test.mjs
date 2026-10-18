@@ -4,6 +4,7 @@ import { matchesStoredDropMetadata } from '../lib/dropSendRecovery.ts';
 
 const textIntent = {
   senderId: 'sender-1',
+  recipientId: 'recipient-1',
   recipientUsername: 'sunny.stories',
   subject: 'For your Tuesday',
   content: 'A tiny surprise.',
@@ -26,8 +27,10 @@ test('recognizes an exact saved text drop and rejects changed sends', () => {
   assert.equal(matchesStoredDropMetadata(storedText, textIntent), true);
   assert.equal(matchesStoredDropMetadata(storedText, { ...textIntent, content: 'Different words.' }), false);
   assert.equal(matchesStoredDropMetadata({ ...storedText, senderId: 'other-sender' }, textIntent), false);
+  assert.equal(matchesStoredDropMetadata({ ...storedText, recipientId: 'other-recipient' }, textIntent), false);
   assert.equal(matchesStoredDropMetadata({ ...storedText, dispatchedAt: null }, textIntent), false);
-  assert.equal(matchesStoredDropMetadata(storedText, { ...textIntent, recipientUsername: 'different.friend' }), false);
+  assert.equal(matchesStoredDropMetadata(storedText, { ...textIntent, recipientId: 'other-recipient' }), false);
+  assert.equal(matchesStoredDropMetadata(storedText, { ...textIntent, recipientUsername: 'new.handle' }), true);
   assert.equal(matchesStoredDropMetadata(storedText, { ...textIntent, sealId: 'heart' }), false);
   assert.equal(matchesStoredDropMetadata(storedText, { ...textIntent, deliveryMode: 'relay', status: 'dispatched' }), false);
 });

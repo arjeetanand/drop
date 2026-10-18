@@ -51,6 +51,87 @@ async function getAuthenticatedClient() {
 
 type AuthenticatedContext = NonNullable<Awaited<ReturnType<typeof getAuthenticatedClient>>>;
 
+type ExistingSendRow = {
+  sender_id: string;
+  recipient_id: string | null;
+  recipient_username: string | null;
+  subject: string;
+  content: string | null;
+  seal_id: string | null;
+  payload_kind: DropPayloadKind | null;
+  delivery_mode: DropDeliveryMode | null;
+  media_path: string | null;
+  media_mime_type: string | null;
+  media_size_bytes: number | null;
+  status: MockLetter['status'];
+  dispatched_at: string | null;
+};
+
+type ExistingSendRead = { state: 'missing' } | { state: 'unavailable' } | { state: 'found'; row: ExistingSendRow };
+
+async function readExistingDrop(context: AuthenticatedContext, draftId: string): Promise<ExistingSendRead> {
+  try {
+    const { data, error } = await context.supabase.from('letters')
+      .select('sender_id, recipient_id, recipient_username, subject, content, seal_id, payload_kind, delivery_mode, media_path, media_mime_type, media_size_bytes, status, dispatched_at')
+      .eq('id', draftId)
+      .maybeSingle<ExistingSendRow>();
+    if (error) return { state: 'unavailable' };
+    return data ? { state: 'found', row: data } : { state: 'missing' };
+  } catch {
+    return { state: 'unavailable' };
+  }
+}
+
+function toStoredDropSend(row: ExistingSendRow): StoredDropSend {
+  return {
+    senderId: row.sender_id,
+    recipientId: row.recipient_id,
+    recipientUsername: row.recipient_username,
+    subject: row.subject,
+    content: row.content,
+    sealId: row.seal_id,
+    payloadKind: row.payload_kind,
+    deliveryMode: row.delivery_mode,
+    mediaPath: row.media_path,
+    mediaMimeType: row.media_mime_type,
+    mediaSizeBytes: row.media_size_bytes,
+    status: row.status,
+    dispatchedAt: row.dispatched_at,
+  };
+}
+
+type DropRecipientProfile = { id: string; username: string; displayName: string };
+export type DropRecipientLookup =
+  | { status: 'found'; recipient: DropRecipientProfile }
+  | { status: 'not-found' }
+  | { status: 'error' };
+
+async function resolveDropRecipient(context: AuthenticatedContext, username: string): Promise<DropRecipientLookup> {
+  try {
+    const { data, error } = await context.supabase
+      .from('profiles')
+      .select('id, username, display_name')
+      .eq('username', username)
+      .maybeSingle<{ id: string; username: string; display_name: string | null }>();
+    if (error) return { status: 'error' };
+    if (!data || data.username !== username) return { status: 'not-found' };
+    return { status: 'found', recipient: { id: data.id, username: data.username, displayName: data.display_name || data.username } };
+  } catch {
+    return { status: 'error' };
+  }
+}
+
+export async function lookupDropRecipient(value: string): Promise<DropRecipientLookup> {
+  const username = normalizeDropRecipient(value);
+  if (!username) return { status: 'not-found' };
+  try {
+    const context = await getAuthenticatedClient();
+    return context ? resolveDropRecipient(context, username) : { status: 'error' };
+  } catch {
+    return { status: 'error' };
+  }
+}
+
 export type RemoteProfileState =
   | { status: 'unavailable' }
   | { status: 'signed-out' }
@@ -263,7 +344,7 @@ function eventsForDraft(draft: LetterDraftState): TrackingEvent[] {
   }));
 }
 
-export async function syncDropToBackend(draft: LetterDraftState, mediaFile?: File): Promise<{ ok: boolean; error?: string; mediaPath?: string; mediaMimeType?: string; mediaSizeBytes?: number; dispatchedAt?: string }> {
+export async function syncDropToBackend(draft: LetterDraftState, confirmedRecipientId: string, mediaFile?: File): Promise<{ ok: boolean; error?: string; mediaPath?: string; mediaMimeType?: string; mediaSizeBytes?: number; dispatchedAt?: string }> {
   const context = await getAuthenticatedClient();
   if (!context) return { ok: false, error: 'Connect an account in Your profile before sending a private drop.' };
 
@@ -279,6 +360,42 @@ export async function syncDropToBackend(draft: LetterDraftState, mediaFile?: Fil
     if (validationError) return { ok: false, error: validationError };
     const expectedKind = mediaFile.type === 'image/gif' ? 'gif' : 'image';
     if (draft.payloadKind !== expectedKind) return { ok: false, error: 'The selected file does not match this drop type.' };
+  }
+  if (!confirmedRecipientId) return { ok: false, error: 'Check the recipient handle before sending this drop.' };
+  if (!mediaFile) {
+    const previous = await readExistingDrop(context, draft.id);
+    if (previous.state === 'unavailable') {
+      return { ok: false, error: 'I could not confirm whether this drop was already sent. Check Sent before retrying.' };
+    }
+    if (previous.state === 'found') {
+      const retryIntent: DropSendIntent = {
+        senderId: context.user.id,
+        recipientId: confirmedRecipientId,
+        recipientUsername,
+        subject: draft.subject || 'Untitled Letter',
+        content: draft.content,
+        sealId: draft.sealId,
+        payloadKind: draft.payloadKind,
+        deliveryMode: draft.deliveryMode === 'relay' ? 'relay' : 'instant',
+        mediaMimeType: null,
+        mediaSizeBytes: null,
+        status: draft.deliveryMode === 'relay' ? 'dispatched' : 'delivered',
+      };
+      if (matchesStoredDropMetadata(toStoredDropSend(previous.row), retryIntent) && previous.row.dispatched_at) {
+        return { ok: true, dispatchedAt: previous.row.dispatched_at };
+      }
+      return { ok: false, error: 'This draft ID is already tied to a different drop. Check Sent before sending this edit.' };
+    }
+  }
+  const initialRecipient = await resolveDropRecipient(context, recipientUsername);
+  if (initialRecipient.status === 'not-found') {
+    return { ok: false, error: `No Drop account found for @${recipientUsername}. Check the username and try again.` };
+  }
+  if (initialRecipient.status === 'error') {
+    return { ok: false, error: `I could not check @${recipientUsername}. Check the handle again before sending.` };
+  }
+  if (initialRecipient.recipient.id !== confirmedRecipientId) {
+    return { ok: false, error: 'This handle now belongs to a different account. Check it again before sending.' };
   }
 
   const instant = draft.deliveryMode !== 'relay';
@@ -345,6 +462,7 @@ export async function syncDropToBackend(draft: LetterDraftState, mediaFile?: Fil
   };
   const intent: DropSendIntent = {
     senderId: context.user.id,
+    recipientId: confirmedRecipientId,
     recipientUsername,
     subject: draft.subject || (draft.payloadKind === 'text' ? 'Untitled Letter' : 'A little moment'),
     content: draft.content,
@@ -355,59 +473,25 @@ export async function syncDropToBackend(draft: LetterDraftState, mediaFile?: Fil
     mediaSizeBytes,
     status: instant ? 'delivered' : 'dispatched',
   };
-  type ExistingSendRow = {
-    sender_id: string;
-    recipient_username: string | null;
-    subject: string;
-    content: string | null;
-    seal_id: string | null;
-    payload_kind: DropPayloadKind | null;
-    delivery_mode: DropDeliveryMode | null;
-    media_path: string | null;
-    media_mime_type: string | null;
-    media_size_bytes: number | null;
-    status: MockLetter['status'];
-    dispatched_at: string | null;
-  };
   type ExistingSendCheck =
     | { state: 'missing' }
     | { state: 'unavailable' }
     | { state: 'conflict'; senderId: string; mediaPath: string | null }
     | { state: 'same'; mediaPath: string | null; dispatchedAt: string };
   const checkExistingSend = async (): Promise<ExistingSendCheck> => {
-    try {
-      const { data, error } = await context.supabase.from('letters')
-        .select('sender_id, recipient_username, subject, content, seal_id, payload_kind, delivery_mode, media_path, media_mime_type, media_size_bytes, status, dispatched_at')
-        .eq('id', draft.id)
-        .maybeSingle<ExistingSendRow>();
-      if (error) return { state: 'unavailable' };
-      if (!data) return { state: 'missing' };
-
-      const stored: StoredDropSend = {
-        senderId: data.sender_id,
-        recipientUsername: data.recipient_username,
-        subject: data.subject,
-        content: data.content,
-        sealId: data.seal_id,
-        payloadKind: data.payload_kind,
-        deliveryMode: data.delivery_mode,
-        mediaPath: data.media_path,
-        mediaMimeType: data.media_mime_type,
-        mediaSizeBytes: data.media_size_bytes,
-        status: data.status,
-        dispatchedAt: data.dispatched_at,
-      };
-      if (!matchesStoredDropMetadata(stored, intent)) {
-        return { state: 'conflict', senderId: data.sender_id, mediaPath: data.media_path };
-      }
-      if (mediaFile) {
-        if (!data.media_path || data.media_path !== mediaPath) return { state: 'conflict', senderId: data.sender_id, mediaPath: data.media_path };
-      }
-      if (!data.dispatched_at) return { state: 'conflict', senderId: data.sender_id, mediaPath: data.media_path };
-      return { state: 'same', mediaPath: data.media_path, dispatchedAt: data.dispatched_at };
-    } catch {
-      return { state: 'unavailable' };
+    const existing = await readExistingDrop(context, draft.id);
+    if (existing.state === 'unavailable') return { state: 'unavailable' };
+    if (existing.state === 'missing') return { state: 'missing' };
+    const data = existing.row;
+    const stored = toStoredDropSend(data);
+    if (!matchesStoredDropMetadata(stored, intent)) {
+      return { state: 'conflict', senderId: data.sender_id, mediaPath: data.media_path };
     }
+    if (mediaFile) {
+      if (!data.media_path || data.media_path !== mediaPath) return { state: 'conflict', senderId: data.sender_id, mediaPath: data.media_path };
+    }
+    if (!data.dispatched_at) return { state: 'conflict', senderId: data.sender_id, mediaPath: data.media_path };
+    return { state: 'same', mediaPath: data.media_path, dispatchedAt: data.dispatched_at };
   };
   const existing = await checkExistingSend();
   if (existing.state === 'same') {
@@ -456,15 +540,20 @@ export async function syncDropToBackend(draft: LetterDraftState, mediaFile?: Fil
     await cleanupUploadedMedia();
     return { ok: false, error: 'I could not check your account profile. Your draft is still here—try again.' };
   }
-  const { data: recipientProfile, error: recipientError } = await context.supabase
-    .from('profiles')
-    .select('id, display_name')
-    .eq('username', recipientUsername)
-    .maybeSingle<{ id: string; display_name: string }>();
-  if (recipientError || !recipientProfile) {
+  const recipientLookup = await resolveDropRecipient(context, recipientUsername);
+  if (recipientLookup.status === 'not-found') {
     await cleanupUploadedMedia();
     return { ok: false, error: `No Drop account found for @${recipientUsername}. Check the username and try again.` };
   }
+  if (recipientLookup.status === 'error') {
+    await cleanupUploadedMedia();
+    return { ok: false, error: `I could not check @${recipientUsername}. Your draft is still here—check the handle and try again.` };
+  }
+  if (recipientLookup.recipient.id !== confirmedRecipientId) {
+    await cleanupUploadedMedia();
+    return { ok: false, error: 'This handle now belongs to a different account. Check it again before sending.' };
+  }
+  const recipientProfile = recipientLookup.recipient;
 
   const sentAt = new Date().toISOString();
   let insertError: { code?: string } | null = null;
@@ -476,7 +565,7 @@ export async function syncDropToBackend(draft: LetterDraftState, mediaFile?: Fil
       sender_display_name: profile?.displayName || context.user.user_metadata?.full_name || context.user.email || 'A correspondent',
       recipient_id: recipientProfile.id,
       recipient_username: recipientUsername,
-      recipient_name: recipientProfile.display_name,
+      recipient_name: recipientProfile.displayName,
       subject: intent.subject,
       content: draft.content,
       teaser: draft.content

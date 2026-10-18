@@ -18,6 +18,7 @@ Tasks are ordered by dependency. Progress is recorded at each tested and pushed 
 - A signed-out recipient opening a shared drop now gets a sign-in action that returns to the same drop. The local browser check verified the encoded return URL, the account section link, and the return link label/navigation. Google OAuth itself remains unverified without the configured Supabase project.
 - Recipient preview now uses the saved text size and alignment and shows the local sender name. A browser check set 20px/right alignment and confirmed both styles, the sender/recipient line, and the not-sent preview notice. The temporary note content was cleared and the seeded draft restored.
 - Recipient handles now show local format feedback, expose `aria-invalid`/help text, and only satisfy the send completeness check when the existing handle validator accepts them. An isolated browser check confirmed a one-character handle errors and a valid handle clears the error; no recipient lookup runs while typing.
+- The composer now requires an explicit handle check, shows the matched display name and handle, distinguishes not-found from lookup failure, and binds confirmation to the normalized handle and recipient ID. Sending rechecks the recipient before media upload and before insert. Unit tests (30/30), lint, typecheck, production build, and local Supabase identity lookup plus existing send/media smoke checks pass; the signed-in browser flow and hosted two-account send remain unverified because no hosted Supabase project is configured.
 - Received drops with a known sender handle now offer an optional “Drop back” action that opens a fresh, addressed draft. The local seeded sender-to-composer flow was checked in-browser; no message was copied or sent. The Supabase profile join for sender handles still needs verification against a configured project.
 - Mailbox filters are now exposed as a labeled group of toggle buttons instead of an incomplete tab pattern. Browser checks confirmed the pressed state changes for Sent and Drafts and that Tab plus Return operates the filters.
 - Reactions on seeded demo drops now persist in this browser and appear on the mailbox card after leaving the detail view or reloading. Browser check selected 🫶, observed the “Saved on this device” disclosure, then confirmed “Reacted 🫶” on the mailbox card after navigation and reload; it does not notify a sender.
@@ -105,10 +106,13 @@ Commit each completed code change separately with a descriptive message and push
 - [x] The composer supports text, image/meme, and GIF previews without requiring multiple desktop-style steps on mobile.
 - [x] A local draft survives navigation, and media is clearly marked as uploaded or local-only until upload succeeds.
 - [x] Sending gives clear progress, success, and recovery states; instant is the default and relay is opt-in.
+- [x] The sender explicitly checks the recipient handle, sees the matched account, and must reconfirm if the normalized handle changes; failed lookups leave the local draft and attachment intact.
 
 **Verification:**
 - [ ] Complete one send for each payload kind with Supabase configured.
 - [ ] Confirm a failed upload or save returns the person to a recoverable draft.
+- [x] Unit coverage verifies confirmation only matches the current normalized handle; local Supabase smoke verifies exact and missing handle lookup results.
+- [ ] Verify the signed-in confirmation and recipient-change states in an authenticated browser session.
 
 **Dependencies:** Tasks 1–3.
 
