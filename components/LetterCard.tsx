@@ -15,34 +15,40 @@ const statusConfig: Record<LetterStatus, { label: string; icon: typeof Mail; ton
 
 export function LetterCard({ letter, showExcerpt = false }: { letter: MockLetter; showExcerpt?: boolean }) {
   const isReceived = letter.direction === 'received';
-  const config = letter.localDemo
-    ? { label: 'Demo · not sent', icon: Eye, tone: 'text-[#8a611b]' }
-    : isReceived
-      ? { label: 'Received', icon: Mail, tone: 'text-[#276a4d]' }
-      : statusConfig[letter.status] || statusConfig.draft;
+  const config = letter.sample
+    ? { label: 'Sample · not sent', icon: Eye, tone: 'text-[#8a611b]' }
+    : letter.localDemo
+      ? { label: 'Demo · not sent', icon: Eye, tone: 'text-[#8a611b]' }
+      : isReceived
+        ? { label: 'Received', icon: Mail, tone: 'text-[#276a4d]' }
+        : statusConfig[letter.status] || statusConfig.draft;
   const Icon = letter.reaction && !isReceived ? Sparkles : config.icon;
-  const href = letter.localDemo
-    ? `/letter/${encodeURIComponent(letter.id)}?view=sender`
-    : isReceived
-      ? `/letter/${encodeURIComponent(letter.id)}`
-    : letter.status === 'draft'
-      ? `/compose?letter=${encodeURIComponent(letter.id)}`
-      : letter.status === 'sealed'
-        ? `/compose?letter=${encodeURIComponent(letter.id)}&mode=relay`
-        : letter.deliveryMode === 'relay' || letter.status === 'dispatched'
-          ? `/journey?letter=${encodeURIComponent(letter.id)}`
-          : `/letter/${encodeURIComponent(letter.id)}`;
-  const action = letter.localDemo
-    ? 'View sender copy'
-    : isReceived
-      ? 'Open drop'
-    : letter.status === 'draft'
-      ? 'Keep making it'
-      : letter.status === 'sealed'
-        ? 'Send it'
-        : letter.deliveryMode === 'relay' || letter.status === 'dispatched'
-          ? 'View journey'
-          : 'Open sent drop';
+  const href = letter.sample
+    ? `/letter/${encodeURIComponent(letter.id)}`
+    : letter.localDemo
+      ? `/letter/${encodeURIComponent(letter.id)}?view=sender`
+      : isReceived
+        ? `/letter/${encodeURIComponent(letter.id)}`
+        : letter.status === 'draft'
+          ? `/compose?letter=${encodeURIComponent(letter.id)}`
+          : letter.status === 'sealed'
+            ? `/compose?letter=${encodeURIComponent(letter.id)}&mode=relay`
+            : letter.deliveryMode === 'relay' || letter.status === 'dispatched'
+              ? `/journey?letter=${encodeURIComponent(letter.id)}`
+              : `/letter/${encodeURIComponent(letter.id)}`;
+  const action = letter.sample
+    ? 'Open sample'
+    : letter.localDemo
+      ? 'View sender copy'
+      : isReceived
+        ? 'Open drop'
+        : letter.status === 'draft'
+          ? 'Keep making it'
+          : letter.status === 'sealed'
+            ? 'Send it'
+            : letter.deliveryMode === 'relay' || letter.status === 'dispatched'
+              ? 'View journey'
+              : 'Open sent drop';
   const kind = letter.payloadKind || 'text';
   const KindIcon = kind === 'text' ? Type : ImageIcon;
 
@@ -64,6 +70,7 @@ export function LetterCard({ letter, showExcerpt = false }: { letter: MockLetter
           </span>
           <span className="mt-1 inline-flex flex-wrap gap-1.5">
             <span className="rounded-full bg-[#f2eee5] px-2 py-0.5 font-mono text-[0.58rem] font-bold uppercase tracking-[0.1em] text-on-surface-variant">{kind === 'text' ? 'Note' : kind === 'gif' ? 'GIF' : 'Photo'}</span>
+            {letter.sample && <span className="rounded-full bg-[#fff4dc] px-2 py-0.5 font-mono text-[0.58rem] font-bold uppercase tracking-[0.1em] text-[#76520d]">Sample</span>}
             {letter.localDemo && <span className="rounded-full bg-[#fff4dc] px-2 py-0.5 font-mono text-[0.58rem] font-bold uppercase tracking-[0.1em] text-[#76520d]">On this device</span>}
           </span>
           {showExcerpt && letter.excerpt && (

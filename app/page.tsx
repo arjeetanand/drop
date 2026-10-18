@@ -30,7 +30,7 @@ export default function HomeDesk() {
     return () => { active = false; };
   }, []);
 
-  const incoming = letters.filter((letter) => letter.direction === 'received').slice(0, 2);
+  const incoming = letters.filter((letter) => letter.direction === 'received' && !letter.sample).slice(0, 2);
 
   return (
     <main className="page-shell page-enter !pt-5 sm:!pt-8">
@@ -57,15 +57,31 @@ export default function HomeDesk() {
             <p className="mt-6 flex items-center gap-2 text-xs text-white/70"><Zap className="h-3.5 w-3.5" aria-hidden="true" /> Instant by default · private between you two</p>
           </div>
 
-          <Link href="/letter/incoming-1" className="group relative min-h-[250px] overflow-hidden rounded-[1.5rem] bg-[#f1d5c5] p-5 text-ink-navy shadow-[0_12px_30px_rgba(16,42,67,.07)] sm:min-h-[300px] md:min-h-0">
-            <Image src="/demo-cat.png" alt="A tiny cat taking a curious look at the camera" fill sizes="(max-width: 767px) 100vw, 34vw" className="object-cover transition-transform duration-500 group-hover:scale-[1.03]" priority />
-            <span className="absolute left-4 top-4 rounded-full bg-[#fffaf2]/90 px-3 py-1.5 font-mono text-[0.62rem] font-bold uppercase tracking-[0.12em] text-ink-navy">A photo for you</span>
-            <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#15213f]/75 via-[#15213f]/25 to-transparent px-5 pb-5 pt-20 text-white">
-              <span className="block font-mono text-[0.62rem] uppercase tracking-[0.12em] text-white/75">From Mina Vale</span>
-              <span className="mt-1 block font-headline-md text-2xl font-semibold">The blue hour</span>
-              <span className="mt-1 inline-flex items-center gap-1 text-xs font-semibold">Open your mailbox <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" /></span>
-            </span>
-          </Link>
+          {incoming[0] ? (
+            <Link href={`/letter/${encodeURIComponent(incoming[0].id)}`} aria-label={`Open drop from ${incoming[0].sender || 'a correspondent'}: ${incoming[0].subject}`} className="group relative flex min-h-[250px] flex-col overflow-hidden rounded-[1.5rem] bg-gradient-to-br from-[#e1e7ff] via-[#f5e5d7] to-[#fff7ed] p-5 text-ink-navy shadow-[0_12px_30px_rgba(16,42,67,.07)] sm:min-h-[300px] md:min-h-0">
+              <span className="absolute -right-8 -top-10 h-44 w-44 rounded-full bg-white/35 blur-2xl" aria-hidden="true" />
+              <span className="relative flex items-center justify-between gap-3">
+                <span className="inline-flex items-center gap-2 rounded-full bg-white/85 px-3 py-1.5 font-mono text-[0.62rem] font-bold uppercase tracking-[0.12em]"><Mail className="h-3.5 w-3.5" aria-hidden="true" />In your inbox</span>
+                <span className="rounded-full bg-[#152b43]/[0.07] px-3 py-1.5 font-mono text-[0.62rem] font-bold uppercase tracking-[0.12em]">{incoming[0].payloadKind === 'image' ? 'Photo' : incoming[0].payloadKind || 'Note'}</span>
+              </span>
+              <span className="relative mt-auto block pt-10">
+                <span className="block font-mono text-[0.62rem] uppercase tracking-[0.12em] text-ink-navy/65">From {incoming[0].sender || 'a correspondent'}</span>
+                <span className="mt-1 block font-headline-md text-2xl font-semibold">{incoming[0].subject}</span>
+                <span className="mt-2 block line-clamp-3 text-sm leading-relaxed text-ink-navy/75">{incoming[0].excerpt}</span>
+                <span className="mt-4 inline-flex items-center gap-1 text-xs font-bold">Open your drop <ArrowUpRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" aria-hidden="true" /></span>
+              </span>
+            </Link>
+          ) : (
+            <Link href="/letter/incoming-1" className="group relative min-h-[250px] overflow-hidden rounded-[1.5rem] bg-[#f1d5c5] p-5 text-ink-navy shadow-[0_12px_30px_rgba(16,42,67,.07)] sm:min-h-[300px] md:min-h-0">
+              <Image src="/demo-cat.png" alt="A tiny cat taking a curious look at the camera" fill sizes="(max-width: 767px) 100vw, 34vw" className="object-cover transition-transform duration-500 group-hover:scale-[1.03]" priority />
+              <span className="absolute left-4 top-4 rounded-full bg-[#fffaf2]/95 px-3 py-1.5 font-mono text-[0.62rem] font-bold uppercase tracking-[0.12em] text-ink-navy">Sample drop · not received</span>
+              <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#15213f]/75 via-[#15213f]/25 to-transparent px-5 pb-5 pt-20 text-white">
+                <span className="block font-mono text-[0.62rem] uppercase tracking-[0.12em] text-white/75">Example from Mina Vale · nothing sent</span>
+                <span className="mt-1 block font-headline-md text-2xl font-semibold">The blue hour</span>
+                <span className="mt-1 inline-flex items-center gap-1 text-xs font-semibold">Open this example <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" /></span>
+              </span>
+            </Link>
+          )}
         </section>
 
         <section className="mt-8 grid gap-7 md:mt-10 md:grid-cols-[minmax(0,1fr)_300px] md:gap-10">

@@ -24,11 +24,13 @@ export interface MockLetter {
   mediaUrl?: string;
   reaction?: string;
   localDemo?: boolean;
+  sample?: boolean;
 }
 
 export const mockLetters: MockLetter[] = [
   {
     id: 'incoming-1',
+    sample: true,
     recipient: 'sunny.stories',
     sender: 'Mina Vale',
     senderUsername: 'mina.vale',
@@ -45,6 +47,7 @@ export const mockLetters: MockLetter[] = [
   },
   {
     id: 'incoming-gif',
+    sample: true,
     recipient: 'sunny.stories',
     sender: 'Jo Park',
     senderUsername: 'jo.park',
@@ -58,6 +61,7 @@ export const mockLetters: MockLetter[] = [
   },
   {
     id: '1',
+    sample: true,
     recipient: 'Eleanor Hartwell',
     date: 'Aug 20, 2026',
     status: 'delivered',
@@ -68,6 +72,7 @@ export const mockLetters: MockLetter[] = [
   },
   {
     id: '2',
+    sample: true,
     recipient: 'Marcus Chen',
     date: 'Aug 18, 2026',
     status: 'dispatched',
@@ -88,6 +93,7 @@ export const mockLetters: MockLetter[] = [
   },
   {
     id: '4',
+    sample: true,
     recipient: 'Iris Vance',
     date: 'Aug 14, 2026',
     status: 'sealed',
@@ -99,6 +105,7 @@ export const mockLetters: MockLetter[] = [
   },
   {
     id: '5',
+    sample: true,
     recipient: 'Theo Ashford',
     date: 'Aug 10, 2026',
     status: 'delivered',

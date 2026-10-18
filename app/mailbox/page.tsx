@@ -7,13 +7,12 @@ import { LetterCard } from '@/components/LetterCard';
 import { mockLetters, type MockLetter } from '@/data/mockData';
 import { getRemoteLetters } from '@/lib/letterBackend';
 import { getLetterDraft, getLettersWithDraft } from '@/lib/letterStore';
+import { filterMailboxLetters, getMailboxCounts, type MailboxFilter } from '@/lib/mailboxView';
 import { cn } from '@/lib/utils';
-
-type FilterTab = 'all' | 'transit' | 'received' | 'sent' | 'drafts';
 
 export default function Mailbox() {
   const [letters, setLetters] = useState<MockLetter[]>(mockLetters);
-  const [activeTab, setActiveTab] = useState<FilterTab>('all');
+  const [activeTab, setActiveTab] = useState<MailboxFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
@@ -37,34 +36,18 @@ export default function Mailbox() {
     };
   }, []);
 
-  const counts = useMemo(() => ({
-    transit: letters.filter((letter) => letter.status === 'dispatched').length,
-    received: letters.filter((letter) => letter.direction === 'received').length,
-    sent: letters.filter((letter) => !letter.localDemo && letter.direction !== 'received' && letter.status !== 'draft' && letter.status !== 'sealed').length,
-    drafts: letters.filter((letter) => letter.status === 'draft' || letter.status === 'sealed').length,
-  }), [letters]);
+  const counts = useMemo(() => getMailboxCounts(letters), [letters]);
 
-  const tabs: Array<{ id: FilterTab; label: string; count: number }> = [
-    { id: 'all', label: 'All drops', count: letters.length },
+  const tabs: Array<{ id: MailboxFilter; label: string; count: number }> = [
+    { id: 'all', label: 'All drops', count: counts.total },
     { id: 'transit', label: 'On a journey', count: counts.transit },
     { id: 'received', label: 'Received', count: counts.received },
     { id: 'sent', label: 'Sent', count: counts.sent },
     { id: 'drafts', label: 'Drafts', count: counts.drafts },
+    { id: 'samples', label: 'Samples', count: counts.samples },
   ];
 
-  const filteredLetters = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    return letters.filter((letter) => {
-      if (activeTab === 'transit' && letter.status !== 'dispatched') return false;
-      if (activeTab === 'received' && letter.direction !== 'received') return false;
-      if (activeTab === 'sent' && (letter.localDemo || letter.direction === 'received' || letter.status === 'draft' || letter.status === 'sealed')) return false;
-      if (activeTab === 'drafts' && letter.status !== 'draft' && letter.status !== 'sealed') return false;
-      if (!query) return true;
-      return [letter.subject, letter.recipient, letter.sender, letter.excerpt]
-        .filter(Boolean)
-        .some((value) => value?.toLowerCase().includes(query));
-    });
-  }, [activeTab, letters, searchQuery]);
+  const filteredLetters = useMemo(() => filterMailboxLetters(letters, activeTab, searchQuery), [activeTab, letters, searchQuery]);
 
   return (
     <main className="page-shell page-enter">
@@ -83,7 +66,7 @@ export default function Mailbox() {
 
         <section className="grid grid-cols-2 gap-0 border-b border-[rgba(16,42,67,0.13)] py-7 sm:grid-cols-4">
           {[
-            { label: 'Total drops', value: letters.length },
+            { label: 'Total drops', value: counts.total },
             { label: 'On a journey', value: counts.transit },
             { label: 'Received', value: counts.received },
             { label: 'Sent', value: counts.sent },
@@ -96,21 +79,24 @@ export default function Mailbox() {
         </section>
 
         <section className="mt-8 flex flex-col gap-4 border-b border-[rgba(16,42,67,0.13)] pb-5 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex gap-1 overflow-x-auto pb-1" role="group" aria-label="Filter drops">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                aria-pressed={activeTab === tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={cn(
-                  'min-h-11 shrink-0 rounded-xl px-3 text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2b45f7]',
-                  activeTab === tab.id ? 'bg-ink-navy text-white' : 'text-on-surface-variant hover:bg-white/55 hover:text-ink-navy'
-                )}
-              >
-                {tab.label} <span className="ml-1 font-mono text-[0.68rem] opacity-70">{tab.count}</span>
-              </button>
-            ))}
+          <div className="relative min-w-0">
+            <div className="flex gap-1 overflow-x-auto pb-1 pr-7" role="group" aria-label="Filter drops">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  aria-pressed={activeTab === tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={cn(
+                    'min-h-11 shrink-0 rounded-xl px-3 text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2b45f7]',
+                    activeTab === tab.id ? 'bg-ink-navy text-white' : 'text-on-surface-variant hover:bg-white/55 hover:text-ink-navy'
+                  )}
+                >
+                  {tab.label} <span className="ml-1 font-mono text-[0.68rem] opacity-70">{tab.count}</span>
+                </button>
+              ))}
+            </div>
+            <span className="pointer-events-none absolute right-0 top-0 h-11 w-7 bg-gradient-to-l from-[#f7f4ee] to-transparent lg:hidden" aria-hidden="true" />
           </div>
           <div className="relative w-full lg:max-w-xs">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-on-surface-variant" aria-hidden="true" />

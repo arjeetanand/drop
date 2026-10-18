@@ -130,7 +130,7 @@ export default function LetterArrivalPage() {
         }
         if (active) {
           setLetter(localLetter);
-          setFullContentAvailable(localLetter.localDemo === true || localLetter.status === 'draft');
+          setFullContentAvailable(localLetter.localDemo === true || localLetter.sample === true || localLetter.status === 'draft');
           if (localLetter.localDemo && senderView) {
             setRevealed(true);
             setOpened(true);
@@ -198,10 +198,10 @@ export default function LetterArrivalPage() {
     if (!letter || savingReaction) return;
     setSavingReaction(true);
     setReactionNotice('');
-    if (letter.localDemo || letter.id.startsWith('incoming-')) {
-      if (saveDemoReaction(letter.id, emoji, letter.localDemo)) {
+    if (letter.localDemo || letter.sample) {
+      if (saveDemoReaction(letter.id, emoji, letter.localDemo || letter.sample)) {
         setLetter({ ...letter, reaction: emoji });
-        setReactionNotice(letter.localDemo ? 'Saved on this device. Open the sender view to see it.' : 'Saved on this device. The sender won’t be notified.');
+        setReactionNotice(letter.sample ? 'Saved on this device. This sample won’t notify a sender.' : letter.localDemo ? 'Saved on this device. Open the sender view to see it.' : 'Saved on this device. The sender won’t be notified.');
       } else {
         setReactionNotice('Could not save that reaction on this device. Try again.');
       }
@@ -247,7 +247,7 @@ export default function LetterArrivalPage() {
   const sender = letter.localDemo ? 'You' : letter.sender || 'A correspondent';
   const isReceived = letter.localDemo ? !senderView : letter.direction === 'received';
   const encodedLetterId = encodeURIComponent(letter.id);
-  const dropBackHref = isReceived && letter.senderUsername
+  const dropBackHref = isReceived && !letter.sample && letter.senderUsername
     ? `/compose?new=1&recipient=${encodeURIComponent(`@${letter.senderUsername}`)}`
     : null;
 
@@ -265,13 +265,16 @@ export default function LetterArrivalPage() {
           <p className="meta">Drop {letter.id}</p>
         </header>
 
+        {letter.sample && <p className="notice mt-5" role="status">{letter.direction === 'received' ? 'Sample drop · this is an example, not a message you received. Reactions stay on this device.' : 'Sample drop · an example only. Nothing was sent or delivered.'}</p>}
         {letter.localDemo && <p className="notice mt-5" role="status">Same-device demo · nothing was sent or shared.</p>}
 
         <section className="mt-12 max-w-[760px]">
-          <p className="eyebrow">{letter.localDemo ? senderView ? 'Sender view' : 'Recipient demo' : isReceived ? 'A drop for you' : 'Drop preview'}</p>
-          <h1 className="display-title mt-4 max-w-[12ch]">{letter.localDemo ? senderView ? 'Your demo copy.' : 'See your drop as the recipient.' : 'Something made its way to you.'}</h1>
+          <p className="eyebrow">{letter.sample ? 'Sample drop' : letter.localDemo ? senderView ? 'Sender view' : 'Recipient demo' : isReceived ? 'A drop for you' : 'Drop preview'}</p>
+          <h1 className="display-title mt-4 max-w-[12ch]">{letter.sample ? 'See how a drop opens.' : letter.localDemo ? senderView ? 'Your demo copy.' : 'See your drop as the recipient.' : 'Something made its way to you.'}</h1>
           <p className="body-copy mt-5 max-w-2xl text-lg">
-            {letter.localDemo
+            {letter.sample
+              ? letter.direction === 'received' ? 'Explore this example, then try a reaction. Nothing was sent and no one will be notified.' : 'Explore this example. It is seeded content, not a drop you sent or received.'
+              : letter.localDemo
               ? senderView ? 'This copy is saved on this device for you to review. Your recipient has not received it.' : 'Open it as if you were the recipient, then try a reaction. Nothing leaves this browser.'
               : `${sender} left a message in your hands. Read the fragments first, then open the full drop when you are ready.`}
           </p>
@@ -287,7 +290,7 @@ export default function LetterArrivalPage() {
               </div>
               <span className="status-mark success self-start">
                 <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
-                {letter.localDemo ? senderView ? 'Demo copy' : 'Demo · not sent' : isReceived ? 'Received' : 'Ready to read'}
+                {letter.sample ? 'Sample · not sent' : letter.localDemo ? senderView ? 'Demo copy' : 'Demo · not sent' : isReceived ? 'Received' : 'Ready to read'}
               </span>
             </div>
 
@@ -321,7 +324,7 @@ export default function LetterArrivalPage() {
                   aria-expanded={revealed}
                   className="button-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#fcfaf6]"
                 >
-                  {contentLoading ? 'Loading the full drop…' : letter.localDemo ? 'Reveal demo fragments' : 'Reveal fragments'}
+                  {contentLoading ? 'Loading the full drop…' : letter.sample ? 'Reveal sample fragments' : letter.localDemo ? 'Reveal demo fragments' : 'Reveal fragments'}
                   <ArrowRight className="h-4 w-4" aria-hidden="true" />
                 </button>
               )}
@@ -332,7 +335,7 @@ export default function LetterArrivalPage() {
                   aria-controls="letter-body"
                   className="button-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#fcfaf6]"
                 >
-                  {letter.localDemo ? 'Open demo drop' : 'Open received drop'}
+                  {letter.sample ? 'Open sample drop' : letter.localDemo ? 'Open demo drop' : 'Open received drop'}
                   <MailOpen className="h-4 w-4" aria-hidden="true" />
                 </button>
               )}
@@ -405,7 +408,7 @@ export default function LetterArrivalPage() {
                 </div>
                 <div className="flex items-start justify-between gap-4 py-3">
                   <dt className="meta">Privacy</dt>
-                  <dd className="text-right text-sm font-semibold text-[#4f9d7a]">{letter.localDemo ? 'Only on this device' : letter.deliveryMode === 'relay' || letter.status === 'dispatched' ? 'Sealed during the journey' : 'Private to you two'}</dd>
+                  <dd className="text-right text-sm font-semibold text-[#4f9d7a]">{letter.sample ? 'Example · no recipient' : letter.localDemo ? 'Only on this device' : letter.deliveryMode === 'relay' || letter.status === 'dispatched' ? 'Sealed during the journey' : 'Private to you two'}</dd>
                 </div>
               </dl>
             </section>

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { copyGuestDraftToAccount, getGuestDraftById, getLetterDraft, getLetterDraftById, saveLetterDraft, setActiveLetterDraft } from '../lib/letterStore.ts';
+import { copyGuestDraftToAccount, getGuestDraftById, getLetterDraft, getLetterDraftById, getLettersWithDraft, saveLetterDraft, setActiveLetterDraft } from '../lib/letterStore.ts';
 import { setLocalAccountId } from '../lib/localAccountScope.ts';
 
 test('transfers the starter draft and refreshes the preserved account draft snapshot', async () => {
@@ -25,6 +25,25 @@ test('transfers the starter draft and refreshes the preserved account draft snap
     setLocalAccountId(null);
     assert.equal(getLetterDraftById(guestDraft.id)?.content, guestDraft.content);
     assert.equal(getGuestDraftById(guestDraft.id)?.content, guestDraft.content);
+  } finally {
+    setLocalAccountId(null);
+    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
+    else delete globalThis.window;
+  }
+});
+
+test('keeps seeded samples labeled when merging older local history snapshots', () => {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const values = new Map([['dear-exe:letter-history:v1', JSON.stringify([
+    { id: 'incoming-1', recipient: 'sunny.stories', sender: 'Mina Vale', direction: 'received', date: 'Just now', status: 'delivered', excerpt: 'A sample.', subject: 'The blue hour' },
+  ])]]);
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { localStorage: { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) } },
+  });
+  try {
+    setLocalAccountId(null);
+    assert.equal(getLettersWithDraft().find((letter) => letter.id === 'incoming-1')?.sample, true);
   } finally {
     setLocalAccountId(null);
     if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);

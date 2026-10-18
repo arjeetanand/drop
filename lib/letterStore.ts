@@ -394,9 +394,11 @@ export function draftAsLetter(draft: LetterDraftState): MockLetter {
 export function getLettersWithDraft(draft = getLetterDraft()): MockLetter[] {
   const activeLetter = draftAsLetter(draft);
   const demoReactions = getDemoReactions();
-  const withLocalReaction = (letter: MockLetter) => letter.localDemo && demoReactions[letter.id]
-    ? { ...letter, reaction: demoReactions[letter.id] }
-    : letter;
+  const withLocalReaction = (letter: MockLetter) => ({
+    ...letter,
+    ...(mockLetters.some((seed) => seed.id === letter.id && seed.sample) ? { sample: true } : {}),
+    ...(letter.localDemo && demoReactions[letter.id] ? { reaction: demoReactions[letter.id] } : {}),
+  });
   const letters = new Map(mockLetters.map((letter) => [
     letter.id,
     letter.direction === 'received' && demoReactions[letter.id]
