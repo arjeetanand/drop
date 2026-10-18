@@ -10,7 +10,7 @@ export default function NotFound() {
           <p className="eyebrow mt-6">404 · Unposted address</p>
           <h1 className="display-title mt-4">This page is not in the mailbox.</h1>
           <p className="body-copy mx-auto mt-5 max-w-md">
-            The letter or profile you are looking for may have moved on. Let&apos;s take you back to the desk.
+            The drop or profile you are looking for may have moved on. Let&apos;s take you back to the desk.
           </p>
           <Link
             href="/"

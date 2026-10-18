@@ -16,7 +16,7 @@ function LoadingLetter() {
       <div className="page-container max-w-[760px]">
         <div className="flex min-h-[70dvh] items-center justify-center">
           <p className="meta" role="status" aria-live="polite">
-            Finding the letter…
+            Finding your drop…
           </p>
         </div>
       </div>
@@ -154,10 +154,10 @@ export default function LetterArrivalPage() {
           setLetter(remoteDetail);
           setFullContentAvailable(true);
         } else {
-          setContentNotice('The complete letter is available when you are signed in as its recipient. This view will keep the relay preview available.');
+          setContentNotice('The complete drop is available when you are signed in as its recipient. This view will keep the relay preview available.');
         }
       } catch {
-        setContentNotice('The complete letter could not be loaded right now. This view will keep the relay preview available.');
+        setContentNotice('The complete drop could not be loaded right now. This view will keep the relay preview available.');
       } finally {
         setContentLoading(false);
       }
@@ -230,14 +230,14 @@ export default function LetterArrivalPage() {
             <ArrowLeft className="h-4 w-4" aria-hidden="true" />
             Back to mailbox
           </Link>
-          <p className="meta">Letter {letter.id}</p>
+          <p className="meta">Drop {letter.id}</p>
         </header>
 
         <section className="mt-12 max-w-[760px]">
-          <p className="eyebrow">{isReceived ? 'A letter for you' : 'Letter preview'}</p>
+          <p className="eyebrow">{isReceived ? 'A drop for you' : 'Drop preview'}</p>
           <h1 className="display-title mt-4 max-w-[12ch]">Something made its way to you.</h1>
           <p className="body-copy mt-5 max-w-2xl text-lg">
-            {sender} left a message in your hands. Read the fragments first, then open the full letter when you are ready.
+            {sender} left a message in your hands. Read the fragments first, then open the full drop when you are ready.
           </p>
         </section>
 
@@ -255,7 +255,7 @@ export default function LetterArrivalPage() {
               </span>
             </div>
 
-            <div id="letter-fragments" className="mt-6" aria-label="Letter fragments">
+            <div id="letter-fragments" className="mt-6" aria-label="Drop fragments">
               <p className="meta">Three fragments, kept closed until you ask to see them.</p>
               <ol className="mt-3 divide-y divide-[rgba(16,42,67,0.1)] border-y border-[rgba(16,42,67,0.1)]">
                 {teasers.map((teaser, index) => (
@@ -272,7 +272,7 @@ export default function LetterArrivalPage() {
             </div>
 
             <p className="sr-only" aria-live="polite">
-              {revealed ? 'The letter fragments are now visible.' : ''}
+              {revealed ? 'The drop fragments are now visible.' : ''}
             </p>
 
             <div className="mt-7 flex flex-wrap items-center gap-3 border-t border-[rgba(16,42,67,0.1)] pt-6">
@@ -285,7 +285,7 @@ export default function LetterArrivalPage() {
                   aria-expanded={revealed}
                   className="button-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#fcfaf6]"
                 >
-                  {contentLoading ? 'Loading the full letter…' : 'Reveal fragments'}
+                  {contentLoading ? 'Loading the full drop…' : 'Reveal fragments'}
                   <ArrowRight className="h-4 w-4" aria-hidden="true" />
                 </button>
               )}
@@ -296,11 +296,11 @@ export default function LetterArrivalPage() {
                   aria-controls="letter-body"
                   className="button-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#fcfaf6]"
                 >
-                  Open received letter
+                  Open received drop
                   <MailOpen className="h-4 w-4" aria-hidden="true" />
                 </button>
               )}
-              {opened && <p className="meta">The full letter is open below.</p>}
+              {opened && <p className="meta">The full drop is open below.</p>}
             </div>
 
             {contentNotice && <p className="notice mt-5" role="status" aria-live="polite">{contentNotice}</p>}
@@ -347,12 +347,12 @@ export default function LetterArrivalPage() {
               <p className="eyebrow">Before you open</p>
               <h2 className="section-title mt-3 text-2xl">Take your time.</h2>
               <p className="body-copy mt-3 text-sm">
-                A sealed letter can wait. Opening it shows the message and keeps the route available for you to revisit.
+                A sealed drop can wait. Opening it shows the message and keeps the route available for you to revisit.
               </p>
             </section>
 
             <section className="panel-muted p-6">
-              <p className="eyebrow">Letter details</p>
+              <p className="eyebrow">Drop details</p>
               <dl className="mt-5 divide-y divide-[rgba(16,42,67,0.1)] border-y border-[rgba(16,42,67,0.1)]">
                 <div className="flex items-start justify-between gap-4 py-3">
                   <dt className="meta">From</dt>
