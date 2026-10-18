@@ -3,11 +3,23 @@
 Drop needs Supabase Auth, the existing `profiles` and `letters` schema, and the new private `drop-media` bucket for real account-to-account sends.
 
 1. Add `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` from the Supabase project to `.env.local`.
-2. Apply the migrations in `supabase/migrations/` in filename order, including both `20261018_drop_media_reactions.sql` and `20261018_relay_handoff_tokens.sql`.
+2. Apply every migration in `supabase/migrations/` in filename order. This includes the sent-drop integrity migration, which keeps senders from promoting drafts through row updates or deleting media already linked to a drop.
 3. Enable Google OAuth in Supabase Auth if you want the existing Google sign-in button to work, and allow `http://localhost:3000/auth/callback` as a redirect URL during local development.
 4. Sign in, save a unique username on Your profile, then send to a registered `@username`.
 
-The app accepts JPG, PNG, WebP, and GIF uploads up to 8 MB. Attachments stay in the private `drop-media` bucket; the app stores a storage path and requests a one-minute signed URL only after Supabase returns an authorized letter row. Storage policies allow the uploader to write under their own account folder and only the sender or addressed recipient to read a linked attachment. The recipient alone can add or change a reaction.
+The app accepts JPG, PNG, WebP, and GIF uploads up to 8 MB. Attachments stay in the private `drop-media` bucket; the app stores a storage path and requests a one-minute signed URL only after Supabase returns an authorized letter row. Storage policies allow the uploader to write under their own account folder, only the sender or addressed recipient to read a linked attachment, and deletion only when no drop references the object. The recipient alone can add or change a reaction.
+
+## Local policy smoke test
+
+With local PostgreSQL tools available, run the policy test against a disposable database from the repository root:
+
+```bash
+createdb drop-policy-smoke
+psql -X -v ON_ERROR_STOP=1 -d drop-policy-smoke -f tests/db/sent_drop_integrity.sql
+dropdb drop-policy-smoke
+```
+
+The script applies the relevant migrations, checks draft edits, sent-row immutability, linked-media deletion, failed-upload cleanup, and sender/recipient read access, then rolls back its changes. It tests PostgreSQL RLS behavior locally; it does not replace a two-account check against the configured Supabase project.
 
 ## Relay handoffs
 
