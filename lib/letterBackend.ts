@@ -9,6 +9,7 @@ import { normalizeDropRecipient, validateDropMedia } from '@/lib/dropValidation'
 type LetterRow = {
   id: string;
   sender_id: string;
+  sender_profile?: { username: string } | null;
   recipient_id: string | null;
   sender_display_name: string | null;
   recipient_username: string | null;
@@ -86,6 +87,7 @@ function rowToLetter(row: LetterRow, userId: string, revealContent = false): Moc
     id: row.id,
     recipient: row.recipient_name || row.recipient_username || 'your correspondent',
     sender: row.sender_display_name || undefined,
+    senderUsername: row.sender_profile?.username || undefined,
     direction: row.sender_id === userId ? 'sent' : 'received',
     date: row.dispatched_at
       ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(row.dispatched_at))
@@ -105,7 +107,7 @@ function rowToLetter(row: LetterRow, userId: string, revealContent = false): Moc
   };
 }
 
-const MAILBOX_SELECT = 'id, sender_id, recipient_id, sender_display_name, recipient_username, recipient_name, subject, teaser, status, seal_id, dispatched_at, delivered_at, created_at, payload_kind, delivery_mode, media_path, media_mime_type, media_size_bytes';
+const MAILBOX_SELECT = 'id, sender_id, sender_profile:profiles!letters_sender_id_fkey(username), recipient_id, sender_display_name, recipient_username, recipient_name, subject, teaser, status, seal_id, dispatched_at, delivered_at, created_at, payload_kind, delivery_mode, media_path, media_mime_type, media_size_bytes';
 const LETTER_SELECT = `${MAILBOX_SELECT}, content`;
 
 export async function getRemoteLetters(): Promise<MockLetter[] | null> {

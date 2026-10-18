@@ -215,6 +215,9 @@ export default function LetterArrivalPage() {
   const sender = letter.sender || 'A correspondent';
   const isReceived = letter.direction === 'received';
   const encodedLetterId = encodeURIComponent(letter.id);
+  const dropBackHref = isReceived && letter.senderUsername
+    ? `/compose?new=1&recipient=${encodeURIComponent(`@${letter.senderUsername}`)}`
+    : null;
 
   return (
     <main className="page-shell page-enter">
@@ -320,6 +323,13 @@ export default function LetterArrivalPage() {
                   <div className="mt-3 flex flex-wrap gap-2">{['💜', '🔥', '😂', '🥹', '🫶'].map((emoji) => <button key={emoji} type="button" onClick={() => void react(emoji)} disabled={savingReaction} aria-label={`React ${emoji}`} aria-pressed={letter.reaction === emoji} className={`flex h-11 min-w-11 items-center justify-center rounded-xl border text-lg transition-colors ${letter.reaction === emoji ? 'border-[#2b45f7] bg-[#2b45f7]/10' : 'border-[rgba(16,42,67,.12)] bg-white hover:bg-[#f5f1e9]'}`}>{emoji}</button>)}</div>
                   {reactionNotice && <p className="mt-3 text-xs text-on-surface-variant" role="status" aria-live="polite">{reactionNotice}</p>}
                 </section>}
+                {dropBackHref && <div className="mt-6">
+                  <p className="meta mb-3">No rush — start a fresh drop back to {sender} whenever you want.</p>
+                  <Link href={dropBackHref} className="button-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#fcfaf6]">
+                    Drop back
+                    <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                  </Link>
+                </div>}
                 {!isReceived && letter.reaction && <p className="mt-5 inline-flex items-center gap-2 rounded-full bg-[#f2eee5] px-4 py-2 text-sm text-ink-navy"><Sparkles className="h-4 w-4 text-[#2b45f7]" aria-hidden="true" /> They reacted {letter.reaction}</p>}
                 {(letter.deliveryMode === 'relay' || letter.status === 'dispatched') && <Link
                   href={`/journey?letter=${encodedLetterId}`}

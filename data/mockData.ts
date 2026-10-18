@@ -6,6 +6,7 @@ export interface MockLetter {
   id: string;
   recipient: string;
   sender?: string;
+  senderUsername?: string;
   direction?: 'sent' | 'received';
   date: string;
   status: LetterStatus;
@@ -29,6 +30,7 @@ export const mockLetters: MockLetter[] = [
     id: 'incoming-1',
     recipient: 'sunny.stories',
     sender: 'Mina Vale',
+    senderUsername: 'mina.vale',
     direction: 'received',
     date: 'Just now',
     status: 'delivered',
@@ -44,6 +46,7 @@ export const mockLetters: MockLetter[] = [
     id: 'incoming-gif',
     recipient: 'sunny.stories',
     sender: 'Jo Park',
+    senderUsername: 'jo.park',
     direction: 'received',
     date: 'Yesterday',
     status: 'delivered',
