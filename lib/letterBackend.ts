@@ -215,7 +215,7 @@ export async function syncDropToBackend(draft: LetterDraftState, mediaFile?: Fil
 
   const sentAt = new Date().toISOString();
   const instant = draft.deliveryMode !== 'relay';
-  const { error } = await context.supabase.from('letters').upsert({
+  const { error } = await context.supabase.from('letters').insert({
     id: draft.id,
     sender_id: context.user.id,
     sender_display_name: profile?.displayName || context.user.user_metadata?.full_name || context.user.email || 'A correspondent',
@@ -241,7 +241,9 @@ export async function syncDropToBackend(draft: LetterDraftState, mediaFile?: Fil
   });
   if (error) {
     if (mediaPath) await context.supabase.storage.from('drop-media').remove([mediaPath]);
-    return { ok: false, error: 'Drop could not be saved. Your draft is still here—try again.' };
+    return error.code === '23505'
+      ? { ok: false, error: 'A drop with this draft ID already exists. Check your sent drops before retrying.' }
+      : { ok: false, error: 'Drop could not be saved. Your draft is still here—try again.' };
   }
 
   if (!instant) {
