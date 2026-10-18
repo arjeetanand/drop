@@ -79,10 +79,9 @@ export default function LetterArrivalPage() {
     const loadLetter = async () => {
       const localLetter = getLetterById(letterId);
       if (localLetter) {
-        const remoteDetail = localLetter.status === 'draft' ? null : await getRemoteLetterById(letterId);
         if (active) {
-          setLetter(remoteDetail || localLetter);
-          setFullContentAvailable(true);
+          setLetter(localLetter);
+          setFullContentAvailable(localLetter.status === 'draft');
           setLoading(false);
         }
         return;

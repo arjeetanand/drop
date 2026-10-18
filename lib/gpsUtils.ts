@@ -282,6 +282,9 @@ export interface ActiveCarry {
   acceptedAt: string;
   waypoints: GpsWaypoint[];
   destinationNeighborhood: string;
+  /** Short-lived bearer capability for the next cross-device relay handoff. */
+  successorToken?: string;
+  successorExpiresAt?: string;
 }
 
 export function saveActiveCarry(carry: ActiveCarry): void {

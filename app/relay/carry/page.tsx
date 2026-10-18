@@ -1,595 +1,206 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
-import {
-  AlertCircle,
-  ArrowLeft,
-  ArrowRight,
-  CheckCircle2,
-  Clock3,
-  MapPin,
-  Navigation,
-  Package,
-  QrCode,
-  RefreshCcw,
-  ShieldCheck,
-} from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
+import { ArrowLeft, ArrowRight, CheckCircle2, Clock3, Copy, MapPin, Package, QrCode, RefreshCcw, ShieldCheck } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
-import {
-  buildHandoffQRPayload,
-  clearActiveCarry,
-  formatDistance,
-  generateHandoffPin,
-  getActiveCarry,
-  getCurrentPosition,
-  haversineDistanceKm,
-  reverseGeocode,
-  saveActiveCarry,
-  storeHandoffPin,
-  watchPosition,
-  type HandoffQRPayload,
-  type LatLng,
-} from '@/lib/gpsUtils';
-import { acceptCarry, getInitialRelayState, getRelayState, type RelayState } from '@/lib/relayStore';
+import { clearActiveCarry, getActiveCarry, type ActiveCarry } from '@/lib/gpsUtils';
+import { getRelayHandoffStatus, issueRelayPassFromCarrier, type RelayHandoffStatus, type IssuedRelayToken } from '@/lib/relayStore';
 
-type CarryPhase = 'accepting' | 'locating' | 'carrying' | 'pass-on';
-
-const COLABA_COORDS: LatLng = { lat: 18.922, lng: 72.8347 };
+type CarryPhase = 'loading' | 'carrying' | 'pass-on' | 'confirmed' | 'unavailable';
 
 function CarryContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const letterId = searchParams.get('letter') ?? '3';
-  const subjectParam = searchParams.get('subject') ?? 'A letter';
-  const destParam = searchParams.get('dest') ?? 'Destination';
-  const nameParam = searchParams.get('name') ?? '';
-
-  const [phase, setPhase] = useState<CarryPhase>('accepting');
-  const [relay, setRelay] = useState<RelayState>(getInitialRelayState);
-  const [name, setName] = useState(nameParam);
-  const [note, setNote] = useState('');
-  const [coords, setCoords] = useState<LatLng | null>(null);
-  const [neighborhood, setNeighborhood] = useState('');
-  const [gpsError, setGpsError] = useState('');
-  const [formError, setFormError] = useState('');
-  const [distanceToDestKm, setDistanceToDestKm] = useState<number | null>(null);
-  const [movingStatus, setMovingStatus] = useState<'moving' | 'stationary' | 'unknown'>('unknown');
-  const [stationaryMinutes, setStationaryMinutes] = useState(0);
-  const [pin, setPin] = useState('');
-  const [qrUrl, setQrUrl] = useState('');
-  const [handoffToken, setHandoffToken] = useState('');
-  const [qrTimeLeft, setQrTimeLeft] = useState(600);
-  const [transferredTo, setTransferredTo] = useState<string | null>(null);
-  const [showManualPin, setShowManualPin] = useState(false);
-  const [carryStartedAt, setCarryStartedAt] = useState<number | null>(null);
-  const [clockNow, setClockNow] = useState(0);
-  const [watchVersion, setWatchVersion] = useState(0);
-  const lastPositionRef = useRef<LatLng | null>(null);
-  const lastMovedAtRef = useRef<number | null>(null);
-
-  const destinationCoords = useMemo(
-    () => (destParam.trim().toLowerCase() === 'colaba' ? COLABA_COORDS : null),
-    [destParam],
-  );
-
-  const relayIsLoaded = relay.letterId === letterId;
-  const displaySubject = relayIsLoaded ? relay.subject : subjectParam;
-  const displayDestination = relayIsLoaded ? relay.destinationNeighborhood || destParam : destParam;
-  const displayRecipient = relayIsLoaded ? relay.recipient : destParam;
+  const requestedLetterId = searchParams.get('letter');
+  const [phase, setPhase] = useState<CarryPhase>('loading');
+  const [carry, setCarry] = useState<ActiveCarry | null>(null);
+  const [pass, setPass] = useState<IssuedRelayToken | null>(null);
+  const [now, setNow] = useState(Date.now());
+  const [acceptedBy, setAcceptedBy] = useState('');
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [issuing, setIssuing] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    setRelay(getRelayState(letterId, { subject: subjectParam, recipient: destParam }));
-  }, [destParam, letterId, subjectParam]);
-
-  useEffect(() => {
-    if (nameParam) return;
     const activeCarry = getActiveCarry();
-    if (!activeCarry || activeCarry.letterId !== letterId) return;
-
-    const storedRelay = getRelayState(letterId, {
-      subject: subjectParam,
-      recipient: destParam,
-    });
-    const latestWaypoint = storedRelay.gpsWaypoints?.at(-1);
-    const acceptedAt = new Date(activeCarry.acceptedAt).getTime();
-
-    setRelay(storedRelay);
-    setName(storedRelay.currentCarrierName || '');
-    if (latestWaypoint) {
-      setCoords(latestWaypoint.coords);
-      setNeighborhood(latestWaypoint.neighborhood);
-      setDistanceToDestKm(destinationCoords ? haversineDistanceKm(latestWaypoint.coords, destinationCoords) : null);
-      lastPositionRef.current = latestWaypoint.coords;
+    if (activeCarry && (!requestedLetterId || activeCarry.letterId === requestedLetterId)) {
+      setCarry(activeCarry);
+      setPhase('carrying');
+    } else {
+      setCarry(null);
+      setPhase('unavailable');
     }
-    setCarryStartedAt(Number.isFinite(acceptedAt) ? acceptedAt : Date.now());
-    setClockNow(Date.now());
-    setPhase('carrying');
-  }, [destParam, destinationCoords, letterId, nameParam, subjectParam]);
+  }, [requestedLetterId]);
 
-  const updateDistance = useCallback((position: LatLng) => {
-    setDistanceToDestKm(destinationCoords ? haversineDistanceKm(position, destinationCoords) : null);
-  }, [destinationCoords]);
+  useEffect(() => {
+    if ((phase !== 'pass-on' && phase !== 'carrying') || !pass) return;
+    setNow(Date.now());
+    const countdown = window.setInterval(() => setNow(Date.now()), 1000);
+    let active = true;
+    const checkAcceptance = async () => {
+      if (Date.parse(pass.expiresAt) <= Date.now()) return;
+      const status: RelayHandoffStatus | null = await getRelayHandoffStatus(pass.token);
+      if (!active || !status?.accepted) return;
+      setAcceptedBy(status.acceptedBy || 'the next carrier');
+      clearActiveCarry();
+      setPhase('confirmed');
+    };
+    void checkAcceptance();
+    const polling = window.setInterval(() => void checkAcceptance(), 3000);
+    return () => {
+      active = false;
+      window.clearInterval(countdown);
+      window.clearInterval(polling);
+    };
+  }, [pass, phase]);
 
-  const handleAccept = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const trimmedName = name.trim();
-    if (!trimmedName) {
-      setFormError('Enter your name before accepting the letter.');
+  const letterId = carry?.letterId || requestedLetterId || '';
+  const destination = carry?.destinationNeighborhood || carry?.recipient || searchParams.get('dest') || 'the recipient area';
+  const remainingMs = pass ? Math.max(0, Date.parse(pass.expiresAt) - now) : 0;
+  const expired = remainingMs <= 0;
+  const passUrl = pass && typeof window !== 'undefined'
+    ? `${window.location.origin}/relay/scan?token=${encodeURIComponent(pass.token)}&letter=${encodeURIComponent(letterId)}&dest=${encodeURIComponent(destination)}`
+    : '';
+
+  const handlePassOn = async () => {
+    if (pass && Date.parse(pass.expiresAt) > Date.now()) {
+      setPhase('pass-on');
       return;
     }
-
-    setPhase('locating');
-    setGpsError('');
-    setFormError('');
-
+    if (!carry?.successorToken) {
+      setError('This carry came from an older invite and cannot create a secure pass. Ask the sender to issue a fresh carrier invite.');
+      return;
+    }
+    setError('');
+    setNotice('');
+    setIssuing(true);
     try {
-      const position = await getCurrentPosition();
-      const area = await reverseGeocode(position);
-      const next = acceptCarry(
-        letterId,
-        {
-          name: trimmedName,
-          neighborhood: area,
-          coords: position,
-          note: note.trim() || undefined,
-        },
-        { subject: subjectParam, recipient: destParam },
-      );
-      const acceptedAt = new Date().toISOString();
-
-      setRelay(next);
-      setCoords(position);
-      setNeighborhood(area);
-      updateDistance(position);
-      setCarryStartedAt(new Date(acceptedAt).getTime());
-      setClockNow(Date.now());
-      lastPositionRef.current = position;
-      lastMovedAtRef.current = Date.now();
-      saveActiveCarry({
-        letterId,
-        subject: next.subject,
-        recipient: next.recipient,
-        acceptedAt,
-        waypoints: next.gpsWaypoints ?? [],
-        destinationNeighborhood: next.destinationNeighborhood || destParam,
-      });
-      setPhase('carrying');
-    } catch (error) {
-      setGpsError(error instanceof Error ? error.message : 'Location could not be confirmed.');
-      setPhase('accepting');
+      const nextPass = await issueRelayPassFromCarrier(carry.successorToken);
+      setPass(nextPass);
+      setNow(Date.now());
+      setPhase('pass-on');
+    } catch (issueError) {
+      setError(issueError instanceof Error ? issueError.message : 'A handoff code could not be created. Try again.');
+    } finally {
+      setIssuing(false);
     }
   };
 
-  useEffect(() => {
-    if (phase !== 'carrying') return;
+  const handleRefreshPass = async () => {
+    if (!carry?.successorToken) return;
+    setIssuing(true);
+    setError('');
+    try {
+      const nextPass = await issueRelayPassFromCarrier(carry.successorToken);
+      setPass(nextPass);
+      setNow(Date.now());
+    } catch (issueError) {
+      setError(issueError instanceof Error ? issueError.message : 'A fresh code could not be created. Try again.');
+    } finally {
+      setIssuing(false);
+    }
+  };
 
-    lastMovedAtRef.current = lastMovedAtRef.current ?? Date.now();
-    const stopWatch = watchPosition(
-      (position) => {
-        const previousPosition = lastPositionRef.current;
-        if (previousPosition) {
-          const movedKm = haversineDistanceKm(previousPosition, position);
-          if (movedKm > 0.02) {
-            lastMovedAtRef.current = Date.now();
-            setMovingStatus('moving');
-            setStationaryMinutes(0);
-          } else {
-            setMovingStatus('stationary');
-          }
-        }
-        lastPositionRef.current = position;
-        setCoords(position);
-        updateDistance(position);
-        setGpsError('');
-      },
-      (message) => {
-        setMovingStatus('unknown');
-        setGpsError(`GPS updates paused: ${message} You can keep carrying and retry the watch when ready.`);
-      },
+  const copyPassLink = async () => {
+    if (!passUrl) return;
+    try {
+      await navigator.clipboard.writeText(passUrl);
+      setCopied(true);
+      setNotice('Secure invite link copied.');
+      window.setTimeout(() => setCopied(false), 1800);
+    } catch {
+      setNotice('Copy is unavailable here. The QR code is ready to scan.');
+    }
+  };
+
+  if (phase === 'loading') {
+    return <main className="page-shell"><div className="page-container max-w-2xl"><p className="meta" role="status">Opening your carrier view…</p></div></main>;
+  }
+
+  if (phase === 'unavailable') {
+    return (
+      <main className="page-shell page-enter !pt-4 sm:!pt-8">
+        <div className="page-container max-w-2xl">
+          <Link href="/relay?mode=carrier" className="inline-flex min-h-11 items-center gap-2 rounded-full px-3 text-sm font-semibold text-ink-navy hover:bg-white/65"><ArrowLeft className="h-4 w-4" aria-hidden="true" /> Relay</Link>
+          <section className="mt-7 rounded-3xl border border-[rgba(16,42,67,.12)] bg-white p-6 shadow-[0_12px_36px_rgba(16,42,67,.06)] sm:mt-10 sm:p-9">
+            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#2b45f7]/10 text-[#2b45f7]" aria-hidden="true"><Package className="h-6 w-6" /></span>
+            <p className="eyebrow mt-6 text-[#2b45f7]">Carrier view</p>
+            <h1 className="mt-2 font-headline-md text-3xl leading-tight text-ink-navy sm:text-4xl">A secure invite is needed to carry a drop.</h1>
+            <p className="mt-4 max-w-xl text-sm leading-relaxed text-on-surface-variant">Ask the sender to share a fresh relay QR code or link. The invite keeps the drop sealed and lets you pass it on securely.</p>
+            <Link href="/relay?mode=carrier" className="button-primary mt-6 !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white">How relay works <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
+          </section>
+        </div>
+      </main>
     );
-
-    const stationaryTimer = window.setInterval(() => {
-      if (!lastMovedAtRef.current) return;
-      const minutes = Math.max(0, Math.floor((Date.now() - lastMovedAtRef.current) / 60000));
-      setStationaryMinutes(minutes);
-      if (minutes >= 2) setMovingStatus('stationary');
-    }, 30000);
-
-    return () => {
-      stopWatch();
-      window.clearInterval(stationaryTimer);
-    };
-  }, [phase, updateDistance, watchVersion]);
-
-  useEffect(() => {
-    if (phase !== 'carrying' || !carryStartedAt) return;
-    setClockNow(Date.now());
-    const timer = window.setInterval(() => setClockNow(Date.now()), 30000);
-    return () => window.clearInterval(timer);
-  }, [carryStartedAt, phase]);
-
-  const generateQrHandoff = useCallback(() => {
-    if (!coords) {
-      setGpsError('Your current GPS position is not available yet. Retry the GPS watch before generating a handoff.');
-      return false;
-    }
-
-    const newPin = generateHandoffPin();
-    const currentNeighborhood = neighborhood || 'Nearby area';
-    const createdAt = new Date().toISOString();
-    const payload: HandoffQRPayload = {
-      letterId,
-      pin: newPin,
-      lat: coords.lat,
-      lng: coords.lng,
-      neighborhood: currentNeighborhood,
-      subject: displaySubject,
-      destination: displayDestination,
-      createdAt,
-    };
-    const encoded = buildHandoffQRPayload(payload);
-    if (!encoded) {
-      setGpsError('The handoff code could not be prepared. Please try again.');
-      return false;
-    }
-
-    storeHandoffPin({
-      letterId,
-      pin: newPin,
-      carrierCoords: coords,
-      neighborhood: currentNeighborhood,
-      createdAt,
-    });
-    setPin(newPin);
-    setHandoffToken(encoded);
-    setQrUrl(`${window.location.origin}/relay/scan?d=${encoded}`);
-    setQrTimeLeft(600);
-    setTransferredTo(null);
-    setGpsError('');
-    return true;
-  }, [coords, displayDestination, displaySubject, letterId, neighborhood]);
-
-  const handlePassOn = () => {
-    if (generateQrHandoff()) setPhase('pass-on');
-  };
-
-  useEffect(() => {
-    if (phase !== 'pass-on') return;
-
-    const countdown = window.setInterval(() => {
-      setQrTimeLeft((current) => (current > 0 ? current - 1 : 0));
-    }, 1000);
-    const poll = window.setInterval(() => {
-      const currentRelay = getRelayState(letterId, { subject: displaySubject, recipient: displayRecipient });
-      if (currentRelay.currentCarrierName && currentRelay.currentCarrierName !== name.trim()) {
-        setTransferredTo(currentRelay.currentCarrierName);
-      }
-    }, 2500);
-
-    return () => {
-      window.clearInterval(countdown);
-      window.clearInterval(poll);
-    };
-  }, [displayRecipient, displaySubject, letterId, name, phase]);
-
-  const handleRetryWatch = () => {
-    setGpsError('');
-    setWatchVersion((version) => version + 1);
-  };
-
-  const handleHandedOff = () => {
-    clearActiveCarry();
-    router.push(`/relay?letter=${encodeURIComponent(letterId)}`);
-  };
-
-  const elapsedMinutes = carryStartedAt && clockNow
-    ? Math.max(0, Math.floor((clockNow - carryStartedAt) / 60000))
-    : 0;
+  }
 
   return (
-    <main className="page-shell page-enter">
+    <main className="page-shell page-enter !pt-4 sm:!pt-8">
       <div className="page-container max-w-3xl">
-        <header className="page-header flex-col gap-4 sm:flex-row sm:items-end">
-          <Link href={`/relay?letter=${encodeURIComponent(letterId)}`} className="button-quiet -ml-2">
-            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-            Relay passport
-          </Link>
-          <p className="meta sm:ml-auto">
-            {phase === 'carrying' ? 'Current carry' : phase === 'pass-on' ? 'Ready to pass on' : phase === 'locating' ? 'Confirming GPS' : 'Carrier setup'}
-          </p>
+        <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <Link href={`/relay?letter=${encodeURIComponent(letterId)}`} className="inline-flex min-h-11 items-center gap-2 rounded-full px-3 text-sm font-semibold text-ink-navy hover:bg-white/65"><ArrowLeft className="h-4 w-4" aria-hidden="true" /> Relay passport</Link>
+          <span className="inline-flex w-fit items-center gap-2 rounded-full bg-[#2b45f7]/[0.08] px-3 py-2 font-mono text-[0.65rem] font-bold uppercase tracking-[0.12em] text-[#2b45f7]"><span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />{phase === 'pass-on' ? 'Ready to pass on' : phase === 'confirmed' ? 'Transfer complete' : 'Current carry'}</span>
         </header>
 
-        {phase === 'accepting' && (
-          <section className="mt-12 grid gap-10 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-start">
-            <div>
-              <p className="eyebrow text-[#4f9d7a]">Accept a relay</p>
-              <h1 className="display-title mt-4">“{subjectParam}”</h1>
-              <p className="body-copy mt-5 max-w-2xl text-lg">
-                This letter is trying to reach <span className="text-ink-navy">{destParam}</span>. You do not need to go all the way—carry it as far as your route allows, then pass it to the next person.
-              </p>
-
-              <form onSubmit={handleAccept} className="panel mt-8 p-5 sm:p-7">
-                <p className="eyebrow">Carrier log</p>
-                <h2 className="section-title mt-3 text-3xl">Add your hand to the journey.</h2>
-                <div className="mt-6 space-y-5">
-                  <label htmlFor="carry-name" className="field-label">
-                    Your name <span className="text-[#b84b3a]">*</span>
-                    <input
-                      id="carry-name"
-                      required
-                      value={name}
-                      onChange={(event) => {
-                        setName(event.target.value);
-                        setFormError('');
-                      }}
-                      className="input-field mt-2"
-                      placeholder="Rohan"
-                      autoComplete="name"
-                      autoFocus
-                    />
-                  </label>
-                  <label htmlFor="carry-note" className="field-label">
-                    Field note <span className="font-normal text-on-surface-variant">(optional)</span>
-                    <textarea
-                      id="carry-note"
-                      value={note}
-                      onChange={(event) => setNote(event.target.value)}
-                      className="textarea-field mt-2 min-h-[6rem]"
-                      placeholder="What were you doing when you agreed to carry this?"
-                    />
-                  </label>
-                </div>
-
-                {formError && <p className="notice error-notice mt-5" role="alert" aria-live="assertive">{formError}</p>}
-                {gpsError && (
-                  <div className="notice error-notice mt-5 flex items-start gap-3" role="alert" aria-live="assertive">
-                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-                    <p>{gpsError}</p>
-                  </div>
-                )}
-
-                <button type="submit" disabled={!name.trim()} className="button-primary mt-6 w-full">
-                  <Navigation className="h-4 w-4" aria-hidden="true" />
-                  {gpsError ? 'Try GPS again' : 'Accept and stamp my GPS'}
-                </button>
-                <p className="field-help mt-4 inline-flex items-start gap-2">
-                  <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#4f9d7a]" aria-hidden="true" />
-                  Only your neighborhood is saved, never your exact address.
-                </p>
-              </form>
+        {phase === 'carrying' && carry && (
+          <section className="mt-7 grid gap-5 lg:mt-10 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-start">
+            <div className="rounded-3xl border border-[rgba(16,42,67,.12)] bg-white p-5 shadow-[0_12px_36px_rgba(16,42,67,.06)] sm:p-8">
+              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#2b45f7]/10 text-[#2b45f7]" aria-hidden="true"><Package className="h-6 w-6" /></span>
+              <p className="eyebrow mt-6 text-[#2b45f7]">Current carry</p>
+              <h1 className="mt-2 font-headline-md text-3xl leading-tight text-ink-navy sm:text-4xl">A sealed drop is in your care.</h1>
+              <p className="mt-4 text-sm leading-relaxed text-on-surface-variant">Carry it toward the recipient area. When you’re ready, show the next person a short-lived QR code or share their invite link.</p>
+              <div className="mt-6 flex items-start gap-3 rounded-2xl bg-[#f5f3ed] p-4">
+                <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-[#2b45f7]" aria-hidden="true" />
+                <div><p className="text-xs font-bold uppercase tracking-[0.1em] text-ink-navy">Destination area</p><p className="mt-1 text-sm text-on-surface-variant">{destination}</p></div>
+              </div>
+              <button type="button" onClick={() => void handlePassOn()} disabled={issuing} className="button-primary mt-6 w-full !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white sm:w-auto">
+                <QrCode className="h-4 w-4" aria-hidden="true" />{issuing ? 'Preparing secure invite…' : 'Pass it on'}<ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </button>
+              {pass && Date.parse(pass.expiresAt) > Date.now() && <p className="mt-4 text-xs leading-relaxed text-on-surface-variant" role="status" aria-live="polite">A previous invite is still active. If the next carrier accepts it, this screen will confirm the transfer.</p>}
+              {error && <p className="notice error-notice mt-4" role="alert" aria-live="assertive">{error}</p>}
             </div>
-
-            <aside className="paper-card p-5 sm:p-6">
-              <p className="eyebrow">The carry loop</p>
-              <ol className="mt-5 space-y-5">
-                {[
-                  ['01', 'Accept', 'Stamp your starting neighborhood.'],
-                  ['02', 'Carry', 'Move the sealed letter along your route.'],
-                  ['03', 'Pass on', 'Show a new QR code or share the PIN.'],
-                  ['04', 'Confirm', 'The next carrier updates the passport.'],
-                ].map(([number, title, text]) => (
-                  <li key={number} className="border-t border-[rgba(16,42,67,0.12)] pt-4 first:border-t-0 first:pt-0">
-                    <span className="meta text-[#b84b3a]">{number}</span>
-                    <h2 className="mt-2 font-headline-md text-xl text-ink-navy">{title}</h2>
-                    <p className="body-copy mt-1 text-sm">{text}</p>
-                  </li>
-                ))}
-              </ol>
+            <aside className="rounded-3xl border border-[rgba(16,42,67,.12)] bg-[#fffdf9] p-5 sm:p-6">
+              <p className="eyebrow">A sealed route</p>
+              <div className="mt-4 flex items-start gap-3"><ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[#2b45f7]" aria-hidden="true" /><p className="text-sm leading-relaxed text-on-surface-variant">Carriers can see route details only. The drop’s note and media stay private.</p></div>
+              <p className="mt-5 border-t border-[rgba(16,42,67,.1)] pt-4 font-mono text-[0.65rem] text-on-surface-variant">Your secure carry pass is saved on this device.</p>
             </aside>
           </section>
         )}
 
-        {phase === 'locating' && (
-          <section className="panel mt-12 p-8 text-center" aria-live="polite">
-            <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-[rgba(79,157,122,0.25)] border-t-[#4f9d7a]" aria-hidden="true" />
-            <p className="eyebrow mt-6 text-[#4f9d7a]">GPS confirmation</p>
-            <h1 className="section-title mt-3">Finding your place in the route.</h1>
-            <p className="body-copy mx-auto mt-3 max-w-md text-sm">Allow location access when your browser asks. Your neighborhood will be recorded as a waypoint.</p>
-          </section>
-        )}
-
-        {phase === 'carrying' && (
-          <section className="mt-12 grid gap-10 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-start">
-            <div>
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                  <p className="eyebrow text-[#4f9d7a]">Current carry</p>
-                  <h1 className="display-title mt-4">“{displaySubject}”</h1>
-                </div>
-                <span className={`status-mark ${movingStatus === 'moving' ? 'success' : 'neutral'}`}>
-                  <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
-                  {movingStatus === 'moving' ? 'Moving' : movingStatus === 'stationary' ? 'Stationary' : 'GPS watch pending'}
-                </span>
+        {phase === 'pass-on' && pass && (
+          <section className="mt-7 rounded-3xl border border-[rgba(16,42,67,.12)] bg-white p-5 shadow-[0_12px_36px_rgba(16,42,67,.06)] sm:mt-10 sm:p-8">
+            <div className="mx-auto max-w-xl text-center">
+              <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#2b45f7]/10 text-[#2b45f7]" aria-hidden="true"><QrCode className="h-6 w-6" /></span>
+              <p className="eyebrow mt-6 text-[#2b45f7]">Secure pass</p>
+              <h1 className="mt-2 font-headline-md text-3xl leading-tight text-ink-navy sm:text-4xl">Let the next carrier scan.</h1>
+              <p className="mt-3 text-sm leading-relaxed text-on-surface-variant">This invite expires in ten minutes. Once they accept, this screen will confirm the handoff.</p>
+              <div className="mx-auto mt-6 flex w-fit max-w-full items-center justify-center rounded-2xl border border-[rgba(16,42,67,.12)] bg-white p-3" role="img" aria-label="Secure QR invite for the next carrier">
+                {passUrl && <QRCodeSVG value={passUrl} size={220} level="M" includeMargin={false} />}
               </div>
-
-              <p className="body-copy mt-5 max-w-2xl text-lg">
-                You are carrying this sealed letter toward <span className="text-ink-navy">{displayDestination}</span>. Stop whenever your route ends and pass it on.
-              </p>
-
-              <div className="mt-8 grid gap-5 border-y border-[rgba(16,42,67,0.13)] py-5 sm:grid-cols-3">
-                <div>
-                  <p className="font-headline-md text-2xl text-ink-navy">{neighborhood || 'Pending'}</p>
-                  <p className="meta mt-1">Your neighborhood</p>
-                </div>
-                <div className="border-t border-[rgba(16,42,67,0.12)] pt-4 sm:border-l sm:border-t-0 sm:pl-5 sm:pt-0">
-                  <p className="font-headline-md text-2xl text-ink-navy">{distanceToDestKm !== null ? formatDistance(distanceToDestKm) : 'Not mapped'}</p>
-                  <p className="meta mt-1">Approx. to {displayDestination}</p>
-                </div>
-                <div className="border-t border-[rgba(16,42,67,0.12)] pt-4 sm:border-l sm:border-t-0 sm:pl-5 sm:pt-0">
-                  <p className="font-headline-md text-2xl text-ink-navy">{elapsedMinutes}m</p>
-                  <p className="meta mt-1">Time carrying</p>
-                </div>
+              <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                <span className={`inline-flex min-h-9 items-center gap-2 rounded-full px-3 text-xs font-bold ${expired ? 'bg-[#f3efe7] text-on-surface-variant' : 'bg-[#2b45f7]/[0.08] text-[#2b45f7]'}`} role="status" aria-live="polite"><Clock3 className="h-3.5 w-3.5" aria-hidden="true" />{expired ? 'Invite expired' : `Expires in ${Math.floor(remainingMs / 60000)}:${String(Math.floor((remainingMs % 60000) / 1000)).padStart(2, '0')}`}</span>
+                <span className="inline-flex min-h-9 items-center gap-2 rounded-full bg-[#f5f3ed] px-3 text-xs font-bold text-ink-navy"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#2b45f7] motion-reduce:animate-none" aria-hidden="true" />Waiting for acceptance</span>
               </div>
-
-              <p className="notice mt-6 inline-flex items-start gap-3" role="status" aria-live="polite">
-                <Navigation className="mt-0.5 h-4 w-4 shrink-0 text-[#4f9d7a]" aria-hidden="true" />
-                Head toward <span className="text-ink-navy">{displayDestination}</span>. The route is logged at neighborhood level.
-              </p>
-
-              {stationaryMinutes >= 30 && (
-                <div className="notice error-notice mt-4 flex items-start gap-3" role="status" aria-live="polite">
-                  <Clock3 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-                  <p>You have been stationary for {stationaryMinutes} minutes. If your route is done, pass the letter on.</p>
-                </div>
-              )}
-
-              {gpsError && (
-                <div className="notice error-notice mt-4 flex flex-wrap items-center justify-between gap-3" role="alert" aria-live="assertive">
-                  <p className="inline-flex items-start gap-3">
-                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-                    <span>{gpsError}</span>
-                  </p>
-                  <button type="button" onClick={handleRetryWatch} className="button-quiet">
-                    <RefreshCcw className="h-4 w-4" aria-hidden="true" />
-                    Retry GPS watch
-                  </button>
-                </div>
-              )}
-
-              <button type="button" onClick={handlePassOn} className="button-primary mt-8 w-full sm:w-auto">
-                <QrCode className="h-4 w-4" aria-hidden="true" />
-                I am ready to pass it on
-                <ArrowRight className="h-4 w-4" aria-hidden="true" />
-              </button>
+              {passUrl && <button type="button" onClick={() => void copyPassLink()} className="button-secondary mt-5 !min-h-11 !rounded-xl"><Copy className="h-4 w-4" aria-hidden="true" />{copied ? 'Link copied' : 'Copy secure link'}</button>}
+              {expired && <button type="button" onClick={() => void handleRefreshPass()} disabled={issuing} className="button-secondary mt-3 !min-h-11 !rounded-xl disabled:opacity-50"><RefreshCcw className="h-4 w-4" aria-hidden="true" />{issuing ? 'Making a new invite…' : 'Create a fresh invite'}</button>}
+              {notice && <p className="mt-3 text-sm text-on-surface-variant" role="status" aria-live="polite">{notice}</p>}
+              {error && <p className="notice error-notice mt-4" role="alert" aria-live="assertive">{error}</p>}
             </div>
-
-            <aside className="panel p-5 sm:p-6">
-              <p className="eyebrow">Privacy promise</p>
-              <p className="body-copy mt-4 text-sm">
-                Carriers see the destination, never the words. GPS is used to name a neighborhood waypoint; exact coordinates stay out of the passport view.
-              </p>
-              <div className="mt-6 border-t border-[rgba(16,42,67,0.12)] pt-5">
-                <p className="meta">Destination</p>
-                <p className="mt-2 inline-flex items-center gap-2 font-headline-md text-xl text-ink-navy">
-                  <MapPin className="h-4 w-4 text-[#b84b3a]" aria-hidden="true" />
-                  {displayDestination}
-                </p>
-              </div>
-            </aside>
+            <p className="mx-auto mt-6 flex max-w-xl items-start gap-2 border-t border-[rgba(16,42,67,.1)] pt-5 text-xs leading-relaxed text-on-surface-variant"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#2b45f7]" aria-hidden="true" />The QR code contains a temporary handoff invite. It does not include the drop’s text, media, or your exact location.</p>
+            <button type="button" onClick={() => { setPhase('carrying'); setError(''); }} className="button-quiet mt-5"><ArrowLeft className="h-4 w-4" aria-hidden="true" />Keep carrying</button>
           </section>
         )}
 
-        {phase === 'pass-on' && (
-          transferredTo ? (
-            <section className="mt-12 max-w-2xl">
-              <p className="eyebrow text-[#4f9d7a]">Transfer recorded</p>
-              <h1 className="display-title mt-4">Passed to {transferredTo}.</h1>
-              <p className="body-copy mt-5 text-lg">
-                The new carrier has accepted “<span className="text-ink-navy">{displaySubject}</span>”. Your neighborhood waypoint is part of the completed custody chain.
-              </p>
-              <p className="notice mt-7 inline-flex items-start gap-3" role="status" aria-live="polite">
-                <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-[#4f9d7a]" aria-hidden="true" />
-                Custody transfer confirmed and saved to the relay passport.
-              </p>
-              <button type="button" onClick={handleHandedOff} className="button-primary mt-7">
-                View relay passport
-                <ArrowRight className="h-4 w-4" aria-hidden="true" />
-              </button>
-            </section>
-          ) : (
-            <section className="mt-12 grid gap-8 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-start">
-              <div>
-                <p className="eyebrow text-[#4f9d7a]">Seamless handoff</p>
-                <h1 className="display-title mt-4">Show the next carrier this code.</h1>
-                <p className="body-copy mt-5 max-w-2xl text-lg">
-                  When they scan the QR code, their GPS acceptance and your handoff point are added to the relay together.
-                </p>
-
-                <div className="paper-card mt-8 p-6 text-center sm:p-8">
-                  <div
-                    className="mx-auto flex w-fit max-w-full items-center justify-center border border-[rgba(16,42,67,0.16)] bg-white p-4"
-                    role="img"
-                    aria-label={`Handoff QR code for ${displaySubject}`}
-                  >
-                    {qrUrl ? (
-                      <QRCodeSVG value={qrUrl} size={220} level="M" includeMargin={false} />
-                    ) : (
-                      <p className="meta flex h-[220px] w-[220px] items-center justify-center text-center">Preparing the handoff code…</p>
-                    )}
-                  </div>
-
-                  <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-                    <span className={`status-mark ${qrTimeLeft > 0 ? 'success' : 'neutral'}`}>
-                      <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
-                      {qrTimeLeft > 0 ? `Expires in ${Math.floor(qrTimeLeft / 60)}:${String(qrTimeLeft % 60).padStart(2, '0')}` : 'Code expired'}
-                    </span>
-                    <span className="status-mark neutral" role="status" aria-live="polite">
-                      Awaiting scan
-                    </span>
-                  </div>
-
-                  {qrTimeLeft === 0 && (
-                    <button type="button" onClick={generateQrHandoff} className="button-secondary mt-5">
-                      <RefreshCcw className="h-4 w-4" aria-hidden="true" />
-                      Generate a fresh code
-                    </button>
-                  )}
-
-                  <p className="field-help mx-auto mt-5 max-w-md">The code is valid for ten minutes. The next carrier can use their phone camera without installing anything.</p>
-                </div>
-
-                <div className="panel mt-6 p-5 sm:p-6">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <p className="eyebrow">Camera fallback</p>
-                      <p className="body-copy mt-2 text-sm">If the camera cannot read the code, share the letter ID and PIN instead.</p>
-                    </div>
-                    <button type="button" onClick={() => setShowManualPin((current) => !current)} className="button-secondary">
-                      {showManualPin ? 'Hide PIN' : 'Show PIN'}
-                    </button>
-                  </div>
-                  {showManualPin && (
-                    <div className="mt-5 border-t border-[rgba(16,42,67,0.12)] pt-5" aria-live="polite">
-                      <p className="meta">Open /relay/handoff</p>
-                      <dl className="mt-3 grid gap-3 sm:grid-cols-2">
-                        <div>
-                          <dt className="meta">Letter ID</dt>
-                          <dd className="mt-1 font-mono text-lg font-bold text-ink-navy">{letterId}</dd>
-                        </div>
-                        <div>
-                          <dt className="meta">Four-digit PIN</dt>
-                          <dd className="mt-1 font-mono text-2xl font-bold tracking-[0.2em] text-[#b84b3a]">{pin}</dd>
-                        </div>
-                      </dl>
-                      <Link
-                        href={handoffToken
-                          ? `/relay/handoff?d=${encodeURIComponent(handoffToken)}&letter=${encodeURIComponent(letterId)}&pin=${encodeURIComponent(pin)}`
-                          : `/relay/handoff?letter=${encodeURIComponent(letterId)}&pin=${encodeURIComponent(pin)}`}
-                        className="button-quiet mt-4 -ml-2"
-                      >
-                        Open the manual handoff page
-                        <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                      </Link>
-                    </div>
-                  )}
-                </div>
-
-                <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-                  <button type="button" onClick={handleHandedOff} className="button-secondary">
-                    They accepted it—finish my carry
-                  </button>
-                  <button type="button" onClick={() => setPhase('carrying')} className="button-quiet">
-                    Keep carrying
-                  </button>
-                </div>
-              </div>
-
-              <aside className="panel p-5 sm:p-6">
-                <p className="eyebrow">Your handoff point</p>
-                <p className="mt-3 inline-flex items-center gap-2 font-headline-md text-xl text-ink-navy">
-                  <MapPin className="h-4 w-4 text-[#b84b3a]" aria-hidden="true" />
-                  {neighborhood || 'Nearby area'}
-                </p>
-                <p className="body-copy mt-4 text-sm">This neighborhood is stamped into the QR payload so the passport can show where the letter changed hands.</p>
-                <div className="mt-6 border-t border-[rgba(16,42,67,0.12)] pt-5">
-                  <p className="meta">Destination</p>
-                  <p className="mt-2 font-headline-md text-xl text-ink-navy">{displayDestination}</p>
-                </div>
-              </aside>
-            </section>
-          )
+        {phase === 'confirmed' && (
+          <section className="mt-7 rounded-3xl border border-[rgba(16,42,67,.12)] bg-white p-6 shadow-[0_12px_36px_rgba(16,42,67,.06)] sm:mt-10 sm:p-9">
+            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#2b45f7]/10 text-[#2b45f7]" aria-hidden="true"><CheckCircle2 className="h-6 w-6" /></span>
+            <p className="eyebrow mt-6 text-[#2b45f7]">Transfer recorded</p>
+            <h1 className="mt-2 font-headline-md text-3xl leading-tight text-ink-navy sm:text-4xl">Passed to {acceptedBy}.</h1>
+            <p className="mt-4 max-w-xl text-sm leading-relaxed text-on-surface-variant">The next carrier accepted the sealed drop. Its route has been updated.</p>
+            <Link href={`/relay?letter=${encodeURIComponent(letterId)}`} className="button-primary mt-6 !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white">View relay passport <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
+          </section>
         )}
       </div>
     </main>
@@ -597,9 +208,5 @@ function CarryContent() {
 }
 
 export default function CarryPage() {
-  return (
-    <Suspense fallback={<main className="page-shell"><div className="page-container"><p className="meta">Loading carrier mode…</p></div></main>}>
-      <CarryContent />
-    </Suspense>
-  );
+  return <Suspense fallback={<main className="page-shell"><div className="page-container"><p className="meta">Loading carrier mode…</p></div></main>}><CarryContent /></Suspense>;
 }

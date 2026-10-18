@@ -15,6 +15,7 @@ import {
   RefreshCcw,
   ShieldCheck,
 } from 'lucide-react';
+import { RelayTokenHandoff } from '@/components/RelayTokenHandoff';
 import {
   getCurrentPosition,
   isHandoffQRExpired,
@@ -55,6 +56,9 @@ function ScanContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const encoded = searchParams.get('d') ?? '';
+  const token = searchParams.get('token') ?? '';
+  const tokenLetterId = searchParams.get('letter') ?? '';
+  const tokenDestination = searchParams.get('dest') ?? 'Recipient area';
   const payload = useMemo(() => (encoded ? parseHandoffQRPayload(encoded) : null), [encoded]);
 
   const [phase, setPhase] = useState<ScanPhase>(encoded ? 'preview' : 'invalid');
@@ -176,6 +180,28 @@ function ScanContent() {
   const manualHref = payload
     ? `/relay/handoff?d=${encodeURIComponent(encoded)}&letter=${encodeURIComponent(payload.letterId)}&pin=${encodeURIComponent(payload.pin)}`
     : '/relay/handoff';
+
+  if (token) {
+    const backHref = tokenLetterId
+      ? `/relay?letter=${encodeURIComponent(tokenLetterId)}`
+      : '/relay?mode=carrier';
+    return (
+      <main className="page-shell page-enter">
+        <div className="page-container max-w-3xl">
+          <header className="page-header flex-col gap-4 sm:flex-row sm:items-end">
+            <Link href={backHref} className="button-quiet -ml-2"><ArrowLeft className="h-4 w-4" aria-hidden="true" /> Relay passport</Link>
+            <p className="meta inline-flex items-center gap-2 sm:ml-auto"><QrCode className="h-4 w-4 text-[#2b45f7]" aria-hidden="true" /> Secure carrier invite</p>
+          </header>
+          <div className="mt-7 rounded-3xl bg-[#2b45f7] p-5 text-white sm:p-8">
+            <p className="font-mono text-[0.66rem] font-bold uppercase tracking-[0.18em] text-white/75">A sealed drop is on its way</p>
+            <h1 className="mt-3 font-headline-md text-4xl font-semibold leading-[1.02] tracking-[-0.045em] sm:text-5xl">Carry it toward {tokenDestination}.</h1>
+            <p className="mt-4 max-w-2xl text-sm leading-relaxed text-white/85 sm:text-base">The handoff is tied to this one-time invite. You’ll see the route details; the message and media stay private.</p>
+          </div>
+          <RelayTokenHandoff token={token} destination={tokenDestination} backHref={backHref} method="QR" />
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="page-shell page-enter">

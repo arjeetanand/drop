@@ -14,7 +14,7 @@ type LetterRow = {
   recipient_username: string | null;
   recipient_name: string | null;
   subject: string;
-  content: string;
+  content?: string;
   teaser: string[] | null;
   status: MockLetter['status'];
   seal_id: string | null;
@@ -74,14 +74,12 @@ export async function saveRemoteProfile(profile: UserProfile) {
     username: profile.username,
     display_name: profile.displayName,
     bio: profile.bio,
-    letters_sent: profile.lettersSent,
-    letters_received: profile.lettersReceived,
   });
   return !error;
 }
 
 function rowToLetter(row: LetterRow, userId: string, revealContent = false): MockLetter {
-  const content = row.content.trim();
+  const content = row.content?.trim() || '';
   const teaser = row.teaser?.filter(Boolean).join(' ') || content.slice(0, 150);
   const mediaFallback = row.payload_kind === 'gif' ? 'A GIF is waiting behind the seal.' : row.payload_kind === 'image' ? 'A photo is waiting behind the seal.' : 'A sealed letter waiting to be opened.';
   return {
@@ -107,7 +105,8 @@ function rowToLetter(row: LetterRow, userId: string, revealContent = false): Moc
   };
 }
 
-const LETTER_SELECT = 'id, sender_id, recipient_id, sender_display_name, recipient_username, recipient_name, subject, content, teaser, status, seal_id, dispatched_at, delivered_at, created_at, payload_kind, delivery_mode, media_path, media_mime_type, media_size_bytes';
+const MAILBOX_SELECT = 'id, sender_id, recipient_id, sender_display_name, recipient_username, recipient_name, subject, teaser, status, seal_id, dispatched_at, delivered_at, created_at, payload_kind, delivery_mode, media_path, media_mime_type, media_size_bytes';
+const LETTER_SELECT = `${MAILBOX_SELECT}, content`;
 
 export async function getRemoteLetters(): Promise<MockLetter[] | null> {
   const context = await getAuthenticatedClient();
@@ -115,7 +114,7 @@ export async function getRemoteLetters(): Promise<MockLetter[] | null> {
 
   const { data, error } = await context.supabase
     .from('letters')
-    .select(LETTER_SELECT)
+    .select(MAILBOX_SELECT)
     .order('created_at', { ascending: false })
     .returns<LetterRow[]>();
 

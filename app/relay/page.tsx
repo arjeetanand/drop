@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState, type FormEvent } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import {
@@ -14,25 +14,22 @@ import {
   Route,
   Share2,
   ShieldCheck,
-  UsersRound,
-  X,
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { currentFocusDraft } from '@/data/mockData';
 import { RouteMap } from '@/components/RouteMap';
 import { TrackingTimeline } from '@/components/TrackingTimeline';
+import { mergeRemoteRelayHandoffs } from '@/components/relayPresentation';
 import {
-  addRelayHandoff,
   getInitialRelayState,
-  getNearbyLetters,
+  getRemoteRelayHandoffs,
   getRelayState,
   getRelayStats,
+  issueRelayHandoffToken,
   relayToTrackingEvents,
-  type AvailableLetter,
   type RelayState,
 } from '@/lib/relayStore';
-import { formatDistance } from '@/lib/gpsUtils';
-import { getLetterDraftById } from '@/lib/letterStore';
+import { getLetterDraft, getLetterDraftById } from '@/lib/letterStore';
 
 type ViewMode = 'sender' | 'carrier';
 
@@ -43,79 +40,80 @@ function RelayContent() {
   const carrierMode = searchParams.get('mode') === 'carrier';
 
   const [relay, setRelay] = useState<RelayState>(getInitialRelayState);
+  const [destination, setDestination] = useState('Recipient area');
   const [viewMode, setViewMode] = useState<ViewMode>(carrierMode ? 'carrier' : 'sender');
-  const [showHandoff, setShowHandoff] = useState(joinRequested);
-  const [name, setName] = useState('');
-  const [location, setLocation] = useState('');
-  const [note, setNote] = useState('');
+  const [inviteUrl, setInviteUrl] = useState('');
+  const [inviteExpiresAt, setInviteExpiresAt] = useState('');
+  const [creatingInvite, setCreatingInvite] = useState(false);
   const [copied, setCopied] = useState(false);
   const [notice, setNotice] = useState('');
-  const [formError, setFormError] = useState('');
-  const [origin, setOrigin] = useState('');
-  const [nearbyLetters, setNearbyLetters] = useState<AvailableLetter[]>([]);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    const draft = getLetterDraftById(letterId);
-    setRelay(getRelayState(letterId, {
+    const draft = getLetterDraftById(letterId) || (getLetterDraft().id === letterId ? getLetterDraft() : null);
+    const localRelay = getRelayState(letterId, {
       subject: draft?.subject || currentFocusDraft.subject,
-      recipient: draft?.address.name || draft?.recipient || 'Eleanor',
-    }));
+      recipient: draft?.address.name || draft?.recipient || 'your correspondent',
+    });
+    setRelay(localRelay);
+    setDestination(
+      localRelay.destinationNeighborhood
+      || draft?.address.city
+      || 'Recipient area',
+    );
     setViewMode(carrierMode ? 'carrier' : 'sender');
-    setShowHandoff(joinRequested);
-    setNearbyLetters(getNearbyLetters());
-  }, [carrierMode, joinRequested, letterId]);
+    if (joinRequested) {
+      setNotice('This older carrier link is no longer active. Create a fresh invite from the sender passport.');
+    } else {
+      setNotice('');
+    }
 
-  useEffect(() => {
-    setOrigin(window.location.origin);
-  }, []);
+    let active = true;
+    void getRemoteRelayHandoffs(letterId).then((remote) => {
+      if (active && remote) setRelay(mergeRemoteRelayHandoffs(localRelay, remote));
+    });
+    return () => {
+      active = false;
+    };
+  }, [carrierMode, joinRequested, letterId]);
 
   const stats = getRelayStats(relay);
   const waypoints = relay.gpsWaypoints ?? [];
-  const shareLink = `${origin}/relay?letter=${encodeURIComponent(letterId)}&join=1`;
   const completedHandoffs = relay.handoffs.filter((handoff) => !handoff.next);
 
-  const announce = (message: string) => {
-    setNotice(message);
-    window.setTimeout(() => setNotice(''), 4200);
+  const createInvite = async () => {
+    setCreatingInvite(true);
+    setError('');
+    setNotice('');
+    setInviteUrl('');
+    try {
+      const issued = await issueRelayHandoffToken(letterId);
+      const params = new URLSearchParams({
+        token: issued.token,
+        letter: letterId,
+        dest: destination,
+      });
+      const url = `${window.location.origin}/relay/scan?${params.toString()}`;
+      setInviteUrl(url);
+      setInviteExpiresAt(issued.expiresAt);
+      setNotice('Carrier invite ready. It expires in 10 minutes.');
+    } catch (issueError) {
+      setError(issueError instanceof Error ? issueError.message : 'A carrier invite could not be created. Try again.');
+    } finally {
+      setCreatingInvite(false);
+    }
   };
 
-  const copyRelayLink = async () => {
+  const copyInvite = async () => {
+    if (!inviteUrl) return;
     try {
       if (!navigator.clipboard) throw new Error('Clipboard unavailable');
-      await navigator.clipboard.writeText(shareLink);
+      await navigator.clipboard.writeText(inviteUrl);
       setCopied(true);
-      announce('Carrier link copied.');
+      setNotice('Carrier invite copied. Share it with the person who will carry this drop.');
       window.setTimeout(() => setCopied(false), 1800);
     } catch {
-      announce(`Copy is unavailable here. Share this link: ${shareLink}`);
-    }
-  };
-
-  const recordHandoff = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const trimmedName = name.trim();
-    const trimmedLocation = location.trim();
-
-    if (!trimmedName || !trimmedLocation) {
-      setFormError('Add a name and neighborhood before recording the handoff.');
-      return;
-    }
-
-    try {
-      const next = addRelayHandoff(
-        letterId,
-        { name: trimmedName, location: trimmedLocation, note },
-        { subject: relay.subject, recipient: relay.recipient },
-      );
-      setRelay(next);
-      setName('');
-      setLocation('');
-      setNote('');
-      setFormError('');
-      setShowHandoff(false);
-      announce(`${trimmedName} is now part of the relay.`);
-    } catch {
-      setFormError('The handoff could not be saved. Check the details and try again.');
+      setNotice('Copy is unavailable. The carrier invite is shown below so you can select it.');
     }
   };
 
@@ -133,278 +131,148 @@ function RelayContent() {
 
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="eyebrow">Choose a view</p>
+              <p className="eyebrow">Your relay</p>
               <p className="body-copy mt-2 max-w-xl text-sm">
-                Keep the passport open to follow the route, or switch to carrier mode to find a letter nearby.
+                Follow a drop you sent, or open a carrier invite someone shared with you.
               </p>
             </div>
-            <div className="flex flex-wrap gap-2" role="group" aria-label="Relay view">
+            <div className="grid w-full grid-cols-2 gap-2 sm:w-auto" role="group" aria-label="Relay view">
               <button
                 type="button"
                 onClick={() => setViewMode('sender')}
                 aria-pressed={viewMode === 'sender'}
-                className={viewMode === 'sender' ? 'button-primary' : 'button-secondary'}
+                className={viewMode === 'sender'
+                  ? 'button-primary !min-h-11 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white'
+                  : 'button-secondary !min-h-11 !rounded-xl'}
               >
                 <Package className="h-4 w-4" aria-hidden="true" />
-                Sender view
+                Follow my drop
               </button>
               <button
                 type="button"
                 onClick={() => setViewMode('carrier')}
                 aria-pressed={viewMode === 'carrier'}
-                className={viewMode === 'carrier' ? 'button-primary' : 'button-secondary'}
+                className={viewMode === 'carrier'
+                  ? 'button-primary !min-h-11 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white'
+                  : 'button-secondary !min-h-11 !rounded-xl'}
               >
                 <Navigation className="h-4 w-4" aria-hidden="true" />
-                Carrier mode
+                Carry a drop
               </button>
             </div>
           </div>
         </header>
 
-        {notice && (
-          <p className="notice mt-5" role="status" aria-live="polite">
-            {notice}
-          </p>
-        )}
+        {notice && <p className="notice mt-5" role="status" aria-live="polite">{notice}</p>}
+        {error && <p className="notice error-notice mt-5" role="alert" aria-live="assertive">{error}</p>}
 
         {viewMode === 'sender' ? (
           <>
-            <section className="mt-12 grid gap-10 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
-              <div className="min-w-0">
-                <p className="eyebrow text-[#4f9d7a]">Human relay / in progress</p>
-                <h1 className="display-title mt-4 max-w-3xl">The story between here and there.</h1>
-                <p className="body-copy mt-5 max-w-2xl text-lg">
-                  <span className="text-ink-navy">“{relay.subject}”</span> is traveling toward{' '}
-                  <span className="text-ink-navy">{relay.recipient}</span> through willing hands. Follow the route without opening the letter.
+            <section className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
+              <div className="min-w-0 rounded-3xl bg-[#2b45f7] p-5 text-white shadow-[0_20px_50px_rgba(43,69,247,.18)] sm:p-8">
+                <p className="font-mono text-[0.66rem] font-bold uppercase tracking-[0.18em] text-white/75">Human relay · in progress</p>
+                <h1 className="mt-4 max-w-3xl font-headline-md text-4xl font-semibold leading-[1.02] tracking-[-0.045em] sm:text-5xl">
+                  Your drop is on a journey.
+                </h1>
+                <p className="mt-4 max-w-2xl text-base leading-relaxed text-white/85 sm:text-lg">
+                  “{relay.subject}” is traveling toward {relay.recipient}. Carriers can see the route and handoff details; the drop stays sealed.
                 </p>
 
-                <div className="mt-8 grid gap-5 border-y border-[rgba(16,42,67,0.13)] py-5 sm:grid-cols-3">
+                <div className="mt-7 grid grid-cols-3 border-y border-white/20 py-4">
                   <div>
-                    <p className="font-headline-md text-3xl text-ink-navy">{stats.carriers}</p>
-                    <p className="meta mt-1">People recorded</p>
+                    <p className="font-headline-md text-2xl sm:text-3xl">{stats.carriers}</p>
+                    <p className="mt-1 text-[0.65rem] text-white/70 sm:text-xs">People</p>
                   </div>
-                  <div className="border-t border-[rgba(16,42,67,0.12)] pt-4 sm:border-l sm:border-t-0 sm:pl-5 sm:pt-0">
-                    <p className="font-headline-md text-3xl text-ink-navy">{waypoints.length}</p>
-                    <p className="meta mt-1">GPS waypoints</p>
+                  <div className="border-l border-white/20 pl-3 sm:pl-5">
+                    <p className="font-headline-md text-2xl sm:text-3xl">{stats.cities}</p>
+                    <p className="mt-1 text-[0.65rem] text-white/70 sm:text-xs">Stops</p>
                   </div>
-                  <div className="border-t border-[rgba(16,42,67,0.12)] pt-4 sm:border-l sm:border-t-0 sm:pl-5 sm:pt-0">
-                    <p className="font-headline-md text-3xl text-ink-navy">{stats.hours}h</p>
-                    <p className="meta mt-1">Journey logged</p>
+                  <div className="border-l border-white/20 pl-3 sm:pl-5">
+                    <p className="font-headline-md text-2xl sm:text-3xl">{stats.hours}h</p>
+                    <p className="mt-1 text-[0.65rem] text-white/70 sm:text-xs">Journey time</p>
                   </div>
                 </div>
 
-                <div className="mt-8 flex flex-wrap gap-3">
+                <div className="mt-6 flex flex-col gap-2 sm:flex-row">
                   <button
                     type="button"
-                    onClick={() => {
-                      setShowHandoff((current) => !current);
-                      setFormError('');
-                    }}
-                    className="button-primary"
-                    aria-expanded={showHandoff}
-                    aria-controls="manual-handoff"
+                    onClick={() => void createInvite()}
+                    disabled={creatingInvite}
+                    className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-bold text-[#2b45f7] disabled:opacity-60"
                   >
-                    <UsersRound className="h-4 w-4" aria-hidden="true" />
-                    {showHandoff ? 'Close handoff form' : 'Record a handoff'}
+                    <Share2 className="h-4 w-4" aria-hidden="true" />
+                    {creatingInvite ? 'Creating invite…' : inviteUrl ? 'Create a fresh invite' : 'Invite a carrier'}
                   </button>
-                  <Link href={`/journey?letter=${encodeURIComponent(letterId)}`} className="button-secondary">
+                  <Link href={`/journey?letter=${encodeURIComponent(letterId)}`} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-white/35 bg-white/10 px-4 py-3 text-sm font-bold text-white hover:bg-white/15">
                     <Route className="h-4 w-4" aria-hidden="true" />
-                    Open full journey
-                    <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                    Open journey <ArrowRight className="h-4 w-4" aria-hidden="true" />
                   </Link>
                 </div>
-
-                {showHandoff && (
-                  <form id="manual-handoff" onSubmit={recordHandoff} className="panel mt-8 p-5 sm:p-7">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <p className="eyebrow text-[#4f9d7a]">Carrier log</p>
-                        <h2 className="section-title mt-2 text-3xl">Record the next handoff.</h2>
-                        <p className="body-copy mt-3 max-w-xl text-sm">
-                          Add the person and neighborhood that move the sealed letter forward. The route is recorded; the words remain private.
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setShowHandoff(false)}
-                        className="button-quiet -mr-2 -mt-2 shrink-0"
-                        aria-label="Close handoff form"
-                      >
-                        <X className="h-4 w-4" aria-hidden="true" />
-                      </button>
-                    </div>
-
-                    {formError && (
-                      <p className="notice error-notice mt-5" role="alert" aria-live="assertive">
-                        {formError}
-                      </p>
-                    )}
-
-                    <div className="mt-6 grid gap-4 sm:grid-cols-2">
-                      <label htmlFor="relay-carrier-name" className="field-label">
-                        Carrier name <span className="text-[#b84b3a]">*</span>
-                        <input
-                          id="relay-carrier-name"
-                          required
-                          value={name}
-                          onChange={(event) => {
-                            setName(event.target.value);
-                            setFormError('');
-                          }}
-                          className="input-field mt-2"
-                          placeholder="Maya"
-                          autoComplete="name"
-                        />
-                      </label>
-                      <label htmlFor="relay-carrier-location" className="field-label">
-                        Neighborhood or stop <span className="text-[#b84b3a]">*</span>
-                        <input
-                          id="relay-carrier-location"
-                          required
-                          value={location}
-                          onChange={(event) => {
-                            setLocation(event.target.value);
-                            setFormError('');
-                          }}
-                          className="input-field mt-2"
-                          placeholder="Dadar"
-                        />
-                      </label>
-                      <label htmlFor="relay-carrier-note" className="field-label sm:col-span-2">
-                        Field note <span className="font-normal text-on-surface-variant">(optional)</span>
-                        <textarea
-                          id="relay-carrier-note"
-                          value={note}
-                          onChange={(event) => setNote(event.target.value)}
-                          className="textarea-field mt-2 min-h-[6rem]"
-                          placeholder="A small detail from this part of the route…"
-                        />
-                      </label>
-                    </div>
-
-                    <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
-                      <p className="field-help inline-flex items-center gap-2">
-                        <ShieldCheck className="h-4 w-4 text-[#4f9d7a]" aria-hidden="true" />
-                        Only the route is recorded.
-                      </p>
-                      <button type="submit" className="button-primary">
-                        Save handoff
-                        <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                      </button>
-                    </div>
-                  </form>
-                )}
               </div>
 
-              <aside className="paper-card p-5 sm:p-6">
-                <div className="flex items-start justify-between gap-4 border-b border-[rgba(16,42,67,0.13)] pb-4">
+              <aside className="rounded-3xl border border-[rgba(16,42,67,.12)] bg-white p-5 shadow-[0_12px_36px_rgba(16,42,67,.06)] sm:p-6">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#2b45f7]/10 text-[#2b45f7]" aria-hidden="true"><QrCode className="h-5 w-5" /></span>
                   <div>
-                    <p className="eyebrow">Custody document</p>
-                    <h2 className="section-title mt-2 text-3xl">Relay passport.</h2>
-                  </div>
-                  <QrCode className="h-5 w-5 text-[#4f9d7a]" aria-hidden="true" />
-                </div>
-
-                <div className="mt-6 flex flex-col items-center">
-                  <div
-                    className="flex h-56 w-56 max-w-full items-center justify-center border border-[rgba(16,42,67,0.16)] bg-white p-3"
-                    role="img"
-                    aria-label={`QR code for the ${relay.subject} carrier link`}
-                  >
-                    {origin ? (
-                      <QRCodeSVG value={shareLink} size={200} level="M" includeMargin={false} />
-                    ) : (
-                      <p className="meta text-center">Preparing the share code…</p>
-                    )}
-                  </div>
-                  <p className="meta mt-5 w-full">Share URL</p>
-                  <p className="mt-1 w-full break-all font-mono text-xs leading-relaxed text-ink-navy">{shareLink}</p>
-                  <button type="button" onClick={() => void copyRelayLink()} className="button-secondary mt-5 w-full">
-                    {copied ? <Check className="h-4 w-4 text-[#4f9d7a]" aria-hidden="true" /> : <Share2 className="h-4 w-4" aria-hidden="true" />}
-                    {copied ? 'Link copied' : 'Copy carrier link'}
-                  </button>
-                </div>
-
-                <div className="mt-6 space-y-4 border-t border-[rgba(16,42,67,0.13)] pt-5">
-                  <div className="flex items-start gap-3">
-                    <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#4f9d7a]" aria-hidden="true" />
-                    <p className="body-copy text-sm">The envelope stays sealed while it travels.</p>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-[#b84b3a]" aria-hidden="true" />
-                    <p className="body-copy text-sm">Only neighborhood-level locations appear in the passport.</p>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <Route className="mt-0.5 h-4 w-4 shrink-0 text-[#4f9d7a]" aria-hidden="true" />
-                    <p className="body-copy text-sm">Share this page when someone is ready to carry it forward.</p>
+                    <p className="eyebrow text-[#2b45f7]">Carrier invite</p>
+                    <h2 className="mt-1 font-headline-md text-xl text-ink-navy">Pass it on safely.</h2>
                   </div>
                 </div>
+                {inviteUrl ? (
+                  <>
+                    <div className="mx-auto mt-5 flex h-48 w-48 items-center justify-center rounded-2xl border border-[rgba(16,42,67,.1)] bg-white p-3" role="img" aria-label="Secure carrier invite QR code">
+                      <QRCodeSVG value={inviteUrl} size={168} level="M" includeMargin={false} />
+                    </div>
+                    <p className="mt-4 break-all rounded-xl bg-[#f5f1e9] p-3 font-mono text-[0.65rem] leading-relaxed text-ink-navy">{inviteUrl}</p>
+                    <p className="mt-3 text-xs text-on-surface-variant">Expires {inviteExpiresAt ? new Date(inviteExpiresAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : 'in 10 minutes'}.</p>
+                    <button type="button" onClick={() => void copyInvite()} className="button-secondary mt-4 w-full !min-h-12 !rounded-xl">
+                      {copied ? <Check className="h-4 w-4 text-[#2b45f7]" aria-hidden="true" /> : <Share2 className="h-4 w-4 text-[#2b45f7]" aria-hidden="true" />}
+                      {copied ? 'Invite copied' : 'Copy carrier invite'}
+                    </button>
+                  </>
+                ) : (
+                  <div className="mt-5 rounded-2xl bg-[#f5f1e9] p-4">
+                    <p className="text-sm leading-relaxed text-on-surface-variant">Create a one-time invite when someone is ready to carry this drop. It works for 10 minutes and reveals only route details.</p>
+                    <p className="mt-3 inline-flex items-center gap-2 text-xs font-semibold text-ink-navy"><ShieldCheck className="h-4 w-4 text-[#2b45f7]" aria-hidden="true" /> Text and media stay private.</p>
+                  </div>
+                )}
               </aside>
             </section>
 
-            <section className="mt-16 grid gap-10 border-t border-[rgba(16,42,67,0.13)] pt-10 lg:grid-cols-[minmax(0,1fr)_minmax(260px,0.72fr)]">
+            <section className="mt-10 grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(280px,.65fr)] lg:items-start">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-end justify-between gap-4">
-                  <div>
-                    <p className="eyebrow">Recorded route</p>
-                    <h2 className="section-title mt-2">Every hand leaves a stop.</h2>
-                  </div>
-                  <span className="meta">{waypoints.length} GPS waypoints</span>
+                  <div><p className="eyebrow text-[#2b45f7]">Route map</p><h2 className="section-title mt-2">Every hand leaves a stop.</h2></div>
+                  <span className="meta">{waypoints.length} mapped stops</span>
                 </div>
-                <div className="panel mt-5 overflow-hidden p-0">
-                  <RouteMap
-                    waypoints={waypoints}
-                    destinationNeighborhood={relay.destinationNeighborhood || relay.recipient}
-                    currentCarrierName={relay.currentCarrierName}
-                  />
+                <div className="mt-4 overflow-hidden rounded-3xl border border-[rgba(16,42,67,.1)] bg-white shadow-[0_12px_36px_rgba(16,42,67,.05)]">
+                  <RouteMap waypoints={waypoints} destinationNeighborhood={relay.destinationNeighborhood || destination} currentCarrierName={relay.currentCarrierName} />
                 </div>
-
-                <div className="mt-10">
-                  <div className="flex flex-wrap items-end justify-between gap-4">
-                    <div>
-                      <p className="eyebrow">Custody timeline</p>
-                      <h2 className="section-title mt-2">A record of the route.</h2>
-                    </div>
-                  </div>
-                  <div className="panel mt-5 p-6 sm:p-8">
+                <div className="mt-9">
+                  <p className="eyebrow text-[#2b45f7]">Handoff history</p>
+                  <h2 className="section-title mt-2">A record of the route.</h2>
+                  <div className="mt-4 rounded-3xl border border-[rgba(16,42,67,.1)] bg-white p-5 sm:p-7">
                     <TrackingTimeline events={relayToTrackingEvents(relay)} />
                   </div>
                 </div>
               </div>
 
-              <aside className="space-y-8">
-                <div className="panel p-5 sm:p-6">
-                  <p className="eyebrow">At a glance</p>
-                  <dl className="mt-5 space-y-4">
-                    <div className="flex items-baseline justify-between gap-4 border-b border-[rgba(16,42,67,0.12)] pb-4">
-                      <dt className="body-copy text-sm">People in the chain</dt>
-                      <dd className="font-headline-md text-2xl text-ink-navy">{stats.carriers}</dd>
-                    </div>
-                    <div className="flex items-baseline justify-between gap-4 border-b border-[rgba(16,42,67,0.12)] pb-4">
-                      <dt className="body-copy text-sm">Route stops</dt>
-                      <dd className="font-headline-md text-2xl text-ink-navy">{stats.cities}</dd>
-                    </div>
-                    <div className="flex items-baseline justify-between gap-4">
-                      <dt className="body-copy text-sm">Time logged</dt>
-                      <dd className="font-headline-md text-2xl text-ink-navy">{stats.hours}h</dd>
-                    </div>
-                  </dl>
+              <aside className="space-y-5">
+                <div className="rounded-3xl border border-[rgba(16,42,67,.1)] bg-white p-5 sm:p-6">
+                  <p className="eyebrow text-[#2b45f7]">Route privacy</p>
+                  <div className="mt-4 space-y-4">
+                    <p className="flex items-start gap-3 text-sm leading-relaxed text-on-surface-variant"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#2b45f7]" aria-hidden="true" /> Carriers never see the drop’s text or media.</p>
+                    <p className="flex items-start gap-3 text-sm leading-relaxed text-on-surface-variant"><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-[#2b45f7]" aria-hidden="true" /> Route stops use neighborhood labels. Precise location is optional.</p>
+                  </div>
                 </div>
-
-                <div className="panel-muted p-5 sm:p-6">
-                  <p className="eyebrow">Custody log</p>
-                  <div className="mt-5 space-y-4">
+                <div className="rounded-3xl border border-[rgba(16,42,67,.1)] bg-[#fff8ee] p-5 sm:p-6">
+                  <p className="eyebrow text-[#b84b3a]">The route so far</p>
+                  <div className="mt-4 space-y-4">
                     {completedHandoffs.slice().reverse().map((handoff) => (
-                      <div key={handoff.id} className="border-b border-[rgba(16,42,67,0.12)] pb-4 last:border-0 last:pb-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="font-headline-md text-lg text-ink-navy">{handoff.name}</p>
-                          <span className="meta">{handoff.role === 'sender' ? 'Origin' : 'Carrier'}</span>
-                        </div>
-                        <p className="body-copy mt-1 text-sm">{handoff.note}</p>
-                        <p className="meta mt-2 inline-flex items-center gap-1.5">
-                          <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
-                          {handoff.neighborhood || handoff.location}
-                        </p>
+                      <div key={handoff.id} className="border-b border-[rgba(16,42,67,.1)] pb-4 last:border-0 last:pb-0">
+                        <div className="flex flex-wrap items-center gap-2"><p className="font-semibold text-ink-navy">{handoff.name}</p><span className="rounded-full bg-white px-2 py-1 font-mono text-[0.58rem] font-bold uppercase tracking-[.08em] text-on-surface-variant">{handoff.role === 'sender' ? 'Origin' : 'Carrier'}</span></div>
+                        <p className="mt-1 text-sm leading-relaxed text-on-surface-variant">{handoff.note}</p>
+                        <p className="meta mt-2 inline-flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5" aria-hidden="true" />{handoff.neighborhood || handoff.location}</p>
                       </div>
                     ))}
                   </div>
@@ -413,91 +281,30 @@ function RelayContent() {
             </section>
           </>
         ) : (
-          <section className="mt-12">
-            <div className="max-w-3xl">
-              <p className="eyebrow text-[#b84b3a]">Carrier mode</p>
-              <h1 className="display-title mt-4">Be the person who carries it.</h1>
-              <p className="body-copy mt-5 max-w-2xl text-lg">
-                Choose a nearby letter, accept it with your GPS, and carry it as far as you can. When you are ready, pass it on with a QR code or a four-digit PIN.
+          <section className="mt-8 rounded-3xl border border-[rgba(16,42,67,.12)] bg-white p-5 shadow-[0_12px_36px_rgba(16,42,67,.06)] sm:p-8">
+            <div className="mx-auto max-w-2xl">
+              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#2b45f7]/10 text-[#2b45f7]" aria-hidden="true"><Navigation className="h-5 w-5" /></span>
+              <p className="eyebrow mt-5 text-[#2b45f7]">Carry a drop</p>
+              <h1 className="display-title mt-3">A friend’s invite is your starting point.</h1>
+              <p className="body-copy mt-4 text-base sm:text-lg">
+                Open the secure link or scan the QR they shared with you. Add your name and, if you want, a neighborhood. The drop stays sealed in your hands.
               </p>
-            </div>
-
-            <div className="mt-8 grid gap-5">
-              {nearbyLetters.map((letter) => (
-                <article key={letter.letterId} className="panel p-5 sm:p-7">
-                  <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-2">
-                        <h2 className="section-title text-3xl">“{letter.subject}”</h2>
-                        <span className="status-mark pending">Available nearby</span>
-                      </div>
-                      <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2">
-                        <p className="meta inline-flex items-center gap-2">
-                          <MapPin className="h-3.5 w-3.5 text-[#b84b3a]" aria-hidden="true" />
-                          From {letter.currentNeighborhood}
-                        </p>
-                        <p className="meta inline-flex items-center gap-2">
-                          <Navigation className="h-3.5 w-3.5 text-[#4f9d7a]" aria-hidden="true" />
-                          Toward {letter.destinationNeighborhood}
-                        </p>
-                      </div>
-                      <div className="mt-5 flex flex-wrap gap-6 border-t border-[rgba(16,42,67,0.12)] pt-4">
-                        <div>
-                          <p className="font-headline-md text-2xl text-ink-navy">{formatDistance(letter.distanceKm)}</p>
-                          <p className="meta mt-1">Approx. to pickup</p>
-                        </div>
-                        <div>
-                          <p className="font-headline-md text-2xl text-ink-navy">{formatDistance(letter.remainingKm)}</p>
-                          <p className="meta mt-1">Approx. to destination</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex shrink-0 flex-col gap-2 sm:flex-row lg:flex-col">
-                      <Link
-                        href={`/relay/carry?letter=${encodeURIComponent(letter.letterId)}&subject=${encodeURIComponent(letter.subject)}&dest=${encodeURIComponent(letter.destinationNeighborhood)}`}
-                        className="button-primary"
-                      >
-                        <Navigation className="h-4 w-4" aria-hidden="true" />
-                        Accept and carry
-                      </Link>
-                      <Link href={`/relay?letter=${encodeURIComponent(letter.letterId)}`} className="button-secondary">
-                        View passport
-                        <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                      </Link>
-                    </div>
-                  </div>
-                </article>
-              ))}
-            </div>
-
-            <div className="panel-muted mt-6 p-5 sm:p-6">
-              <p className="eyebrow">Already holding a letter?</p>
-              <p className="body-copy mt-3 max-w-2xl text-sm">
-                Use the manual handoff page when someone has given you the letter and a four-digit PIN in person.
-              </p>
-              <Link href="/relay/handoff" className="button-secondary mt-5">
-                Enter handoff PIN
-                <ArrowRight className="h-4 w-4" aria-hidden="true" />
-              </Link>
-            </div>
-
-            <div className="mt-16 border-t border-[rgba(16,42,67,0.13)] pt-10">
-              <p className="eyebrow">The carrier loop</p>
-              <ol className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="mt-6 grid gap-3 sm:grid-cols-3">
                 {[
-                  ['01', 'Accept', 'Stamp your neighborhood and start carrying.'],
-                  ['02', 'Carry', 'Move the sealed letter as far as your route allows.'],
-                  ['03', 'Pass on', 'Generate a fresh QR code or share the PIN.'],
-                  ['04', 'Confirm', 'The next carrier accepts and the passport updates.'],
-                ].map(([number, title, text]) => (
-                  <li key={number} className="border-t border-[rgba(16,42,67,0.13)] pt-4">
-                    <span className="meta text-[#b84b3a]">{number}</span>
-                    <h2 className="mt-3 font-headline-md text-2xl text-ink-navy">{title}</h2>
-                    <p className="body-copy mt-2 text-sm">{text}</p>
-                  </li>
+                  ['01', 'Open the invite', 'The sender’s link names the route, not the message.'],
+                  ['02', 'Join the route', 'Use a neighborhood label or skip location.'],
+                  ['03', 'Pass it on', 'Create a fresh QR when the next person is ready.'],
+                ].map(([number, title, copy]) => (
+                  <article key={number} className="rounded-2xl bg-[#f5f1e9] p-4">
+                    <span className="font-mono text-xs font-bold text-[#2b45f7]">{number}</span>
+                    <h2 className="mt-2 text-sm font-bold text-ink-navy">{title}</h2>
+                    <p className="mt-1 text-xs leading-relaxed text-on-surface-variant">{copy}</p>
+                  </article>
                 ))}
-              </ol>
+              </div>
+              <Link href={`/relay?letter=${encodeURIComponent(letterId)}`} className="button-secondary mt-6 !min-h-12 !rounded-xl">
+                <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Back to my passport
+              </Link>
             </div>
           </section>
         )}

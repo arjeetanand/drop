@@ -1,5 +1,7 @@
 import type { TrackingEvent } from '@/data/mockData';
 import { getHandoffPin, type LatLng, type GpsWaypoint } from '@/lib/gpsUtils';
+import { getSupabaseBrowserClient } from '@/lib/supabaseBrowser';
+import { isRelayToken, validateRelayHandoff, type RelayHandoffSubmission } from '@/lib/relayValidation';
 
 const STORAGE_KEY = 'dear-exe:relay-state:v1';
 const DEFAULT_RELAY_ID = '3';
@@ -42,6 +44,54 @@ export interface RelayStats {
   carriers: number;
   cities: number;
   hours: number;
+}
+
+export interface IssuedRelayToken {
+  token: string;
+  expiresAt: string;
+}
+
+export interface AcceptedRelayHandoff {
+  handoffId: string;
+  letterId: string;
+  successorToken: string;
+  successorExpiresAt: string;
+}
+
+export interface RelayHandoffStatus {
+  accepted: boolean;
+  acceptedBy?: string;
+  acceptedAt?: string;
+}
+
+interface RelayHandoffRow {
+  id: string;
+  carrier_name: string;
+  neighborhood: string;
+  note: string;
+  handoff_lat: number | null;
+  handoff_lng: number | null;
+  accepted_lat: number | null;
+  accepted_lng: number | null;
+  created_at: string;
+}
+
+interface RelayTokenRow {
+  token: string;
+  expires_at: string;
+}
+
+interface AcceptedRelayHandoffRow {
+  handoff_id: string;
+  letter_id: string;
+  successor_token: string;
+  successor_expires_at: string;
+}
+
+interface RelayHandoffStatusRow {
+  accepted: boolean;
+  accepted_by: string | null;
+  accepted_at: string | null;
 }
 
 const seededRelay: RelayState = {
@@ -485,4 +535,135 @@ export function confirmHandoffFromQR(
   };
 
   return saveRelayState(next);
+}
+
+/** Issue the sender's first short-lived QR/manual pass for a dispatched relay. */
+export async function issueRelayHandoffToken(letterId: string): Promise<IssuedRelayToken> {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) throw new Error('Relay handoffs need a connected Drop account.');
+
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData.user) throw new Error('Sign in as the sender to start this relay.');
+
+  const { data, error } = await supabase.rpc('issue_relay_handoff_token', { p_letter_id: letterId });
+  if (error) throw new Error(error.message || 'A relay handoff code could not be created.');
+
+  const row = (Array.isArray(data) ? data[0] : data) as RelayTokenRow | null;
+  if (!row || !isRelayToken(row.token) || !Number.isFinite(Date.parse(row.expires_at))) {
+    throw new Error('The relay handoff code response was incomplete.');
+  }
+
+  return { token: row.token, expiresAt: row.expires_at };
+}
+
+/** Mint a fresh short-lived pass when the current carrier is ready to pass on. */
+export async function issueRelayPassFromCarrier(carrierToken: string): Promise<IssuedRelayToken> {
+  if (!isRelayToken(carrierToken)) throw new Error('This carrier code is invalid or expired.');
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) throw new Error('Relay handoffs need a connected Drop service.');
+
+  const { data, error } = await supabase.rpc('issue_relay_pass_from_carrier', { p_carrier_token: carrierToken });
+  if (error) throw new Error(error.message || 'A fresh handoff code could not be created.');
+
+  const row = (Array.isArray(data) ? data[0] : data) as RelayTokenRow | null;
+  if (!row || !isRelayToken(row.token) || !Number.isFinite(Date.parse(row.expires_at))) {
+    throw new Error('The relay handoff code response was incomplete.');
+  }
+
+  return { token: row.token, expiresAt: row.expires_at };
+}
+
+/**
+ * Accept a one-time relay pass and atomically persist the handoff while
+ * minting the next carrier's long-lived capability. The carrier receives route details
+ * only; this endpoint never returns letter content or media.
+ */
+export async function acceptRelayHandoffToken(
+  input: RelayHandoffSubmission & { token: string; requestId: string }
+): Promise<AcceptedRelayHandoff> {
+  if (!isRelayToken(input.token)) throw new Error('This handoff code is invalid or expired.');
+  if (!isRelayToken(input.requestId)) throw new Error('This handoff request is incomplete.');
+  const validationError = validateRelayHandoff(input);
+  if (validationError) throw new Error(validationError);
+
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) throw new Error('Relay handoffs need a connected Drop service.');
+
+  const { data, error } = await supabase.rpc('accept_relay_handoff_token', {
+    p_token: input.token,
+    p_request_id: input.requestId,
+    p_carrier_name: input.name.trim(),
+    p_neighborhood: input.neighborhood.trim(),
+    p_note: input.note?.trim() || '',
+    p_handoff_lat: input.handoffCoords?.lat ?? null,
+    p_handoff_lng: input.handoffCoords?.lng ?? null,
+    p_accepted_lat: input.acceptedCoords?.lat ?? null,
+    p_accepted_lng: input.acceptedCoords?.lng ?? null,
+  });
+  if (error) throw new Error(error.message || 'This handoff code is invalid or expired.');
+
+  const row = (Array.isArray(data) ? data[0] : data) as AcceptedRelayHandoffRow | null;
+  if (!row || !isRelayToken(row.successor_token) || !Number.isFinite(Date.parse(row.successor_expires_at)) || !row.handoff_id || !row.letter_id) {
+    throw new Error('The relay handoff response was incomplete.');
+  }
+
+  return {
+    handoffId: row.handoff_id,
+    letterId: row.letter_id,
+    successorToken: row.successor_token,
+    successorExpiresAt: row.successor_expires_at,
+  };
+}
+
+/** Load participant-visible route events without loading letter body or media. */
+export async function getRemoteRelayHandoffs(letterId: string): Promise<RelayHandoff[] | null> {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) return null;
+
+  const { data: authData } = await supabase.auth.getUser();
+  if (!authData.user) return null;
+
+  const { data, error } = await supabase
+    .from('relay_handoffs')
+    .select('id, carrier_name, neighborhood, note, handoff_lat, handoff_lng, accepted_lat, accepted_lng, created_at')
+    .eq('letter_id', letterId)
+    .order('created_at', { ascending: true })
+    .returns<RelayHandoffRow[]>();
+
+  if (error || !data) return null;
+  return data.map((row) => {
+    const coords = row.accepted_lat !== null && row.accepted_lng !== null
+      ? { lat: row.accepted_lat, lng: row.accepted_lng }
+      : row.handoff_lat !== null && row.handoff_lng !== null
+        ? { lat: row.handoff_lat, lng: row.handoff_lng }
+        : undefined;
+    return {
+      id: row.id,
+      name: row.carrier_name,
+      role: 'carrier',
+      location: row.neighborhood,
+      neighborhood: row.neighborhood,
+      note: row.note,
+      createdAt: row.created_at,
+      coords,
+    };
+  });
+}
+
+/** Check whether this carrier's short-lived handoff pass has been consumed. */
+export async function getRelayHandoffStatus(token: string): Promise<RelayHandoffStatus | null> {
+  if (!isRelayToken(token)) return null;
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) return null;
+
+  const { data, error } = await supabase.rpc('get_relay_handoff_token_status', { p_token: token });
+  if (error) return null;
+
+  const row = (Array.isArray(data) ? data[0] : data) as RelayHandoffStatusRow | null;
+  if (!row || typeof row.accepted !== 'boolean') return null;
+  return {
+    accepted: row.accepted,
+    acceptedBy: row.accepted_by || undefined,
+    acceptedAt: row.accepted_at || undefined,
+  };
 }
