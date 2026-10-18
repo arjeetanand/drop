@@ -10,6 +10,7 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 
 - Task 1 is complete. The mixed-payload model, default text behavior for older drafts, and compatible recipient routes are in place.
 - The core mobile sharing, receive, reaction, and optional relay flows have local implementations. Detailed code and browser checks are recorded in `tasks/todo.md`.
+- Seeded demo reactions now persist on this device and appear on the mailbox card; they are clearly marked as local and do not notify a sender.
 - Hosted account-to-account sending, storage privacy, reactions, and relay still need verification because this checkout has no Supabase project configuration. Real-device safe-area, keyboard, and reduced-motion checks also remain open.
 
 ## Workspace and Delivery

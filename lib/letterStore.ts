@@ -1,5 +1,6 @@
 import { currentFocusDraft, mockAddress, mockFieldNotes, mockLetters } from '@/data/mockData';
 import type { DropDeliveryMode, DropPayloadKind, LetterStatus, MockLetter } from '@/data/mockData';
+import { getDemoReactions } from '@/lib/demoReactionStore';
 
 const STORAGE_KEY = 'dear-exe:active-letter:v1';
 const NOTES_STORAGE_KEY = 'dear-exe:journey-notes:v1';
@@ -321,7 +322,13 @@ export function draftAsLetter(draft: LetterDraftState): MockLetter {
 
 export function getLettersWithDraft(draft = getLetterDraft()): MockLetter[] {
   const activeLetter = draftAsLetter(draft);
-  const letters = new Map(mockLetters.map((letter) => [letter.id, letter]));
+  const demoReactions = getDemoReactions();
+  const letters = new Map(mockLetters.map((letter) => [
+    letter.id,
+    letter.direction === 'received' && demoReactions[letter.id]
+      ? { ...letter, reaction: demoReactions[letter.id] }
+      : letter,
+  ]));
 
   // Once the original seeded draft becomes a new letter, the stale seed should
   // not keep appearing beside the user's real history.

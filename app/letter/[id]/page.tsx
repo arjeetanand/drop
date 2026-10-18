@@ -7,6 +7,7 @@ import { useParams } from 'next/navigation';
 import type { MockLetter } from '@/data/mockData';
 import { getRemoteLetterById, getRemoteLetters, saveRemoteReaction } from '@/lib/letterBackend';
 import { getLetterById } from '@/lib/letterStore';
+import { DEMO_REACTION_EMOJIS, saveDemoReaction } from '@/lib/demoReactionStore';
 import { getSupabaseBrowserClient, isGoogleAuthConfigured } from '@/lib/supabaseBrowser';
 import { ReducedMotionGif } from '@/components/ReducedMotionGif';
 
@@ -171,8 +172,12 @@ export default function LetterArrivalPage() {
     setSavingReaction(true);
     setReactionNotice('');
     if (letter.id.startsWith('incoming-')) {
-      setLetter({ ...letter, reaction: emoji });
-      setReactionNotice('Demo reaction added. Connect an account to save reactions across devices.');
+      if (saveDemoReaction(letter.id, emoji)) {
+        setLetter({ ...letter, reaction: emoji });
+        setReactionNotice('Saved on this device. The sender won’t be notified.');
+      } else {
+        setReactionNotice('Could not save that reaction on this device. Try again.');
+      }
       setSavingReaction(false);
       return;
     }
@@ -320,7 +325,7 @@ export default function LetterArrivalPage() {
                 </div>
                 {isReceived && <section className="mt-6 rounded-xl border border-[rgba(16,42,67,.1)] bg-white/60 p-4" aria-labelledby="drop-reaction-heading">
                   <h3 id="drop-reaction-heading" className="flex items-center gap-2 text-sm font-bold text-ink-navy"><Sparkles className="h-4 w-4 text-[#2b45f7]" aria-hidden="true" /> Send a little reaction</h3>
-                  <div className="mt-3 flex flex-wrap gap-2">{['💜', '🔥', '😂', '🥹', '🫶'].map((emoji) => <button key={emoji} type="button" onClick={() => void react(emoji)} disabled={savingReaction} aria-label={`React ${emoji}`} aria-pressed={letter.reaction === emoji} className={`flex h-11 min-w-11 items-center justify-center rounded-xl border text-lg transition-colors ${letter.reaction === emoji ? 'border-[#2b45f7] bg-[#2b45f7]/10' : 'border-[rgba(16,42,67,.12)] bg-white hover:bg-[#f5f1e9]'}`}>{emoji}</button>)}</div>
+                  <div className="mt-3 flex flex-wrap gap-2">{DEMO_REACTION_EMOJIS.map((emoji) => <button key={emoji} type="button" onClick={() => void react(emoji)} disabled={savingReaction} aria-label={`React ${emoji}`} aria-pressed={letter.reaction === emoji} className={`flex h-11 min-w-11 items-center justify-center rounded-xl border text-lg transition-colors ${letter.reaction === emoji ? 'border-[#2b45f7] bg-[#2b45f7]/10' : 'border-[rgba(16,42,67,.12)] bg-white hover:bg-[#f5f1e9]'}`}>{emoji}</button>)}</div>
                   {reactionNotice && <p className="mt-3 text-xs text-on-surface-variant" role="status" aria-live="polite">{reactionNotice}</p>}
                 </section>}
                 {dropBackHref && <div className="mt-6">
