@@ -8,7 +8,7 @@ import { getSealInfo, mockSeals, waxColors, writingPrompts, type DropDeliveryMod
 import { dispatchLetter, getLetterDraft, getLetterDraftById, saveLetterDraft, setActiveLetterDraft, startNewLetter, type LetterDraftState, type LetterAlignment } from '@/lib/letterStore';
 import { syncDropToBackend } from '@/lib/letterBackend';
 import { getSupabaseBrowserClient } from '@/lib/supabaseBrowser';
-import { validateDropMedia } from '@/lib/dropValidation';
+import { normalizeDropRecipient, validateDropMedia } from '@/lib/dropValidation';
 import { deleteDraftAttachment, getDraftAttachment, saveDraftAttachment } from '@/lib/letterMediaStore';
 import { ReducedMotionGif } from '@/components/ReducedMotionGif';
 import { cn } from '@/lib/utils';
@@ -113,7 +113,9 @@ function Composer() {
   }, [alignment, content, deliveryMode, draft, fontSize, payloadKind, ready, recipient, sealColor, sealId, sealMonogram, subject]);
 
   const wordCount = content.trim() ? content.trim().split(/\s+/).length : 0;
-  const complete = Boolean(recipient.trim() && (payloadKind === 'text' ? content.trim() : file));
+  const recipientUsername = normalizeDropRecipient(recipient);
+  const recipientHasValue = recipient.replace(/^@/, '').trim().length > 0;
+  const complete = Boolean(recipientUsername && (payloadKind === 'text' ? content.trim() : file));
   const currentSeal = getSealInfo(sealId, sealMonogram, sealColor);
   const profileHref = draft ? `/profile?next=${encodeURIComponent(`/compose?letter=${encodeURIComponent(draft.id)}`)}#account` : '/profile#account';
 
@@ -310,9 +312,10 @@ function Composer() {
             <label htmlFor="drop-recipient" className="field-label">Send to one person</label>
             <div className="mt-2 flex items-center rounded-xl border border-[rgba(16,42,67,.14)] bg-white px-3 focus-within:ring-2 focus-within:ring-[#2b45f7]/35">
               <span className="font-mono text-sm font-bold text-[#2b45f7]">@</span>
-              <input id="drop-recipient" value={recipient.replace(/^@/, '')} onChange={(event) => { setRecipient(`@${event.target.value.replace(/^@/, '')}`); setSaved(false); }} className="min-h-12 min-w-0 flex-1 border-0 bg-transparent px-2 text-base text-ink-navy outline-none placeholder:text-on-surface-variant/60" placeholder="their.username" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
+              <input id="drop-recipient" value={recipient.replace(/^@/, '')} onChange={(event) => { setRecipient(`@${event.target.value.replace(/^@/, '')}`); setSaved(false); }} className="min-h-12 min-w-0 flex-1 border-0 bg-transparent px-2 text-base text-ink-navy outline-none placeholder:text-on-surface-variant/60" placeholder="their.username" autoCapitalize="none" autoCorrect="off" spellCheck={false} aria-invalid={recipientHasValue && !recipientUsername} aria-describedby={recipientHasValue && !recipientUsername ? 'drop-recipient-help drop-recipient-error' : 'drop-recipient-help'} />
             </div>
-            <p className="field-help mt-2">They need a Drop account so the note stays between you two.</p>
+            <p id="drop-recipient-help" className="field-help mt-2">They need a Drop account so the note stays between you two. Handles use 2–24 letters, numbers, periods, underscores, or hyphens.</p>
+            {recipientHasValue && !recipientUsername && <p id="drop-recipient-error" className="error-notice mt-2" role="status" aria-live="polite">Enter a valid Drop handle to send.</p>}
           </section>
 
           <fieldset className="rounded-2xl border border-[rgba(16,42,67,.12)] bg-white/55 p-4 sm:p-6">
