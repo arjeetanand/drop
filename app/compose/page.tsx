@@ -147,9 +147,6 @@ function Composer() {
     attachmentChosenRef.current = true;
     const validationError = validateDropMedia(selected);
     if (validationError) {
-      setFile(null);
-      setAttachmentSaved(false);
-      if (draft) void deleteDraftAttachment(draft.id).catch(() => undefined);
       setError(validationError);
       event.target.value = '';
       return;
@@ -258,7 +255,7 @@ function Composer() {
     <main className="page-shell page-enter !pt-4 sm:!pt-8">
       <div className="page-container max-w-[760px]">
         <header className="flex items-center justify-between gap-3">
-          <Link href="/" className="inline-flex min-h-11 items-center gap-2 rounded-full px-3 text-sm font-semibold text-ink-navy hover:bg-white/65"><ArrowLeft className="h-4 w-4" aria-hidden="true" /> Desk</Link>
+          <Link href="/" onClick={saveBeforeLeaving} className="inline-flex min-h-11 items-center gap-2 rounded-full px-3 text-sm font-semibold text-ink-navy hover:bg-white/65"><ArrowLeft className="h-4 w-4" aria-hidden="true" /> Desk</Link>
           <p className="inline-flex items-center gap-1.5 font-mono text-[0.65rem] text-on-surface-variant" aria-live="polite">{saved ? <Check className="h-3.5 w-3.5 text-[#2f8d67]" aria-hidden="true" /> : <span className="h-1.5 w-1.5 rounded-full bg-[#d08354]" aria-hidden="true" />}{saved ? 'Saved on this device' : 'Saving as you go'}</p>
         </header>
 
