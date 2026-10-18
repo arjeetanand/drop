@@ -31,7 +31,7 @@ psql -X -v ON_ERROR_STOP=1 -d drop-relay-handoff-smoke -f tests/db/relay_handoff
 dropdb drop-relay-handoff-smoke
 ```
 
-The transaction checks sender-only relay starts, short-lived passes, one-time handoff acceptance and exact retry recovery, pass rotation, optional coordinates, participant-only route visibility, and private token-table access. It rolls back all schema and data changes. This is local PostgreSQL coverage; it does not verify RPC behavior against a hosted Supabase project.
+The transaction checks sender-only relay starts, short-lived passes, one-time text and GIF handoff acceptance, exact retry recovery, pass rotation, coordinate-free and coordinate-bearing handoffs, participant-only route visibility, and private token-table access. It also confirms the carrier handoff result omits message text and media fields. It rolls back all schema and data changes. This is local PostgreSQL coverage; it does not verify RPC behavior against a hosted Supabase project.
 
 ## Relay handoffs
 

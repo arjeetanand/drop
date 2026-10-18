@@ -42,6 +42,21 @@ values
   ('relay', '11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222', 'Relay', 'private relay body', 'dispatched', 'relay', now()),
   ('relay-draft', '11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222', 'Draft relay', 'draft body', 'sealed', 'relay', null),
   ('instant', '11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222', 'Instant', 'instant body', 'delivered', 'instant', now());
+insert into storage.objects (bucket_id, name, metadata)
+values (
+  'drop-media',
+  '11111111-1111-4111-8111-111111111111/relay-gif/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  '{"mimetype":"image/gif","size":123}'
+);
+insert into public.letters (
+  id, sender_id, recipient_id, subject, content, status, delivery_mode,
+  dispatched_at, payload_kind, media_path, media_mime_type, media_size_bytes
+) values (
+  'relay-gif', '11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222',
+  'GIF relay', 'private gif caption', 'dispatched', 'relay', now(), 'gif',
+  '11111111-1111-4111-8111-111111111111/relay-gif/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  'image/gif', 123
+);
 
 grant usage on schema auth, public to anon, authenticated;
 grant select on public.letters to authenticated;
@@ -93,10 +108,23 @@ begin
   perform set_config('test.relay_initial_pass', v_token::text, true);
 end $$;
 
+do $$
+declare
+  v_token uuid;
+  v_expires_at timestamptz;
+begin
+  select token, expires_at into v_token, v_expires_at
+  from public.issue_relay_handoff_token('relay-gif');
+  if v_token is null or v_expires_at <= now() or v_expires_at > now() + interval '11 minutes' then
+    raise exception 'the sender did not receive a short-lived media relay pass';
+  end if;
+  perform set_config('test.media_relay_pass', v_token::text, true);
+end $$;
+
 reset role;
 do $$ begin
-  if (select count(*) from private.relay_handoff_tokens) <> 1 then
-    raise exception 'relay start did not create exactly one private capability';
+  if (select count(*) from private.relay_handoff_tokens where token_kind = 'handoff') <> 2 then
+    raise exception 'relay starts did not create exactly two private capabilities';
   end if;
 end $$;
 
@@ -155,6 +183,24 @@ begin
     raise exception 'a different request reused a consumed pass';
   exception when insufficient_privilege then null;
   end;
+end $$;
+
+do $$
+declare
+  v_result jsonb;
+begin
+  select pg_catalog.to_jsonb(result) into v_result
+  from public.accept_relay_handoff_token(
+    current_setting('test.media_relay_pass')::uuid,
+    'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+    'GIF Carrier', 'Bandra West', 'The sealed GIF stays private.'
+  ) as result;
+  if v_result->>'letter_id' <> 'relay-gif' or v_result->>'handoff_id' is null or v_result->>'successor_token' is null then
+    raise exception 'the coordinate-free media relay handoff failed';
+  end if;
+  if v_result ?| array['subject', 'content', 'payload_kind', 'media_path', 'media_mime_type', 'media_size_bytes'] then
+    raise exception 'the carrier handoff result exposed message or media data';
+  end if;
 end $$;
 
 do $$
