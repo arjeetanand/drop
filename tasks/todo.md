@@ -5,9 +5,11 @@ Tasks are ordered by dependency. Progress is recorded at each tested and pushed 
 ## Current Checkpoint — 2026-10-18
 
 - The foundation, mobile drop flow, draft handoff, secure relay, and reduced-motion GIF work are pushed separately: `04cc01f`, `047c6b9`, `b062dbe`, `6b43271`, and `4f38e0e`.
+- Follow-up commits are pushed: `27db56c` restricts letter update/delete access to unsent rows and uses insert-once sends; `0190b7d` routes relay invites through the secure passport; `59988d0` adds a local recipient preview.
 - Verification now passes `npm test` (11/11), lint, typecheck, and the default Next.js/Turbopack production build in an isolated scratch copy. Browser checks confirmed no horizontal overflow at 360px, 390px, and 430px on the desk, profile, and mailbox; the composer preview was checked at 390px. A photo draft survived the account-options detour and reload, and a GIF preview loaded at 390px.
-- Relay handoffs now use short-lived server-issued capabilities; the migration keeps carrier access to route details and excludes message text/media. The Supabase migration is not deployed here, and there is no Supabase configuration in this environment, so OAuth, real account-to-account send/media/reaction, and cross-device handoff still need a configured project. A local PostgreSQL smoke run could not start because the sandbox denies shared memory. The browser setup also could not emulate `prefers-reduced-motion`; that branch was reviewed but not exercised in-browser.
-- Exact mobile keyboard/safe-area behavior and real-device accessibility remain unverified. The preview correctly keeps sending unavailable until remote persistence is configured.
+- The new recipient preview was checked in-browser for text, recipient handle, sign-off, and return-to-edit persistence. Local PNG and GIF attachments saved in IndexedDB and appeared in the recipient view; the GIF remained available after a page reload. Unsupported and over-8 MB fixtures showed visible errors while the draft text remained. The home prompt, note sign-off choices, and seeded `/letter/1` reveal flow remain reachable. The relay send CTA was checked through to the passport, including its sign-in requirement without Supabase credentials. A local PostgreSQL transaction confirmed sent letters cannot be changed or deleted by the sender, while an unsent draft can still be sent; the transaction rolled back. The latest scratch production build includes `/compose/preview`.
+- Relay handoffs now use short-lived server-issued capabilities; the migration keeps carrier access to route details and excludes message text/media. The Supabase migration is not deployed here, and there is no Supabase configuration in this environment, so OAuth, real account-to-account send/media/reaction, and cross-device handoff still need a configured project. The local PostgreSQL policy smoke test does not verify the migration or storage policies in Supabase. The browser setup also could not emulate `prefers-reduced-motion`; that branch was reviewed but not exercised in-browser.
+- The in-app browser ignored viewport overrides and remained at 765 CSS pixels, so the recipient preview route still needs checks at exact 360px, 390px, and 430px widths. Exact mobile keyboard/safe-area behavior, reduced-motion browser behavior, and real-device accessibility remain unverified. The preview correctly keeps sending unavailable until remote persistence is configured.
 
 ## Git Delivery
 
@@ -18,13 +20,13 @@ Commit each completed code change separately with a descriptive message and push
 **Description:** Extend the existing letter/draft model so each item can represent a text letter, image/meme, or GIF, plus its delivery mode and optional private media metadata. Keep old localStorage drafts and existing database rows readable as text.
 
 **Acceptance criteria:**
-- [ ] Existing seeded letters, local drafts, and Supabase rows without a payload kind render as text drops.
-- [ ] New model fields are additive and existing letter content and IDs remain intact.
-- [ ] Mock examples cover a text drop, an image/meme, and a GIF.
+- [x] Existing seeded letters, local drafts, and Supabase rows without a payload kind render as text drops.
+- [x] New model fields are additive and existing letter content and IDs remain intact.
+- [x] Mock examples cover a text drop, an image/meme, and a GIF.
 
 **Verification:**
-- [ ] Run `npm run typecheck` and inspect migrated mock/local draft output.
-- [ ] Confirm an existing seeded letter still opens through `/letter/[id]`.
+- [x] Run `npm run typecheck` and inspect migrated mock/local draft output.
+- [x] Confirm an existing seeded letter still opens through `/letter/[id]` and retains its reveal flow.
 
 **Dependencies:** None.
 
@@ -37,13 +39,13 @@ Commit each completed code change separately with a descriptive message and push
 **Description:** Add the smallest Supabase Storage path for private image and GIF assets. Keep only the storage path and basic metadata on the drop, validate files before upload, and fetch a short-lived URL for an authorized sender or recipient.
 
 **Acceptance criteria:**
-- [ ] Only the chosen image formats and GIF are accepted, with a visible size limit and upload error state.
+- [x] Only the chosen image formats and GIF are accepted, with a visible size limit and upload error state.
 - [ ] Storage policies allow the sender and addressed recipient to read the attachment, while unrelated users cannot.
 - [ ] A failed upload leaves the draft intact and does not report the drop as sent.
 
 **Verification:**
 - [ ] Test upload and read with the sender account, then verify access with an unrelated account is denied.
-- [ ] Test unsupported type, oversized file, and failed upload recovery.
+- [x] Unsupported type and over-limit files show validation errors while preserving the draft. Remote upload failure recovery still needs a configured Supabase project.
 
 **Dependencies:** Task 1.
 
@@ -62,13 +64,14 @@ Commit each completed code change separately with a descriptive message and push
 **Description:** Reframe the core shell around sharing and receiving any supported drop. Use a mobile-first bottom bar, a clear “Make a drop” action, incoming/recent drop cards, and simple filters for inbox, sent, and drafts. Keep the optional Journey destination available without centering every send around a map.
 
 **Acceptance criteria:**
-- [ ] Home and mailbox labels, cards, and empty states make sense for text and media drops.
-- [ ] Navigation and primary actions fit phone widths and respect bottom safe-area insets.
-- [ ] The existing desktop sidebar and profile access remain available at larger widths.
+- [x] Home and mailbox labels, cards, and empty states make sense for text and media drops.
+- [x] Navigation and primary actions fit phone widths.
+- [ ] Confirm bottom safe-area insets on a real device.
+- [x] The existing desktop sidebar and profile access remain available at larger widths.
 
 **Verification:**
-- [ ] Check home and mailbox at 360px, 390px, and 430px widths.
-- [ ] Confirm current prompt cards and seal-related entry points remain reachable.
+- [x] Check home and mailbox at 360px, 390px, and 430px widths.
+- [x] Confirm current prompt cards and seal-related entry points remain reachable.
 
 **Dependencies:** Task 1.
 
@@ -81,9 +84,9 @@ Commit each completed code change separately with a descriptive message and push
 **Description:** Let the sender choose a text note, image/meme, or GIF; preview it with an optional caption; choose one recipient; then send instantly by default or explicitly choose relay. Preserve existing text prompts and optional seals for letter-style drops.
 
 **Acceptance criteria:**
-- [ ] The composer supports text, image/meme, and GIF previews without requiring multiple desktop-style steps on mobile.
-- [ ] A local draft survives navigation, and media is clearly marked as uploaded or local-only until upload succeeds.
-- [ ] Sending gives clear progress, success, and recovery states; instant is the default and relay is opt-in.
+- [x] The composer supports text, image/meme, and GIF previews without requiring multiple desktop-style steps on mobile.
+- [x] A local draft survives navigation, and media is clearly marked as uploaded or local-only until upload succeeds.
+- [x] Sending gives clear progress, success, and recovery states; instant is the default and relay is opt-in.
 
 **Verification:**
 - [ ] Complete one send for each payload kind with Supabase configured.
@@ -106,7 +109,7 @@ Commit each completed code change separately with a descriptive message and push
 **Description:** Update the existing arrival route so it renders text, image/meme, and GIF drops with the same private recipient access. Add a small set of one-tap reactions and persist the recipient’s reaction without changing the sender’s message.
 
 **Acceptance criteria:**
-- [ ] Existing letter URLs continue to open and text still uses its current reveal behavior.
+- [x] Existing letter URLs continue to open and text still uses its current reveal behavior.
 - [ ] Media is fetched only after authorization and has an accessible text fallback.
 - [ ] A recipient can add or change a reaction, and the sender can see it.
 
@@ -152,7 +155,7 @@ Commit each completed code change separately with a descriptive message and push
 **Acceptance criteria:**
 - [ ] Core controls are keyboard reachable, labeled, and at least 44px high; media has useful alt text or fallback copy.
 - [ ] Motion respects `prefers-reduced-motion`, and no content is hidden behind the bottom navigation or keyboard.
-- [ ] Lint, typecheck, and production build all pass without removing unrelated working-tree changes.
+- [x] Lint, typecheck, and production build all pass without removing unrelated working-tree changes.
 
 **Verification:**
 - [ ] Run `npm run lint`, `npm run typecheck`, and `npm run build`.
