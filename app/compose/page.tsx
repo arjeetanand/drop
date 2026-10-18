@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { AlignCenter, AlignLeft, AlignRight, ArrowLeft, Check, FileImage, ImagePlus, Minus, Plus, Send, Type, X } from 'lucide-react';
+import { AlignCenter, AlignLeft, AlignRight, ArrowLeft, Check, Eye, FileImage, ImagePlus, Minus, Plus, Send, Type, X } from 'lucide-react';
 import { getSealInfo, mockSeals, waxColors, writingPrompts, type DropDeliveryMode, type DropPayloadKind } from '@/data/mockData';
 import { dispatchLetter, getLetterDraft, getLetterDraftById, saveLetterDraft, setActiveLetterDraft, startNewLetter, type LetterDraftState, type LetterAlignment } from '@/lib/letterStore';
 import { syncDropToBackend } from '@/lib/letterBackend';
@@ -341,9 +341,12 @@ function Composer() {
           {notice && !error && <p className="notice" role="status">{notice}</p>}
           {accountState !== 'connected' && <div className="rounded-xl border border-[#e9d6c7] bg-[#fff6ec] p-4"><p className="text-sm font-semibold text-ink-navy">{accountState === 'checking' ? 'Checking your account…' : accountState === 'unavailable' ? 'Preview mode' : 'Connect your account to send.'}</p><p className="mt-1 text-xs leading-relaxed text-on-surface-variant">{accountState === 'unavailable' ? 'Sign-in isn’t available in this preview. Your drafts stay on this device.' : 'A private drop can only reach someone with a Drop account.'}</p><Link href={profileHref} onClick={saveBeforeLeaving} aria-disabled={attachmentSaving || Boolean(file && !attachmentSaved)} className="mt-2 inline-flex min-h-10 items-center text-xs font-bold text-[#2b45f7]">{accountState === 'unavailable' ? 'Account options' : 'Your profile'} <ArrowRightIcon /></Link></div>}
 
-          <div className="flex flex-col-reverse gap-2 pb-3 sm:flex-row sm:justify-between">
-            <button type="button" onClick={handleSave} className="button-secondary !min-h-12 !rounded-xl">{saveLabel}</button>
-            {accountState === 'connected' ? <button type="submit" disabled={!complete || sending || attachmentSaving} className="button-primary !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white disabled:opacity-45">{sending ? 'Sending…' : 'Send drop'} <Send className="h-4 w-4" aria-hidden="true" /></button> : <Link href={profileHref} onClick={saveBeforeLeaving} aria-disabled={attachmentSaving || Boolean(file && !attachmentSaved)} className="button-primary !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white">{accountState === 'unavailable' ? 'Account options' : 'Connect to send'} <Send className="h-4 w-4" aria-hidden="true" /></Link>}
+          <div className="flex flex-col gap-2 pb-3">
+            <Link href={draft ? `/compose/preview?letter=${encodeURIComponent(draft.id)}` : '/compose/preview'} onClick={saveBeforeLeaving} className="button-secondary !min-h-12 !rounded-xl"><Eye className="h-4 w-4" aria-hidden="true" /> Preview as recipient</Link>
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
+              <button type="button" onClick={handleSave} className="button-secondary !min-h-12 !rounded-xl">{saveLabel}</button>
+              {accountState === 'connected' ? <button type="submit" disabled={!complete || sending || attachmentSaving} className="button-primary !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white disabled:opacity-45">{sending ? 'Sending…' : 'Send drop'} <Send className="h-4 w-4" aria-hidden="true" /></button> : <Link href={profileHref} onClick={saveBeforeLeaving} aria-disabled={attachmentSaving || Boolean(file && !attachmentSaved)} className="button-primary !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white">{accountState === 'unavailable' ? 'Account options' : 'Connect to send'} <Send className="h-4 w-4" aria-hidden="true" /></Link>}
+            </div>
           </div>
         </form>
       </div>
