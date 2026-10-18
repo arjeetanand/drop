@@ -8,6 +8,8 @@ import { getSealInfo } from '@/data/mockData';
 import type { LetterDraftState } from '@/lib/letterStore';
 import { getLetterDraftById } from '@/lib/letterStore';
 import { getDraftAttachment } from '@/lib/letterMediaStore';
+import { getUserProfile } from '@/lib/userStore';
+import { cn } from '@/lib/utils';
 import { ReducedMotionGif } from '@/components/ReducedMotionGif';
 
 function RecipientPreview() {
@@ -65,9 +67,11 @@ function RecipientPreview() {
   }
 
   const recipient = draft.recipient.trim() || 'your person';
+  const sender = getUserProfile().displayName.trim() || 'You';
   const seal = getSealInfo(draft.sealId, draft.sealMonogram, draft.sealColor);
   const payloadLabel = draft.payloadKind === 'gif' ? 'GIF' : draft.payloadKind === 'image' ? 'Photo or meme' : 'Note';
   const editHref = `/compose?letter=${encodeURIComponent(draft.id)}`;
+  const alignmentClass = draft.alignment === 'center' ? 'text-center' : draft.alignment === 'right' ? 'text-right' : 'text-left';
 
   return (
     <main className="page-shell page-enter !pt-4 sm:!pt-8">
@@ -89,7 +93,7 @@ function RecipientPreview() {
             <div className="min-w-0">
               <p className="eyebrow">{payloadLabel}</p>
               <h2 className="section-title mt-2 break-words text-2xl sm:text-3xl">{draft.subject || 'A little moment'}</h2>
-              <p className="meta mt-3">To {recipient.startsWith('@') ? recipient : `@${recipient}`}</p>
+              <p className="meta mt-3">From {sender} · To {recipient.startsWith('@') ? recipient : `@${recipient}`}</p>
             </div>
             <span className="rounded-full bg-[#f2eee5] px-3 py-1 font-mono text-[0.62rem] font-bold uppercase tracking-[0.1em] text-on-surface-variant">{payloadLabel}</span>
           </div>
@@ -99,7 +103,7 @@ function RecipientPreview() {
           </div>}
           {mediaUnavailable && <p className="notice error-notice mt-5" role="status">The attachment is not saved on this device. Go back to editing and add it again to preview it.</p>}
 
-          {draft.content.trim() && <p className="body-copy mt-5 whitespace-pre-wrap break-words text-lg text-ink-navy">{draft.content}</p>}
+          {draft.content.trim() && <p className={cn('body-copy mt-5 whitespace-pre-wrap break-words text-ink-navy', draft.payloadKind === 'text' && alignmentClass)} style={draft.payloadKind === 'text' ? { fontSize: `${draft.fontSize}px` } : undefined}>{draft.content}</p>}
           {!draft.content.trim() && draft.payloadKind === 'text' && <p className="body-copy mt-5 italic text-on-surface-variant">Your note will appear here.</p>}
 
           <footer className="mt-6 flex items-center gap-3 border-t border-[rgba(16,42,67,0.1)] pt-5">
