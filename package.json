@@ -1,5 +1,5 @@
 {
-  "name": "nextjs",
+  "name": "drop",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test tests/*.test.mjs",
     "ai:fix": "node scripts/openrouter-fix.mjs",
     "ai:repair": "node scripts/openrouter-fix.mjs"
   },

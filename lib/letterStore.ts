@@ -1,5 +1,5 @@
 import { currentFocusDraft, mockAddress, mockFieldNotes, mockLetters } from '@/data/mockData';
-import type { LetterStatus, MockLetter } from '@/data/mockData';
+import type { DropDeliveryMode, DropPayloadKind, LetterStatus, MockLetter } from '@/data/mockData';
 
 const STORAGE_KEY = 'dear-exe:active-letter:v1';
 const NOTES_STORAGE_KEY = 'dear-exe:journey-notes:v1';
@@ -27,6 +27,11 @@ export interface LetterDraftState {
   sealId: string | null;
   sealColor?: string;
   sealMonogram?: string;
+  payloadKind: DropPayloadKind;
+  deliveryMode: DropDeliveryMode;
+  mediaPath?: string;
+  mediaMimeType?: string;
+  mediaSizeBytes?: number;
   status: LetterStatus;
   updatedAt: string;
   dispatchedAt?: string;
@@ -50,6 +55,8 @@ function defaultDraft(): LetterDraftState {
     sealId: 'fern',
     sealColor: '#991b1b',
     sealMonogram: 'E',
+    payloadKind: 'text',
+    deliveryMode: 'instant',
     status: 'draft',
     updatedAt: new Date().toISOString(),
   };
@@ -70,6 +77,8 @@ function blankDraft(): LetterDraftState {
     sealId: 'fern',
     sealColor: '#991b1b',
     sealMonogram: '',
+    payloadKind: 'text',
+    deliveryMode: 'instant',
     status: 'draft',
     updatedAt: new Date().toISOString(),
   };
@@ -80,6 +89,8 @@ function hydrateDraft(value: Partial<LetterDraftState>): LetterDraftState {
   return {
     ...fallback,
     ...value,
+    payloadKind: value.payloadKind ?? 'text',
+    deliveryMode: value.deliveryMode ?? 'instant',
     address: { ...mockAddress, ...(value.address ?? {}) },
   };
 }
@@ -300,6 +311,11 @@ export function draftAsLetter(draft: LetterDraftState): MockLetter {
     sealId: draft.sealId ?? undefined,
     sealColor: draft.sealColor,
     sealMonogram: draft.sealMonogram,
+    payloadKind: draft.payloadKind,
+    deliveryMode: draft.deliveryMode,
+    mediaPath: draft.mediaPath,
+    mediaMimeType: draft.mediaMimeType,
+    mediaSizeBytes: draft.mediaSizeBytes,
   };
 }
 

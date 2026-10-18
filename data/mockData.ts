@@ -1,4 +1,6 @@
 export type LetterStatus = 'draft' | 'sealed' | 'dispatched' | 'delivered';
+export type DropPayloadKind = 'text' | 'image' | 'gif';
+export type DropDeliveryMode = 'instant' | 'relay';
 
 export interface MockLetter {
   id: string;
@@ -13,6 +15,13 @@ export interface MockLetter {
   sealId?: string;
   sealColor?: string;
   sealMonogram?: string;
+  payloadKind?: DropPayloadKind;
+  deliveryMode?: DropDeliveryMode;
+  mediaPath?: string;
+  mediaMimeType?: string;
+  mediaSizeBytes?: number;
+  mediaUrl?: string;
+  reaction?: string;
 }
 
 export const mockLetters: MockLetter[] = [
@@ -28,6 +37,20 @@ export const mockLetters: MockLetter[] = [
     teaser: ['I kept the blue hour for you.', 'It was hiding between the rain…', 'Open when you want a small secret.'],
     sealId: 'celestial',
     sealColor: '#102a43',
+    payloadKind: 'image',
+    mediaUrl: '/demo-cat.png',
+  },
+  {
+    id: 'incoming-gif',
+    recipient: 'sunny.stories',
+    sender: 'Jo Park',
+    direction: 'received',
+    date: 'Yesterday',
+    status: 'delivered',
+    excerpt: 'A tiny loop from the walk home. This made me think of you.',
+    subject: 'The world doing its thing',
+    payloadKind: 'gif',
+    mediaUrl: '/demo-cat.gif',
   },
   {
     id: '1',
@@ -91,6 +114,17 @@ export const currentFocusDraft = {
   lastEdited: '2 hours ago',
   wordCount: 247,
 };
+
+export const writingPrompts = [
+  'Describe a small kindness you still remember.',
+  'What ordinary thing would you miss if it disappeared tomorrow?',
+  'Tell someone about a place that makes you feel at home.',
+  'Write about a moment you wish you could replay slowly.',
+  'What is something you understand differently now?',
+  'Share a little detail from today that made you smile.',
+  'What would you like someone to know, with no need to reply?',
+  'Describe a sound that brings back a person or place.',
+];
 
 export interface TrackingEvent {
   id: string;

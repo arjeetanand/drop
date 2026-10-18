@@ -17,3 +17,7 @@ yarn-error.log*
 pnpm-debug.log*
 
 public/
+!public/
+public/*
+!public/demo-cat.png
+!public/demo-cat.gif

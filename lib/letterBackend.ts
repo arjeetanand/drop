@@ -1,8 +1,10 @@
 import type { MockLetter, TrackingEvent } from '@/data/mockData';
+import type { DropDeliveryMode, DropPayloadKind } from '@/data/mockData';
 import type { JourneyNote, LetterDraftState } from '@/lib/letterStore';
 import type { UserProfile } from '@/lib/userStore';
 import { defaultUserProfile } from '@/lib/userStore';
 import { getSupabaseBrowserClient } from '@/lib/supabaseBrowser';
+import { normalizeDropRecipient, validateDropMedia } from '@/lib/dropValidation';
 
 type LetterRow = {
   id: string;
@@ -19,6 +21,11 @@ type LetterRow = {
   dispatched_at: string | null;
   delivered_at: string | null;
   created_at: string;
+  payload_kind: DropPayloadKind | null;
+  delivery_mode: DropDeliveryMode | null;
+  media_path: string | null;
+  media_mime_type: string | null;
+  media_size_bytes: number | null;
 };
 
 type ProfileRow = {
@@ -91,8 +98,15 @@ function rowToLetter(row: LetterRow, userId: string, revealContent = false): Moc
       : teaser ? `${teaser}${content.length > 150 ? '…' : ''}` : 'A sealed letter waiting to be opened.',
     subject: row.subject || 'Untitled Letter',
     teaser: row.teaser || undefined,
+    payloadKind: row.payload_kind || 'text',
+    deliveryMode: row.delivery_mode || 'instant',
+    mediaPath: row.media_path || undefined,
+    mediaMimeType: row.media_mime_type || undefined,
+    mediaSizeBytes: row.media_size_bytes || undefined,
   };
 }
+
+const LETTER_SELECT = 'id, sender_id, recipient_id, sender_display_name, recipient_username, recipient_name, subject, content, teaser, status, seal_id, dispatched_at, delivered_at, created_at, payload_kind, delivery_mode, media_path, media_mime_type, media_size_bytes';
 
 export async function getRemoteLetters(): Promise<MockLetter[] | null> {
   const context = await getAuthenticatedClient();
@@ -100,7 +114,7 @@ export async function getRemoteLetters(): Promise<MockLetter[] | null> {
 
   const { data, error } = await context.supabase
     .from('letters')
-    .select('id, sender_id, recipient_id, sender_display_name, recipient_username, recipient_name, subject, content, teaser, status, seal_id, dispatched_at, delivered_at, created_at')
+    .select(LETTER_SELECT)
     .order('created_at', { ascending: false })
     .returns<LetterRow[]>();
 
@@ -114,12 +128,19 @@ export async function getRemoteLetterById(letterId: string): Promise<MockLetter 
 
   const { data, error } = await context.supabase
     .from('letters')
-    .select('id, sender_id, recipient_id, sender_display_name, recipient_username, recipient_name, subject, content, teaser, status, seal_id, dispatched_at, delivered_at, created_at')
+    .select(LETTER_SELECT)
     .eq('id', letterId)
     .maybeSingle<LetterRow>();
 
   if (error || !data) return null;
-  return rowToLetter(data, context.user.id, true);
+  const letter = rowToLetter(data, context.user.id, true);
+  if (data.media_path) {
+    const { data: signed } = await context.supabase.storage.from('drop-media').createSignedUrl(data.media_path, 60);
+    letter.mediaUrl = signed?.signedUrl;
+  }
+  const { data: reaction } = await context.supabase.from('letter_reactions').select('emoji').eq('letter_id', letterId).maybeSingle<{ emoji: string }>();
+  letter.reaction = reaction?.emoji;
+  return letter;
 }
 
 function eventsForDraft(draft: LetterDraftState): TrackingEvent[] {
@@ -144,9 +165,23 @@ function eventsForDraft(draft: LetterDraftState): TrackingEvent[] {
   }));
 }
 
-export async function syncLetterToBackend(draft: LetterDraftState) {
+export async function syncDropToBackend(draft: LetterDraftState, mediaFile?: File): Promise<{ ok: boolean; error?: string }> {
   const context = await getAuthenticatedClient();
-  if (!context) return false;
+  if (!context) return { ok: false, error: 'Connect an account in Your profile before sending a private drop.' };
+
+  const recipientUsername = normalizeDropRecipient(draft.recipient);
+  if (!recipientUsername) {
+    return { ok: false, error: 'Add your friend’s exact @username to send this drop.' };
+  }
+  if (draft.payloadKind !== 'text' && !mediaFile) {
+    return { ok: false, error: 'Attach the photo or GIF before sending.' };
+  }
+  if (mediaFile) {
+    const validationError = validateDropMedia(mediaFile);
+    if (validationError) return { ok: false, error: validationError };
+    const expectedKind = mediaFile.type === 'image/gif' ? 'gif' : 'image';
+    if (draft.payloadKind !== expectedKind) return { ok: false, error: 'The selected file does not match this drop type.' };
+  }
 
   let profile = await getRemoteProfile();
   if (!profile) {
@@ -156,48 +191,89 @@ export async function syncLetterToBackend(draft: LetterDraftState) {
       displayName: metadataName,
       username: `user_${context.user.id.slice(0, 8)}`,
     };
-    await saveRemoteProfile(generatedProfile);
+    const created = await saveRemoteProfile(generatedProfile);
+    if (!created) return { ok: false, error: 'Your profile could not be set up. Check the account settings and try again.' };
     profile = await getRemoteProfile();
   }
-  const recipientInput = draft.recipient.trim();
-  const recipientUsername = /^@[a-z0-9._-]{2,24}$/i.test(recipientInput)
-    ? recipientInput.slice(1).toLowerCase()
-    : null;
-  const { data: recipientProfile } = recipientUsername
-    ? await context.supabase.from('profiles').select('id').eq('username', recipientUsername).maybeSingle<{ id: string }>()
-    : { data: null };
+  const { data: recipientProfile, error: recipientError } = await context.supabase
+    .from('profiles')
+    .select('id, display_name')
+    .eq('username', recipientUsername)
+    .maybeSingle<{ id: string; display_name: string }>();
+  if (recipientError || !recipientProfile) return { ok: false, error: `No Drop account found for @${recipientUsername}. Check the username and try again.` };
+
+  let mediaPath: string | null = null;
+  if (mediaFile) {
+    const safeDraftId = draft.id.replace(/[^a-z0-9._-]/gi, '-');
+    mediaPath = `${context.user.id}/${safeDraftId}/${crypto.randomUUID()}`;
+    const { error } = await context.supabase.storage.from('drop-media').upload(mediaPath, mediaFile, {
+      contentType: mediaFile.type,
+      upsert: false,
+    });
+    if (error) return { ok: false, error: 'The image did not finish uploading. Your draft is still here—try again.' };
+  }
+
+  const sentAt = new Date().toISOString();
+  const instant = draft.deliveryMode !== 'relay';
   const { error } = await context.supabase.from('letters').upsert({
     id: draft.id,
     sender_id: context.user.id,
     sender_display_name: profile?.displayName || context.user.user_metadata?.full_name || context.user.email || 'A correspondent',
-    recipient_id: recipientProfile?.id || null,
+    recipient_id: recipientProfile.id,
     recipient_username: recipientUsername,
-    recipient_name: draft.address.name || null,
-    subject: draft.subject || 'Untitled Letter',
+    recipient_name: recipientProfile.display_name,
+    subject: draft.subject || (draft.payloadKind === 'text' ? 'Untitled Letter' : 'A little moment'),
     content: draft.content,
     teaser: draft.content
       .split(/(?<=[.!?])\s+/)
       .map((part) => part.trim())
       .filter(Boolean)
       .slice(0, 3),
-    status: draft.status,
+    status: instant ? 'delivered' : 'dispatched',
     seal_id: draft.sealId,
-    dispatched_at: draft.dispatchedAt || null,
+    dispatched_at: sentAt,
+    delivered_at: instant ? sentAt : null,
+    payload_kind: draft.payloadKind,
+    delivery_mode: instant ? 'instant' : 'relay',
+    media_path: mediaPath,
+    media_mime_type: mediaFile?.type || null,
+    media_size_bytes: mediaFile?.size || null,
   });
-  if (error) return false;
+  if (error) {
+    if (mediaPath) await context.supabase.storage.from('drop-media').remove([mediaPath]);
+    return { ok: false, error: 'Drop could not be saved. Your draft is still here—try again.' };
+  }
 
-  const eventStart = new Date(draft.dispatchedAt || draft.updatedAt).getTime();
-  const events = eventsForDraft(draft).map((event, index) => ({
-    letter_id: draft.id,
-    event_key: event.id,
-    status: event.status,
-    note: event.note,
-    is_done: event.done,
-    is_current: Boolean(event.current),
-    occurred_at: new Date(eventStart + index * 60 * 60 * 1000).toISOString(),
-  }));
-  await context.supabase.from('letter_events').upsert(events, { onConflict: 'letter_id,event_key' });
-  return true;
+  if (!instant) {
+    const relayDraft = { ...draft, status: 'dispatched' as const, dispatchedAt: sentAt };
+    const events = eventsForDraft(relayDraft).map((event, index) => ({
+      letter_id: draft.id,
+      event_key: event.id,
+      status: event.status,
+      note: event.note,
+      is_done: event.done,
+      is_current: Boolean(event.current),
+      occurred_at: new Date(new Date(sentAt).getTime() + index * 60 * 60 * 1000).toISOString(),
+    }));
+    await context.supabase.from('letter_events').upsert(events, { onConflict: 'letter_id,event_key' });
+  }
+  return { ok: true };
+}
+
+export async function syncLetterToBackend(draft: LetterDraftState) {
+  return (await syncDropToBackend(draft)).ok;
+}
+
+export async function saveRemoteReaction(letterId: string, emoji: string) {
+  const context = await getAuthenticatedClient();
+  if (!context || !['💜', '🔥', '😂', '🥹', '🫶'].includes(emoji)) return false;
+  const { error } = await context.supabase.from('letter_reactions').upsert({
+    letter_id: letterId,
+    recipient_id: context.user.id,
+    emoji,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'letter_id' });
+  return !error;
 }
 
 export async function getRemoteJourney(letterId: string): Promise<{ events: TrackingEvent[]; notes: JourneyNote[] } | null> {
