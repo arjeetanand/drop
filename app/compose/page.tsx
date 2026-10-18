@@ -10,6 +10,7 @@ import { dispatchLetter, getLetterDraft, getLetterDraftById, saveLetterDraft, se
 import { syncDropToBackend } from '@/lib/letterBackend';
 import { getSupabaseBrowserClient } from '@/lib/supabaseBrowser';
 import { validateDropMedia } from '@/lib/dropValidation';
+import { deleteDraftAttachment, getDraftAttachment, saveDraftAttachment } from '@/lib/letterMediaStore';
 import { cn } from '@/lib/utils';
 
 function Composer() {
@@ -19,6 +20,8 @@ function Composer() {
   const [payloadKind, setPayloadKind] = useState<DropPayloadKind>('text');
   const [deliveryMode, setDeliveryMode] = useState<DropDeliveryMode>('instant');
   const [file, setFile] = useState<File | null>(null);
+  const [attachmentSaved, setAttachmentSaved] = useState(false);
+  const [attachmentSaving, setAttachmentSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [previewUrl, setPreviewUrl] = useState('');
   const [content, setContent] = useState('');
@@ -38,6 +41,8 @@ function Composer() {
   const [notice, setNotice] = useState('');
 
   useEffect(() => {
+    let active = true;
+    setReady(false);
     const requestedId = searchParams.get('letter');
     const selected = requestedId ? getLetterDraftById(requestedId) : null;
     const current = selected
@@ -55,7 +60,20 @@ function Composer() {
     setSealColor(current.sealColor || '#991b1b');
     setSealMonogram(current.sealMonogram || '');
     setWritingPrompt(searchParams.get('prompt') || '');
-    setReady(true);
+    setFile(null);
+    setAttachmentSaved(false);
+    void getDraftAttachment(current.id).then((savedFile) => {
+      if (!active) return;
+      if (savedFile && current.payloadKind !== 'text' && !validateDropMedia(savedFile)) {
+        setFile(savedFile);
+        setAttachmentSaved(true);
+      } else if (savedFile) {
+        void deleteDraftAttachment(current.id).catch(() => undefined);
+      }
+    }).catch(() => undefined).finally(() => {
+      if (active) setReady(true);
+    });
+    return () => { active = false; };
   }, [searchParams]);
 
   useEffect(() => {
@@ -97,19 +115,26 @@ function Composer() {
   const wordCount = content.trim() ? content.trim().split(/\s+/).length : 0;
   const complete = Boolean(recipient.trim() && (payloadKind === 'text' ? content.trim() : file));
   const currentSeal = getSealInfo(sealId, sealMonogram, sealColor);
+  const profileHref = draft ? `/profile?next=${encodeURIComponent(`/compose?letter=${encodeURIComponent(draft.id)}`)}#account` : '/profile#account';
 
   const updateKind = (kind: DropPayloadKind) => {
     setPayloadKind(kind);
-    if (kind === 'text' || (file && (kind === 'gif' ? file.type !== 'image/gif' : file.type === 'image/gif'))) setFile(null);
+    if (kind === 'text' || (file && (kind === 'gif' ? file.type !== 'image/gif' : file.type === 'image/gif'))) {
+      setFile(null);
+      setAttachmentSaved(false);
+      if (draft) void deleteDraftAttachment(draft.id).catch(() => undefined);
+    }
     setError('');
   };
 
-  const handleFile = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const selected = event.target.files?.[0] || null;
     if (!selected) return;
     const validationError = validateDropMedia(selected);
     if (validationError) {
       setFile(null);
+      setAttachmentSaved(false);
+      if (draft) void deleteDraftAttachment(draft.id).catch(() => undefined);
       setError(validationError);
       event.target.value = '';
       return;
@@ -117,7 +142,20 @@ function Composer() {
     setFile(selected);
     setPayloadKind(selected.type === 'image/gif' ? 'gif' : 'image');
     setError('');
-    setNotice('Preview only until it finishes sending.');
+    setAttachmentSaving(true);
+    try {
+      if (!draft) throw new Error('Draft unavailable');
+      await saveDraftAttachment(draft.id, selected);
+      const updatedDraft = saveLetterDraft({ payloadKind: selected.type === 'image/gif' ? 'gif' : 'image' });
+      setDraft(updatedDraft);
+      setAttachmentSaved(true);
+      setNotice('Attachment saved privately on this device.');
+    } catch {
+      setAttachmentSaved(false);
+      setNotice('Attachment is ready for now. Keep this screen open while sending.');
+    } finally {
+      setAttachmentSaving(false);
+    }
   };
 
   const makeDraft = () => {
@@ -137,12 +175,23 @@ function Composer() {
     });
   };
 
+  const saveBeforeLeaving = (event: React.MouseEvent<HTMLAnchorElement>) => {
+    if (attachmentSaving || (file && !attachmentSaved)) {
+      event.preventDefault();
+      setNotice(attachmentSaving
+        ? 'Saving your attachment on this device…'
+        : 'This browser cannot save attachments between screens. Remove it, connect your account, then add it again.');
+      return;
+    }
+    makeDraft();
+  };
+
   const handleSave = () => {
     const next = makeDraft();
     if (!next) return;
     setDraft(next);
     setSaved(true);
-    setNotice(file ? 'Your words are saved. Keep this screen open to keep the photo attached.' : 'Saved to your desk on this device.');
+    setNotice(file && !attachmentSaved ? 'Your words are saved. Keep this screen open to keep the photo attached.' : 'Saved to your desk on this device.');
   };
 
   const handleSend = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -172,6 +221,7 @@ function Composer() {
         return;
       }
       const storedDraft = saveLetterDraft({ mediaPath: result.mediaPath, mediaMimeType: file?.type, mediaSizeBytes: file?.size });
+      void deleteDraftAttachment(next.id).catch(() => undefined);
       const status = deliveryMode === 'instant' ? 'delivered' : 'dispatched';
       const sent = dispatchLetter(storedDraft.id, status);
       router.push(`/sent?letter=${encodeURIComponent(sent.id)}&sync=cloud&mode=${deliveryMode}`);
@@ -224,7 +274,7 @@ function Composer() {
               {previewUrl ? (
                 <div className="relative aspect-[4/3] max-h-[430px] overflow-hidden bg-[#ede8df]">
                   <Image src={previewUrl} alt={`Preview of your ${payloadKind === 'gif' ? 'GIF' : 'photo'}`} fill unoptimized sizes="(max-width: 760px) 100vw, 760px" className="object-contain" />
-                  <button type="button" aria-label="Remove attachment" onClick={() => { setFile(null); if (fileInputRef.current) fileInputRef.current.value = ''; }} className="absolute right-3 top-3 flex h-11 w-11 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/75"><X className="h-4 w-4" aria-hidden="true" /></button>
+                  <button type="button" aria-label="Remove attachment" disabled={attachmentSaving} onClick={() => { setFile(null); setAttachmentSaved(false); if (draft) void deleteDraftAttachment(draft.id).catch(() => undefined); if (fileInputRef.current) fileInputRef.current.value = ''; }} className="absolute right-3 top-3 flex h-11 w-11 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/75 disabled:opacity-50"><X className="h-4 w-4" aria-hidden="true" /></button>
                 </div>
               ) : (
                 <label htmlFor="drop-media" className="flex min-h-[190px] cursor-pointer flex-col items-center justify-center gap-3 px-5 py-8 text-center sm:min-h-[240px]">
@@ -233,7 +283,7 @@ function Composer() {
                 </label>
               )}
               <input ref={fileInputRef} id="drop-media" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleFile} className="sr-only" aria-label={`Choose a ${payloadKind === 'gif' ? 'GIF' : 'photo'}`} />
-              {previewUrl && <p className="px-4 pb-3 text-center font-mono text-[0.62rem] text-on-surface-variant">Local preview · private after successful send</p>}
+              {previewUrl && <p className="px-4 pb-3 text-center font-mono text-[0.62rem] text-on-surface-variant">{attachmentSaving ? 'Saving attachment on this device…' : attachmentSaved ? 'Saved privately on this device · uploads only when sent' : 'Local preview · keep this screen open while sending'}</p>}
             </section>
           )}
 
@@ -289,11 +339,11 @@ function Composer() {
 
           {error && <p className="notice error-notice" role="alert">{error}</p>}
           {notice && !error && <p className="notice" role="status">{notice}</p>}
-          {accountState !== 'connected' && <div className="rounded-xl border border-[#e9d6c7] bg-[#fff6ec] p-4"><p className="text-sm font-semibold text-ink-navy">{accountState === 'checking' ? 'Checking your account…' : accountState === 'unavailable' ? 'You’re in preview mode.' : 'Connect your account to send.'}</p><p className="mt-1 text-xs leading-relaxed text-on-surface-variant">{accountState === 'unavailable' ? 'Your notes save on this device. Add Supabase to send privately between accounts.' : 'A private drop can only reach someone with a Drop account.'}</p><Link href="/profile" className="mt-2 inline-flex min-h-10 items-center text-xs font-bold text-[#2b45f7]">Your profile <ArrowRightIcon /></Link></div>}
+          {accountState !== 'connected' && <div className="rounded-xl border border-[#e9d6c7] bg-[#fff6ec] p-4"><p className="text-sm font-semibold text-ink-navy">{accountState === 'checking' ? 'Checking your account…' : accountState === 'unavailable' ? 'Preview mode' : 'Connect your account to send.'}</p><p className="mt-1 text-xs leading-relaxed text-on-surface-variant">{accountState === 'unavailable' ? 'Sign-in isn’t available in this preview. Your drafts stay on this device.' : 'A private drop can only reach someone with a Drop account.'}</p><Link href={profileHref} onClick={saveBeforeLeaving} aria-disabled={attachmentSaving || Boolean(file && !attachmentSaved)} className="mt-2 inline-flex min-h-10 items-center text-xs font-bold text-[#2b45f7]">{accountState === 'unavailable' ? 'Account options' : 'Your profile'} <ArrowRightIcon /></Link></div>}
 
           <div className="flex flex-col-reverse gap-2 pb-3 sm:flex-row sm:justify-between">
             <button type="button" onClick={handleSave} className="button-secondary !min-h-12 !rounded-xl">{saveLabel}</button>
-            {accountState === 'connected' ? <button type="submit" disabled={!complete || sending} className="button-primary !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white disabled:opacity-45">{sending ? 'Sending…' : 'Send drop'} <Send className="h-4 w-4" aria-hidden="true" /></button> : <Link href="/profile" className="button-primary !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white">Connect to send <Send className="h-4 w-4" aria-hidden="true" /></Link>}
+            {accountState === 'connected' ? <button type="submit" disabled={!complete || sending || attachmentSaving} className="button-primary !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white disabled:opacity-45">{sending ? 'Sending…' : 'Send drop'} <Send className="h-4 w-4" aria-hidden="true" /></button> : <Link href={profileHref} onClick={saveBeforeLeaving} aria-disabled={attachmentSaving || Boolean(file && !attachmentSaved)} className="button-primary !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white">{accountState === 'unavailable' ? 'Account options' : 'Connect to send'} <Send className="h-4 w-4" aria-hidden="true" /></Link>}
           </div>
         </form>
       </div>

@@ -5,6 +5,9 @@ import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getSupabaseBrowserClient } from '@/lib/supabaseBrowser';
+import { safeInternalPath } from '@/lib/safeInternalPath';
+
+const AUTH_RETURN_KEY = 'dear-exe:auth-return';
 
 function AuthCallbackLoading() {
   return (
@@ -26,7 +29,11 @@ function AuthCallbackContent() {
 
     const redirectWithError = (errorMessage: string) => {
       if (active) setMessage('Google sign-in could not finish. Returning to your profile…');
-      router.replace(`/profile?authError=${encodeURIComponent(errorMessage)}`);
+      let nextPath: string | null = null;
+      try {
+        nextPath = safeInternalPath(window.sessionStorage.getItem(AUTH_RETURN_KEY), window.location.origin);
+      } catch { /* Storage may be disabled; return to the profile. */ }
+      router.replace(`/profile?authError=${encodeURIComponent(errorMessage)}${nextPath ? `&next=${encodeURIComponent(nextPath)}` : ''}`);
     };
 
     const finishAuth = async () => {
@@ -59,7 +66,12 @@ function AuthCallbackContent() {
         }
 
         if (active) setMessage('Signed in. Opening your profile…');
-        router.replace('/profile');
+        let nextPath: string | null = null;
+        try {
+          nextPath = safeInternalPath(window.sessionStorage.getItem(AUTH_RETURN_KEY), window.location.origin);
+          window.sessionStorage.removeItem(AUTH_RETURN_KEY);
+        } catch { /* Storage may be disabled; return to the profile. */ }
+        router.replace(nextPath || '/profile');
       } catch {
         redirectWithError('The sign-in return could not be verified. Please try again.');
       }

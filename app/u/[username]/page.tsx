@@ -15,6 +15,8 @@ type PublicProfileRow = {
   bio: string;
 };
 
+type PublicProfileStatus = 'loading' | 'found' | 'local-only' | 'missing' | 'error';
+
 function safeDecodeUsername(raw: string | string[] | undefined) {
   const value = Array.isArray(raw) ? raw[0] : raw;
   if (!value) return 'your.story';
@@ -33,7 +35,7 @@ export default function PublicProfilePage() {
   const params = useParams<{ username?: string | string[] }>();
   const username = normalizeUsername(safeDecodeUsername(params.username));
   const [profile, setProfile] = useState<PublicProfile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [status, setStatus] = useState<PublicProfileStatus>('loading');
   const [copied, setCopied] = useState(false);
   const [notice, setNotice] = useState('');
 
@@ -41,22 +43,19 @@ export default function PublicProfilePage() {
     let active = true;
     const localProfile = getUserProfile();
     const localMatch = localProfile.username.toLowerCase() === username;
-
-    setProfile(localMatch
+    const localPublicProfile = localMatch
       ? {
           displayName: localProfile.displayName,
           username: localProfile.username,
           bio: localProfile.bio,
         }
-      : {
-          displayName: username,
-          username,
-          bio: '',
-        });
+      : null;
+
+    setProfile(localPublicProfile);
 
     const supabase = getSupabaseBrowserClient();
     if (!supabase) {
-      setLoading(false);
+      setStatus(localPublicProfile ? 'local-only' : 'missing');
       return () => {
         active = false;
       };
@@ -70,17 +69,24 @@ export default function PublicProfilePage() {
           .eq('username', username)
           .maybeSingle<PublicProfileRow>();
 
-        if (active && !error && data) {
+        if (!active) return;
+        if (error) {
+          setStatus('error');
+          return;
+        }
+        if (data) {
           setProfile({
             displayName: data.display_name,
             username: data.username,
             bio: data.bio,
           });
+          setStatus('found');
+        } else {
+          setProfile(null);
+          setStatus('missing');
         }
       } catch {
-        // The local or address-only profile remains useful when the network is unavailable.
-      } finally {
-        if (active) setLoading(false);
+        if (active) setStatus('error');
       }
     };
 
@@ -91,6 +97,7 @@ export default function PublicProfilePage() {
   }, [username]);
 
   const copyLink = async () => {
+    if (status !== 'found') return;
     const link = `${window.location.origin}${profileUrl(username)}`;
     try {
       if (!navigator.clipboard) throw new Error('Clipboard unavailable');
@@ -104,9 +111,17 @@ export default function PublicProfilePage() {
   };
 
   const displayName = profile?.displayName || username;
-  const bio = profile?.bio || 'A quiet address for letters worth carrying.';
   const initials = displayName.trim().split(/\s+/).filter(Boolean).map((part) => part[0]).join('').slice(0, 2).toUpperCase() || 'DE';
   const composePath = `/compose?new=1&recipient=${encodeURIComponent(`@${username}`)}`;
+  const statusText = status === 'loading'
+    ? 'Finding this profile…'
+    : status === 'found'
+      ? 'Open to drops'
+      : status === 'local-only'
+        ? 'Only saved on this device'
+        : status === 'missing'
+          ? 'No Drop account found'
+          : 'Profile unavailable';
 
   return (
     <main className="page-shell page-enter">
@@ -127,7 +142,7 @@ export default function PublicProfilePage() {
           </Link>
         </header>
 
-        <section className="paper-card mt-12 p-6 sm:p-10" aria-busy={loading}>
+        <section className="paper-card mt-12 p-6 sm:p-10" aria-busy={status === 'loading'}>
           <div className="flex flex-col gap-5 border-b border-[rgba(16,42,67,0.13)] pb-7 sm:flex-row sm:items-end sm:justify-between">
             <div className="flex items-start gap-4">
               <span className="flex h-12 w-12 shrink-0 items-center justify-center border border-ink-navy bg-ink-navy font-headline-md text-xl text-white" aria-hidden="true">
@@ -139,39 +154,62 @@ export default function PublicProfilePage() {
               </div>
             </div>
             <p className="meta sm:text-right" role="status" aria-live="polite">
-              {loading ? 'Finding this profile…' : 'Open to new letters'}
+              {statusText}
             </p>
           </div>
 
-          <div className="mt-8 max-w-2xl">
-            <p className="meta">{displayName}</p>
-            <p className="body-copy mt-4 text-lg text-ink-navy">{bio}</p>
-          </div>
+          {profile ? (
+            <div className="mt-8 max-w-2xl">
+              <p className="meta">{displayName}</p>
+              {profile.bio && <p className="body-copy mt-4 text-lg text-ink-navy">{profile.bio}</p>}
+              {status === 'local-only' && (
+                <p className="notice mt-5" role="status">This profile is only saved on this device. Connect an account to make it available to friends.</p>
+              )}
+              {status === 'error' && (
+                <p className="error-notice mt-5" role="alert">We could not reach this profile. Check your connection and try again.</p>
+              )}
+            </div>
+          ) : status !== 'loading' ? (
+            <div className="panel-muted mt-8 p-6">
+              <p className="eyebrow">{status === 'missing' ? 'Not here yet' : 'Try again soon'}</p>
+              <h2 className="section-title mt-3 text-2xl">
+                {status === 'missing' ? 'This Drop address is not active.' : 'We could not load this profile.'}
+              </h2>
+              <p className="body-copy mt-3 text-sm">
+                {status === 'missing'
+                  ? 'Check the handle with your friend, or make your own Drop profile.'
+                  : 'Your connection may be down. Come back in a moment.'}
+              </p>
+              <Link href="/profile" className="button-secondary mt-5">Make your profile</Link>
+            </div>
+          ) : null}
 
-          <div className="mt-8 flex flex-wrap items-center gap-3 border-t border-[rgba(16,42,67,0.1)] pt-6">
-            <Link
-              href={composePath}
-              className="button-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#fcfaf6]"
-            >
-              <Mail className="h-4 w-4" aria-hidden="true" />
-              Start a relay
-              <ArrowRight className="h-4 w-4" aria-hidden="true" />
-            </Link>
-            <button
-              type="button"
-              onClick={() => void copyLink()}
-              className="button-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#fcfaf6]"
-            >
-              {copied ? <Check className="h-4 w-4" aria-hidden="true" /> : <Copy className="h-4 w-4" aria-hidden="true" />}
-              {copied ? 'Link copied' : 'Share profile'}
-            </button>
-          </div>
+          {status === 'found' && (
+            <div className="mt-8 flex flex-wrap items-center gap-3 border-t border-[rgba(16,42,67,0.1)] pt-6">
+              <Link
+                href={composePath}
+                className="button-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#fcfaf6]"
+              >
+                <Mail className="h-4 w-4" aria-hidden="true" />
+                Send a drop
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </Link>
+              <button
+                type="button"
+                onClick={() => void copyLink()}
+                className="button-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#fcfaf6]"
+              >
+                {copied ? <Check className="h-4 w-4" aria-hidden="true" /> : <Copy className="h-4 w-4" aria-hidden="true" />}
+                {copied ? 'Link copied' : 'Share profile'}
+              </button>
+            </div>
+          )}
 
           {notice && <p className="notice mt-5" role="status" aria-live="polite">{notice}</p>}
         </section>
 
         <p className="body-copy mt-10 max-w-xl text-sm">
-          Dear.exe is a place for words to move through willing hands. Start a relay when you have something worth sending.
+          Dear.exe is a place for friends to send each other words, photos, and GIFs. Send a drop when you have something worth sharing.
         </p>
       </div>
     </main>
