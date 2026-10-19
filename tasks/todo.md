@@ -98,12 +98,13 @@ Commit each completed code change separately with a descriptive message and push
 **Acceptance criteria:**
 - [x] Home and mailbox labels, cards, and empty states make sense for text and media drops.
 - [x] Navigation and primary actions fit phone widths.
-- [ ] Bottom navigation remains available through compose, opened-drop, and relay routes with an accurate current-tab indication.
+- [x] Bottom navigation remains available through compose, opened-drop, and relay routes with an accurate current-tab indication.
 - [ ] Confirm bottom safe-area insets on a real device.
 - [x] The existing desktop sidebar and profile access remain available at larger widths.
 
 **Verification:**
 - [x] Check home and mailbox at 360px, 390px, and 430px widths.
+- [x] At 390px, confirm the bottom navigation stays visible on compose, an opened sample drop, and relay; Desk and Journey receive the expected current-page state, drop detail stays neutral, and there is no horizontal overflow or console warning/error.
 - [x] Confirm current prompt cards and seal-related entry points remain reachable.
 
 **Dependencies:** Task 1.
