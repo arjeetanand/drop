@@ -113,8 +113,7 @@ export default function LetterArrivalPage() {
 
     const loadLetter = async () => {
       let localLetter = getLetterById(letterId);
-      const localOnlyLetter = localLetter && (localLetter.localDemo || localLetter.sample || localLetter.status === 'draft');
-      if (localOnlyLetter) {
+      if (localLetter && (localLetter.localDemo || localLetter.sample || localLetter.status === 'draft')) {
         if (localLetter.localDemo && localLetter.payloadKind !== 'text') {
           try {
             const attachment = await getDraftAttachment(localLetter.id);
