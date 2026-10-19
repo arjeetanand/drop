@@ -202,6 +202,7 @@ Commit each completed code change separately with a descriptive message and push
 **Verification:**
 - [ ] Run `npm run lint`, `npm run typecheck`, and `npm run build`.
 - [ ] Manually test 360px, 390px, and 430px mobile widths, reduced-motion mode, and one desktop width.
+- [x] At the bottom of the opened sample drop, its content ends 34px above the fixed navigation at 360px, 390px, and 430px; phone-keyboard and real-device safe-area behavior remain open.
 - [ ] Verify large-GIF reduced-motion capture on a lower-memory phone; browser testing is still needed for the actual preference branch.
 - [ ] Review the final diff and verify no existing user changes were lost.
 
