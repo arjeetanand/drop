@@ -681,7 +681,7 @@ function ProfileContent() {
                 <LogIn className="mt-0.5 h-5 w-5 shrink-0 text-[#4f9d7a]" aria-hidden="true" />
                 <div>
                   <p className="eyebrow">Your account</p>
-                  <h2 className="section-title mt-3 text-2xl">Keep your letters with you.</h2>
+                  <h2 className="section-title mt-3 text-2xl">Keep your drops with you.</h2>
                 </div>
               </div>
               <p className="body-copy mt-4 text-sm">

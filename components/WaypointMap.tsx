@@ -84,7 +84,7 @@ export function WaypointMap({
       <svg
         viewBox={`0 0 ${W} ${H}`}
         className="w-full"
-        aria-label="Letter journey map"
+        aria-label="Drop journey map"
         role="img"
       >
         {/* Grid lines (subtle) */}

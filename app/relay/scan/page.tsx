@@ -256,7 +256,7 @@ function ScanContent() {
           <>
             <section className="mt-12">
               <p className="eyebrow text-[#4f9d7a]">Seamless handoff</p>
-              <h1 className="display-title mt-4">You are about to carry a letter.</h1>
+              <h1 className="display-title mt-4">You are about to carry a drop.</h1>
               <p className="body-copy mt-5 max-w-2xl text-lg">
                 “<span className="text-ink-navy">{relay?.subject ?? payload.subject}</span>” is moving toward{' '}
                 <span className="text-ink-navy">{relay?.recipient ?? payload.destination}</span>. Confirm your name, then allow one GPS stamp to join the relay.
@@ -366,7 +366,7 @@ function ScanContent() {
         {phase === 'confirmed' && payload && (
           <section className="mt-12 max-w-3xl">
             <p className="eyebrow text-[#4f9d7a]">Transfer recorded</p>
-            <h1 className="display-title mt-4">You have the letter.</h1>
+            <h1 className="display-title mt-4">You have the drop.</h1>
             <p className="body-copy mt-5 max-w-2xl text-lg">
               You are now carrying “<span className="text-ink-navy">{relay?.subject ?? payload.subject}</span>”. The passport has two new GPS waypoints: the handoff point and your acceptance point.
             </p>
@@ -377,7 +377,7 @@ function ScanContent() {
                 <div>
                   <h2 className="font-headline-md text-2xl text-ink-navy">Handoff confirmed.</h2>
                   <p className="body-copy mt-3 text-sm">
-                    The route now includes <span className="text-ink-navy">{payload.neighborhood}</span> and <span className="text-ink-navy">{r2Neighborhood || 'your area'}</span>. The letter remains sealed while it travels toward <span className="text-ink-navy">{payload.destination}</span>.
+                    The route now includes <span className="text-ink-navy">{payload.neighborhood}</span> and <span className="text-ink-navy">{r2Neighborhood || 'your area'}</span>. The drop remains sealed while it travels toward <span className="text-ink-navy">{payload.destination}</span>.
                   </p>
                 </div>
               </div>

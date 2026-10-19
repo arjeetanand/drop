@@ -109,7 +109,7 @@ function HandoffContent() {
     const normalizedName = name.trim();
     const nextFieldErrors: FieldErrors = {};
 
-    if (!normalizedLetterId) nextFieldErrors.letterId = 'Enter the letter ID.';
+    if (!normalizedLetterId) nextFieldErrors.letterId = 'Enter the Drop ID.';
     if (!/^\d{4}$/.test(normalizedPin)) nextFieldErrors.pin = 'Enter the four-digit PIN exactly as provided.';
     if (!normalizedName) nextFieldErrors.name = 'Enter your name so the new carrier can be recorded.';
 
@@ -132,7 +132,7 @@ function HandoffContent() {
 
       if (handoffPayload) {
         if (handoffPayload.letterId !== normalizedLetterId) {
-          throw new Error('The letter ID does not match this handoff code. Use the ID shown by the carrier.');
+          throw new Error('The Drop ID does not match this handoff code. Use the ID shown by the carrier.');
         }
         if (!Number.isFinite(handoffPayload.lat) || !Number.isFinite(handoffPayload.lng)) {
           throw new Error('The handoff location is not valid. Ask the carrier to generate a fresh code.');
@@ -260,7 +260,7 @@ function HandoffContent() {
             <p className="eyebrow text-[#b84b3a]">Carrier-issued PIN</p>
             <h1 className="display-title mt-4">Verify the handoff.</h1>
             <p className="body-copy mt-5 max-w-2xl text-lg">
-              Enter the letter ID and four-digit PIN the current carrier gave you. We will confirm your GPS is within 50 m of their handoff point before recording the new carrier.
+              Enter the Drop ID and four-digit PIN the current carrier gave you. We will confirm your GPS is within 50 m of their handoff point before recording the new carrier.
             </p>
 
             {phase === 'error' && (
@@ -276,7 +276,7 @@ function HandoffContent() {
                 <p className="mt-1">{errorMsg}</p>
                 {Object.keys(fieldErrors).length > 0 && (
                   <ul className="mt-3 list-disc space-y-1 pl-5">
-                    {fieldErrors.letterId && <li><a className="underline underline-offset-2" href="#handoff-letter-id">Letter ID: {fieldErrors.letterId}</a></li>}
+                    {fieldErrors.letterId && <li><a className="underline underline-offset-2" href="#handoff-letter-id">Drop ID: {fieldErrors.letterId}</a></li>}
                     {fieldErrors.pin && <li><a className="underline underline-offset-2" href="#handoff-pin">PIN: {fieldErrors.pin}</a></li>}
                     {fieldErrors.name && <li><a className="underline underline-offset-2" href="#handoff-name">Name: {fieldErrors.name}</a></li>}
                   </ul>
@@ -292,7 +292,7 @@ function HandoffContent() {
               <p className="eyebrow">Handoff details</p>
               <div className="mt-6 space-y-5">
                 <label htmlFor="handoff-letter-id" className="field-label">
-                  Letter ID <span className="text-[#b84b3a]">*</span>
+                  Drop ID <span className="text-[#b84b3a]">*</span>
                   <input
                     id="handoff-letter-id"
                     required
@@ -358,14 +358,14 @@ function HandoffContent() {
                     value={note}
                     onChange={(event) => setNote(event.target.value)}
                     className="textarea-field mt-2 min-h-[6rem]"
-                    placeholder="How did you receive the letter?"
+                    placeholder="How did you receive the drop?"
                   />
                 </label>
               </div>
 
               <button type="submit" className="button-primary mt-6 w-full">
                 <Fingerprint className="h-4 w-4" aria-hidden="true" />
-                Verify PIN and accept letter
+                Verify PIN and accept drop
               </button>
               <p className="field-help mt-4 inline-flex items-start gap-2">
                 <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#4f9d7a]" aria-hidden="true" />

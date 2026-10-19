@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 
 export function TrackingTimeline({ events }: { events: TrackingEvent[] }) {
   return (
-    <ol className="relative ml-2 border-l border-[rgba(16,42,67,0.18)] pl-7" aria-label="Letter journey timeline">
+    <ol className="relative ml-2 border-l border-[rgba(16,42,67,0.18)] pl-7" aria-label="Drop journey timeline">
       {events.map((event) => (
         <li key={event.id} className={cn('relative pb-8 last:pb-0', !event.done && 'opacity-50')}>
           <span

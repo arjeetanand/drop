@@ -37,7 +37,7 @@ export function RelayEnvelope({
     <div
       className={cn('relative aspect-[1.58] w-full max-w-[440px]', compact && 'max-w-[270px]', className)}
       role="img"
-      aria-label="A sealed letter ready to travel"
+      aria-label="A sealed drop ready to travel"
     >
       <div className="absolute inset-0 overflow-hidden border border-[rgba(16,42,67,0.18)] bg-[#fcfaf6] shadow-[0_16px_26px_rgba(16,42,67,0.1)]">
         <div className="absolute inset-0 opacity-40" aria-hidden="true">

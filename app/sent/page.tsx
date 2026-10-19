@@ -61,7 +61,7 @@ function SentContent() {
             <p className="eyebrow">Your drop is on its way</p>
             <h1 className="display-title mt-4 max-w-3xl">Let someone carry it forward.</h1>
             <p className="body-copy mt-5 max-w-2xl text-lg">“{relay.subject}” is sealed and waiting for its first human handoff. Share the passport with someone heading in the right direction.</p>
-            <p className="field-help mt-3">{syncedToCloud ? 'Your account has a copy of this letter.' : 'This local-first demo keeps the letter on this device. Sign in from Profile to sync across devices.'}</p>
+            <p className="field-help mt-3">{syncedToCloud ? 'Your account has a copy of this drop.' : 'This local-first demo keeps the drop on this device. Sign in from Profile to sync across devices.'}</p>
           </div>
         </header>
 

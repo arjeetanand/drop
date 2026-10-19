@@ -235,7 +235,7 @@ function JourneyDetail({ requestedLetterId }: { requestedLetterId: string }) {
               <div>
                 <p className="eyebrow text-[#2b45f7]">Carrier invite</p>
                 <h2 className="mt-2 font-headline-md text-2xl text-ink-navy">Share the next hand.</h2>
-                <p className="mt-2 max-w-xl text-sm leading-relaxed text-on-surface-variant">This one-time invite expires in ten minutes. It contains no letter content or media.</p>
+                <p className="mt-2 max-w-xl text-sm leading-relaxed text-on-surface-variant">This one-time invite expires in ten minutes. It contains no drop content or media.</p>
                 <div className="mt-4 flex flex-wrap items-center gap-2">
                   <span className={`inline-flex min-h-9 items-center gap-2 rounded-full px-3 text-xs font-bold ${inviteExpired ? 'bg-[#f3efe7] text-on-surface-variant' : 'bg-[#2b45f7]/[0.08] text-[#2b45f7]'}`} role="status" aria-live="polite"><Clock3 className="h-3.5 w-3.5" aria-hidden="true" />{inviteExpired ? 'Invite expired' : `Expires in ${Math.floor(inviteRemainingMs / 60000)}:${String(Math.floor((inviteRemainingMs % 60000) / 1000)).padStart(2, '0')}`}</span>
                   <span className="inline-flex min-h-9 items-center gap-2 rounded-full bg-[#f5f3ed] px-3 text-xs font-bold text-ink-navy"><ShieldCheck className="h-3.5 w-3.5 text-[#2b45f7]" aria-hidden="true" />Route only</span>

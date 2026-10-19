@@ -16,7 +16,7 @@ export function LetterProgress({ current }: { current: LetterStep }) {
   const currentIndex = steps.findIndex((step) => step.id === current);
 
   return (
-    <nav aria-label="Letter setup progress" className="flex flex-wrap items-center gap-2">
+    <nav aria-label="Drop setup progress" className="flex flex-wrap items-center gap-2">
       {steps.map((step, index) => {
         const isCurrent = step.id === current;
         const isComplete = index < currentIndex;

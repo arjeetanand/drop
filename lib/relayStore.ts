@@ -165,7 +165,7 @@ const seededRelay: RelayState = {
       name: 'Eleanor',
       role: 'recipient',
       location: 'Colaba',
-      note: 'The person this letter is trying to find.',
+      note: 'The person this drop is trying to find.',
       createdAt: '2026-09-13T07:12:00.000Z',
       next: true,
       coords: { lat: 18.9220, lng: 72.8347 },
@@ -186,7 +186,7 @@ function copyRelay(relay: RelayState): RelayState {
 }
 
 function createRelay(letterId: string, details: RelayDetails = {}): RelayState {
-  const subject = details.subject?.trim() || 'A letter worth carrying';
+  const subject = details.subject?.trim() || 'A drop worth carrying';
   const recipient = details.recipient?.trim() || 'your correspondent';
   const now = new Date().toISOString();
 
@@ -273,7 +273,7 @@ export function addRelayHandoff(
     name: details.name.trim(),
     role: 'carrier',
     location: details.location.trim(),
-    note: details.note?.trim() || 'Carried the letter forward.',
+    note: details.note?.trim() || 'Carried the drop forward.',
     createdAt: now.toISOString(),
   };
   const recipientIndex = current.handoffs.findIndex((item) => item.role === 'recipient');
@@ -329,7 +329,7 @@ export function relayToTrackingEvents(relay: RelayState): TrackingEvent[] {
     const note = handoff.role === 'sender'
       ? handoff.note
       : handoff.role === 'recipient'
-        ? isNext ? `${handoff.name} is the next person this letter is trying to reach.` : handoff.note
+        ? isNext ? `${handoff.name} is the next person this drop is trying to reach.` : handoff.note
         : `${handoff.note} Recorded in ${handoff.location}.`;
 
     return {
@@ -400,7 +400,7 @@ export function acceptCarry(
     neighborhood: details.neighborhood,
     timestamp: now.toISOString(),
     carrierName: details.name,
-    carrierNote: details.note ?? 'Accepted the letter.',
+    carrierNote: details.note ?? 'Accepted the drop.',
   };
 
   const handoff: RelayHandoff = {
@@ -408,7 +408,7 @@ export function acceptCarry(
     name: details.name,
     role: 'carrier',
     location: details.neighborhood,
-    note: details.note ?? 'Accepted the letter and started carrying.',
+    note: details.note ?? 'Accepted the drop and started carrying.',
     createdAt: now.toISOString(),
     coords: details.coords,
     neighborhood: details.neighborhood,

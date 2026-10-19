@@ -271,7 +271,7 @@ export async function saveRemoteProfile(profile: UserProfile, expectedUserId: st
 function rowToLetter(row: LetterRow, userId: string, revealContent = false): MockLetter {
   const content = row.content?.trim() || '';
   const teaser = row.teaser?.filter(Boolean).join(' ') || content.slice(0, 150);
-  const mediaFallback = row.payload_kind === 'gif' ? 'A GIF is waiting behind the seal.' : row.payload_kind === 'image' ? 'A photo is waiting behind the seal.' : 'A sealed letter waiting to be opened.';
+  const mediaFallback = row.payload_kind === 'gif' ? 'A GIF is waiting behind the seal.' : row.payload_kind === 'image' ? 'A photo is waiting behind the seal.' : 'A sealed drop waiting to be opened.';
   return {
     id: row.id,
     recipient: row.recipient_name || row.recipient_username || 'your correspondent',
@@ -285,9 +285,9 @@ function rowToLetter(row: LetterRow, userId: string, revealContent = false): Moc
     status: row.status,
     // Mailbox cards get a teaser only. Full content is fetched on the detail route after reveal.
     excerpt: revealContent
-      ? content || (row.payload_kind === 'text' || !row.payload_kind ? 'An empty letter, waiting for your words.' : '')
+      ? content || (row.payload_kind === 'text' || !row.payload_kind ? 'An empty drop, waiting for your words.' : '')
       : teaser ? `${teaser}${content.length > 150 ? '…' : ''}` : mediaFallback,
-    subject: row.subject || 'Untitled Letter',
+    subject: row.subject || 'Untitled drop',
     teaser: row.teaser || undefined,
     payloadKind: row.payload_kind || 'text',
     deliveryMode: row.delivery_mode || 'instant',
@@ -388,7 +388,7 @@ function eventsForDraft(draft: LetterDraftState): TrackingEvent[] {
     ['written', 'Written', 'The words are saved and ready to travel.'],
     ['sealed', 'Sealed', 'The message is locked. Carriers can move it without reading it.'],
     ['first-handoff', 'First handoff', 'Someone agreed to become the next link in the route.'],
-    ['in-relay', 'In the relay', 'Your letter is moving hand to hand.'],
+    ['in-relay', 'In the relay', 'Your drop is moving hand to hand.'],
     ['arriving-soon', draft.status === 'delivered' ? 'Delivered' : 'Waiting for a hand', draft.status === 'delivered' ? 'It reached the other side safely.' : 'The next person is still finding their way to it.'],
   ] as const;
   const activeIndex = draft.status === 'delivered' ? 4 : draft.status === 'dispatched' ? 3 : draft.status === 'sealed' ? 1 : 0;
@@ -436,7 +436,7 @@ export async function syncDropToBackend(draft: LetterDraftState, confirmedRecipi
         senderId: context.user.id,
         recipientId: confirmedRecipientId,
         recipientUsername,
-        subject: draft.subject || 'Untitled Letter',
+        subject: draft.subject || 'Untitled drop',
         content: draft.content,
         sealId: draft.sealId,
         payloadKind: draft.payloadKind,
@@ -528,7 +528,7 @@ export async function syncDropToBackend(draft: LetterDraftState, confirmedRecipi
     senderId: context.user.id,
     recipientId: confirmedRecipientId,
     recipientUsername,
-    subject: draft.subject || (draft.payloadKind === 'text' ? 'Untitled Letter' : 'A little moment'),
+    subject: draft.subject || (draft.payloadKind === 'text' ? 'Untitled drop' : 'A little moment'),
     content: draft.content,
     sealId: draft.sealId,
     payloadKind: draft.payloadKind,

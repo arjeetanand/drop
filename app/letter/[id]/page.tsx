@@ -356,8 +356,8 @@ export default function LetterArrivalPage() {
                   </div>}
                   {letter.localDemo && letter.payloadKind !== 'text' && !letter.mediaUrl && <p className="notice error-notice mb-5" role="status">The attachment is unavailable on this device. The rest of the demo is still available.</p>}
                   {letter.payloadKind && letter.payloadKind !== 'text' && letter.mediaPath && !letter.mediaUrl && <p className="notice error-notice mb-5" role="status">The private attachment could not load. Check your connection and open the drop again.</p>}
-                  {letter.excerpt && letter.excerpt !== 'An empty letter, waiting for your words.' && <p className="body-copy text-lg text-ink-navy">{fullContentAvailable ? letter.excerpt : 'This drop is still available as a sealed preview. Sign in as its recipient to open it.'}</p>}
-                  {!letter.mediaUrl && (!letter.excerpt || letter.excerpt === 'An empty letter, waiting for your words.') && <p className="body-copy text-lg text-ink-navy">This drop is still available as a sealed preview. Sign in as its recipient to open it.</p>}
+                  {letter.excerpt && letter.excerpt !== 'An empty drop, waiting for your words.' && letter.excerpt !== 'An empty letter, waiting for your words.' && <p className="body-copy text-lg text-ink-navy">{fullContentAvailable ? letter.excerpt : 'This drop is still available as a sealed preview. Sign in as its recipient to open it.'}</p>}
+                  {!letter.mediaUrl && (!letter.excerpt || letter.excerpt === 'An empty drop, waiting for your words.' || letter.excerpt === 'An empty letter, waiting for your words.') && <p className="body-copy text-lg text-ink-navy">This drop is still available as a sealed preview. Sign in as its recipient to open it.</p>}
                   <p className="meta mt-6 border-t border-[rgba(16,42,67,0.1)] pt-4">From {sender}</p>
                 </div>
                 {isReceived && <section className="mt-6 rounded-xl border border-[rgba(16,42,67,.1)] bg-white/60 p-4" aria-labelledby="drop-reaction-heading">

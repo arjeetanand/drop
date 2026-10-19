@@ -111,7 +111,7 @@ export function getCurrentPosition(
       (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
       (err) => {
         const messages: Record<number, string> = {
-          1: 'Location permission denied. Please allow location access to carry letters.',
+          1: 'Location permission denied. Please allow location access to carry drops.',
           2: 'Location unavailable. Try moving to an area with better signal.',
           3: 'Location request timed out. Please try again.',
         };
