@@ -57,7 +57,8 @@ export async function POST(request: Request) {
     .eq('id', paths.draftId)
     .eq('sender_id', user.id)
     .maybeSingle<{ media_path: string | null; media_mime_type: string | null; media_size_bytes: number | null }>();
-  if (!existingDropError && existingDrop && isDropMediaFinalPath(existingDrop.media_path, user.id, paths.draftId)) {
+  if (existingDropError) return json({ error: 'Could not confirm the drop media state. Please retry.' }, 503);
+  if (existingDrop && isDropMediaFinalPath(existingDrop.media_path, user.id, paths.draftId)) {
     const { data: savedMedia, error: savedMediaError } = await serviceClient.storage.from('drop-media').download(existingDrop.media_path!);
     if (!savedMediaError && savedMedia && existingDrop.media_mime_type === media.mimeType && existingDrop.media_size_bytes === media.sizeBytes) {
       const savedBytes = Buffer.from(await savedMedia.arrayBuffer());
