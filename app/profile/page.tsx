@@ -761,11 +761,11 @@ function ProfileContent() {
                         disabled={emailLoading || googleLoading || !emailAddress.trim()}
                         className="button-secondary !min-h-12 w-full disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        {emailLoading ? 'Sending link…' : 'Email me a sign-in link'}
+                        {emailLoading ? 'Sending link…' : 'Continue with email'}
                       </button>
                       {emailLinkSent && <p className="field-help" role="status" aria-live="polite">Sign-in link sent. Check your inbox to continue.</p>}
                       {emailError && <p className="error-notice" role="alert">{emailError}</p>}
-                      <p className="field-help">One-time link, no password to remember.</p>
+                      <p className="field-help">No password needed. If this is your first time, we’ll create your account after you confirm the link.</p>
                     </form>
                   </>}
                   {accountConnected && (
