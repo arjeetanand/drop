@@ -239,6 +239,16 @@ try {
   });
   assert.ifError(textInsertError);
 
+  const { data: recentDropRows, error: recentDropRowsError } = await sender.client.from('letters')
+    .select('recipient_username, recipient_name')
+    .eq('sender_id', sender.id)
+    .in('status', ['dispatched', 'delivered'])
+    .order('dispatched_at', { ascending: false, nullsFirst: false })
+    .order('id', { ascending: false })
+    .limit(100);
+  assert.ifError(recentDropRowsError);
+  assert.deepEqual(recentDropRows, [{ recipient_username: profiles[1].username, recipient_name: profiles[1].display_name }], 'The recent-recipient query should return only recipients from the sender’s sent drops');
+
   for (const account of [sender, recipient]) {
     const { data, error } = await account.client.from('letters').select('id, content').eq('id', textDropId).maybeSingle();
     assert.ifError(error);

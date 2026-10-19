@@ -4,6 +4,7 @@ Tasks are ordered by dependency. Progress is recorded at each tested and pushed 
 
 ## Current Checkpoint — 2026-10-19
 
+- The composer suggests up to five unique people from the latest 100 sent drops and rechecks a handle when selected. Unit tests pass (70/70), lint, typecheck, the local Supabase recipient-query smoke check, and the Webpack production build. Browser checks found no horizontal overflow at 360px, 375px, 390px, or 430px; the signed-in suggestions row and hosted OAuth remain unverified without a connected account or hosted project.
 - The foundation, mobile drop flow, draft handoff, secure relay, and reduced-motion GIF work are pushed separately: `04cc01f`, `047c6b9`, `b062dbe`, `6b43271`, and `4f38e0e`.
 - Follow-up commits are pushed: `27db56c` restricts letter update/delete access to unsent rows and uses insert-once sends; `0190b7d` routes relay invites through the secure passport; `59988d0` adds a local recipient preview.
 - Verification passes `npm test` (47/47), lint, typecheck, and an isolated scratch Next.js/Webpack production build after the account-isolation fixes. Browser checks confirmed no horizontal overflow at 360px, 390px, and 430px on the desk, profile, and mailbox; the composer preview was checked at 390px. A photo draft survived the account-options detour and reload, and a GIF preview loaded at 390px.

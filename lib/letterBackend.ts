@@ -10,6 +10,7 @@ import { createStagedDropMediaPath, isDropMediaFinalPath, resolveDropMediaPaths 
 import { mergeDropReactions, type DropReactionRow } from '@/lib/mergeDropReactions';
 import { matchesStoredDropMetadata, type DropSendIntent, type StoredDropSend } from '@/lib/dropSendRecovery';
 import { fetchAllPages } from '@/lib/fetchAllPages';
+import { uniqueRecentDropRecipients, type RecentDropRecipient, type RecentDropRecipientRow } from '@/lib/recentDropRecipients';
 
 type LetterRow = {
   id: string;
@@ -131,6 +132,27 @@ export async function lookupDropRecipient(value: string): Promise<DropRecipientL
     return context ? resolveDropRecipient(context, username) : { status: 'error' };
   } catch {
     return { status: 'error' };
+  }
+}
+
+export async function getRemoteRecentDropRecipients(): Promise<RecentDropRecipient[] | null> {
+  try {
+    const context = await getAuthenticatedClient();
+    if (!context) return null;
+
+    const { data, error } = await context.supabase.from('letters')
+      .select('recipient_username, recipient_name')
+      .eq('sender_id', context.user.id)
+      .in('status', ['dispatched', 'delivered'])
+      .order('dispatched_at', { ascending: false, nullsFirst: false })
+      .order('id', { ascending: false })
+      // shortcut: scan the latest 100 sent drops; use a distinct-recipient query if high-volume accounts need older people.
+      .limit(100)
+      .returns<RecentDropRecipientRow[]>();
+    if (error || !data) return null;
+    return uniqueRecentDropRecipients(data);
+  } catch {
+    return null;
   }
 }
 

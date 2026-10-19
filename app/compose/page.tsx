@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { AlignCenter, AlignLeft, AlignRight, ArrowLeft, Check, Eye, FileImage, ImagePlus, Minus, Plus, Send, Share2, Trash2, Type, X } from 'lucide-react';
 import { getSealInfo, mockSeals, waxColors, writingPrompts, type DropDeliveryMode, type DropPayloadKind } from '@/data/mockData';
 import { canDeleteLocalDraft, deleteLocalDraft, dispatchLetter, getLetterDraft, getLetterDraftById, restoreDeletedDraft, saveLetterDraft, setActiveLetterDraft, startNewLetter, type LetterDraftState, type LetterAlignment } from '@/lib/letterStore';
-import { lookupDropRecipient, syncDropToBackend } from '@/lib/letterBackend';
+import { getRemoteRecentDropRecipients, lookupDropRecipient, syncDropToBackend } from '@/lib/letterBackend';
 import { getSupabaseBrowserClient } from '@/lib/supabaseBrowser';
 import { isDropRecipientConfirmed, normalizeDropRecipient, validateDropMedia } from '@/lib/dropValidation';
 import { deleteDraftAttachment, getDraftAttachment, saveDraftAttachment } from '@/lib/letterMediaStore';
@@ -14,6 +14,7 @@ import { getLocalAccountId, isCurrentLocalAccount } from '@/lib/localAccountScop
 import { ReducedMotionGif } from '@/components/ReducedMotionGif';
 import { cn } from '@/lib/utils';
 import { shareInviteLink } from '@/lib/shareInvite';
+import type { RecentDropRecipient } from '@/lib/recentDropRecipients';
 
 type RecipientCheck =
   | { status: 'idle' | 'checking' | 'not-found' | 'error'; username: string | null }
@@ -34,6 +35,7 @@ function Composer() {
   const [content, setContent] = useState('');
   const [recipient, setRecipient] = useState('');
   const [recipientCheck, setRecipientCheck] = useState<RecipientCheck>({ status: 'idle', username: null });
+  const [recentRecipients, setRecentRecipients] = useState<RecentDropRecipient[]>([]);
   const recipientCheckRequest = useRef(0);
   const [subject, setSubject] = useState('');
   const [fontSize, setFontSize] = useState(18);
@@ -69,6 +71,11 @@ function Composer() {
     setRecipient(searchParams.get('recipient') || current.recipient);
     recipientCheckRequest.current += 1;
     setRecipientCheck({ status: 'idle', username: null });
+    setRecentRecipients([]);
+    const accountId = getLocalAccountId();
+    void getRemoteRecentDropRecipients().then((recipients) => {
+      if (active && recipients && isCurrentLocalAccount(accountId)) setRecentRecipients(recipients);
+    });
     setSubject(current.subject);
     setFontSize(current.fontSize);
     setAlignment(current.alignment);
@@ -246,18 +253,28 @@ function Composer() {
     setManualInviteUrl('');
   };
 
-  const checkRecipient = async () => {
-    if (!recipientUsername || recipientCheck.status === 'checking') return;
+  const checkRecipient = async (value = recipientUsername) => {
+    const username = normalizeDropRecipient(value || '');
+    if (!username || (recipientCheck.status === 'checking' && recipientCheck.username === username)) return;
     const request = ++recipientCheckRequest.current;
     setInviteNotice('');
     setManualInviteUrl('');
-    setRecipientCheck({ status: 'checking', username: recipientUsername });
+    setRecipientCheck({ status: 'checking', username });
     setError('');
-    const result = await lookupDropRecipient(recipientUsername);
+    const result = await lookupDropRecipient(username);
     if (request !== recipientCheckRequest.current) return;
     setRecipientCheck(result.status === 'found'
       ? { status: 'found', username: result.recipient.username, id: result.recipient.id, displayName: result.recipient.displayName }
-      : { status: result.status, username: recipientUsername });
+      : { status: result.status, username });
+  };
+
+  const selectRecentRecipient = (username: string) => {
+    setRecipient(`@${username}`);
+    setSaved(false);
+    setError('');
+    setInviteNotice('');
+    setManualInviteUrl('');
+    void checkRecipient(username);
   };
 
   const inviteRecipient = async () => {
@@ -483,8 +500,17 @@ function Composer() {
               <input id="drop-recipient" value={recipient.replace(/^@/, '')} onChange={handleRecipientChange} disabled={sending || sharingInvite} className="min-h-12 min-w-0 flex-1 border-0 bg-transparent px-2 text-base text-ink-navy outline-none placeholder:text-on-surface-variant/60 disabled:opacity-60" placeholder="their.username" autoCapitalize="none" autoCorrect="off" spellCheck={false} aria-invalid={recipientHasValue && !recipientUsername} aria-describedby={recipientHasValue && !recipientUsername ? 'drop-recipient-help drop-recipient-error' : 'drop-recipient-help'} />
             </div>
             <p id="drop-recipient-help" className="field-help mt-2">They need a Drop account so the note stays between you two. Handles use 2–24 letters, numbers, periods, underscores, or hyphens.</p>
+            {recentRecipients.length > 0 && <div className="mt-3">
+              <p className="field-help">Recent people from your sent drops</p>
+              <div role="group" aria-label="Recent recipients" className="mt-2 flex flex-wrap gap-2">
+                {recentRecipients.map(({ username, displayName }) => <button key={username} type="button" aria-label={`Check ${displayName} (@${username})`} onClick={() => selectRecentRecipient(username)} disabled={sending || sharingInvite} className="inline-flex min-h-12 min-w-0 max-w-full flex-col items-start justify-center rounded-xl border border-[rgba(16,42,67,.14)] bg-white/75 px-3 py-1.5 text-left transition-colors hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2b45f7] disabled:opacity-50">
+                  <span className="block max-w-[10rem] truncate text-xs font-semibold text-ink-navy">{displayName}</span>
+                  <span className="block max-w-[10rem] truncate font-mono text-[0.62rem] text-on-surface-variant">@{username}</span>
+                </button>)}
+              </div>
+            </div>}
             {recipientHasValue && !recipientUsername && <p id="drop-recipient-error" className="error-notice mt-2" role="status" aria-live="polite">Enter a valid Drop handle to send.</p>}
-            <button type="button" onClick={checkRecipient} disabled={!recipientUsername || recipientCheck.status === 'checking' || accountState !== 'connected' || sending || sharingInvite} className="button-secondary mt-3 !min-h-12 w-full !rounded-xl disabled:opacity-45">{recipientCheck.status === 'checking' ? 'Checking…' : recipientCheck.status === 'found' || recipientCheck.status === 'not-found' ? 'Check again' : recipientCheck.status === 'idle' ? 'Check handle' : 'Try again'}</button>
+            <button type="button" onClick={() => void checkRecipient()} disabled={!recipientUsername || recipientCheck.status === 'checking' || accountState !== 'connected' || sending || sharingInvite} className="button-secondary mt-3 !min-h-12 w-full !rounded-xl disabled:opacity-45">{recipientCheck.status === 'checking' ? 'Checking…' : recipientCheck.status === 'found' || recipientCheck.status === 'not-found' ? 'Check again' : recipientCheck.status === 'idle' ? 'Check handle' : 'Try again'}</button>
             {recipientCheck.status === 'checking' && recipientCheck.username === recipientUsername && <p className="field-help mt-2" role="status" aria-live="polite">Checking @{recipientUsername}…</p>}
             {confirmedRecipient && <p className="mt-2 text-sm font-semibold text-[#26734f]" role="status" aria-live="polite">Recipient confirmed: {confirmedRecipient.displayName} (@{confirmedRecipient.username})</p>}
             {recipientCheck.status === 'not-found' && recipientCheck.username === recipientUsername && <>
