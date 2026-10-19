@@ -243,9 +243,10 @@ Commit each completed code change separately with a descriptive message and push
 ## Current follow-up — 2026-10-19
 
 - [x] The global skip link now moves keyboard focus to its content target. Browser check confirmed Tab → Enter changes focus to `#main-content`; W3C technique G1 calls for this behavior: https://www.w3.org/WAI/WCAG21/Techniques/general/G1.
-- [ ] Before running any DB-mutating local Supabase checks, verify the SSH-forwarded listener on port 54321 targets the disposable local stack. The tunnel destination is currently unknown, so database mutation checks are paused.
+- [x] Verified port 54321 is Colima's local forwarder for this repo's `drop` Supabase containers; `supabase status` reports the local API and database endpoints.
+- [x] `npm run test:local-supabase` passed against that local stack: three disposable accounts authenticated, text access and reaction policies passed, unrelated access was denied, and GIF finalization plus exact retry passed. Cleanup completed without a warning.
 - [x] Mark legacy seeded inbox examples as samples, exclude them from real counts and normal mailbox filters, keep sample reactions device-only, and feature the newest real inbox drop on Home when one exists. Unit coverage and a local browser pass confirm the photo/GIF examples remain openable.
-- [ ] Verify the photo/GIF send-open-react flow at a phone viewport with two disposable local accounts; hosted account verification is unavailable until a hosted Supabase project is configured.
+- [ ] Verify the photo/GIF send-open-react flow through the composer at a phone viewport with two disposable local accounts. The local smoke covers backend boundaries, not the browser file picker; hosted account verification is unavailable until a hosted Supabase project is configured.
 - [x] Verify photo/GIF retry recovery with a fresh staging path; the server reuses the committed object only when its MIME type, size, and bytes match.
 - [x] Verify existing-drop lookup failures stop media finalization with a retryable response before writing the final object.
 - [x] Sending feedback names the selected note, photo, or GIF and announces the in-progress label through a polite live region.
