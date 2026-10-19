@@ -1,10 +1,7 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-
-function usesPrivateShell(pathname: string | null) {
-  return pathname === null || pathname === '/' || ['/mailbox', '/journey', '/profile', '/sent'].some((path) => pathname?.startsWith(path));
-}
+import { usesPrivateShell } from '@/lib/navigation';
 
 export function MainContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();

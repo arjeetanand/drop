@@ -9,6 +9,7 @@ import { getLetterDraft } from '@/lib/letterStore';
 import { defaultUserProfile, getUserProfileForCurrentAccount } from '@/lib/userStore';
 import { getRemoteProfile } from '@/lib/letterBackend';
 import { SoundToggle } from '@/components/SoundToggle';
+import { getActiveNavigationHref, usesPrivateShell } from '@/lib/navigation';
 
 const navItems = [
   { href: '/', label: 'Desk', icon: PenLine },
@@ -17,16 +18,9 @@ const navItems = [
   { href: '/profile', label: 'You', icon: UserRound },
 ];
 
-function isActivePath(pathname: string | null, href: string) {
-  return href === '/' ? pathname === '/' : Boolean(pathname?.startsWith(href));
-}
-
-function usesPrivateShell(pathname: string | null) {
-  return pathname === null || pathname === '/' || ['/mailbox', '/journey', '/profile', '/sent'].some((path) => pathname?.startsWith(path));
-}
-
 export function Sidebar() {
   const pathname = usePathname();
+  const activeNavigationHref = getActiveNavigationHref(pathname);
   const [profile, setProfile] = useState(defaultUserProfile);
 
   useEffect(() => {
@@ -76,7 +70,7 @@ export function Sidebar() {
           <p className="eyebrow px-3">Your desk</p>
           <ul className="mt-3 space-y-1">
             {navItems.map((item) => {
-              const active = isActivePath(pathname, item.href);
+              const active = activeNavigationHref === item.href;
               const Icon = item.icon;
               return (
                 <li key={item.href}>
@@ -115,9 +109,9 @@ export function Sidebar() {
         </div>
       </aside>
 
-      <nav className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-around border-t border-[rgba(16,42,67,0.12)] bg-[#fffaf2]/95 px-2 pb-[max(0.45rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-md lg:hidden" aria-label="Primary navigation">
+      <nav className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-around border-t border-[rgba(16,42,67,0.12)] bg-[#fffaf2]/95 px-2 pb-[max(0.45rem,env(safe-area-inset-bottom,0px))] pt-2 backdrop-blur-md lg:hidden" aria-label="Primary navigation">
         {[navItems[0], navItems[1]].map((item) => {
-          const active = isActivePath(pathname, item.href);
+          const active = activeNavigationHref === item.href;
           const Icon = item.icon;
           return (
             <Link
@@ -138,7 +132,7 @@ export function Sidebar() {
           <Plus className="h-6 w-6" aria-hidden="true" />
         </Link>
         {navItems.slice(2).map((item) => {
-          const active = isActivePath(pathname, item.href);
+          const active = activeNavigationHref === item.href;
           const Icon = item.icon;
           return (
             <Link key={item.href} href={item.href} aria-current={active ? 'page' : undefined} className={cn('flex min-h-11 min-w-[54px] flex-col items-center justify-center gap-1 px-1 text-[0.66rem] font-semibold transition-colors', active ? 'text-[#2b45f7]' : 'text-on-surface-variant hover:text-ink-navy')}>
