@@ -19,6 +19,11 @@ const config: Config = {
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
       },
+      minHeight: {
+        '9': '2.25rem',
+        '11': '2.75rem',
+        '12': '3rem',
+      },
       colors: {
         background: 'hsl(var(--background))',
         foreground: 'hsl(var(--foreground))',

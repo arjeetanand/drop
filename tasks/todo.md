@@ -245,6 +245,7 @@ Commit each completed code change separately with a descriptive message and push
 ## Current follow-up — 2026-10-19
 
 - [x] The global skip link now moves keyboard focus to its content target. Browser check confirmed Tab → Enter changes focus to `#main-content`; W3C technique G1 calls for this behavior: https://www.w3.org/WAI/WCAG21/Techniques/general/G1.
+- [x] Tailwind now defines the `min-h-9/11/12` utilities used by existing controls; Edge at 390px confirms the composer profile link is 44px and no visible composer control is below 44px.
 - [x] Verified port 54321 is Colima's local forwarder for this repo's `drop` Supabase containers; `supabase status` reports the local API and database endpoints.
 - [x] `npm run test:local-supabase` passed against that local stack: three disposable accounts authenticated, text access and reaction policies passed, unrelated access was denied, and GIF finalization plus exact retry passed. Cleanup completed without a warning.
 - [x] Mark legacy seeded inbox examples as samples, exclude them from real counts and normal mailbox filters, keep sample reactions device-only, and feature the newest real inbox drop on Home when one exists. Unit coverage and a local browser pass confirm the photo/GIF examples remain openable.
