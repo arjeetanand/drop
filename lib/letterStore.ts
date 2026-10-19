@@ -375,6 +375,7 @@ export function draftAsLetter(draft: LetterDraftState): MockLetter {
     id: draft.id,
     recipient: draft.address.name || draft.recipient,
     date: formatDate(draft.dispatchedAt ?? draft.updatedAt),
+    activityAt: draft.dispatchedAt ?? draft.updatedAt,
     status: draft.status,
     excerpt: draft.content.trim() || (draft.payloadKind === 'text' ? 'An empty letter, waiting for your words.' : 'A little moment worth sharing.'),
     subject: draft.subject || 'A little moment',

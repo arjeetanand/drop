@@ -5,11 +5,13 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { ArrowLeft, ArrowRight, Check, Clock3, Copy, MapPin, QrCode, Route as RouteIcon, ShieldCheck } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
+import { LetterCard } from '@/components/LetterCard';
 import { RelayChain } from '@/components/RelayChain';
 import { RouteMap } from '@/components/RouteMap';
 import { TrackingTimeline } from '@/components/TrackingTimeline';
-import { currentFocusDraft } from '@/data/mockData';
-import { getRemoteJourney, saveRemoteJourneyNote } from '@/lib/letterBackend';
+import { currentFocusDraft, type MockLetter } from '@/data/mockData';
+import { getRemoteJourney, getRemoteJourneyLetter, getRemoteJourneyLetters, saveRemoteJourneyNote } from '@/lib/letterBackend';
+import { getJourneyLetters } from '@/lib/journeyView';
 import { getJourneyNotes, getLetterDraft, getLettersWithDraft, saveJourneyNotes, type JourneyNote } from '@/lib/letterStore';
 import { getInitialRelayState, getRelayState, getRelayStats, getRemoteRelayHandoffs, issueRelayHandoffToken, relayToTrackingEvents, type RelayState } from '@/lib/relayStore';
 import { mergeRemoteRelayHandoffs } from '@/components/relayPresentation';
@@ -19,9 +21,64 @@ interface SenderInvite {
   expiresAt: string;
 }
 
-function JourneyContent() {
-  const searchParams = useSearchParams();
-  const [letterId, setLetterId] = useState(currentFocusDraft.id);
+function JourneyIndex() {
+  const [journeys, setJourneys] = useState<MockLetter[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    const loadJourneys = async () => {
+      const localLetters = getLettersWithDraft(getLetterDraft());
+      try {
+        const remoteLetters = await getRemoteJourneyLetters();
+        if (active) setJourneys(getJourneyLetters(localLetters, remoteLetters));
+      } catch {
+        if (active) setJourneys(getJourneyLetters(localLetters, null));
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    void loadJourneys();
+    return () => { active = false; };
+  }, []);
+
+  const startRelayHref = '/compose?new=1&mode=relay';
+
+  return (
+    <main className="page-shell page-enter">
+      <div className="page-container max-w-[1080px]">
+        <header className="page-header flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="eyebrow">Journey</p>
+            <h1 className="display-title mt-4 max-w-3xl">Your drops in motion.</h1>
+            <p className="body-copy mt-4 max-w-2xl text-base">Follow drops as they travel hand to hand. Their contents stay sealed.</p>
+          </div>
+          <Link href={startRelayHref} className="button-primary shrink-0 !rounded-xl !bg-[#2b45f7] !text-white !border-[#2b45f7]">
+            <RouteIcon className="h-4 w-4 text-[#8fd1ad]" aria-hidden="true" /> Make a relay drop <ArrowRight className="h-4 w-4" aria-hidden="true" />
+          </Link>
+        </header>
+
+        <section className="mt-8" aria-label="Your sent relay drops" aria-busy={loading}>
+          {loading ? <p className="meta py-8 text-center" role="status">Loading your journeys…</p> : journeys.length ? journeys.map((letter) => (
+            <LetterCard key={letter.id} letter={letter} />
+          )) : (
+            <div className="panel-muted my-10 rounded-2xl p-8 text-center sm:p-10">
+              <RouteIcon className="mx-auto h-7 w-7 text-[#2b45f7]" aria-hidden="true" />
+              <h2 className="mt-4 font-headline-md text-2xl text-ink-navy">Nothing’s traveling yet.</h2>
+              <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-on-surface-variant">Send a drop hand-to-hand when the route is part of the message.</p>
+              <Link href={startRelayHref} className="button-primary mt-5 !rounded-xl !bg-[#2b45f7] !text-white !border-[#2b45f7]">Make a relay drop <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
+            </div>
+          )}
+        </section>
+      </div>
+    </main>
+  );
+}
+
+function JourneyDetail({ requestedLetterId }: { requestedLetterId: string }) {
+  const [letterId, setLetterId] = useState(requestedLetterId);
+  const [journeyLetter, setJourneyLetter] = useState<MockLetter | null>(null);
+  const [loading, setLoading] = useState(true);
   const [relay, setRelay] = useState<RelayState>(getInitialRelayState);
   const [notes, setNotes] = useState<JourneyNote[]>([]);
   const [newNote, setNewNote] = useState('');
@@ -36,24 +93,33 @@ function JourneyContent() {
     let active = true;
     const loadJourney = async () => {
       const draft = getLetterDraft();
-      const selectedId = searchParams.get('letter') || draft.id;
-      const selectedLetter = getLettersWithDraft(draft).find((letter) => letter.id === selectedId);
-      const initial = getRelayState(selectedId, {
+      const localLetters = getLettersWithDraft(draft);
+      const remoteLetter = await getRemoteJourneyLetter(requestedLetterId).catch(() => null);
+      if (!active) return;
+      const selectedLetter = getJourneyLetters(localLetters, remoteLetter ? [remoteLetter] : null).find((letter) => letter.id === requestedLetterId);
+      if (!selectedLetter) {
+        setJourneyLetter(null);
+        setLoading(false);
+        return;
+      }
+      const [remoteJourney, remoteHandoffs] = await Promise.all([
+        getRemoteJourney(requestedLetterId).catch(() => null),
+        getRemoteRelayHandoffs(requestedLetterId).catch(() => []),
+      ]);
+      if (!active) return;
+      const initial = getRelayState(requestedLetterId, {
         subject: selectedLetter?.subject || draft.subject || currentFocusDraft.subject,
         recipient: selectedLetter?.recipient || draft.address.name || draft.recipient || 'Recipient',
       });
-      const [remoteJourney, remoteHandoffs] = await Promise.all([
-        getRemoteJourney(selectedId),
-        getRemoteRelayHandoffs(selectedId),
-      ]);
-      if (!active) return;
-      setLetterId(selectedId);
+      setJourneyLetter(selectedLetter);
+      setLetterId(requestedLetterId);
       setRelay(remoteHandoffs?.length ? mergeRemoteRelayHandoffs(initial, remoteHandoffs) : initial);
-      setNotes(remoteJourney?.notes.length ? remoteJourney.notes : getJourneyNotes(selectedId));
+      setNotes(remoteJourney?.notes.length ? remoteJourney.notes : getJourneyNotes(requestedLetterId));
+      setLoading(false);
     };
     void loadJourney();
     return () => { active = false; };
-  }, [searchParams]);
+  }, [requestedLetterId]);
 
   useEffect(() => {
     if (!invite) return;
@@ -117,11 +183,28 @@ function JourneyContent() {
     }
   };
 
+  if (loading || !journeyLetter) {
+    return (
+      <main className="page-shell page-enter">
+        <div className="page-container max-w-[760px]">
+          <Link href="/journey" className="button-quiet -ml-2"><ArrowLeft className="h-4 w-4" aria-hidden="true" /> Back to journeys</Link>
+          <section className="panel-muted mt-8 rounded-2xl p-8 text-center sm:p-10">
+            {loading ? <p className="text-sm text-on-surface-variant" role="status">Loading journey details…</p> : <>
+              <h1 className="font-headline-md text-2xl text-ink-navy">This journey isn’t available.</h1>
+              <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-on-surface-variant">It may be a draft or a relay you can’t access from this account.</p>
+            </>}
+            {!loading && <Link href="/journey" className="button-primary mt-5 !rounded-xl !bg-[#2b45f7] !text-white !border-[#2b45f7]">Back to journeys <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>}
+          </section>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="page-shell page-enter !pt-4 sm:!pt-8">
       <div className="page-container max-w-6xl">
         <header className="flex flex-wrap items-center justify-between gap-3">
-          <Link href="/" className="inline-flex min-h-11 items-center gap-2 rounded-full px-3 text-sm font-semibold text-ink-navy hover:bg-white/65"><ArrowLeft className="h-4 w-4" aria-hidden="true" /> Back to desk</Link>
+          <Link href="/journey" className="inline-flex min-h-11 items-center gap-2 rounded-full px-3 text-sm font-semibold text-ink-navy hover:bg-white/65"><ArrowLeft className="h-4 w-4" aria-hidden="true" /> Back to journeys</Link>
           <Link href={`/relay?letter=${encodeURIComponent(letterId)}`} className="inline-flex min-h-11 items-center gap-2 rounded-full bg-[#2b45f7]/[0.08] px-4 text-sm font-bold text-[#2b45f7]"><RouteIcon className="h-4 w-4" aria-hidden="true" /> Relay passport</Link>
         </header>
 
@@ -201,6 +284,12 @@ function JourneyContent() {
   );
 }
 
+function JourneyContent() {
+  const searchParams = useSearchParams();
+  const letterId = searchParams.get('letter');
+  return letterId ? <JourneyDetail key={letterId} requestedLetterId={letterId} /> : <JourneyIndex />;
+}
+
 export default function JourneyPage() {
-  return <Suspense fallback={<main className="page-shell"><div className="page-container"><p className="meta">Loading the journey…</p></div></main>}><JourneyContent /></Suspense>;
+  return <Suspense fallback={<main className="page-shell"><div className="page-container"><p className="meta">Loading your journeys…</p></div></main>}><JourneyContent /></Suspense>;
 }

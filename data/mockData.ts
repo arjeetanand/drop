@@ -9,6 +9,7 @@ export interface MockLetter {
   senderUsername?: string;
   direction?: 'sent' | 'received';
   date: string;
+  activityAt?: string;
   status: LetterStatus;
   excerpt: string;
   subject: string;

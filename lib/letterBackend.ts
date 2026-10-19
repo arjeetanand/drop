@@ -9,6 +9,7 @@ import { normalizeDropRecipient, validateDropMedia } from '@/lib/dropValidation'
 import { createStagedDropMediaPath, isDropMediaFinalPath, resolveDropMediaPaths } from '@/lib/dropMediaStorage';
 import { mergeDropReactions, type DropReactionRow } from '@/lib/mergeDropReactions';
 import { matchesStoredDropMetadata, type DropSendIntent, type StoredDropSend } from '@/lib/dropSendRecovery';
+import { fetchAllPages } from '@/lib/fetchAllPages';
 
 type LetterRow = {
   id: string;
@@ -258,6 +259,7 @@ function rowToLetter(row: LetterRow, userId: string, revealContent = false): Moc
     date: row.dispatched_at
       ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(row.dispatched_at))
       : 'Saved just now',
+    activityAt: row.delivered_at ?? row.dispatched_at ?? row.created_at,
     status: row.status,
     // Mailbox cards get a teaser only. Full content is fetched on the detail route after reveal.
     excerpt: revealContent
@@ -300,6 +302,41 @@ export async function getRemoteLetters(): Promise<MockLetter[] | null> {
   } catch {
     return letters;
   }
+}
+
+export async function getRemoteJourneyLetters(): Promise<MockLetter[] | null> {
+  const context = await getAuthenticatedClient();
+  if (!context) return null;
+
+  const rows = await fetchAllPages<LetterRow>(async (from, to) => {
+    const { data, error } = await context.supabase
+      .from('letters')
+      .select(MAILBOX_SELECT)
+      .eq('sender_id', context.user.id)
+      .in('status', ['dispatched', 'delivered'])
+      .or('delivery_mode.eq.relay,status.eq.dispatched')
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .range(from, to)
+      .returns<LetterRow[]>();
+
+    return error || !data ? null : data;
+  });
+  return rows?.map((row) => rowToLetter(row, context.user.id)) ?? null;
+}
+
+export async function getRemoteJourneyLetter(letterId: string): Promise<MockLetter | null> {
+  const context = await getAuthenticatedClient();
+  if (!context) return null;
+
+  const { data, error } = await context.supabase
+    .from('letters')
+    .select(MAILBOX_SELECT)
+    .eq('id', letterId)
+    .eq('sender_id', context.user.id)
+    .maybeSingle<LetterRow>();
+
+  return error || !data ? null : rowToLetter(data, context.user.id);
 }
 
 export async function getRemoteLetterById(letterId: string): Promise<MockLetter | null> {
