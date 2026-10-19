@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { copyGuestDraftToAccount, getGuestDraftById, getLetterDraft, getLetterDraftById, getLettersWithDraft, saveLetterDraft, setActiveLetterDraft } from '../lib/letterStore.ts';
+import { copyGuestDraftToAccount, dispatchLetter, getGuestDraftById, getJourneyNotes, getLetterDraft, getLetterDraftById, getLettersWithDraft, saveJourneyNotes, saveLetterDraft, setActiveLetterDraft, startNewLetter } from '../lib/letterStore.ts';
 import { setLocalAccountId } from '../lib/localAccountScope.ts';
 
 test('transfers the starter draft and refreshes the preserved account draft snapshot', async () => {
@@ -25,6 +25,50 @@ test('transfers the starter draft and refreshes the preserved account draft snap
     setLocalAccountId(null);
     assert.equal(getLetterDraftById(guestDraft.id)?.content, guestDraft.content);
     assert.equal(getGuestDraftById(guestDraft.id)?.content, guestDraft.content);
+  } finally {
+    setLocalAccountId(null);
+    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
+    else delete globalThis.window;
+  }
+});
+
+test('restores only each account’s drafts, sent copy, and journey notes across A-B-A switching', () => {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const values = new Map();
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { localStorage: { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) } },
+  });
+  try {
+    setLocalAccountId('account-a');
+    const draftA = saveLetterDraft({ id: 'draft-switch', content: 'A private draft' });
+    startNewLetter();
+    saveLetterDraft({ id: 'sent-switch', content: 'A sent copy', recipient: '@friend' });
+    const sentA = dispatchLetter('sent-switch', 'delivered', '2026-10-19T00:00:00.000Z');
+    setActiveLetterDraft(draftA);
+    saveJourneyNotes([{ id: 'note-switch', date: 'Today', text: 'A private note' }], sentA.id);
+
+    setLocalAccountId('account-b');
+    assert.equal(getLetterDraftById(draftA.id), null);
+    assert.equal(getLettersWithDraft().some((letter) => letter.id === sentA.id), false);
+    assert.deepEqual(getJourneyNotes(sentA.id), []);
+    const draftB = saveLetterDraft({ id: draftA.id, content: 'B private draft' });
+    startNewLetter();
+    saveLetterDraft({ id: sentA.id, content: 'B sent copy', recipient: '@friend' });
+    const sentB = dispatchLetter(sentA.id, 'delivered', '2026-10-19T00:00:01.000Z');
+    setActiveLetterDraft(draftB);
+    saveJourneyNotes([{ id: 'note-switch', date: 'Today', text: 'B private note' }], sentB.id);
+
+    setLocalAccountId('account-a');
+    assert.equal(getLetterDraft().content, 'A private draft');
+    assert.equal(getLetterDraftById(draftA.id)?.content, 'A private draft');
+    assert.equal(getLettersWithDraft().find((letter) => letter.id === sentA.id)?.excerpt, 'A sent copy');
+    assert.deepEqual(getJourneyNotes(sentA.id).map((note) => note.text), ['A private note']);
+
+    setLocalAccountId('account-b');
+    assert.equal(getLetterDraft().content, 'B private draft');
+    assert.equal(getLettersWithDraft().find((letter) => letter.id === sentB.id)?.excerpt, 'B sent copy');
+    assert.deepEqual(getJourneyNotes(sentB.id).map((note) => note.text), ['B private note']);
   } finally {
     setLocalAccountId(null);
     if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);

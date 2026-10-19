@@ -75,6 +75,46 @@ test('copies a remapped guest attachment and does not replace an existing accoun
   }
 });
 
+test('restores only the owning account’s attachment across A-B-A switching', async () => {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const records = new Map();
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: { indexedDB: memoryIndexedDb(records) } });
+  try {
+    setLocalAccountId('account-a');
+    await saveDraftAttachment('draft-switch', {
+      size: 5,
+      type: 'image/png',
+      name: 'a.png',
+      lastModified: 1,
+      slice: () => new Blob(['A-file'], { type: 'image/png' }),
+    });
+
+    setLocalAccountId('account-b');
+    assert.equal(await getDraftAttachment('draft-switch'), null);
+    await saveDraftAttachment('draft-switch', {
+      size: 5,
+      type: 'image/png',
+      name: 'b.png',
+      lastModified: 2,
+      slice: () => new Blob(['B-file'], { type: 'image/png' }),
+    });
+
+    setLocalAccountId('account-a');
+    const attachmentA = await getDraftAttachment('draft-switch');
+    assert.equal(attachmentA?.name, 'a.png');
+    assert.equal(await attachmentA?.text(), 'A-file');
+
+    setLocalAccountId('account-b');
+    const attachmentB = await getDraftAttachment('draft-switch');
+    assert.equal(attachmentB?.name, 'b.png');
+    assert.equal(await attachmentB?.text(), 'B-file');
+  } finally {
+    setLocalAccountId(null);
+    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
+    else delete globalThis.window;
+  }
+});
+
 function deferredIndexedDb() {
   let releaseOpen;
   const open = new Promise((resolve) => { releaseOpen = resolve; });
