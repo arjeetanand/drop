@@ -8,7 +8,7 @@ import type { MockLetter } from '@/data/mockData';
 import { getRemoteLetterById, getRemoteLetters, saveRemoteReaction } from '@/lib/letterBackend';
 import { getLetterById } from '@/lib/letterStore';
 import { DEMO_REACTION_EMOJIS, saveDemoReaction } from '@/lib/demoReactionStore';
-import { getSupabaseBrowserClient, isGoogleAuthConfigured } from '@/lib/supabaseBrowser';
+import { getSupabaseBrowserClient, isSupabaseAuthConfigured } from '@/lib/supabaseBrowser';
 import { getDraftAttachment } from '@/lib/letterMediaStore';
 import { ReducedMotionGif } from '@/components/ReducedMotionGif';
 
@@ -143,7 +143,7 @@ export default function LetterArrivalPage() {
       try {
         const remoteLetters = await getRemoteLetters();
         const remoteLetter = remoteLetters?.find((candidate) => candidate.id === letterId) || null;
-        if (!remoteLetters && isGoogleAuthConfigured()) {
+        if (!remoteLetters && isSupabaseAuthConfigured()) {
           const supabase = getSupabaseBrowserClient();
           if (supabase) {
             const { data, error } = await supabase.auth.getSession();

@@ -29,12 +29,16 @@ function AuthCallbackContent() {
   useEffect(() => {
     let active = true;
 
-    const redirectWithError = (errorMessage: string) => {
-      if (active) setMessage('Google sign-in could not finish. Returning to your profile…');
-      let nextPath: string | null = null;
+    const getReturnPath = () => {
+      const fromEmailLink = safeInternalPath(searchParams.get('next'), window.location.origin);
       try {
-        nextPath = safeInternalPath(window.sessionStorage.getItem(AUTH_RETURN_KEY), window.location.origin);
-      } catch { /* Storage may be disabled; return to the profile. */ }
+        return safeInternalPath(window.sessionStorage.getItem(AUTH_RETURN_KEY), window.location.origin) || fromEmailLink;
+      } catch { return fromEmailLink; }
+    };
+
+    const redirectWithError = (errorMessage: string) => {
+      if (active) setMessage('Sign-in could not finish. Returning to your profile…');
+      const nextPath = getReturnPath();
       router.replace(`/profile?authError=${encodeURIComponent(errorMessage)}${nextPath ? `&next=${encodeURIComponent(nextPath)}` : ''}`);
     };
 
@@ -71,11 +75,8 @@ function AuthCallbackContent() {
         }
 
         if (active) setMessage('Signed in. Opening your profile…');
-        let nextPath: string | null = null;
-        try {
-          nextPath = safeInternalPath(window.sessionStorage.getItem(AUTH_RETURN_KEY), window.location.origin);
-          window.sessionStorage.removeItem(AUTH_RETURN_KEY);
-        } catch { /* Storage may be disabled; return to the profile. */ }
+        let nextPath = getReturnPath();
+        try { window.sessionStorage.removeItem(AUTH_RETURN_KEY); } catch { /* Storage may be disabled. */ }
         if (nextPath && signedInUserId) {
           const returnUrl = new URL(nextPath, window.location.origin);
           const draftId = returnUrl.pathname === '/compose' ? returnUrl.searchParams.get('letter') : null;
@@ -111,7 +112,7 @@ function AuthCallbackContent() {
   return (
     <main className="page-shell page-enter">
       <div className="page-container flex min-h-[70dvh] items-center justify-center">
-        <section className="panel w-full max-w-[560px] p-7 sm:p-10" aria-live="polite" aria-busy={!message.startsWith('Signed in') && !message.startsWith('Google sign-in could not')}>
+        <section className="panel w-full max-w-[560px] p-7 sm:p-10" aria-live="polite" aria-busy={!message.startsWith('Signed in') && !message.startsWith('Sign-in could not')}>
           <p className="eyebrow">Account handoff</p>
           <h1 className="section-title mt-3">Returning to your desk.</h1>
           <p className="body-copy mt-4">{message}</p>

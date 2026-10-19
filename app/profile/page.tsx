@@ -6,7 +6,7 @@ import { ArrowLeft, ArrowRight, Check, Copy, LogIn, LogOut } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getRemoteProfileState, saveRemoteProfile, type SaveRemoteProfileResult } from '@/lib/letterBackend';
 import { normalizeDropRecipient } from '@/lib/dropValidation';
-import { getSupabaseBrowserClient, isGoogleAuthConfigured } from '@/lib/supabaseBrowser';
+import { getSupabaseBrowserClient, isSupabaseAuthConfigured } from '@/lib/supabaseBrowser';
 import { getLocalAccountId } from '@/lib/localAccountScope';
 import { safeInternalPath } from '@/lib/safeInternalPath';
 import { clearPendingRemoteProfile, defaultUserProfile, getFirstUseProfile, getPendingRemoteProfileSnapshot, getUserProfile, getUserProfileForAccount, getUserProfileOwnerId, hasCustomizedUserIdentity, hasUnmatchedLocalProfile, markPendingRemoteProfileSynced, preserveUserProfileForAccount, profileUrl, savePendingRemoteProfile, saveUserProfile, type UserProfile } from '@/lib/userStore';
@@ -34,6 +34,10 @@ function ProfileContent() {
   const [accountNoticeIsError, setAccountNoticeIsError] = useState(false);
   const [copied, setCopied] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [emailAddress, setEmailAddress] = useState('');
+  const [emailLoading, setEmailLoading] = useState(false);
+  const [emailLinkSent, setEmailLinkSent] = useState(false);
+  const [emailError, setEmailError] = useState('');
   const [signOutLoading, setSignOutLoading] = useState(false);
   const [signedInEmail, setSignedInEmail] = useState('');
   const [remoteProfileAvailable, setRemoteProfileAvailable] = useState(false);
@@ -51,7 +55,7 @@ function ProfileContent() {
   const searchParams = useSearchParams();
   const authError = searchParams.get('authError');
   const nextPath = safeInternalPath(searchParams.get('next'), typeof window === 'undefined' ? 'https://drop.invalid' : window.location.origin);
-  const googleConfigured = isGoogleAuthConfigured();
+  const supabaseAuthConfigured = isSupabaseAuthConfigured();
 
   useEffect(() => {
     let active = true;
@@ -237,7 +241,7 @@ function ProfileContent() {
   useEffect(() => {
     if (!authError) return;
     setAccountStatus('error');
-    setAccountNotice(`Google sign-in could not finish: ${authError}`);
+    setAccountNotice(`Sign-in could not finish: ${authError}`);
     setAccountNoticeIsError(true);
     router.replace(`/profile${nextPath ? `?next=${encodeURIComponent(nextPath)}` : ''}`, { scroll: false });
   }, [authError, nextPath, router]);
@@ -349,7 +353,7 @@ function ProfileContent() {
 
   const connectGoogle = async () => {
     const supabase = getSupabaseBrowserClient();
-    if (!supabase || !googleConfigured) {
+    if (!supabase || !supabaseAuthConfigured) {
       setAccountNotice('Google sign-in is optional. Add the Supabase values to enable the real sign-in flow.');
       setAccountNoticeIsError(false);
       setAccountStatus('unavailable');
@@ -381,6 +385,37 @@ function ProfileContent() {
       setAccountStatus('error');
       setAccountNotice('Google sign-in could not start. Please try again.');
       setAccountNoticeIsError(true);
+    }
+  };
+
+  const sendEmailSignInLink = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const supabase = getSupabaseBrowserClient();
+    const email = emailAddress.trim().toLowerCase();
+    if (!supabase || !supabaseAuthConfigured || !email || accountConnected || emailLoading) return;
+
+    setEmailLoading(true);
+    setEmailLinkSent(false);
+    setEmailError('');
+    try {
+      try {
+        window.sessionStorage.removeItem('dear-exe:auth-return');
+        if (nextPath) window.sessionStorage.setItem('dear-exe:auth-return', nextPath);
+      } catch { /* Sign-in can continue without a return path when storage is disabled. */ }
+
+      const redirectTo = new URL('/auth/callback', window.location.origin);
+      if (nextPath) redirectTo.searchParams.set('next', nextPath);
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: { emailRedirectTo: redirectTo.toString() },
+      });
+      if (error) throw error;
+      setEmailLinkSent(true);
+    } catch (error) {
+      try { window.sessionStorage.removeItem('dear-exe:auth-return'); } catch { /* Ignore blocked storage. */ }
+      setEmailError(error instanceof Error ? error.message : 'A sign-in link could not be sent. Please try again.');
+    } finally {
+      setEmailLoading(false);
     }
   };
 
@@ -431,7 +466,7 @@ function ProfileContent() {
     ? `Connected as ${signedInEmail}.`
     : accountStatus === 'checking'
       ? 'Checking your account connection…'
-      : accountStatus === 'unavailable' || !googleConfigured
+      : accountStatus === 'unavailable' || !supabaseAuthConfigured
         ? 'Sign-in is not available in this preview.'
         : accountStatus === 'error'
           ? 'Account status needs attention.'
@@ -685,20 +720,54 @@ function ProfileContent() {
                 </div>
               </div>
               <p className="body-copy mt-4 text-sm">
-                Drafts save on this device. Sign in with Google to send and receive private drops and keep your profile across devices.
+                Drafts save on this device. Sign in with Google or email to send and receive private drops and keep your profile across devices.
               </p>
               <p className="meta mt-5" role="status" aria-live="polite">{accountStatusText}</p>
-              {googleConfigured && accountStatus !== 'unavailable' ? (
+              {supabaseAuthConfigured && accountStatus !== 'unavailable' ? (
                 <>
                   <button
                     type="button"
                     onClick={() => void connectGoogle()}
-                    disabled={googleLoading || accountConnected || signOutLoading}
+                    disabled={googleLoading || emailLoading || accountConnected || signOutLoading}
                     className="button-secondary mt-5 w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f7f4ee] disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    <span aria-hidden="true" className="font-sans text-base font-bold">G</span>
-                    {googleLoading ? 'Opening Google…' : accountStatus === 'signed-in' ? 'Google connected' : accountConnected ? 'Account connected' : 'Continue with Google'}
+                    {!accountConnected && <span aria-hidden="true" className="font-sans text-base font-bold">G</span>}
+                    {googleLoading ? 'Opening Google…' : accountConnected ? 'Account connected' : 'Continue with Google'}
                   </button>
+                  {!accountConnected && <>
+                    <p className="meta mt-4 text-center">or use email</p>
+                    <form className="mt-3 space-y-3" onSubmit={(event) => void sendEmailSignInLink(event)}>
+                      <div>
+                        <label htmlFor="account-email" className="field-label">Email address</label>
+                        <input
+                          id="account-email"
+                          type="email"
+                          value={emailAddress}
+                          onChange={(event) => {
+                            setEmailAddress(event.target.value);
+                            setEmailLinkSent(false);
+                            setEmailError('');
+                          }}
+                          autoComplete="email"
+                          autoCapitalize="none"
+                          required
+                          disabled={emailLoading}
+                          className="input-field mt-2 !min-h-12"
+                          placeholder="you@example.com"
+                        />
+                      </div>
+                      <button
+                        type="submit"
+                        disabled={emailLoading || googleLoading || !emailAddress.trim()}
+                        className="button-secondary !min-h-12 w-full disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {emailLoading ? 'Sending link…' : 'Email me a sign-in link'}
+                      </button>
+                      {emailLinkSent && <p className="field-help" role="status" aria-live="polite">Sign-in link sent. Check your inbox to continue.</p>}
+                      {emailError && <p className="error-notice" role="alert">{emailError}</p>}
+                      <p className="field-help">One-time link, no password to remember.</p>
+                    </form>
+                  </>}
                   {accountConnected && (
                     <button
                       type="button"
