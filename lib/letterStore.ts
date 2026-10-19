@@ -100,7 +100,11 @@ function hydrateDraft(value: Partial<LetterDraftState>): LetterDraftState {
 }
 
 function canUseStorage() {
-  return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
+  try {
+    return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
+  } catch {
+    return false;
+  }
 }
 
 function readStoredLetterDraft(accountId = getLocalAccountId()): LetterDraftState | null {
@@ -145,13 +149,94 @@ function saveDraftHistory(drafts: LetterDraftState[], accountId = getLocalAccoun
   }
 }
 
+export interface DeletedDraftSnapshot {
+  accountId: string | null;
+  active: string | null;
+  drafts: string | null;
+  letters: string | null;
+}
+
+function canDeleteDraft(draft: LetterDraftState | null | undefined) {
+  return Boolean(draft
+    && (draft.status === 'draft' || draft.status === 'sealed')
+    && !draft.localDemo
+    && !mockLetters.some((letter) => letter.id === draft.id && letter.sample));
+}
+
+export function canDeleteLocalDraft(id: string, accountId = getLocalAccountId()) {
+  const active = readStoredLetterDraft(accountId);
+  const saved = getDraftHistory(accountId).find((draft) => draft.id === id);
+  const stored = active?.id === id ? active : saved;
+  return canDeleteDraft(stored);
+}
+
+export function deleteLocalDraft(id: string, accountId = getLocalAccountId()):
+  | { status: 'deleted'; snapshot: DeletedDraftSnapshot; nextDraft: LetterDraftState }
+  | { status: 'not-found' | 'not-deletable' }
+  | { status: 'storage-error'; restored: boolean } {
+  if (!canUseStorage()) return { status: 'not-found' };
+  const activeKey = localAccountStorageKey(STORAGE_KEY, accountId);
+  const draftsKey = localAccountStorageKey(DRAFT_HISTORY_STORAGE_KEY, accountId);
+  const lettersKey = localAccountStorageKey(HISTORY_STORAGE_KEY, accountId);
+  let snapshot: DeletedDraftSnapshot;
+  try {
+    snapshot = {
+      accountId,
+      active: window.localStorage.getItem(activeKey),
+      drafts: window.localStorage.getItem(draftsKey),
+      letters: window.localStorage.getItem(lettersKey),
+    };
+  } catch {
+    return { status: 'storage-error', restored: true };
+  }
+  const active = readStoredLetterDraft(accountId);
+  const history = getDraftHistory(accountId);
+  const target = active?.id === id ? active : history.find((draft) => draft.id === id);
+  if (!target) return { status: 'not-found' };
+  if (!canDeleteDraft(target)) return { status: 'not-deletable' };
+
+  const remainingDrafts = history.filter((draft) => draft.id !== id);
+  const nextDraft = active?.id === id
+    ? remainingDrafts.filter(canDeleteDraft).sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))[0] ?? blankDraft()
+    : canDeleteDraft(active) ? active : blankDraft();
+  const letters = getLetterHistory(accountId);
+  const nextLetters = letters.filter((letter) => letter.id !== id);
+
+  try {
+    if (history.some((draft) => draft.id === id)) window.localStorage.setItem(draftsKey, JSON.stringify(remainingDrafts));
+    if (letters.some((letter) => letter.id === id)) window.localStorage.setItem(lettersKey, JSON.stringify(nextLetters));
+    if (nextDraft.id !== active?.id) window.localStorage.setItem(activeKey, JSON.stringify(nextDraft));
+  } catch {
+    return { status: 'storage-error', restored: restoreDeletedDraft(snapshot) };
+  }
+  return { status: 'deleted', snapshot, nextDraft };
+}
+
+export function restoreDeletedDraft(snapshot: DeletedDraftSnapshot) {
+  try {
+    if (!canUseStorage()) return false;
+    const entries: Array<[string, string | null]> = [
+      [localAccountStorageKey(STORAGE_KEY, snapshot.accountId), snapshot.active],
+      [localAccountStorageKey(DRAFT_HISTORY_STORAGE_KEY, snapshot.accountId), snapshot.drafts],
+      [localAccountStorageKey(HISTORY_STORAGE_KEY, snapshot.accountId), snapshot.letters],
+    ];
+    entries.forEach(([key, value]) => {
+      if (value === null) window.localStorage.removeItem(key);
+      else window.localStorage.setItem(key, value);
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Return a complete local draft, including an older letter saved before a new one was started. */
 export function getLetterDraftById(id: string, accountId = getLocalAccountId()): LetterDraftState | null {
   const active = readStoredLetterDraft(accountId);
   if (active?.id === id) return active;
   const saved = getDraftHistory(accountId).find((draft) => draft.id === id);
   if (saved) return saved;
-  if (!active && id === currentFocusDraft.id) return defaultDraft();
+  if (id === currentFocusDraft.id) return active ? null : defaultDraft();
 
   // Older seeded letters pre-date the complete local draft format. Hydrate the
   // small amount of information needed to continue their flow instead of
@@ -258,11 +343,11 @@ export function saveLetterDraft(
   return next;
 }
 
-function getLetterHistory(): MockLetter[] {
+function getLetterHistory(accountId = getLocalAccountId()): MockLetter[] {
   if (!canUseStorage()) return [];
 
   try {
-    const stored = window.localStorage.getItem(localAccountStorageKey(HISTORY_STORAGE_KEY));
+    const stored = window.localStorage.getItem(localAccountStorageKey(HISTORY_STORAGE_KEY, accountId));
     if (!stored) return [];
     const parsed = JSON.parse(stored) as MockLetter[];
     return Array.isArray(parsed) ? parsed : [];
@@ -271,10 +356,10 @@ function getLetterHistory(): MockLetter[] {
   }
 }
 
-function saveLetterHistory(letters: MockLetter[]) {
+function saveLetterHistory(letters: MockLetter[], accountId = getLocalAccountId()) {
   if (!canUseStorage()) return;
   try {
-    window.localStorage.setItem(localAccountStorageKey(HISTORY_STORAGE_KEY), JSON.stringify(letters));
+    window.localStorage.setItem(localAccountStorageKey(HISTORY_STORAGE_KEY, accountId), JSON.stringify(letters));
   } catch {
     // The active letter remains usable when storage is blocked or full.
   }

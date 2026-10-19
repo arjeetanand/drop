@@ -3,9 +3,9 @@
 import { Suspense, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { AlignCenter, AlignLeft, AlignRight, ArrowLeft, Check, Eye, FileImage, ImagePlus, Minus, Plus, Send, Type, X } from 'lucide-react';
+import { AlignCenter, AlignLeft, AlignRight, ArrowLeft, Check, Eye, FileImage, ImagePlus, Minus, Plus, Send, Trash2, Type, X } from 'lucide-react';
 import { getSealInfo, mockSeals, waxColors, writingPrompts, type DropDeliveryMode, type DropPayloadKind } from '@/data/mockData';
-import { dispatchLetter, getLetterDraft, getLetterDraftById, saveLetterDraft, setActiveLetterDraft, startNewLetter, type LetterDraftState, type LetterAlignment } from '@/lib/letterStore';
+import { canDeleteLocalDraft, deleteLocalDraft, dispatchLetter, getLetterDraft, getLetterDraftById, restoreDeletedDraft, saveLetterDraft, setActiveLetterDraft, startNewLetter, type LetterDraftState, type LetterAlignment } from '@/lib/letterStore';
 import { lookupDropRecipient, syncDropToBackend } from '@/lib/letterBackend';
 import { getSupabaseBrowserClient } from '@/lib/supabaseBrowser';
 import { isDropRecipientConfirmed, normalizeDropRecipient, validateDropMedia } from '@/lib/dropValidation';
@@ -45,11 +45,15 @@ function Composer() {
   const [saved, setSaved] = useState(false);
   const [accountState, setAccountState] = useState<'checking' | 'connected' | 'signed-out' | 'unavailable'>('checking');
   const [sending, setSending] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const deletingRef = useRef(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
   useEffect(() => {
     let active = true;
+    deletingRef.current = false;
+    setDeleting(false);
     setReady(false);
     const requestedId = searchParams.get('letter');
     const selected = requestedId ? getLetterDraftById(requestedId) : null;
@@ -123,11 +127,13 @@ function Composer() {
   }, []);
 
   useEffect(() => {
-    if (!ready || !draft) return;
+    if (!ready || !draft || deletingRef.current) return;
     setSaved(false);
     const timer = window.setTimeout(() => {
-      saveLetterDraft({ content, recipient, subject, fontSize, alignment, payloadKind, deliveryMode, sealId, sealColor, sealMonogram });
-      setSaved(true);
+      if (!deletingRef.current) {
+        saveLetterDraft({ content, recipient, subject, fontSize, alignment, payloadKind, deliveryMode, sealId, sealColor, sealMonogram });
+        setSaved(true);
+      }
     }, 350);
     return () => window.clearTimeout(timer);
   }, [alignment, content, deliveryMode, draft, fontSize, payloadKind, ready, recipient, sealColor, sealId, sealMonogram, subject]);
@@ -200,6 +206,10 @@ function Composer() {
   };
 
   const saveBeforeLeaving = (event: React.MouseEvent<HTMLAnchorElement>) => {
+    if (deletingRef.current) {
+      event.preventDefault();
+      return;
+    }
     if (attachmentSaving || (file && !attachmentSaved)) {
       event.preventDefault();
       setNotice(attachmentSaving
@@ -211,6 +221,7 @@ function Composer() {
   };
 
   const handleSave = () => {
+    if (deletingRef.current) return;
     const next = makeDraft();
     if (!next) return;
     setDraft(next);
@@ -243,7 +254,7 @@ function Composer() {
 
   const handleSend = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!complete || !confirmedRecipient || !draft || sending) return;
+    if (!complete || !confirmedRecipient || !draft || sending || deletingRef.current) return;
     if (payloadKind !== 'text') {
       const validationError = validateDropMedia(file);
       if (validationError) {
@@ -283,6 +294,59 @@ function Composer() {
     }
   };
 
+  const handleDelete = async () => {
+    if (!draft || sending || attachmentSaving || deletingRef.current) return;
+    const accountId = getLocalAccountId();
+    if (!canDeleteLocalDraft(draft.id, accountId)
+      || !window.confirm('Delete this unsent draft and its saved attachment from this device? This can’t be undone.')) return;
+    if (!isCurrentLocalAccount(accountId)) return;
+
+    deletingRef.current = true;
+    setDeleting(true);
+    setError('');
+    setNotice('');
+    const latest = makeDraft();
+    if (!latest) {
+      deletingRef.current = false;
+      setDeleting(false);
+      return;
+    }
+    const result = deleteLocalDraft(latest.id, accountId);
+    if (result.status !== 'deleted') {
+      if (result.status === 'storage-error' && !result.restored) setActiveLetterDraft(latest);
+      setError(result.status === 'storage-error' && !result.restored
+        ? 'Drop could not safely remove the draft. Your current copy is still open; save it again before leaving.'
+        : result.status === 'storage-error'
+          ? 'Drop could not remove this draft from this device. Your draft is still here.'
+          : 'This draft is no longer available to delete.');
+      deletingRef.current = false;
+      setDeleting(false);
+      return;
+    }
+
+    try {
+      if (latest.payloadKind !== 'text' && attachmentSaved) await deleteDraftAttachment(latest.id, accountId);
+    } catch {
+      const restored = restoreDeletedDraft(result.snapshot);
+      if (!restored && isCurrentLocalAccount(accountId)) setActiveLetterDraft(latest);
+      if (isCurrentLocalAccount(accountId)) {
+        setError(restored
+          ? 'The saved attachment could not be removed, so your draft was restored.'
+          : 'The saved attachment could not be removed. Your draft is open; save it again before leaving.');
+      }
+      deletingRef.current = false;
+      setDeleting(false);
+      return;
+    }
+
+    if (!isCurrentLocalAccount(accountId)) {
+      deletingRef.current = false;
+      setDeleting(false);
+      return;
+    }
+    router.replace(`/compose?letter=${encodeURIComponent(result.nextDraft.id)}`);
+  };
+
   if (!ready) {
     return <main className="page-shell"><div className="page-container max-w-[720px]"><p className="meta" role="status">Loading your draft…</p></div></main>;
   }
@@ -291,6 +355,7 @@ function Composer() {
   const alignClass = alignment === 'center' ? 'text-center' : alignment === 'right' ? 'text-right' : 'text-left';
   const saveLabel = saved ? 'Saved' : 'Save draft';
   const sendProgressLabel = isText ? 'Sending your note…' : payloadKind === 'gif' ? 'Sending your GIF…' : 'Sending your photo…';
+  const deletableDraft = draft ? canDeleteLocalDraft(draft.id) : false;
 
   return (
     <main className="page-shell page-enter !pt-4 sm:!pt-8">
@@ -306,7 +371,8 @@ function Composer() {
           <p className="mt-3 max-w-xl text-sm leading-relaxed text-on-surface-variant sm:text-base">One person, one thing you wanted them to see. The rest can wait.</p>
         </div>
 
-        <form onSubmit={handleSend} className="mt-6 space-y-4 sm:mt-8 sm:space-y-5">
+        <form onSubmit={handleSend} aria-busy={deleting} className="mt-6 sm:mt-8">
+          <fieldset disabled={deleting} aria-label="Compose drop" className="m-0 min-w-0 space-y-4 border-0 p-0 sm:space-y-5">
           <fieldset>
             <legend className="field-label">What are we sending?</legend>
             <div className="mt-2 grid grid-cols-3 gap-2">
@@ -403,10 +469,14 @@ function Composer() {
           <div className="flex flex-col gap-2 pb-3">
             <Link href={draft ? `/compose/preview?letter=${encodeURIComponent(draft.id)}` : '/compose/preview'} onClick={saveBeforeLeaving} className="button-secondary !min-h-12 !rounded-xl"><Eye className="h-4 w-4" aria-hidden="true" /> Preview as recipient</Link>
             <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
-              <button type="button" onClick={handleSave} className="button-secondary !min-h-12 !rounded-xl">{saveLabel}</button>
-              {accountState === 'connected' ? <button type="submit" disabled={!complete || sending || attachmentSaving} className="button-primary !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white disabled:opacity-45"><span aria-live="polite" aria-atomic="true">{sending ? sendProgressLabel : 'Send drop'}</span> <Send className="h-4 w-4" aria-hidden="true" /></button> : <Link href={profileHref} onClick={saveBeforeLeaving} aria-disabled={attachmentSaving || Boolean(file && !attachmentSaved)} className="button-primary !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white">{accountState === 'unavailable' ? 'Account options' : 'Connect to send'} <Send className="h-4 w-4" aria-hidden="true" /></Link>}
+              <div className={deletableDraft ? 'grid grid-cols-2 gap-2 sm:flex' : 'flex'}>
+                <button type="button" onClick={handleSave} className="button-secondary !min-h-12 !rounded-xl">{saveLabel}</button>
+                {deletableDraft && <button type="button" onClick={handleDelete} disabled={deleting || sending || attachmentSaving} className="button-secondary !min-h-12 !rounded-xl !border-[#e6c7bd] !text-[#9e4038] disabled:opacity-45"><Trash2 className="h-4 w-4" aria-hidden="true" />{deleting ? 'Deleting…' : 'Delete draft'}</button>}
+              </div>
+              {accountState === 'connected' ? <button type="submit" disabled={!complete || sending || deleting || attachmentSaving} className="button-primary !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white disabled:opacity-45"><span aria-live="polite" aria-atomic="true">{sending ? sendProgressLabel : 'Send drop'}</span> <Send className="h-4 w-4" aria-hidden="true" /></button> : <Link href={profileHref} onClick={saveBeforeLeaving} aria-disabled={deleting || attachmentSaving || Boolean(file && !attachmentSaved)} className="button-primary !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white">{accountState === 'unavailable' ? 'Account options' : 'Connect to send'} <Send className="h-4 w-4" aria-hidden="true" /></Link>}
             </div>
           </div>
+          </fieldset>
         </form>
       </div>
     </main>

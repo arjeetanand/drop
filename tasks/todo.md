@@ -235,3 +235,4 @@ Commit each completed code change separately with a descriptive message and push
 - [x] Verify photo/GIF retry recovery with a fresh staging path; the server reuses the committed object only when its MIME type, size, and bytes match.
 - [x] Verify existing-drop lookup failures stop media finalization with a retryable response before writing the final object.
 - [x] Sending feedback names the selected note, photo, or GIF and announces the in-progress label through a polite live region.
+- [x] Add confirmed, account-scoped deletion for unsent local drafts and their saved media; tests cover history cleanup, replacement drafts, sample/sent protection, account isolation, and localStorage rollback. Composer UI and media-cleanup rollback still need browser verification.
