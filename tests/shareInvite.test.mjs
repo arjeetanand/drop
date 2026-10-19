@@ -8,8 +8,26 @@ test('uses native sharing without copying the private invite link', async () => 
   const result = await shareInviteLink('https://drop.test/relay/scan?token=opaque', async (data) => { shared = data; }, async () => { copied = true; });
 
   assert.equal(result, 'shared');
+  assert.equal(shared.title, 'A Drop to carry');
+  assert.equal(shared.text, 'Help carry this sealed Drop along its journey.');
   assert.equal(shared.url, 'https://drop.test/relay/scan?token=opaque');
   assert.equal(copied, false);
+});
+
+test('allows a generic Drop invite message without adding draft content', async () => {
+  let shared;
+  const url = 'https://drop.test/invite';
+  const result = await shareInviteLink(url, async (data) => { shared = data; }, async () => undefined, {
+    title: 'Join me on Drop',
+    text: 'Set up your Drop profile, then share your handle with me. I have a little moment for you.',
+  });
+
+  assert.equal(result, 'shared');
+  assert.deepEqual(shared, {
+    title: 'Join me on Drop',
+    text: 'Set up your Drop profile, then share your handle with me. I have a little moment for you.',
+    url,
+  });
 });
 
 test('treats a cancelled share sheet as intentional', async () => {

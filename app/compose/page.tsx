@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { AlignCenter, AlignLeft, AlignRight, ArrowLeft, Check, Eye, FileImage, ImagePlus, Minus, Plus, Send, Trash2, Type, X } from 'lucide-react';
+import { AlignCenter, AlignLeft, AlignRight, ArrowLeft, Check, Eye, FileImage, ImagePlus, Minus, Plus, Send, Share2, Trash2, Type, X } from 'lucide-react';
 import { getSealInfo, mockSeals, waxColors, writingPrompts, type DropDeliveryMode, type DropPayloadKind } from '@/data/mockData';
 import { canDeleteLocalDraft, deleteLocalDraft, dispatchLetter, getLetterDraft, getLetterDraftById, restoreDeletedDraft, saveLetterDraft, setActiveLetterDraft, startNewLetter, type LetterDraftState, type LetterAlignment } from '@/lib/letterStore';
 import { lookupDropRecipient, syncDropToBackend } from '@/lib/letterBackend';
@@ -13,6 +13,7 @@ import { deleteDraftAttachment, getDraftAttachment, saveDraftAttachment } from '
 import { getLocalAccountId, isCurrentLocalAccount } from '@/lib/localAccountScope';
 import { ReducedMotionGif } from '@/components/ReducedMotionGif';
 import { cn } from '@/lib/utils';
+import { shareInviteLink } from '@/lib/shareInvite';
 
 type RecipientCheck =
   | { status: 'idle' | 'checking' | 'not-found' | 'error'; username: string | null }
@@ -49,6 +50,9 @@ function Composer() {
   const deletingRef = useRef(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [inviteNotice, setInviteNotice] = useState('');
+  const [manualInviteUrl, setManualInviteUrl] = useState('');
+  const [sharingInvite, setSharingInvite] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -238,11 +242,15 @@ function Composer() {
     setRecipient(next);
     setSaved(false);
     setError('');
+    setInviteNotice('');
+    setManualInviteUrl('');
   };
 
   const checkRecipient = async () => {
     if (!recipientUsername || recipientCheck.status === 'checking') return;
     const request = ++recipientCheckRequest.current;
+    setInviteNotice('');
+    setManualInviteUrl('');
     setRecipientCheck({ status: 'checking', username: recipientUsername });
     setError('');
     const result = await lookupDropRecipient(recipientUsername);
@@ -250,6 +258,48 @@ function Composer() {
     setRecipientCheck(result.status === 'found'
       ? { status: 'found', username: result.recipient.username, id: result.recipient.id, displayName: result.recipient.displayName }
       : { status: result.status, username: recipientUsername });
+  };
+
+  const inviteRecipient = async () => {
+    if (!draft || recipientCheck.status !== 'not-found' || recipientCheck.username !== recipientUsername || sharingInvite || sending || deletingRef.current) return;
+    const request = recipientCheckRequest.current;
+    const savedDraft = makeDraft();
+    if (!savedDraft) return;
+    setDraft(savedDraft);
+    setSaved(true);
+    if (attachmentSaving || (file && !attachmentSaved)) {
+      setInviteNotice('Your draft text is saved, but its attachment is not saved on this device yet. Wait for it to finish before sharing.');
+      return;
+    }
+    setSharingInvite(true);
+    setInviteNotice('');
+    setManualInviteUrl('');
+    const inviteUrl = `${window.location.origin}/invite`;
+    try {
+      const result = await shareInviteLink(
+        inviteUrl,
+        navigator.share ? (details) => navigator.share(details) : undefined,
+        async (url) => {
+          if (!navigator.clipboard) throw new Error('Clipboard unavailable');
+          await navigator.clipboard.writeText(url);
+        },
+        {
+          title: 'Join me on Drop',
+          text: 'Set up your Drop profile, then share your handle with me. I have a little moment for you.',
+        },
+      );
+      if (request !== recipientCheckRequest.current) return;
+      setInviteNotice(result === 'shared'
+        ? 'Invite shared. Check their handle again after they join.'
+        : result === 'copied'
+          ? 'Invite link copied. Check their handle again after they join.'
+          : result === 'cancelled'
+            ? 'Invite cancelled. Your draft is still saved on this device.'
+            : 'Sharing and copying are unavailable. Select the invite link below and copy it manually.');
+      if (result === 'unavailable') setManualInviteUrl(inviteUrl);
+    } finally {
+      setSharingInvite(false);
+    }
   };
 
   const handleSend = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -278,6 +328,7 @@ function Composer() {
       if (!result.ok) {
         setError(result.error || 'This drop could not be sent. Your draft is safe to retry.');
         setRecipientCheck({ status: 'idle', username: null });
+        setInviteNotice('');
         setSending(false);
         return;
       }
@@ -429,14 +480,24 @@ function Composer() {
             <label htmlFor="drop-recipient" className="field-label">Send to one person</label>
             <div className="mt-2 flex items-center rounded-xl border border-[rgba(16,42,67,.14)] bg-white px-3 focus-within:ring-2 focus-within:ring-[#2b45f7]/35">
               <span className="font-mono text-sm font-bold text-[#2b45f7]">@</span>
-              <input id="drop-recipient" value={recipient.replace(/^@/, '')} onChange={handleRecipientChange} disabled={sending} className="min-h-12 min-w-0 flex-1 border-0 bg-transparent px-2 text-base text-ink-navy outline-none placeholder:text-on-surface-variant/60 disabled:opacity-60" placeholder="their.username" autoCapitalize="none" autoCorrect="off" spellCheck={false} aria-invalid={recipientHasValue && !recipientUsername} aria-describedby={recipientHasValue && !recipientUsername ? 'drop-recipient-help drop-recipient-error' : 'drop-recipient-help'} />
+              <input id="drop-recipient" value={recipient.replace(/^@/, '')} onChange={handleRecipientChange} disabled={sending || sharingInvite} className="min-h-12 min-w-0 flex-1 border-0 bg-transparent px-2 text-base text-ink-navy outline-none placeholder:text-on-surface-variant/60 disabled:opacity-60" placeholder="their.username" autoCapitalize="none" autoCorrect="off" spellCheck={false} aria-invalid={recipientHasValue && !recipientUsername} aria-describedby={recipientHasValue && !recipientUsername ? 'drop-recipient-help drop-recipient-error' : 'drop-recipient-help'} />
             </div>
             <p id="drop-recipient-help" className="field-help mt-2">They need a Drop account so the note stays between you two. Handles use 2–24 letters, numbers, periods, underscores, or hyphens.</p>
             {recipientHasValue && !recipientUsername && <p id="drop-recipient-error" className="error-notice mt-2" role="status" aria-live="polite">Enter a valid Drop handle to send.</p>}
-            <button type="button" onClick={checkRecipient} disabled={!recipientUsername || recipientCheck.status === 'checking' || accountState !== 'connected' || sending} className="button-secondary mt-3 !min-h-12 w-full !rounded-xl disabled:opacity-45">{recipientCheck.status === 'checking' ? 'Checking…' : recipientCheck.status === 'found' ? 'Check again' : recipientCheck.status === 'idle' ? 'Check handle' : 'Try again'}</button>
+            <button type="button" onClick={checkRecipient} disabled={!recipientUsername || recipientCheck.status === 'checking' || accountState !== 'connected' || sending || sharingInvite} className="button-secondary mt-3 !min-h-12 w-full !rounded-xl disabled:opacity-45">{recipientCheck.status === 'checking' ? 'Checking…' : recipientCheck.status === 'found' || recipientCheck.status === 'not-found' ? 'Check again' : recipientCheck.status === 'idle' ? 'Check handle' : 'Try again'}</button>
             {recipientCheck.status === 'checking' && recipientCheck.username === recipientUsername && <p className="field-help mt-2" role="status" aria-live="polite">Checking @{recipientUsername}…</p>}
             {confirmedRecipient && <p className="mt-2 text-sm font-semibold text-[#26734f]" role="status" aria-live="polite">Recipient confirmed: {confirmedRecipient.displayName} (@{confirmedRecipient.username})</p>}
-            {recipientCheck.status === 'not-found' && recipientCheck.username === recipientUsername && <p className="error-notice mt-2" role="status" aria-live="polite">No Drop account found for @{recipientUsername}.</p>}
+            {recipientCheck.status === 'not-found' && recipientCheck.username === recipientUsername && <>
+              <p className="error-notice mt-2" role="status" aria-live="polite">No Drop account found for @{recipientUsername}.</p>
+              <div className="mt-3 rounded-xl border border-[rgba(16,42,67,.12)] bg-white/75 p-3">
+                <p className="text-xs leading-relaxed text-on-surface-variant">Your draft stays here. Invite them to Drop, then check their handle again.</p>
+                <button type="button" onClick={() => void inviteRecipient()} disabled={sharingInvite || sending || deleting} className="button-secondary mt-3 !min-h-12 w-full !rounded-xl disabled:opacity-50">
+                  <Share2 className="h-4 w-4" aria-hidden="true" />{sharingInvite ? 'Opening share…' : 'Invite them to Drop'}
+                </button>
+                {inviteNotice && <p className="field-help mt-2 break-words" role="status" aria-live="polite">{inviteNotice}</p>}
+                {manualInviteUrl && <code tabIndex={0} aria-label="Select and copy this invite link" className="mt-2 block select-all break-all rounded-lg bg-[#f5f1e9] px-2 py-1.5 font-mono text-[0.68rem] text-ink-navy">{manualInviteUrl}</code>}
+              </div>
+            </>}
             {recipientCheck.status === 'error' && recipientCheck.username === recipientUsername && <p className="error-notice mt-2" role="status" aria-live="polite">Couldn’t check that handle. Try again.</p>}
           </section>
 
