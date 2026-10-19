@@ -236,3 +236,4 @@ Commit each completed code change separately with a descriptive message and push
 - [x] Verify existing-drop lookup failures stop media finalization with a retryable response before writing the final object.
 - [x] Sending feedback names the selected note, photo, or GIF and announces the in-progress label through a polite live region.
 - [x] Add confirmed, account-scoped deletion for unsent local drafts and their saved media; tests cover history cleanup, replacement drafts, sample/sent protection, account isolation, and localStorage rollback. Composer UI and media-cleanup rollback still need browser verification.
+- [x] Relay carrier links use the native share sheet where available and clipboard fallback elsewhere; tests cover share, cancellation, fallback, and unavailable states. Device share-sheet behavior still needs browser verification.

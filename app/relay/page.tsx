@@ -30,6 +30,7 @@ import {
   type RelayState,
 } from '@/lib/relayStore';
 import { getLetterDraft, getLetterDraftById } from '@/lib/letterStore';
+import { shareInviteLink } from '@/lib/shareInvite';
 
 type ViewMode = 'sender' | 'carrier';
 
@@ -104,17 +105,26 @@ function RelayContent() {
     }
   };
 
-  const copyInvite = async () => {
+  const shareInvite = async () => {
     if (!inviteUrl) return;
-    try {
-      if (!navigator.clipboard) throw new Error('Clipboard unavailable');
-      await navigator.clipboard.writeText(inviteUrl);
+
+    const result = await shareInviteLink(
+      inviteUrl,
+      navigator.share ? (details) => navigator.share(details) : undefined,
+      async (url) => {
+        if (!navigator.clipboard) throw new Error('Clipboard unavailable');
+        await navigator.clipboard.writeText(url);
+      },
+    );
+    setError('');
+    if (result === 'shared') {
+      setCopied(false);
+      setNotice('Carrier invite shared. The drop stays sealed.');
+    } else if (result === 'copied') {
       setCopied(true);
       setNotice('Carrier invite copied. Share it with the person who will carry this drop.');
       window.setTimeout(() => setCopied(false), 1800);
-    } catch {
-      setNotice('Copy is unavailable. The carrier invite is shown below so you can select it.');
-    }
+    } else if (result === 'unavailable') setNotice('Sharing is unavailable. The carrier invite is shown below so you can select it.');
   };
 
   return (
@@ -225,9 +235,9 @@ function RelayContent() {
                     </div>
                     <p className="mt-4 break-all rounded-xl bg-[#f5f1e9] p-3 font-mono text-[0.65rem] leading-relaxed text-ink-navy">{inviteUrl}</p>
                     <p className="mt-3 text-xs text-on-surface-variant">Expires {inviteExpiresAt ? new Date(inviteExpiresAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : 'in 10 minutes'}.</p>
-                    <button type="button" onClick={() => void copyInvite()} className="button-secondary mt-4 w-full !min-h-12 !rounded-xl">
+                    <button type="button" onClick={() => void shareInvite()} className="button-secondary mt-4 w-full !min-h-12 !rounded-xl">
                       {copied ? <Check className="h-4 w-4 text-[#2b45f7]" aria-hidden="true" /> : <Share2 className="h-4 w-4 text-[#2b45f7]" aria-hidden="true" />}
-                      {copied ? 'Invite copied' : 'Copy carrier invite'}
+                      {copied ? 'Invite copied' : 'Share carrier invite'}
                     </button>
                   </>
                 ) : (

@@ -3,11 +3,12 @@
 import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { ArrowLeft, ArrowRight, CheckCircle2, Clock3, Copy, MapPin, Package, QrCode, RefreshCcw, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle2, Clock3, MapPin, Package, QrCode, RefreshCcw, Share2, ShieldCheck } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { clearActiveCarry, getActiveCarry, type ActiveCarry } from '@/lib/gpsUtils';
 import { getRelayHandoffStatus, issueRelayPassFromCarrier, type RelayHandoffStatus, type IssuedRelayToken } from '@/lib/relayStore';
 import { getLocalAccountId, isCurrentLocalAccount } from '@/lib/localAccountScope';
+import { shareInviteLink } from '@/lib/shareInvite';
 
 type CarryPhase = 'loading' | 'carrying' | 'pass-on' | 'confirmed' | 'unavailable';
 
@@ -106,16 +107,25 @@ function CarryContent() {
     }
   };
 
-  const copyPassLink = async () => {
+  const sharePassLink = async () => {
     if (!passUrl) return;
-    try {
-      await navigator.clipboard.writeText(passUrl);
+
+    const result = await shareInviteLink(
+      passUrl,
+      navigator.share ? (details) => navigator.share(details) : undefined,
+      async (url) => {
+        if (!navigator.clipboard) throw new Error('Clipboard unavailable');
+        await navigator.clipboard.writeText(url);
+      },
+    );
+    if (result === 'shared') {
+      setCopied(false);
+      setNotice('Secure invite shared. It expires in 10 minutes.');
+    } else if (result === 'copied') {
       setCopied(true);
       setNotice('Secure invite link copied.');
       window.setTimeout(() => setCopied(false), 1800);
-    } catch {
-      setNotice('Copy is unavailable here. The QR code is ready to scan.');
-    }
+    } else if (result === 'unavailable') setNotice('Sharing is unavailable here. The QR code is ready to scan.');
   };
 
   if (phase === 'loading') {
@@ -186,7 +196,7 @@ function CarryContent() {
                 <span className={`inline-flex min-h-9 items-center gap-2 rounded-full px-3 text-xs font-bold ${expired ? 'bg-[#f3efe7] text-on-surface-variant' : 'bg-[#2b45f7]/[0.08] text-[#2b45f7]'}`} role="status" aria-live="polite"><Clock3 className="h-3.5 w-3.5" aria-hidden="true" />{expired ? 'Invite expired' : `Expires in ${Math.floor(remainingMs / 60000)}:${String(Math.floor((remainingMs % 60000) / 1000)).padStart(2, '0')}`}</span>
                 <span className="inline-flex min-h-9 items-center gap-2 rounded-full bg-[#f5f3ed] px-3 text-xs font-bold text-ink-navy"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#2b45f7] motion-reduce:animate-none" aria-hidden="true" />Waiting for acceptance</span>
               </div>
-              {passUrl && <button type="button" onClick={() => void copyPassLink()} className="button-secondary mt-5 !min-h-11 !rounded-xl"><Copy className="h-4 w-4" aria-hidden="true" />{copied ? 'Link copied' : 'Copy secure link'}</button>}
+              {passUrl && <button type="button" onClick={() => void sharePassLink()} className="button-secondary mt-5 !min-h-11 !rounded-xl"><Share2 className="h-4 w-4" aria-hidden="true" />{copied ? 'Link copied' : 'Share secure link'}</button>}
               {expired && <button type="button" onClick={() => void handleRefreshPass()} disabled={issuing} className="button-secondary mt-3 !min-h-11 !rounded-xl disabled:opacity-50"><RefreshCcw className="h-4 w-4" aria-hidden="true" />{issuing ? 'Making a new invite…' : 'Create a fresh invite'}</button>}
               {notice && <p className="mt-3 text-sm text-on-surface-variant" role="status" aria-live="polite">{notice}</p>}
               {error && <p className="notice error-notice mt-4" role="alert" aria-live="assertive">{error}</p>}
