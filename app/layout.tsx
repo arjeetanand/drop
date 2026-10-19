@@ -54,7 +54,7 @@ export default function RootLayout({
           <div className="min-h-screen bg-[#f7f4ee] text-slate-900">
             <Sidebar />
             <MainContent>
-              <div id="main-content">{children}</div>
+              <div id="main-content" tabIndex={-1}>{children}</div>
             </MainContent>
           </div>
         </LocalAccountProvider>
