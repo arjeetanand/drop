@@ -166,6 +166,7 @@ function Composer() {
       if (draft) void deleteDraftAttachment(draft.id).catch(() => undefined);
     }
     setError('');
+    setNotice('');
   };
 
   const handleFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
