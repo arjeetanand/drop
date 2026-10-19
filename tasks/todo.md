@@ -256,3 +256,5 @@ Commit each completed code change separately with a descriptive message and push
 - [x] Sending feedback names the selected note, photo, or GIF and announces the in-progress label through a polite live region.
 - [x] Add confirmed, account-scoped deletion for unsent local drafts and their saved media; tests cover history cleanup, replacement drafts, sample/sent protection, account isolation, and localStorage rollback. Composer UI and media-cleanup rollback still need browser verification.
 - [x] Relay carrier links use the native share sheet where available and clipboard fallback elsewhere; tests cover share, cancellation, fallback, and unavailable states. Device share-sheet behavior still needs browser verification.
+- [x] Replace opaque email-link network/response parsing errors with a clear retry message while preserving actionable Supabase Auth API errors; covered by three focused tests and shipped in `6cc9873`.
+- [ ] Verify invite email sign-in, profile save, and share-back in Edge. Local QA corrected the Supabase base URL and confirmed the OTP route responds with JSON; reconnecting to the fresh tab timed out before retry. No test account was created.
