@@ -113,7 +113,8 @@ export default function LetterArrivalPage() {
 
     const loadLetter = async () => {
       let localLetter = getLetterById(letterId);
-      if (localLetter) {
+      const localOnlyLetter = localLetter && (localLetter.localDemo || localLetter.sample || localLetter.status === 'draft');
+      if (localOnlyLetter) {
         if (localLetter.localDemo && localLetter.payloadKind !== 'text') {
           try {
             const attachment = await getDraftAttachment(localLetter.id);
@@ -151,12 +152,12 @@ export default function LetterArrivalPage() {
           }
         }
         if (active) {
-          setLetter(remoteLetter);
+          setLetter(remoteLetter || localLetter || null);
           setFullContentAvailable(false);
         }
       } catch {
         if (active) {
-          setLetter(null);
+          setLetter(localLetter || null);
           setFullContentAvailable(false);
         }
       } finally {
@@ -269,13 +270,15 @@ export default function LetterArrivalPage() {
         {letter.localDemo && <p className="notice mt-5" role="status">Same-device demo · nothing was sent or shared.</p>}
 
         <section className="mt-12 max-w-[760px]">
-          <p className="eyebrow">{letter.sample ? 'Sample drop' : letter.localDemo ? senderView ? 'Sender view' : 'Recipient demo' : isReceived ? 'A drop for you' : 'Drop preview'}</p>
-          <h1 className="display-title mt-4 max-w-[12ch]">{letter.sample ? 'See how a drop opens.' : letter.localDemo ? senderView ? 'Your demo copy.' : 'See your drop as the recipient.' : 'Something made its way to you.'}</h1>
+          <p className="eyebrow">{letter.sample ? 'Sample drop' : letter.localDemo ? senderView ? 'Sender view' : 'Recipient demo' : letter.direction === 'sent' ? 'Your sent drop' : isReceived ? 'A drop for you' : 'Drop preview'}</p>
+          <h1 className="display-title mt-4 max-w-[12ch]">{letter.sample ? 'See how a drop opens.' : letter.localDemo ? senderView ? 'Your demo copy.' : 'See your drop as the recipient.' : letter.direction === 'sent' ? 'Your sent drop.' : 'Something made its way to you.'}</h1>
           <p className="body-copy mt-5 max-w-2xl text-lg">
             {letter.sample
               ? letter.direction === 'received' ? 'Explore this example, then try a reaction. Nothing was sent and no one will be notified.' : 'Explore this example. It is seeded content, not a drop you sent or received.'
               : letter.localDemo
               ? senderView ? 'This copy is saved on this device for you to review. Your recipient has not received it.' : 'Open it as if you were the recipient, then try a reaction. Nothing leaves this browser.'
+              : letter.direction === 'sent'
+              ? `You sent this drop to ${letter.recipient || 'your recipient'}. Open your copy to see the message and any reaction.`
               : `${sender} left a message in your hands. Read the fragments first, then open the full drop when you are ready.`}
           </p>
         </section>
@@ -290,7 +293,7 @@ export default function LetterArrivalPage() {
               </div>
               <span className="status-mark success self-start">
                 <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
-                {letter.sample ? 'Sample · not sent' : letter.localDemo ? senderView ? 'Demo copy' : 'Demo · not sent' : isReceived ? 'Received' : 'Ready to read'}
+                {letter.sample ? 'Sample · not sent' : letter.localDemo ? senderView ? 'Demo copy' : 'Demo · not sent' : letter.direction === 'sent' ? 'Sent' : 'Received'}
               </span>
             </div>
 
@@ -335,7 +338,7 @@ export default function LetterArrivalPage() {
                   aria-controls="letter-body"
                   className="button-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#fcfaf6]"
                 >
-                  {letter.sample ? 'Open sample drop' : letter.localDemo ? 'Open demo drop' : 'Open received drop'}
+                  {letter.sample ? 'Open sample drop' : letter.localDemo ? 'Open demo drop' : letter.direction === 'sent' ? 'Open your copy' : 'Open received drop'}
                   <MailOpen className="h-4 w-4" aria-hidden="true" />
                 </button>
               )}
