@@ -8,7 +8,7 @@ import { getSealInfo, mockSeals, waxColors, writingPrompts, type DropDeliveryMod
 import { canDeleteLocalDraft, deleteLocalDraft, dispatchLetter, getLetterDraft, getLetterDraftById, restoreDeletedDraft, saveLetterDraft, setActiveLetterDraft, startNewLetter, type LetterDraftState, type LetterAlignment } from '@/lib/letterStore';
 import { getRemoteRecentDropRecipients, lookupDropRecipient, syncDropToBackend } from '@/lib/letterBackend';
 import { getSupabaseBrowserClient } from '@/lib/supabaseBrowser';
-import { isDropRecipientConfirmed, normalizeDropRecipient, validateDropMedia } from '@/lib/dropValidation';
+import { isDropPayloadKindCompatibleWithMedia, isDropRecipientConfirmed, normalizeDropRecipient, validateDropMedia } from '@/lib/dropValidation';
 import { deleteDraftAttachment, getDraftAttachment, saveDraftAttachment } from '@/lib/letterMediaStore';
 import { getLocalAccountId, isCurrentLocalAccount } from '@/lib/localAccountScope';
 import { ReducedMotionGif } from '@/components/ReducedMotionGif';
@@ -29,6 +29,8 @@ function Composer() {
   const [file, setFile] = useState<File | null>(null);
   const [attachmentSaved, setAttachmentSaved] = useState(false);
   const [attachmentSaving, setAttachmentSaving] = useState(false);
+  const [attachmentLoading, setAttachmentLoading] = useState(false);
+  const [attachmentFormatError, setAttachmentFormatError] = useState('');
   const attachmentChosenRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [previewUrl, setPreviewUrl] = useState('');
@@ -87,20 +89,23 @@ function Composer() {
     setWritingPrompt(searchParams.get('prompt') || '');
     setFile(null);
     setAttachmentSaved(false);
+    setAttachmentLoading(true);
     attachmentChosenRef.current = false;
     const attachmentLoadTimeout = window.setTimeout(() => {
       if (active) setReady(true);
     }, 1500);
     void getDraftAttachment(current.id).then((savedFile) => {
       if (!active || attachmentChosenRef.current) return;
-      if (savedFile && current.payloadKind !== 'text' && !validateDropMedia(savedFile)) {
+      if (savedFile && !validateDropMedia(savedFile)) {
         setFile(savedFile);
+        setPayloadKind(savedFile.type === 'image/gif' ? 'gif' : 'image');
         setAttachmentSaved(true);
       } else if (savedFile) {
         void deleteDraftAttachment(current.id).catch(() => undefined);
       }
     }).catch(() => undefined).finally(() => {
       if (active) {
+        setAttachmentLoading(false);
         window.clearTimeout(attachmentLoadTimeout);
         setReady(true);
       }
@@ -158,20 +163,21 @@ function Composer() {
   const profileHref = draft ? `/profile?next=${encodeURIComponent(`/compose?letter=${encodeURIComponent(draft.id)}`)}#account` : '/profile#account';
 
   const updateKind = (kind: DropPayloadKind) => {
-    attachmentChosenRef.current = true;
-    setPayloadKind(kind);
-    if (kind === 'text' || (file && (kind === 'gif' ? file.type !== 'image/gif' : file.type === 'image/gif'))) {
-      setFile(null);
-      setAttachmentSaved(false);
-      if (draft) void deleteDraftAttachment(draft.id).catch(() => undefined);
-    }
     setError('');
     setNotice('');
+    if (!isDropPayloadKindCompatibleWithMedia(kind, file)) {
+      setAttachmentFormatError(`Remove this ${file?.type === 'image/gif' ? 'GIF' : 'photo'} before switching formats.`);
+      return;
+    }
+    attachmentChosenRef.current = true;
+    setPayloadKind(kind);
+    setAttachmentFormatError('');
   };
 
   const handleFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const selected = event.target.files?.[0] || null;
     if (!selected) return;
+    setAttachmentFormatError('');
     const accountId = getLocalAccountId();
     attachmentChosenRef.current = true;
     const validationError = validateDropMedia(selected);
@@ -450,11 +456,13 @@ function Composer() {
                 ['image', 'A photo', FileImage],
                 ['gif', 'A GIF', ImagePlus],
               ] as const).map(([kind, label, Icon]) => (
-                <button key={kind} type="button" aria-pressed={payloadKind === kind} onClick={() => updateKind(kind)} className={cn('flex min-h-[58px] items-center justify-center gap-2 rounded-xl border px-2 text-xs font-bold transition-colors sm:min-h-12 sm:text-sm', payloadKind === kind ? 'border-[#2b45f7] bg-[#2b45f7]/[0.07] text-[#2b45f7]' : 'border-[rgba(16,42,67,.15)] bg-white/65 text-ink-navy hover:bg-white')}>
+                <button key={kind} type="button" aria-pressed={payloadKind === kind} disabled={attachmentLoading || attachmentSaving} onClick={() => updateKind(kind)} className={cn('flex min-h-[58px] items-center justify-center gap-2 rounded-xl border px-2 text-xs font-bold transition-colors disabled:cursor-wait disabled:opacity-50 sm:min-h-12 sm:text-sm', payloadKind === kind ? 'border-[#2b45f7] bg-[#2b45f7]/[0.07] text-[#2b45f7]' : 'border-[rgba(16,42,67,.15)] bg-white/65 text-ink-navy hover:bg-white')}>
                   <Icon className="h-4 w-4" aria-hidden="true" />{label}
                 </button>
               ))}
             </div>
+            {attachmentFormatError && <p className="notice error-notice mt-2" role="alert">{attachmentFormatError}</p>}
+            {attachmentLoading && <p className="mt-2 text-xs text-on-surface-variant" role="status">Checking this draft for a saved attachment…</p>}
           </fieldset>
 
           {!isText && (
@@ -462,7 +470,7 @@ function Composer() {
               {previewUrl ? (
                 <div className="relative aspect-[4/3] max-h-[430px] overflow-hidden bg-[#ede8df]">
                   <ReducedMotionGif src={previewUrl} alt={content.trim() ? '' : `Preview of your ${payloadKind === 'gif' ? 'GIF' : 'photo'}`} animated={payloadKind === 'gif'} sizes="(max-width: 760px) 100vw, 760px" className="object-contain" />
-                  <button type="button" aria-label="Remove attachment" disabled={attachmentSaving} onClick={() => { setFile(null); setAttachmentSaved(false); attachmentChosenRef.current = true; if (draft) void deleteDraftAttachment(draft.id).catch(() => undefined); if (fileInputRef.current) fileInputRef.current.value = ''; }} className="absolute right-3 top-3 flex h-11 w-11 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/75 disabled:opacity-50"><X className="h-4 w-4" aria-hidden="true" /></button>
+                  <button type="button" aria-label="Remove attachment" disabled={attachmentSaving} onClick={() => { setFile(null); setAttachmentSaved(false); setAttachmentFormatError(''); attachmentChosenRef.current = true; if (draft) void deleteDraftAttachment(draft.id).catch(() => undefined); if (fileInputRef.current) fileInputRef.current.value = ''; }} className="absolute right-3 top-3 flex h-11 w-11 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/75 disabled:opacity-50"><X className="h-4 w-4" aria-hidden="true" /></button>
                 </div>
               ) : (
                 <label htmlFor="drop-media" className="flex min-h-[190px] cursor-pointer flex-col items-center justify-center gap-3 px-5 py-8 text-center sm:min-h-[240px]">

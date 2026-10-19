@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { isDropRecipientConfirmed, MAX_DROP_MEDIA_BYTES, normalizeDropRecipient, validateDropMedia } from '../lib/dropValidation.ts';
+import { isDropPayloadKindCompatibleWithMedia, isDropRecipientConfirmed, MAX_DROP_MEDIA_BYTES, normalizeDropRecipient, validateDropMedia } from '../lib/dropValidation.ts';
 
 test('accepts supported image types within the upload limit', () => {
   for (const type of ['image/jpeg', 'image/png', 'image/webp', 'image/gif']) {
@@ -20,6 +20,17 @@ test('only confirms the same account for the currently normalized handle', () =>
   assert.equal(isDropRecipientConfirmed(confirmation, '@other.person'), false);
   assert.equal(isDropRecipientConfirmed(confirmation, 'invalid name'), false);
   assert.equal(isDropRecipientConfirmed(null, '@sunny.stories'), false);
+});
+
+test('keeps the payload kind aligned with a saved attachment', () => {
+  assert.equal(isDropPayloadKindCompatibleWithMedia('image', { type: 'image/png' }), true);
+  assert.equal(isDropPayloadKindCompatibleWithMedia('gif', { type: 'image/gif' }), true);
+  assert.equal(isDropPayloadKindCompatibleWithMedia('text', { type: 'image/png' }), false);
+  assert.equal(isDropPayloadKindCompatibleWithMedia('gif', { type: 'image/png' }), false);
+  assert.equal(isDropPayloadKindCompatibleWithMedia('image', { type: 'image/gif' }), false);
+  for (const kind of ['text', 'image', 'gif']) {
+    assert.equal(isDropPayloadKindCompatibleWithMedia(kind, null), true);
+  }
 });
 
 test('rejects missing, unsafe, empty, and oversized files', () => {

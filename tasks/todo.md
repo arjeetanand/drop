@@ -124,6 +124,7 @@ Commit each completed code change separately with a descriptive message and push
 - [x] The composer supports text, image/meme, and GIF previews without requiring multiple desktop-style steps on mobile.
 - [x] A local draft survives navigation, and media is clearly marked as uploaded or local-only until upload succeeds.
 - [x] Sending gives clear progress, success, and recovery states; instant is the default and relay is opt-in.
+- [x] Choosing an incompatible format preserves the saved attachment and explains how to remove it; the photo flow and reload recovery pass in the local browser.
 - [x] The sender explicitly checks the recipient handle, sees the matched account, and must reconfirm if the normalized handle changes; failed lookups leave the local draft and attachment intact.
 - [x] A confirmed not-found result offers a generic `/invite` link without draft content; the composer saves before sharing and does not mark the drop sent.
 
