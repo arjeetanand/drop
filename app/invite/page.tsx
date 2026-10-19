@@ -16,7 +16,7 @@ export default function InvitePage() {
             <p className="eyebrow mt-7">A friend sent you an invite</p>
             <h1 className="mt-3 max-w-[13ch] font-headline-md text-4xl font-semibold leading-[1.02] tracking-[-0.045em] text-ink-navy sm:text-6xl">Small moments travel better together.</h1>
             <p className="mt-5 max-w-xl text-sm leading-relaxed text-on-surface-variant sm:text-base">Someone would like to send you a private Drop: a note, photo, or GIF made for one person. Join Drop, choose your handle, and share it back so they can send it to the right place.</p>
-            <Link href="/profile#account" className="button-primary mt-7 !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white">
+            <Link href="/profile?invite=1#account" className="button-primary mt-7 !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white">
               Set up your Drop profile <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </Link>
           </div>

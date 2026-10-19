@@ -2,13 +2,16 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, ArrowRight, Check, Copy, LogIn, LogOut } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Copy, LogIn, LogOut, Share2 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getRemoteProfileState, saveRemoteProfile, type SaveRemoteProfileResult } from '@/lib/letterBackend';
 import { normalizeDropRecipient } from '@/lib/dropValidation';
 import { getSupabaseBrowserClient, isSupabaseAuthConfigured } from '@/lib/supabaseBrowser';
 import { getLocalAccountId } from '@/lib/localAccountScope';
 import { safeInternalPath } from '@/lib/safeInternalPath';
+import { authCallbackRoute, profileRoute } from '@/lib/inviteOnboarding';
+import { createProfileSharePayload } from '@/lib/profileInviteShare';
+import { shareInviteLink } from '@/lib/shareInvite';
 import { clearPendingRemoteProfile, defaultUserProfile, getFirstUseProfile, getPendingRemoteProfileSnapshot, getUserProfile, getUserProfileForAccount, getUserProfileOwnerId, hasCustomizedUserIdentity, hasUnmatchedLocalProfile, markPendingRemoteProfileSynced, preserveUserProfileForAccount, profileUrl, savePendingRemoteProfile, saveUserProfile, type UserProfile } from '@/lib/userStore';
 
 type AccountStatus = 'checking' | 'signed-out' | 'signed-in' | 'unavailable' | 'error';
@@ -33,6 +36,7 @@ function ProfileContent() {
   const [accountNotice, setAccountNotice] = useState('');
   const [accountNoticeIsError, setAccountNoticeIsError] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [inviteShareNotice, setInviteShareNotice] = useState('');
   const [googleLoading, setGoogleLoading] = useState(false);
   const [emailAddress, setEmailAddress] = useState('');
   const [emailLoading, setEmailLoading] = useState(false);
@@ -54,6 +58,7 @@ function ProfileContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const authError = searchParams.get('authError');
+  const inviteContext = searchParams.get('invite') === '1';
   const nextPath = safeInternalPath(searchParams.get('next'), typeof window === 'undefined' ? 'https://drop.invalid' : window.location.origin);
   const supabaseAuthConfigured = isSupabaseAuthConfigured();
 
@@ -243,8 +248,8 @@ function ProfileContent() {
     setAccountStatus('error');
     setAccountNotice(`Sign-in could not finish: ${authError}`);
     setAccountNoticeIsError(true);
-    router.replace(`/profile${nextPath ? `?next=${encodeURIComponent(nextPath)}` : ''}`, { scroll: false });
-  }, [authError, nextPath, router]);
+    router.replace(profileRoute(inviteContext, nextPath), { scroll: false });
+  }, [authError, inviteContext, nextPath, router]);
 
   const update = (field: keyof Pick<UserProfile, 'displayName' | 'username' | 'bio'>, value: string) => {
     const nextValue = field === 'username'
@@ -255,6 +260,7 @@ function ProfileContent() {
     setRemoteProfileAvailable(false);
     setNotice('');
     setProfileError('');
+    setInviteShareNotice('');
   };
 
   const save = async () => {
@@ -370,7 +376,7 @@ function ProfileContent() {
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
-        options: { redirectTo: `${window.location.origin}/auth/callback` },
+        options: { redirectTo: new URL(authCallbackRoute(inviteContext), window.location.origin).toString() },
       });
       if (error) {
         window.sessionStorage.removeItem('dear-exe:auth-return');
@@ -403,7 +409,7 @@ function ProfileContent() {
         if (nextPath) window.sessionStorage.setItem('dear-exe:auth-return', nextPath);
       } catch { /* Sign-in can continue without a return path when storage is disabled. */ }
 
-      const redirectTo = new URL('/auth/callback', window.location.origin);
+      const redirectTo = new URL(authCallbackRoute(inviteContext), window.location.origin);
       if (nextPath) redirectTo.searchParams.set('next', nextPath);
       const { error } = await supabase.auth.signInWithOtp({
         email,
@@ -456,6 +462,30 @@ function ProfileContent() {
     } catch {
       setNotice(`Copy is unavailable here. Your profile link is ${link}`);
     }
+  };
+
+  const shareProfileBack = async () => {
+    const payload = createProfileSharePayload(profile.username, window.location.origin);
+    if (!payload) {
+      setProfileError('Choose a valid Drop handle before sharing your profile.');
+      return;
+    }
+    const result = await shareInviteLink(
+      payload.url,
+      typeof navigator.share === 'function' ? navigator.share.bind(navigator) : undefined,
+      async () => {
+        if (!navigator.clipboard) throw new Error('Clipboard unavailable');
+        await navigator.clipboard.writeText(payload.copyText);
+      },
+      { title: payload.title, text: payload.text },
+    );
+    setInviteShareNotice(result === 'shared'
+      ? `Shared @${normalizeDropRecipient(profile.username)} and your public profile link.`
+      : result === 'copied'
+        ? `Copied @${normalizeDropRecipient(profile.username)} and your public profile link.`
+        : result === 'cancelled'
+          ? 'Share cancelled. Nothing was copied.'
+          : 'Sharing and copying are unavailable here. You can copy your public profile link below.');
   };
 
   const username = normalizeDropRecipient(profile.username);
@@ -790,6 +820,23 @@ function ProfileContent() {
                 </p>
               )}
             </section>
+
+            {inviteContext && accountStatus === 'signed-in' && remoteProfileAvailable && publicPath && (
+              <section className="panel p-6">
+                <p className="eyebrow">Your invite</p>
+                <h2 className="section-title mt-3 text-2xl">Send your handle back.</h2>
+                <p className="body-copy mt-3 text-sm">Share only your public @handle and profile link so your friend can send your Drop.</p>
+                <button
+                  type="button"
+                  onClick={() => void shareProfileBack()}
+                  className="button-primary mt-5 min-h-12 w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+                >
+                  <Share2 className="h-4 w-4" aria-hidden="true" />
+                  Share @{username}
+                </button>
+                {inviteShareNotice && <p className="notice mt-4" role="status" aria-live="polite">{inviteShareNotice}</p>}
+              </section>
+            )}
           </aside>
         </section>
       </div>

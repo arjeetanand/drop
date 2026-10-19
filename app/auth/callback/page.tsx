@@ -6,6 +6,7 @@ import { ArrowLeft } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getSupabaseBrowserClient } from '@/lib/supabaseBrowser';
 import { safeInternalPath } from '@/lib/safeInternalPath';
+import { profileRoute } from '@/lib/inviteOnboarding';
 import { copyGuestDraftAttachmentToAccount, deleteDraftAttachment } from '@/lib/letterMediaStore';
 import { copyGuestDraftToAccount, getGuestDraftById } from '@/lib/letterStore';
 
@@ -24,6 +25,7 @@ function AuthCallbackLoading() {
 function AuthCallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const inviteContext = searchParams.get('invite') === '1';
   const [message, setMessage] = useState('Checking the sign-in return…');
 
   useEffect(() => {
@@ -39,7 +41,9 @@ function AuthCallbackContent() {
     const redirectWithError = (errorMessage: string) => {
       if (active) setMessage('Sign-in could not finish. Returning to your profile…');
       const nextPath = getReturnPath();
-      router.replace(`/profile?authError=${encodeURIComponent(errorMessage)}${nextPath ? `&next=${encodeURIComponent(nextPath)}` : ''}`);
+      const errorUrl = new URL(profileRoute(inviteContext, nextPath), window.location.origin);
+      errorUrl.searchParams.set('authError', errorMessage);
+      router.replace(`${errorUrl.pathname}${errorUrl.search}`);
     };
 
     const finishAuth = async () => {
@@ -97,7 +101,7 @@ function AuthCallbackContent() {
             }
           }
         }
-        router.replace(nextPath || '/profile');
+        router.replace(nextPath || profileRoute(inviteContext));
       } catch {
         redirectWithError('The sign-in return could not be verified. Please try again.');
       }
@@ -107,7 +111,7 @@ function AuthCallbackContent() {
     return () => {
       active = false;
     };
-  }, [router, searchParams]);
+  }, [inviteContext, router, searchParams]);
 
   return (
     <main className="page-shell page-enter">
