@@ -10,6 +10,7 @@ import { getSupabaseBrowserClient, isSupabaseAuthConfigured } from '@/lib/supaba
 import { getLocalAccountId } from '@/lib/localAccountScope';
 import { safeInternalPath } from '@/lib/safeInternalPath';
 import { authCallbackRoute, profileRoute } from '@/lib/inviteOnboarding';
+import { emailLinkErrorMessage } from '@/lib/emailLinkErrorMessage';
 import { createProfileSharePayload } from '@/lib/profileInviteShare';
 import { shareInviteLink } from '@/lib/shareInvite';
 import { clearPendingRemoteProfile, defaultUserProfile, getFirstUseProfile, getPendingRemoteProfileSnapshot, getUserProfile, getUserProfileForAccount, getUserProfileOwnerId, hasCustomizedUserIdentity, hasUnmatchedLocalProfile, markPendingRemoteProfileSynced, preserveUserProfileForAccount, profileUrl, savePendingRemoteProfile, saveUserProfile, type UserProfile } from '@/lib/userStore';
@@ -419,7 +420,7 @@ function ProfileContent() {
       setEmailLinkSent(true);
     } catch (error) {
       try { window.sessionStorage.removeItem('dear-exe:auth-return'); } catch { /* Ignore blocked storage. */ }
-      setEmailError(error instanceof Error ? error.message : 'A sign-in link could not be sent. Please try again.');
+      setEmailError(emailLinkErrorMessage(error));
     } finally {
       setEmailLoading(false);
     }
