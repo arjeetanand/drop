@@ -89,7 +89,7 @@ export async function copyGuestDraftAttachmentToAccount(draftId: string, account
   }).finally(() => database.close());
 }
 
-export async function deleteDraftAttachment(draftId: string, accountId?: string) {
+export async function deleteDraftAttachment(draftId: string, accountId?: string | null) {
   const activeAccountId = getLocalAccountId();
   const targetAccountId = accountId === undefined ? activeAccountId : accountId;
   const recordId = localAccountRecordId(draftId, targetAccountId);

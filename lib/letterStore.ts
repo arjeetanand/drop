@@ -198,7 +198,7 @@ export function deleteLocalDraft(id: string, accountId = getLocalAccountId()):
   const remainingDrafts = history.filter((draft) => draft.id !== id);
   const nextDraft = active?.id === id
     ? remainingDrafts.filter(canDeleteDraft).sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))[0] ?? blankDraft()
-    : canDeleteDraft(active) ? active : blankDraft();
+    : active && canDeleteDraft(active) ? active : blankDraft();
   const letters = getLetterHistory(accountId);
   const nextLetters = letters.filter((letter) => letter.id !== id);
 
