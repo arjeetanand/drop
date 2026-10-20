@@ -64,7 +64,7 @@ export default function PublicProfilePage() {
     const loadPublicProfile = async () => {
       try {
         const { data, error } = await supabase
-          .from('profiles')
+          .from('public_profiles')
           .select('username, display_name, bio')
           .eq('username', username)
           .maybeSingle<PublicProfileRow>();

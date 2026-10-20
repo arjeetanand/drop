@@ -112,7 +112,7 @@ export type DropRecipientLookup =
 async function resolveDropRecipient(context: AuthenticatedContext, username: string): Promise<DropRecipientLookup> {
   try {
     const { data, error } = await context.supabase
-      .from('profiles')
+      .from('public_profiles')
       .select('id, username, display_name')
       .eq('username', username)
       .maybeSingle<{ id: string; username: string; display_name: string | null }>();
@@ -297,7 +297,7 @@ function rowToLetter(row: LetterRow, userId: string, revealContent = false): Moc
   };
 }
 
-const MAILBOX_SELECT = 'id, sender_id, sender_profile:profiles!letters_sender_id_fkey(username), recipient_id, sender_display_name, recipient_username, recipient_name, subject, teaser, status, seal_id, dispatched_at, delivered_at, created_at, payload_kind, delivery_mode, media_path, media_mime_type, media_size_bytes';
+const MAILBOX_SELECT = 'id, sender_id, sender_profile:public_profiles!letters_sender_id_fkey(username), recipient_id, sender_display_name, recipient_username, recipient_name, subject, teaser, status, seal_id, dispatched_at, delivered_at, created_at, payload_kind, delivery_mode, media_path, media_mime_type, media_size_bytes';
 const LETTER_SELECT = `${MAILBOX_SELECT}, content`;
 
 export async function getRemoteLetters(): Promise<MockLetter[] | null> {

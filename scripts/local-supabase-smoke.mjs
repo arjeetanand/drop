@@ -127,7 +127,26 @@ try {
     assert.ifError(error);
   }
 
-  const { data: recipientLookup, error: recipientLookupError } = await sender.client.from('profiles')
+  const anonymous = client();
+  const { data: anonymousProfile, error: anonymousProfileError } = await anonymous.from('public_profiles')
+    .select('username, display_name, bio')
+    .eq('username', profiles[0].username)
+    .maybeSingle();
+  assert.ifError(anonymousProfileError);
+  assert.deepEqual(anonymousProfile, {
+    username: profiles[0].username,
+    display_name: profiles[0].display_name,
+    bio: profiles[0].bio,
+  }, 'Anonymous profile reads should include only public profile fields');
+  const { error: anonymousBaseProfileError } = await anonymous.from('profiles').select('*').eq('username', profiles[0].username).maybeSingle();
+  assert.ok(anonymousBaseProfileError, 'Anonymous clients must not read the private profile table');
+  const { error: anonymousWideProfileError } = await anonymous.from('public_profiles').select('*').eq('username', profiles[0].username).maybeSingle();
+  assert.ok(anonymousWideProfileError, 'Anonymous clients must not select the account ID from the public profile view');
+  const { data: senderPrivateProfiles, error: senderPrivateProfilesError } = await sender.client.from('profiles').select('*');
+  assert.ifError(senderPrivateProfilesError);
+  assert.deepEqual(senderPrivateProfiles?.map((profile) => profile.id), [sender.id], 'Authenticated base profile reads should be limited to the signed-in account');
+
+  const { data: recipientLookup, error: recipientLookupError } = await sender.client.from('public_profiles')
     .select('id, username, display_name')
     .eq('username', profiles[1].username)
     .maybeSingle();
@@ -137,7 +156,7 @@ try {
     username: profiles[1].username,
     display_name: profiles[1].display_name,
   }, 'A handle lookup should return only the target account identity needed for confirmation');
-  const { data: missingRecipient, error: missingRecipientError } = await sender.client.from('profiles')
+  const { data: missingRecipient, error: missingRecipientError } = await sender.client.from('public_profiles')
     .select('id, username, display_name')
     .eq('username', 'unknown.drop.handle')
     .maybeSingle();
@@ -238,6 +257,13 @@ try {
     delivery_mode: 'instant',
   });
   assert.ifError(textInsertError);
+
+  const { data: senderProfileJoin, error: senderProfileJoinError } = await recipient.client.from('letters')
+    .select('sender_profile:public_profiles!letters_sender_id_fkey(username)')
+    .eq('id', textDropId)
+    .maybeSingle();
+  assert.ifError(senderProfileJoinError);
+  assert.deepEqual(senderProfileJoin?.sender_profile, { username: profiles[0].username }, 'Mailbox sender handles should still resolve through the public profile view');
 
   const { data: recentDropRows, error: recentDropRowsError } = await sender.client.from('letters')
     .select('recipient_username, recipient_name')
