@@ -171,27 +171,34 @@ export default function LetterArrivalPage() {
     };
   }, [letterId, senderView]);
 
-  const revealFragments = async () => {
-    setContentNotice('');
+  const revealFragments = () => {
+    setRevealed(true);
+  };
 
+  const openDrop = async () => {
+    setContentNotice('');
     if (!fullContentAvailable && letterId) {
       setContentLoading(true);
       try {
         const remoteDetail = await getRemoteLetterById(letterId);
-        if (remoteDetail) {
-          setLetter(remoteDetail);
-          setFullContentAvailable(true);
-        } else {
-          setContentNotice('The complete drop is available when you are signed in as its recipient. This view will keep the relay preview available.');
+        if (!remoteDetail) {
+          setContentNotice('The full drop could not load. Sign in as the recipient or check your connection, then try again.');
+          return;
         }
+        setLetter(remoteDetail);
+        if (remoteDetail.mediaPath && !remoteDetail.mediaUrl) {
+          setContentNotice('The private attachment could not load. Check your connection, then try opening again.');
+          return;
+        }
+        setFullContentAvailable(true);
       } catch {
-        setContentNotice('The complete drop could not be loaded right now. This view will keep the relay preview available.');
+        setContentNotice('The full drop could not load. Check your connection, then try opening again.');
+        return;
       } finally {
         setContentLoading(false);
       }
     }
-
-    setRevealed(true);
+    setOpened(true);
   };
 
   const react = async (emoji: string) => {
@@ -333,11 +340,12 @@ export default function LetterArrivalPage() {
               {revealed && !opened && (
                 <button
                   type="button"
-                  onClick={() => setOpened(true)}
+                  onClick={() => void openDrop()}
+                  disabled={contentLoading}
                   aria-controls="letter-body"
                   className="button-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#fcfaf6]"
                 >
-                  {letter.sample ? 'Open sample drop' : letter.localDemo ? 'Open demo drop' : letter.direction === 'sent' ? 'Open your copy' : 'Open received drop'}
+                  {contentLoading ? 'Opening the full drop…' : contentNotice ? 'Try again' : letter.sample ? 'Open sample drop' : letter.localDemo ? 'Open demo drop' : letter.direction === 'sent' ? 'Open your copy' : 'Open received drop'}
                   <MailOpen className="h-4 w-4" aria-hidden="true" />
                 </button>
               )}
