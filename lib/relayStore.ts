@@ -385,7 +385,7 @@ export function getNearbyLetters(userNeighborhood = 'Worli'): AvailableLetter[] 
 
 /**
  * Record that a new carrier has accepted the letter.
- * Adds a GPS-stamped carrier handoff and updates the currentCarrierName.
+ * Adds a carrier handoff and records a GPS waypoint when location is available.
  */
 export function acceptCarry(
   letterId: string,
@@ -394,14 +394,6 @@ export function acceptCarry(
 ): RelayState {
   const current = getRelayState(letterId, relayDetails);
   const now = new Date();
-
-  const waypoint: GpsWaypoint = {
-    coords: details.coords ?? { lat: 0, lng: 0 },
-    neighborhood: details.neighborhood,
-    timestamp: now.toISOString(),
-    carrierName: details.name,
-    carrierNote: details.note ?? 'Accepted the drop.',
-  };
 
   const handoff: RelayHandoff = {
     id: `handoff-${now.getTime()}`,
@@ -426,7 +418,15 @@ export function acceptCarry(
     ...current,
     handoffs: nextHandoffs,
     currentCarrierName: details.name,
-    gpsWaypoints: [...(current.gpsWaypoints ?? []), waypoint],
+    gpsWaypoints: details.coords
+      ? [...(current.gpsWaypoints ?? []), {
+          coords: details.coords,
+          neighborhood: details.neighborhood,
+          timestamp: now.toISOString(),
+          carrierName: details.name,
+          carrierNote: details.note ?? 'Accepted the drop.',
+        }]
+      : current.gpsWaypoints,
     durationHours: current.durationHours + 0,
   };
 
@@ -435,7 +435,7 @@ export function acceptCarry(
 
 /**
  * Confirm a PIN-verified handoff between two carriers (legacy — kept as fallback).
- * Appends the new carrier's GPS waypoint to the relay trail.
+ * Records a GPS waypoint when the incoming carrier's location is available.
  */
 export function confirmHandoff(
   letterId: string,
@@ -448,7 +448,7 @@ export function confirmHandoff(
 /**
  * Confirm a QR-based seamless handoff.
  *
- * Stamps TWO GPS waypoints:
+ * Records the outgoing carrier's handoff point and, when available, a waypoint for the incoming carrier:
  *   1. r1Coords — where the outgoing carrier was when they showed the QR
  *   2. r2Coords — where the incoming carrier was when they scanned it
  *
@@ -457,7 +457,7 @@ export function confirmHandoff(
 export function confirmHandoffFromQR(
   letterId: string,
   r1: { coords: LatLng; neighborhood: string; pin: string },
-  r2: { name: string; coords: LatLng; neighborhood: string; note?: string },
+  r2: { name: string; coords?: LatLng; neighborhood: string; note?: string },
   relayDetails: RelayDetails = {}
 ): RelayState {
   if (!/^\d{4}$/.test(r1.pin)) {
@@ -481,19 +481,19 @@ export function confirmHandoffFromQR(
   };
 
   // Waypoint for R2's location when they scanned (may differ slightly from R1)
-  const r2Waypoint: GpsWaypoint = {
+  const r2Waypoint: GpsWaypoint | null = r2.coords ? {
     coords: r2.coords,
     neighborhood: r2.neighborhood,
     timestamp: now.toISOString(),
     carrierName: r2.name,
     carrierNote: r2.note ?? 'Accepted via QR scan.',
-  };
+  } : null;
 
   // Compute how much closer R2 is to the destination than R1 was (inline haversine)
   const destHandoff = current.handoffs.find((h) => h.role === 'recipient');
   const destCoords = destHandoff?.coords;
   let distanceClosedKm: number | undefined;
-  if (destCoords) {
+  if (destCoords && r2.coords) {
     const haversine = (a: LatLng, b: LatLng) => {
       const dLat = (b.lat - a.lat) * Math.PI / 180;
       const dLng = (b.lng - a.lng) * Math.PI / 180;
@@ -530,7 +530,7 @@ export function confirmHandoffFromQR(
     gpsWaypoints: [
       ...(current.gpsWaypoints ?? []),
       r1Waypoint,
-      r2Waypoint,
+      ...(r2Waypoint ? [r2Waypoint] : []),
     ],
     durationHours: current.durationHours,
   };

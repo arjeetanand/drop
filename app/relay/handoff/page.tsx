@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { RelayTokenHandoff } from '@/components/RelayTokenHandoff';
 import {
-  getCurrentPosition,
+  getOptionalCurrentPosition,
   getHandoffPin,
   isHandoffQRExpired,
   isWithinHandoffRange,
@@ -86,6 +86,8 @@ function HandoffContent() {
   const [neighborhood, setNeighborhood] = useState('');
   const [confirmedRelay, setConfirmedRelay] = useState<{ subject: string; recipient: string } | null>(null);
   const errorSummaryRef = useRef<HTMLDivElement>(null);
+  // shortcut: blocks repeat submits in this tab only; cross-device replay needs server-backed claims.
+  const submittingRef = useRef(false);
 
   useEffect(() => {
     setLetterId(initialLetterId);
@@ -103,6 +105,7 @@ function HandoffContent() {
 
   const handleConfirm = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (submittingRef.current) return;
     const accountId = getLocalAccountId();
     const normalizedLetterId = letterId.trim();
     const normalizedPin = pin.trim();
@@ -121,6 +124,7 @@ function HandoffContent() {
       return;
     }
 
+    submittingRef.current = true;
     setPhase('locating');
     setErrorMsg('');
     setFieldErrors({});
@@ -170,23 +174,26 @@ function HandoffContent() {
         throw new Error('This handoff has already been accepted. Ask the carrier to generate a fresh code.');
       }
 
-      const position = await getCurrentPosition();
-      if (!isWithinHandoffRange(carrierCoords, position)) {
+      const position = await getOptionalCurrentPosition();
+      if (position && !isWithinHandoffRange(carrierCoords, position)) {
         throw new Error('You are more than 50 m from the current carrier. Move closer and try again so the handoff can be verified.');
       }
 
-      const area = await reverseGeocode(position);
+      const area = position ? await reverseGeocode(position) : 'Location not shared';
       if (!isCurrentLocalAccount(accountId)) throw new Error('Your account changed during this handoff. Start again in the active account.');
       const relay = getRelayState(normalizedLetterId, {
         subject: handoffPayload?.subject || querySubject,
         recipient: handoffPayload?.destination || queryDestination,
       });
+      if (isHandoffQRExpired(createdAt)) {
+        throw new Error('This handoff code expired while checking your location. Ask the carrier to generate a fresh code.');
+      }
       confirmHandoff(
         normalizedLetterId,
         {
           name: normalizedName,
           neighborhood: area,
-          coords: position,
+          coords: position ?? undefined,
           note: note.trim() || undefined,
         },
         { subject: relay.subject, recipient: relay.recipient },
@@ -200,6 +207,8 @@ function HandoffContent() {
       setErrorMsg(error instanceof Error ? error.message : 'The handoff could not be verified.');
       setPhase('error');
       focusErrorSummary();
+    } finally {
+      submittingRef.current = false;
     }
   };
 
@@ -260,7 +269,7 @@ function HandoffContent() {
             <p className="eyebrow text-[#b84b3a]">Carrier-issued PIN</p>
             <h1 className="display-title mt-4">Verify the handoff.</h1>
             <p className="body-copy mt-5 max-w-2xl text-lg">
-              Enter the Drop ID and four-digit PIN the current carrier gave you. We will confirm your GPS is within 50 m of their handoff point before recording the new carrier.
+              Enter the Drop ID and four-digit PIN the current carrier gave you. Your PIN verifies the handoff; if location is available, we check that you are within 50 m and add only your neighborhood.
             </p>
 
             {phase === 'error' && (
@@ -389,9 +398,9 @@ function HandoffContent() {
         {phase === 'locating' && (
           <section className="panel mt-12 p-8 text-center" aria-live="polite">
             <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-[rgba(79,157,122,0.25)] border-t-[#4f9d7a]" aria-hidden="true" />
-            <p className="eyebrow mt-6 text-[#4f9d7a]">GPS verification</p>
-            <h1 className="section-title mt-3">Checking the handoff point.</h1>
-            <p className="body-copy mx-auto mt-3 max-w-md text-sm">Allow location access when your browser asks. We will record only your neighborhood after the proximity check passes.</p>
+            <p className="eyebrow mt-6 text-[#4f9d7a]">Handoff confirmation</p>
+            <h1 className="section-title mt-3">Checking for optional location.</h1>
+            <p className="body-copy mx-auto mt-3 max-w-md text-sm">Location helps check that you are nearby. If it is denied or unavailable, your PIN still verifies the handoff and no new location is recorded.</p>
           </section>
         )}
 
@@ -400,7 +409,7 @@ function HandoffContent() {
             <p className="eyebrow text-[#4f9d7a]">Transfer recorded</p>
             <h1 className="display-title mt-4">Handoff confirmed.</h1>
             <p className="body-copy mt-5 text-lg">
-              You are now carrying “<span className="text-ink-navy">{confirmedRelay?.subject}</span>”. The relay passport has been updated with your neighborhood waypoint.
+              You are now carrying “<span className="text-ink-navy">{confirmedRelay?.subject}</span>”. The relay passport includes your neighborhood only if location was available.
             </p>
 
             <div className="panel mt-8 p-5 sm:p-7">
@@ -410,7 +419,7 @@ function HandoffContent() {
                   <h2 className="font-headline-md text-2xl text-ink-navy">Your place in the route is saved.</h2>
                   <p className="body-copy mt-3 text-sm">
                     <span className="inline-flex items-center gap-2 text-ink-navy"><MapPin className="h-4 w-4 text-[#b84b3a]" aria-hidden="true" />{neighborhood || 'Nearby area'}</span>
-                    <br />Only the neighborhood is visible to the relay; your exact coordinates are not shown.
+                    <br />{neighborhood === 'Location not shared' ? 'Location was not shared for this handoff.' : 'Only the neighborhood is visible to the relay; your exact coordinates are not shown.'}
                   </p>
                 </div>
               </div>

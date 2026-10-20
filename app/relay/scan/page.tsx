@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { RelayTokenHandoff } from '@/components/RelayTokenHandoff';
 import {
-  getCurrentPosition,
+  getOptionalCurrentPosition,
   isHandoffQRExpired,
   isWithinHandoffRange,
   parseHandoffQRPayload,
@@ -71,6 +71,8 @@ function ScanContent() {
   const [errorMsg, setErrorMsg] = useState('');
   const [relay, setRelay] = useState<{ subject: string; recipient: string; currentCarrier: string } | null>(null);
   const errorSummaryRef = useRef<HTMLDivElement>(null);
+  // shortcut: blocks repeat submits in this tab only; cross-device replay needs server-backed claims.
+  const submittingRef = useRef(false);
 
   useEffect(() => {
     setName('');
@@ -108,6 +110,7 @@ function ScanContent() {
 
   const handleAccept = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (submittingRef.current) return;
     const accountId = getLocalAccountId();
 
     if (!payload) {
@@ -135,17 +138,22 @@ function ScanContent() {
       return;
     }
 
+    submittingRef.current = true;
     setPhase('locating');
     setErrorMsg('');
 
     try {
-      const position = await getCurrentPosition();
-      if (!isWithinHandoffRange({ lat: payload.lat, lng: payload.lng }, position)) {
+      const position = await getOptionalCurrentPosition();
+      if (position && !isWithinHandoffRange({ lat: payload.lat, lng: payload.lng }, position)) {
         throw new Error('You are more than 50 m from the current carrier. Move closer and try again so the handoff can be verified.');
       }
-      const area = await reverseGeocode(position);
+      const area = position ? await reverseGeocode(position) : 'Location not shared';
       if (!isCurrentLocalAccount(accountId)) throw new Error('Your account changed during this handoff. Start again in the active account.');
       setR2Neighborhood(area);
+      if (isHandoffQRExpired(payload.createdAt)) {
+        setPhase('expired');
+        return;
+      }
       confirmHandoffFromQR(
         payload.letterId,
         {
@@ -155,7 +163,7 @@ function ScanContent() {
         },
         {
           name: name.trim(),
-          coords: position,
+          coords: position ?? undefined,
           neighborhood: area,
           note: note.trim() || undefined,
         },
@@ -167,6 +175,8 @@ function ScanContent() {
       setErrorMsg(error instanceof Error ? error.message : 'The GPS handoff could not be completed.');
       setPhase('error');
       focusErrorSummary();
+    } finally {
+      submittingRef.current = false;
     }
   };
 
@@ -259,7 +269,7 @@ function ScanContent() {
               <h1 className="display-title mt-4">You are about to carry a drop.</h1>
               <p className="body-copy mt-5 max-w-2xl text-lg">
                 “<span className="text-ink-navy">{relay?.subject ?? payload.subject}</span>” is moving toward{' '}
-                <span className="text-ink-navy">{relay?.recipient ?? payload.destination}</span>. Confirm your name, then allow one GPS stamp to join the relay.
+                <span className="text-ink-navy">{relay?.recipient ?? payload.destination}</span>. Confirm your name to accept the QR. Location sharing is optional.
               </p>
             </section>
 
@@ -305,7 +315,7 @@ function ScanContent() {
                   </div>
                 </dl>
                 <p className="body-copy mt-6 border-t border-[rgba(16,42,67,0.12)] pt-5 text-sm">
-                  Your exact location is not shown. The passport records a neighborhood-level waypoint for the journey.
+                  Your QR verifies the handoff. If location is available, only your neighborhood is added to the route.
                 </p>
               </section>
 
@@ -339,11 +349,11 @@ function ScanContent() {
                 </div>
                 <button type="submit" disabled={!name.trim()} className="button-primary mt-6 w-full">
                   <Navigation className="h-4 w-4" aria-hidden="true" />
-                  Accept and stamp my GPS
+                  Accept handoff
                 </button>
                 <p className="field-help mt-4 inline-flex items-start gap-2">
                   <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#4f9d7a]" aria-hidden="true" />
-                  Your neighborhood is recorded, never your exact address.
+                  Sharing your neighborhood is optional; the QR is enough to confirm the handoff.
                 </p>
                 <Link href={manualHref} className="button-quiet mt-4 w-full">
                   Enter the PIN manually instead
@@ -357,9 +367,9 @@ function ScanContent() {
         {phase === 'locating' && (
           <section className="panel mt-12 p-8 text-center" aria-live="polite">
             <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-[rgba(79,157,122,0.25)] border-t-[#4f9d7a]" aria-hidden="true" />
-            <p className="eyebrow mt-6 text-[#4f9d7a]">GPS confirmation</p>
-            <h1 className="section-title mt-3">Stamping your place in the route.</h1>
-            <p className="body-copy mx-auto mt-3 max-w-md text-sm">Allow location access when your browser asks. Only the neighborhood name will be saved.</p>
+            <p className="eyebrow mt-6 text-[#4f9d7a]">Handoff confirmation</p>
+            <h1 className="section-title mt-3">Checking for optional location.</h1>
+            <p className="body-copy mx-auto mt-3 max-w-md text-sm">Location helps confirm you are nearby. If it is denied or unavailable, the QR still completes the handoff without recording your location.</p>
           </section>
         )}
 
@@ -368,7 +378,7 @@ function ScanContent() {
             <p className="eyebrow text-[#4f9d7a]">Transfer recorded</p>
             <h1 className="display-title mt-4">You have the drop.</h1>
             <p className="body-copy mt-5 max-w-2xl text-lg">
-              You are now carrying “<span className="text-ink-navy">{relay?.subject ?? payload.subject}</span>”. The passport has two new GPS waypoints: the handoff point and your acceptance point.
+              You are now carrying “<span className="text-ink-navy">{relay?.subject ?? payload.subject}</span>”. The passport records the handoff point and adds your neighborhood only if location is available.
             </p>
 
             <div className="panel mt-8 p-5 sm:p-7">
@@ -377,7 +387,7 @@ function ScanContent() {
                 <div>
                   <h2 className="font-headline-md text-2xl text-ink-navy">Handoff confirmed.</h2>
                   <p className="body-copy mt-3 text-sm">
-                    The route now includes <span className="text-ink-navy">{payload.neighborhood}</span> and <span className="text-ink-navy">{r2Neighborhood || 'your area'}</span>. The drop remains sealed while it travels toward <span className="text-ink-navy">{payload.destination}</span>.
+                    The route includes <span className="text-ink-navy">{payload.neighborhood}</span> and <span className="text-ink-navy">{r2Neighborhood || 'Location not shared'}</span>. The drop remains sealed while it travels toward <span className="text-ink-navy">{payload.destination}</span>.
                   </p>
                 </div>
               </div>

@@ -122,6 +122,14 @@ export function getCurrentPosition(
   });
 }
 
+export async function getOptionalCurrentPosition(): Promise<LatLng | null> {
+  try {
+    return await getCurrentPosition();
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Watch position — returns a cleanup function.
  * Calls onUpdate each time GPS reports a new position.

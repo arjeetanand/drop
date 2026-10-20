@@ -180,7 +180,8 @@ Commit each completed code change separately with a descriptive message and push
 
 **Verification:**
 - [ ] Test an existing letter relay and a new media relay through one handoff.
-- [ ] Confirm permission denial or unavailable location still allows relay handoff without precise coordinates.
+- [x] Unit coverage verifies denied/unavailable location and confirms manual and QR handoffs do not invent coordinates.
+- [ ] Browser end-to-end check: complete a valid carrier-issued handoff with location denied or unavailable.
 
 **Dependencies:** Tasks 1, 4, and 5.
 
