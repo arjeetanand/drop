@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Start Dear.exe from any working directory.
+# Start Drop from any working directory.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -16,5 +16,5 @@ if [ ! -d node_modules ]; then
   npm ci
 fi
 
-echo "Starting Dear.exe at http://localhost:3000"
+echo "Starting Drop at http://localhost:3000"
 exec npm run dev -- "$@"

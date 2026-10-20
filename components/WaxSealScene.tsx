@@ -59,7 +59,7 @@ export function WaxSealScene({
 
         {/* Envelope Header stamp */}
         <div className="absolute left-5 top-4 flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-[0.25em] text-[#102a43]/50">
-          <span>Dear.exe</span>
+          <span>Drop</span>
           <span>·</span>
           <span>Postal Relay</span>
         </div>

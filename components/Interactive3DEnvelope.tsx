@@ -132,7 +132,7 @@ export function Interactive3DEnvelope({
             {/* Subtle flap diagonal shadows */}
             <div className="absolute bottom-0 left-0 w-full h-[50%] bg-gradient-to-t from-slate-100/40 to-transparent" />
             <div className="absolute bottom-4 left-6 right-6 flex items-center justify-between text-slate-400 font-mono text-[10px] tracking-wider uppercase">
-              <span>Dear.exe · Relay</span>
+              <span>Drop · Relay</span>
               <span>100% Private</span>
             </div>
           </div>

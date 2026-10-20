@@ -36,9 +36,9 @@ export default function HomeDesk() {
     <main className="page-shell page-enter !pt-5 sm:!pt-8">
       <div className="page-container max-w-[1080px]">
         <header className="flex items-center justify-between gap-4">
-          <Link href="/" className="inline-flex min-h-11 items-center gap-3" aria-label="Dear.exe desk">
+          <Link href="/" className="inline-flex min-h-11 items-center gap-3" aria-label="Drop desk">
             <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#2b45f7] text-white shadow-[0_5px_14px_rgba(43,69,247,.2)]"><Mail className="h-5 w-5" aria-hidden="true" /></span>
-            <span><span className="block font-headline-md text-xl font-semibold leading-none text-ink-navy">Dear.exe</span><span className="mt-1 block font-mono text-[0.58rem] uppercase tracking-[0.2em] text-on-surface-variant">small things, sent</span></span>
+            <span><span className="block font-headline-md text-xl font-semibold leading-none text-ink-navy">Drop</span><span className="mt-1 block font-mono text-[0.58rem] uppercase tracking-[0.2em] text-on-surface-variant">small things, sent</span></span>
           </Link>
           <Link href="/profile" className="flex min-h-11 items-center gap-2 rounded-full border border-[rgba(16,42,67,.12)] bg-white/70 py-1 pl-1 pr-3 text-xs font-semibold text-ink-navy" aria-label={`Your profile, ${profile.displayName}`}>
             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#f3d8c9] font-mono text-[0.65rem] font-bold text-ink-navy">{profile.displayName.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase()}</span>

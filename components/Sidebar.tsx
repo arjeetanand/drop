@@ -48,12 +48,12 @@ export function Sidebar() {
   return (
     <>
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-[240px] flex-col border-r border-[rgba(16,42,67,0.1)] bg-[#f7f4ee] px-5 py-7 lg:flex">
-        <Link href="/" className="group inline-flex items-center gap-3" aria-label="Dear.exe home">
+        <Link href="/" className="group inline-flex items-center gap-3" aria-label="Drop home">
           <span className="flex h-10 w-10 items-center justify-center border border-ink-navy bg-ink-navy text-white transition-transform duration-200 group-hover:-translate-y-0.5">
             <Mail className="h-5 w-5" aria-hidden="true" />
           </span>
           <span>
-            <span className="block font-headline-md text-[1.55rem] leading-none tracking-[-0.04em] text-ink-navy">Dear.exe</span>
+            <span className="block font-headline-md text-[1.55rem] leading-none tracking-[-0.04em] text-ink-navy">Drop</span>
             <span className="mt-1 block font-mono text-[0.62rem] uppercase tracking-[0.2em] text-on-surface-variant">Small things, sent</span>
           </span>
         </Link>

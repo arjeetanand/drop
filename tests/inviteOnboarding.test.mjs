@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { authCallbackRoute, profileRoute } from '../lib/inviteOnboarding.ts';
+import { authCallbackRoute, canEditInviteProfile, profileRoute } from '../lib/inviteOnboarding.ts';
 import { createProfileSharePayload } from '../lib/profileInviteShare.ts';
 import { shareInviteLink } from '../lib/shareInvite.ts';
 
@@ -10,6 +10,14 @@ test('keeps invite context on profile and through auth callback routes', () => {
   assert.equal(profileRoute(true, '/compose?letter=draft-1'), '/profile?invite=1&next=%2Fcompose%3Fletter%3Ddraft-1');
   assert.equal(authCallbackRoute(true), '/auth/callback?invite=1');
   assert.equal(authCallbackRoute(false), '/auth/callback');
+});
+
+test('requires a verified signed-in account before editing an invite profile', () => {
+  assert.equal(canEditInviteProfile(false, 'signed-out', false, false), true);
+  assert.equal(canEditInviteProfile(true, 'signed-out', false, false), false);
+  assert.equal(canEditInviteProfile(true, 'signed-in', false, false), true);
+  assert.equal(canEditInviteProfile(true, 'signed-in', true, false), false);
+  assert.equal(canEditInviteProfile(true, 'signed-in', false, true), false);
 });
 
 test('builds a share payload from only the public handle and canonical profile URL', async () => {

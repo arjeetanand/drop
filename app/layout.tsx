@@ -33,7 +33,7 @@ const courier = Courier_Prime({
 });
 
 export const metadata: Metadata = {
-  title: 'Dear.exe — Small things, sent',
+  title: 'Drop — Small things, sent',
   description: 'Send a private note, photo, or GIF to one person. Make a journey optional.',
 };
 

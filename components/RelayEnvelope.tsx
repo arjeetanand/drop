@@ -46,7 +46,7 @@ export function RelayEnvelope({
           <span className="absolute inset-0 rotate-[27deg] border-t border-[rgba(16,42,67,0.11)]" />
           <span className="absolute inset-0 -rotate-[27deg] border-t border-[rgba(16,42,67,0.11)]" />
         </div>
-        <div className="absolute left-5 top-4 font-mono text-[0.58rem] font-bold uppercase tracking-[0.2em] text-on-surface-variant">Dear.exe / relay</div>
+        <div className="absolute left-5 top-4 font-mono text-[0.58rem] font-bold uppercase tracking-[0.2em] text-on-surface-variant">Drop / relay</div>
         <div className="absolute bottom-4 right-5 inline-flex items-center gap-1.5 font-mono text-[0.58rem] font-bold uppercase tracking-[0.17em] text-on-surface-variant">
           <LockKeyhole className="h-3 w-3 text-[#4f9d7a]" aria-hidden="true" /> Sealed
         </div>

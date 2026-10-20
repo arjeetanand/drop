@@ -132,7 +132,7 @@ export default function PublicProfilePage() {
             className="button-quiet -ml-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f7f4ee]"
           >
             <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-            Back to Dear.exe
+            Back to Drop
           </Link>
           <Link
             href="/profile"
@@ -209,7 +209,7 @@ export default function PublicProfilePage() {
         </section>
 
         <p className="body-copy mt-10 max-w-xl text-sm">
-          Dear.exe is a place for friends to send each other words, photos, and GIFs. Send a drop when you have something worth sharing.
+          Drop is a place for friends to send each other words, photos, and GIFs. Send a drop when you have something worth sharing.
         </p>
       </div>
     </main>

@@ -249,6 +249,13 @@
     transition: border-color 180ms ease, background-color 180ms ease, box-shadow 180ms ease;
   }
 
+  .input-field:disabled,
+  .textarea-field:disabled,
+  .select-field:disabled {
+    cursor: not-allowed;
+    background: #ede9e0;
+  }
+
   .input-field,
   .select-field {
     min-height: 2.75rem;

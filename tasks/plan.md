@@ -1,8 +1,8 @@
-# Implementation Plan: Dear.exe Mobile Drop Experience
+# Implementation Plan: Drop Mobile Sharing Experience
 
 ## Overview
 
-Rework Dear.exe into a mobile-first private sharing app where a person can send a photo, GIF, meme, or text letter as a “drop.” Use the three mobile concept directions already reviewed as visual references: bold cobalt and warm paper, oversized media previews, playful stamps, and expressive but quick send/open moments. “Drop” is a working product term, not a permanent rename. Sending stays one-to-one in the first release; delivery is instant by default, with the existing human relay as an optional slower journey. There will be no public discovery feed in this release.
+Build Drop as a mobile-first private sharing app where a person can send a photo, GIF, meme, or text letter as a “drop.” Use the three mobile concept directions already reviewed as visual references: bold cobalt and warm paper, oversized media previews, playful stamps, and expressive but quick send/open moments. Drop is the product brand and a “drop” is the item shared. Sending stays one-to-one in the first release; delivery is instant by default, with the existing human relay as an optional slower journey. There will be no public discovery feed in this release.
 
 The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailbox, and relay foundations. Existing letters continue to work as text drops, and their routes and saved content remain readable. The build covers the end-to-end mobile flow: choose content, attach an image or GIF, choose a recipient, send, open, react, and optionally follow a relay.
 
@@ -33,11 +33,11 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 - **Delivery:** instant is the default. Human relay is an explicit choice for a drop that should travel hand to hand. Map and route details appear only in relay mode.
 - **Privacy:** drops are private to sender and recipient. Media uses private storage and recipient-aware access. Do not expose public asset URLs or precise location in the normal sharing flow.
 - **Local demo:** seeded examples can demonstrate image/GIF cards when clearly labeled as samples, separate from real mailbox counts, and opened by choice. Real media delivery requires the configured Supabase account and private storage; drafts should clearly show if a file has not uploaded yet.
-- **Out of scope for v1:** public feed, likes/follows, group chats, video/audio recording, GIF search provider, and a permanent brand rename.
+- **Out of scope for v1:** public feed, likes/follows, group chats, video/audio recording, and a GIF search provider.
 
 ## Architecture Decisions
 
-- Keep existing routes and components where practical. Update the interface language to “drops” while retaining `/letter/[id]` links and the current relay routes for saved content and shared links.
+- Use Drop as the visible brand while keeping existing routes, components, and `dear-exe:` storage keys compatible; update the interface language to “drops” while retaining `/letter/[id]` links and the current relay routes for saved content and shared links.
 - Add an explicit payload kind and delivery mode to the existing draft/letter model. Treat records without a payload kind as text so local drafts, seeded examples, and existing Supabase rows remain compatible.
 - Store only private storage paths and media metadata with a drop. Upload files to a private Supabase Storage bucket and return short-lived authorized URLs only when sender or recipient opens the drop. Validate file type and size at the upload boundary.
 - Reuse the current local draft store and Supabase client. Do not add a client state or animation dependency for this redesign.
@@ -105,6 +105,5 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 
 ## Open Questions
 
-- Keep “Dear.exe” as the brand and use “Drop” only for the shared item until a brand decision is made.
 - Revisit group sharing and GIF search after the one-to-one image/GIF flow is working.
 - Confirm the upload size cap against the configured Supabase plan during implementation; the initial design should surface the limit before upload.

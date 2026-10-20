@@ -9,7 +9,7 @@ import { normalizeDropRecipient } from '@/lib/dropValidation';
 import { getSupabaseBrowserClient, isSupabaseAuthConfigured } from '@/lib/supabaseBrowser';
 import { getLocalAccountId } from '@/lib/localAccountScope';
 import { safeInternalPath } from '@/lib/safeInternalPath';
-import { authCallbackRoute, profileRoute } from '@/lib/inviteOnboarding';
+import { authCallbackRoute, canEditInviteProfile, profileRoute } from '@/lib/inviteOnboarding';
 import { emailLinkErrorMessage } from '@/lib/emailLinkErrorMessage';
 import { createProfileSharePayload } from '@/lib/profileInviteShare';
 import { shareInviteLink } from '@/lib/shareInvite';
@@ -60,6 +60,7 @@ function ProfileContent() {
   const searchParams = useSearchParams();
   const authError = searchParams.get('authError');
   const inviteContext = searchParams.get('invite') === '1';
+  const canEditProfile = canEditInviteProfile(inviteContext, accountStatus, profileLookupFailed, identityUnverified);
   const nextPath = safeInternalPath(searchParams.get('next'), typeof window === 'undefined' ? 'https://drop.invalid' : window.location.origin);
   const supabaseAuthConfigured = isSupabaseAuthConfigured();
 
@@ -265,6 +266,7 @@ function ProfileContent() {
   };
 
   const save = async () => {
+    if (!canEditProfile) return;
     const username = normalizeDropRecipient(profile.username);
     if (!username) {
       setProfileError('Use 2–24 letters, numbers, periods, underscores, or hyphens.');
@@ -486,7 +488,7 @@ function ProfileContent() {
         ? `Copied @${normalizeDropRecipient(profile.username)} and your public profile link.`
         : result === 'cancelled'
           ? 'Share cancelled. Nothing was copied.'
-          : 'Sharing and copying are unavailable here. You can copy your public profile link below.');
+        : 'Sharing and copying are unavailable here. Select the public profile link in the Public profile panel to copy it manually.');
   };
 
   const username = normalizeDropRecipient(profile.username);
@@ -502,11 +504,25 @@ function ProfileContent() {
         : accountStatus === 'error'
           ? 'Account status needs attention.'
           : 'Not connected. Your profile still works on this device.';
+  const inviteProgress = accountStatus === 'checking'
+    ? 'Checking your account before we save an invite handle.'
+    : accountStatus === 'unavailable' || !supabaseAuthConfigured
+      ? 'Account sign-in is unavailable in this preview, so this invite cannot be completed yet.'
+      : accountStatus === 'error'
+        ? 'We could not verify your account. Refresh before continuing with this invite.'
+        : accountStatus === 'signed-out'
+          ? 'Step 1 of 3: connect your account. A profile saved only on this device will not reach your friend.'
+          : remoteProfileAvailable
+            ? 'Step 3 of 3: your handle is synced. Send it back to your friend below.'
+            : 'Step 2 of 3: save and sync your handle. Then you can share it back.';
+  const canRefreshInviteAccount = inviteContext && accountStatus === 'error';
   const saveButtonLabel = saving
     ? 'Saving…'
-    : saved
-      ? remoteProfileAvailable ? 'Saved & synced' : 'Saved on this device'
-      : 'Save identity';
+    : inviteContext && !canEditProfile
+      ? accountStatus === 'checking' ? 'Checking account…' : accountStatus === 'error' ? 'Refresh account status' : 'Connect account first'
+      : saved
+        ? remoteProfileAvailable ? 'Saved & synced' : inviteContext ? 'Save & sync handle' : 'Saved on this device'
+        : inviteContext ? 'Save & sync handle' : 'Save identity';
 
   const restorePendingProfile = (source: 'current' | 'legacy' = 'current') => {
     const pendingSnapshot = remoteUserId ? getPendingRemoteProfileSnapshot(remoteUserId) : null;
@@ -586,6 +602,16 @@ function ProfileContent() {
               </p>
             </div>
 
+            {inviteContext && (
+              <div className="notice mt-6" role="status" aria-live="polite">
+                <p className="eyebrow">Finish your invite</p>
+                <p className="mt-2">{inviteProgress}</p>
+                {accountStatus === 'signed-out' && (
+                  <a href="#account" className="mt-3 inline-flex min-h-11 items-center font-semibold underline underline-offset-4">Connect your account</a>
+                )}
+              </div>
+            )}
+
             <form
               className="mt-8 space-y-6"
               onSubmit={(event) => {
@@ -602,7 +628,7 @@ function ProfileContent() {
                   className="input-field mt-2"
                   placeholder="Eleanor Vance"
                   autoComplete="name"
-                  disabled={saving || accountStatus === 'checking' || identityUnverified}
+                  disabled={saving || accountStatus === 'checking' || identityUnverified || !canEditProfile}
                 />
               </div>
 
@@ -616,7 +642,7 @@ function ProfileContent() {
                   placeholder="eleanor"
                   autoComplete="username"
                   spellCheck={false}
-                  disabled={saving || accountStatus === 'checking' || identityUnverified}
+                  disabled={saving || accountStatus === 'checking' || identityUnverified || !canEditProfile}
                   aria-describedby={profileError ? 'username-help username-error' : 'username-help'}
                   aria-invalid={Boolean(profileError)}
                 />
@@ -633,14 +659,15 @@ function ProfileContent() {
                   className="textarea-field mt-2"
                   placeholder="Collecting small moments and sending them forward."
                   rows={4}
-                  disabled={saving || accountStatus === 'checking' || identityUnverified}
+                  disabled={saving || accountStatus === 'checking' || identityUnverified || !canEditProfile}
                 />
               </div>
 
               <div className="flex flex-wrap items-center gap-3 border-t border-[rgba(16,42,67,0.1)] pt-6">
                 <button
-                  type="submit"
-                  disabled={saving || accountStatus === 'checking' || identityUnverified}
+                  type={canRefreshInviteAccount ? 'button' : 'submit'}
+                  onClick={canRefreshInviteAccount ? () => window.location.reload() : undefined}
+                  disabled={saving || accountStatus === 'checking' || (!canRefreshInviteAccount && (identityUnverified || !canEditProfile))}
                   className="button-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#fcfaf6] disabled:opacity-60"
                 >
                   {saved ? <Check className="h-4 w-4" aria-hidden="true" /> : null}
@@ -686,19 +713,38 @@ function ProfileContent() {
                     Use account profile
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={() => void copyProfileLink()}
-                  disabled={!remoteProfileAvailable}
-                  className="button-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#fcfaf6]"
-                >
-                  {copied ? <Check className="h-4 w-4" aria-hidden="true" /> : <Copy className="h-4 w-4" aria-hidden="true" />}
-                  {copied ? 'Link copied' : 'Copy public link'}
-                </button>
+                {(!inviteContext || remoteProfileAvailable) && (
+                  <button
+                    type="button"
+                    onClick={() => void copyProfileLink()}
+                    disabled={!remoteProfileAvailable}
+                    className="button-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#fcfaf6]"
+                  >
+                    {copied ? <Check className="h-4 w-4" aria-hidden="true" /> : <Copy className="h-4 w-4" aria-hidden="true" />}
+                    {copied ? 'Link copied' : 'Copy public link'}
+                  </button>
+                )}
               </div>
             </form>
 
             {notice && <p className="notice mt-5" role="status" aria-live="polite">{notice}</p>}
+
+            {inviteContext && accountStatus === 'signed-in' && remoteProfileAvailable && publicPath && (
+              <section className="panel mt-6 p-6" aria-labelledby="invite-share-title">
+                <p className="eyebrow">Your invite · step 3</p>
+                <h2 id="invite-share-title" className="section-title mt-3 text-2xl">Send your handle back.</h2>
+                <p className="body-copy mt-3 text-sm">Share only your public @handle and profile link so your friend can send your Drop.</p>
+                <button
+                  type="button"
+                  onClick={() => void shareProfileBack()}
+                  className="button-primary mt-5 min-h-12 w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+                >
+                  <Share2 className="h-4 w-4" aria-hidden="true" />
+                  Share @{username}
+                </button>
+                {inviteShareNotice && <p className="notice mt-4" role="status" aria-live="polite">{inviteShareNotice}</p>}
+              </section>
+            )}
           </article>
 
           <aside className="space-y-6">
@@ -712,7 +758,7 @@ function ProfileContent() {
                     href={publicPath}
                     className="meta mt-5 block break-all border-y border-[rgba(16,42,67,0.1)] py-4 text-ink-navy underline decoration-[#b84b3a] underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a]"
                   >
-                    dear.exe{publicPath}
+                    drop{publicPath}
                   </Link>
                   <div className="mt-5 flex flex-wrap gap-3">
                     <button
@@ -734,7 +780,7 @@ function ProfileContent() {
                 </>
               ) : publicPath ? (
                 <div className="mt-5 border-y border-[rgba(16,42,67,0.1)] py-4">
-                  <p className="meta break-all text-ink-navy">dear.exe{publicPath}</p>
+                  <p className="meta break-all text-ink-navy">drop{publicPath}</p>
                   <p className="field-help mt-2">Preview link · only available on this device until your profile syncs.</p>
                 </div>
               ) : (
@@ -822,22 +868,6 @@ function ProfileContent() {
               )}
             </section>
 
-            {inviteContext && accountStatus === 'signed-in' && remoteProfileAvailable && publicPath && (
-              <section className="panel p-6">
-                <p className="eyebrow">Your invite</p>
-                <h2 className="section-title mt-3 text-2xl">Send your handle back.</h2>
-                <p className="body-copy mt-3 text-sm">Share only your public @handle and profile link so your friend can send your Drop.</p>
-                <button
-                  type="button"
-                  onClick={() => void shareProfileBack()}
-                  className="button-primary mt-5 min-h-12 w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-white"
-                >
-                  <Share2 className="h-4 w-4" aria-hidden="true" />
-                  Share @{username}
-                </button>
-                {inviteShareNotice && <p className="notice mt-4" role="status" aria-live="polite">{inviteShareNotice}</p>}
-              </section>
-            )}
           </aside>
         </section>
       </div>
