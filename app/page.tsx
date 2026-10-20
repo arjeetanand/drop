@@ -36,7 +36,7 @@ export default function HomeDesk() {
     <main className="page-shell page-enter !pt-5 sm:!pt-8">
       <div className="page-container max-w-[1080px]">
         <header className="flex items-center justify-between gap-4">
-          <Link href="/" className="inline-flex items-center gap-3" aria-label="Dear.exe desk">
+          <Link href="/" className="inline-flex min-h-11 items-center gap-3" aria-label="Dear.exe desk">
             <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#2b45f7] text-white shadow-[0_5px_14px_rgba(43,69,247,.2)]"><Mail className="h-5 w-5" aria-hidden="true" /></span>
             <span><span className="block font-headline-md text-xl font-semibold leading-none text-ink-navy">Dear.exe</span><span className="mt-1 block font-mono text-[0.58rem] uppercase tracking-[0.2em] text-on-surface-variant">small things, sent</span></span>
           </Link>
