@@ -28,6 +28,7 @@ alter table storage.objects enable row level security;
 \ir ../../supabase/migrations/20260823000000_dear_exe.sql
 \ir ../../supabase/migrations/20261018000000_drop_media_reactions.sql
 \ir ../../supabase/migrations/20261018000100_relay_handoff_tokens.sql
+\ir ../../supabase/migrations/20261020000000_carrier_route_summary.sql
 
 insert into auth.users (id) values
   ('11111111-1111-4111-8111-111111111111'),
@@ -139,7 +140,13 @@ declare
   v_retry_letter_id text;
   v_retry_carrier_token uuid;
   v_retry_expires_at timestamptz;
+  v_route jsonb;
 begin
+  if (select count(*) from public.get_carrier_relay_route(current_setting('test.relay_initial_pass')::uuid)) <> 0
+    or (select count(*) from public.get_carrier_relay_route('ffffffff-ffff-4fff-8fff-ffffffffffff')) <> 0 then
+    raise exception 'a handoff or unknown token exposed a carrier route';
+  end if;
+
   select handoff_id, letter_id, successor_token, successor_expires_at
     into v_handoff_id, v_letter_id, v_carrier_token, v_carrier_expires_at
   from public.accept_relay_handoff_token(
@@ -152,6 +159,18 @@ begin
   end if;
   perform set_config('test.first_handoff_id', v_handoff_id::text, true);
   perform set_config('test.first_carrier_token', v_carrier_token::text, true);
+
+  select pg_catalog.to_jsonb(route) into v_route
+  from public.get_carrier_relay_route(v_carrier_token) as route;
+  if (select count(*) from public.get_carrier_relay_route(v_carrier_token)) <> 1
+    or v_route->>'carrier_name' <> 'Mira'
+    or v_route->>'neighborhood' <> 'Bandra West'
+    or v_route->>'carrier_note' <> 'Met at the market.' then
+    raise exception 'the active carrier could not read its route summary';
+  end if;
+  if v_route ?| array['letter_id', 'subject', 'content', 'payload_kind', 'media_path', 'media_mime_type', 'media_size_bytes', 'handoff_lat', 'handoff_lng', 'accepted_lat', 'accepted_lng'] then
+    raise exception 'the carrier route summary exposed letter, media, or precise location data';
+  end if;
 
   select handoff_id, letter_id, successor_token, successor_expires_at
     into v_retry_handoff_id, v_retry_letter_id, v_retry_carrier_token, v_retry_expires_at
@@ -249,6 +268,7 @@ declare
   v_carrier_token uuid;
   v_retry_handoff_id uuid;
   v_retry_carrier_token uuid;
+  v_route jsonb;
 begin
   select handoff_id, letter_id, successor_token
     into v_handoff_id, v_letter_id, v_carrier_token
@@ -263,6 +283,20 @@ begin
   end if;
   perform set_config('test.second_handoff_id', v_handoff_id::text, true);
   perform set_config('test.second_carrier_token', v_carrier_token::text, true);
+
+  if (select count(*) from public.get_carrier_relay_route(current_setting('test.first_carrier_token')::uuid)) <> 0
+    or (select count(*) from public.get_carrier_relay_route(v_carrier_token)) <> 2 then
+    raise exception 'carrier route access did not follow active token ownership';
+  end if;
+  select pg_catalog.to_jsonb(route) into v_route
+  from public.get_carrier_relay_route(v_carrier_token) as route
+  where route.handoff_id = current_setting('test.second_handoff_id')::uuid;
+  if v_route->>'carrier_name' <> 'Noor' or v_route->>'neighborhood' <> 'Dadar' or v_route->>'carrier_note' <> 'Passed near the station.' then
+    raise exception 'the route summary omitted the latest carrier event';
+  end if;
+  if v_route ?| array['letter_id', 'subject', 'content', 'payload_kind', 'media_path', 'media_mime_type', 'media_size_bytes', 'handoff_lat', 'handoff_lng', 'accepted_lat', 'accepted_lng'] then
+    raise exception 'the carrier route summary exposed letter, media, or precise location data';
+  end if;
 
   select handoff_id, successor_token into v_retry_handoff_id, v_retry_carrier_token
   from public.accept_relay_handoff_token(

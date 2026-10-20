@@ -65,6 +65,14 @@ export interface RelayHandoffStatus {
   acceptedAt?: string;
 }
 
+export interface CarrierRelayRouteEvent {
+  id: string;
+  carrierName: string;
+  neighborhood: string;
+  note: string;
+  createdAt: string;
+}
+
 interface RelayHandoffRow {
   id: string;
   carrier_name: string;
@@ -93,6 +101,14 @@ interface RelayHandoffStatusRow {
   accepted: boolean;
   accepted_by: string | null;
   accepted_at: string | null;
+}
+
+interface CarrierRelayRouteRow {
+  handoff_id: string;
+  carrier_name: string;
+  neighborhood: string;
+  carrier_note: string;
+  created_at: string;
 }
 
 const seededRelay: RelayState = {
@@ -649,6 +665,23 @@ export async function getRemoteRelayHandoffs(letterId: string): Promise<RelayHan
       coords,
     };
   });
+}
+
+/** Load the route visible to an active carrier without exposing message or location data. */
+export async function getCarrierRelayRoute(carrierToken: string): Promise<CarrierRelayRouteEvent[] | null> {
+  if (!isRelayToken(carrierToken)) return null;
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) return null;
+
+  const { data, error } = await supabase.rpc('get_carrier_relay_route', { p_carrier_token: carrierToken });
+  if (error || !Array.isArray(data)) return null;
+  return (data as CarrierRelayRouteRow[]).map((row) => ({
+    id: row.handoff_id,
+    carrierName: row.carrier_name,
+    neighborhood: row.neighborhood,
+    note: row.carrier_note,
+    createdAt: row.created_at,
+  }));
 }
 
 /** Check whether this carrier's short-lived handoff pass has been consumed. */

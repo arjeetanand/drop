@@ -176,11 +176,12 @@ Commit each completed code change separately with a descriptive message and push
 **Acceptance criteria:**
 - [ ] Instant drops bypass relay screens and location requests.
 - [ ] Relay-mode drops retain existing handoff and journey history behavior.
-- [ ] Carriers see route/handoff information but not private message text or media.
+- [x] Active carriers see their route/handoff history without private message, media, or exact location data.
 
 **Verification:**
 - [ ] Test an existing letter relay and a new media relay through one handoff.
 - [x] Unit coverage verifies denied/unavailable location and confirms manual and QR handoffs do not invent coordinates.
+- [x] A capability-gated route RPC returns only names, neighborhoods, carrier notes, and timestamps; SQL coverage checks active, consumed, and invalid tokens plus private-data exclusions.
 - [ ] Browser end-to-end check: complete a valid carrier-issued handoff with location denied or unavailable.
 
 **Dependencies:** Tasks 1, 4, and 5.

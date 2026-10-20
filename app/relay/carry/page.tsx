@@ -6,7 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { ArrowLeft, ArrowRight, CheckCircle2, Clock3, MapPin, Package, QrCode, RefreshCcw, Share2, ShieldCheck } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { clearActiveCarry, getActiveCarry, type ActiveCarry } from '@/lib/gpsUtils';
-import { getRelayHandoffStatus, issueRelayPassFromCarrier, type RelayHandoffStatus, type IssuedRelayToken } from '@/lib/relayStore';
+import { getCarrierRelayRoute, getRelayHandoffStatus, issueRelayPassFromCarrier, type CarrierRelayRouteEvent, type RelayHandoffStatus, type IssuedRelayToken } from '@/lib/relayStore';
 import { getLocalAccountId, isCurrentLocalAccount } from '@/lib/localAccountScope';
 import { shareInviteLink } from '@/lib/shareInvite';
 
@@ -18,6 +18,7 @@ function CarryContent() {
   const [phase, setPhase] = useState<CarryPhase>('loading');
   const [carry, setCarry] = useState<ActiveCarry | null>(null);
   const [pass, setPass] = useState<IssuedRelayToken | null>(null);
+  const [route, setRoute] = useState<CarrierRelayRouteEvent[] | null>();
   const [now, setNow] = useState(Date.now());
   const [acceptedBy, setAcceptedBy] = useState('');
   const [error, setError] = useState('');
@@ -35,6 +36,19 @@ function CarryContent() {
       setPhase('unavailable');
     }
   }, [requestedLetterId]);
+
+  useEffect(() => {
+    let active = true;
+    setRoute(undefined);
+    if (!carry?.successorToken) {
+      setRoute(null);
+      return () => { active = false; };
+    }
+    void getCarrierRelayRoute(carry.successorToken).then((events) => {
+      if (active) setRoute(events);
+    });
+    return () => { active = false; };
+  }, [carry?.successorToken]);
 
   useEffect(() => {
     if ((phase !== 'pass-on' && phase !== 'carrying') || !pass) return;
@@ -177,6 +191,10 @@ function CarryContent() {
             <aside className="rounded-3xl border border-[rgba(16,42,67,.12)] bg-[#fffdf9] p-5 sm:p-6">
               <p className="eyebrow">A sealed route</p>
               <div className="mt-4 flex items-start gap-3"><ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[#2b45f7]" aria-hidden="true" /><p className="text-sm leading-relaxed text-on-surface-variant">Carriers can see route details only. The drop’s note and media stay private.</p></div>
+              {route === undefined && <p className="mt-5 text-sm text-on-surface-variant" role="status">Loading route details…</p>}
+              {route === null && <p className="mt-5 text-sm text-on-surface-variant" role="status">Route details are unavailable for this carry.</p>}
+              {route?.length === 0 && <p className="mt-5 text-sm text-on-surface-variant" role="status">No route details to show yet.</p>}
+              {route && route.length > 0 && <ol aria-label="Drop route so far" className="mt-5 max-h-72 space-y-4 overflow-y-auto border-l border-[rgba(43,69,247,.2)] pl-4 pr-2">{route.map((event) => <li key={event.id} className="relative"><span className="absolute -left-[1.32rem] top-1.5 h-2 w-2 rounded-full bg-[#2b45f7]" aria-hidden="true" /><p className="break-words text-sm font-semibold text-ink-navy">{event.carrierName} · {event.neighborhood}</p><time className="mt-1 block text-xs text-on-surface-variant" dateTime={event.createdAt}>{new Date(event.createdAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</time>{event.note && <p className="mt-1 break-words text-xs leading-relaxed text-on-surface-variant">{event.note}</p>}</li>)}</ol>}
               <p className="mt-5 border-t border-[rgba(16,42,67,.1)] pt-4 font-mono text-[0.65rem] text-on-surface-variant">Your secure carry pass is saved on this device.</p>
             </aside>
           </section>
