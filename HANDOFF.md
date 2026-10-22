@@ -6,10 +6,10 @@ Updated: 2026-10-23
 
 - Active code checkout: /Users/arjeetanand/projects/drop
 - GitHub remote: private repository arjeetanand/drop
-- Current branch: `feat/relay-token-fragment`, created from the pushed recipient-first composer checkpoint `20af1a2`.
+- Current branch: feat/relay-handoff-refresh-recovery, based on feat/relay-token-fragment at 0b211ee and pushed to origin; no pull request has been created.
 - Recipient-first composer commit: `a9049cf` (`feat: put recipient first in drop composer`), pushed to `origin/feat/recipient-first-compose`.
 - Relay token URL commit: `fd5a327` (`fix: keep relay bearer tokens out of request URLs`), pushed to `origin/feat/relay-token-fragment`; no pull request has been created.
-- Handoff/docs commits on this branch: `629f480` and `7fc824f`, both pushed to `origin/feat/relay-token-fragment`.
+- Prior handoff/docs commits on feat/relay-token-fragment: 629f480 and 7fc824f, both pushed to origin.
 - Live sender reaction commit: `9c375a1` (`feat: notify senders about new drop reactions`), pushed to `origin/feat/live-reaction-feedback`.
 - The current branch also includes the pushed inbox checkpoint from `feat/drop-live-inbox-arrival`; its prior commits are listed below.
 - Live inbox commit: `1cf321d` (`feat: surface new drops in live inbox`), pushed to `origin/feat/drop-live-inbox-arrival`; not merged and no pull request created.
@@ -24,6 +24,7 @@ Updated: 2026-10-23
 - `.env.local` is already present in `/Users/arjeetanand/projects/drop`, has mode 600, is ignored by Git, and is not tracked. No copy was needed because the OneDrive source directory is absent. Its values were not displayed or committed; the configured Supabase URL was checked as loopback-only.
 
 ## Change inventory
+- Relay token acceptance stores the exact pending attempt in tab-scoped session storage under a SHA-256 fingerprint of the invite and active local account. Refresh restores the same request ID and form details, locks them for an identical retry, expires the attempt after 24 hours, and clears it after the carrier pass is saved in account-scoped local storage.
 
 - Removed third-party reverse geocoding from the relay handoff flow. QR and manual PIN flows ask before accessing current device location; manual neighborhood entry remains available, and location stays in local route history after a successful handoff.
 - Removed the location suggestion action from secure token invites, which now use manual neighborhood entry and do not request device location.
@@ -46,6 +47,7 @@ Updated: 2026-10-23
 - Live sender reaction slice `9c375a1`: `npm test` passed 107/107, `npm run lint`, `npx tsc --noEmit --incremental false`, `npm run build`, `git diff --check`, and `bash -n run.sh` passed. Five routes (`/`, `/mailbox`, `/letter/incoming-1`, `/compose`, `/journey`) returned HTTP 200 from the local app on port 4004. The feature commit is pushed to `origin/feat/live-reaction-feedback`; a separate documentation commit follows it on the same branch.
 - Recipient-first composer `a9049cf`: `npm test` passed 107/107, lint, typecheck, Webpack production build, and `git diff --check` passed. Home, Compose, and Mailbox returned HTTP 200 on port 4004. Rendered viewport, keyboard, and safe-area checks remain open because browser automation is unavailable. The disposable PostgreSQL reaction-broadcast fixture also remains unverified; the isolated server failed with `shmget: Operation not permitted` in this sandbox. Build output included the existing Browserslist freshness and Tailwind easing warnings.
 - Relay token URL slice `fd5a327`: `npm test` passed 109/109, lint, `npx tsc --noEmit --incremental false`, Webpack production build, and `git diff --cached --check` passed. `/relay/scan` returned HTTP 200 on the local app at port 4004. Browser interaction with a real fragment invite remains unverified because browser automation is unavailable. The build reported the existing Browserslist freshness and Tailwind easing warnings.
+- Relay acceptance retry recovery a3a2ca9: focused tests pass 4/4, full npm test passes 113/113, lint, typecheck, Webpack production build, bash -n run.sh, and diff check pass. Home and relay routes return HTTP 200 on port 4004. The rendered lost-response refresh flow remains unverified.
 - The SQL fixture `tests/db/drop_reaction_broadcast.sql` is written but was not run: Docker was unavailable and a temporary PostgreSQL startup failed in this environment. Hosted cross-account delivery and rendered browser/screen-reader checks remain unverified.
 - The inbox unit tests mock Supabase Realtime; the new broadcast policy and trigger have not been applied to local or hosted Supabase. Account-to-account delivery is not verified.
 - The live inbox feature is committed and pushed to its task branch; main/default branch was not changed.
@@ -61,6 +63,7 @@ Updated: 2026-10-23
 
 - Legacy `?d=` QR links still put previous-carrier coordinates in the URL and send them to Drop when opened. Use a new server-issued invite for future handoffs; old payloads are not safely convertible.
 - Verify a valid carrier-issued handoff across accounts/devices and against hosted Supabase. No hosted Drop project has been created.
+- Verify refresh recovery after a server-accepted relay request loses its response, using a rendered browser and local Supabase when those tools are available.
 - Apply `20261022100000_drop_inbox_broadcast.sql` to the Free Drop Supabase project and verify real recipient notifications between two disposable accounts.
 - Apply `20261022110000_drop_reaction_broadcast.sql` after the inbox broadcast migration and verify real sender reaction cues between two disposable accounts.
 - Apply `20261022000000_restrict_relay_handoff_column_select.sql` to the Free Drop Supabase project when that project is available; only the disposable local PostgreSQL regression has been run so far.
@@ -71,4 +74,4 @@ Updated: 2026-10-23
 
 ## Run locally
 
-From /Users/arjeetanand/projects/drop, run npm ci, then ./run.sh. Drop uses http://localhost:4004; ./run.sh stop stops the project-owned process. The local Supabase smoke environment uses port 5004 and browser QA is reserved port 6004. The current branch is `feat/relay-token-fragment` at `7fc824f`, pushed to origin; it is not merged and has no pull request. Earlier inbox and route work remains on its separately pushed task branches.
+From /Users/arjeetanand/projects/drop, run npm ci, then ./run.sh. Drop uses http://localhost:4004; ./run.sh stop stops the project-owned process. The local Supabase smoke environment uses port 5004 and browser QA is reserved port 6004. Feature code commit a3a2ca9 is pushed to origin/feat/relay-handoff-refresh-recovery; the branch is not merged and has no pull request. A separate handoff documentation commit follows on the same branch.
