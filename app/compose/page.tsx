@@ -187,14 +187,17 @@ function Composer() {
       return;
     }
     setFile(selected);
-    setPayloadKind(selected.type === 'image/gif' ? 'gif' : 'image');
+    const nextPayloadKind = selected.type === 'image/gif' ? 'gif' : 'image';
+    setPayloadKind(nextPayloadKind);
     setError('');
     setAttachmentSaving(true);
     try {
       if (!draft) throw new Error('Draft unavailable');
+      const mediaDraft = saveLetterDraft({ payloadKind: nextPayloadKind, mediaUploadId: crypto.randomUUID() });
+      setDraft(mediaDraft);
       await saveDraftAttachment(draft.id, selected);
       if (!isCurrentLocalAccount(accountId)) return;
-      const updatedDraft = saveLetterDraft({ payloadKind: selected.type === 'image/gif' ? 'gif' : 'image' });
+      const updatedDraft = saveLetterDraft({ payloadKind: nextPayloadKind });
       setDraft(updatedDraft);
       setAttachmentSaved(true);
       setNotice('Attachment saved privately on this device.');
@@ -216,6 +219,7 @@ function Composer() {
       alignment,
       payloadKind,
       deliveryMode,
+      mediaUploadId: draft.mediaUploadId,
       sealId,
       sealColor,
       sealMonogram,
@@ -340,10 +344,13 @@ function Composer() {
     setNotice('');
     setSending(true);
     const accountId = getLocalAccountId();
-    const next = makeDraft();
+    let next = makeDraft();
     if (!next) {
       setSending(false);
       return;
+    }
+    if (file && !next.mediaUploadId) {
+      next = setActiveLetterDraft({ ...next, mediaUploadId: crypto.randomUUID(), updatedAt: new Date().toISOString() });
     }
     setDraft(next);
     try {

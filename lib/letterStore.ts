@@ -35,6 +35,7 @@ export interface LetterDraftState {
   mediaPath?: string;
   mediaMimeType?: string;
   mediaSizeBytes?: number;
+  mediaUploadId?: string;
   status: LetterStatus;
   updatedAt: string;
   dispatchedAt?: string;

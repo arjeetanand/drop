@@ -52,3 +52,99 @@ test('a failed existing-drop lookup returns a retryable response without creatin
   assert.match((await response.json()).error, /confirm.*media state.*retry/i);
   assert.equal(uploads, 0);
 });
+
+test('a retry after losing the finalize response reuses an unlinked final object', async () => {
+  const mediaBytes = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
+  const stagedObjects = new Map([[stagedPath, mediaBytes]]);
+  const finalObjects = new Map();
+  let finalObjectsWritten = 0;
+  const retryServiceClient = {
+    storage: {
+      from: () => ({
+        download: async (path) => {
+          const bytes = stagedObjects.get(path) ?? finalObjects.get(path);
+          return bytes
+            ? { data: new Blob([bytes]), error: null }
+            : { data: null, error: new Error('Object not found') };
+        },
+        upload: async (path, blob) => {
+          if (finalObjects.has(path)) return { error: new Error('Object already exists') };
+          finalObjects.set(path, Buffer.from(await blob.arrayBuffer()));
+          finalObjectsWritten += 1;
+          return { error: null };
+        },
+        remove: async (paths) => {
+          for (const path of paths) stagedObjects.delete(path);
+          return { error: null };
+        },
+      }),
+    },
+    from: () => ({
+      select() { return this; },
+      eq() { return this; },
+      maybeSingle: async () => ({ data: null, error: null }),
+    }),
+  };
+  globalThis.__dropFinalizeSupabaseFactory = (_url, key) => key === 'local-anon' ? authClient : retryServiceClient;
+
+  const finalize = (path) => POST(new Request('http://localhost/api/drop-media/finalize', {
+    method: 'POST',
+    headers: { authorization: 'Bearer local-test', 'content-type': 'application/json' },
+    body: JSON.stringify({ stagedPath: path, payloadKind: 'gif' }),
+  }));
+
+  await finalize(stagedPath); // The client loses this response before linking the letter row.
+  // The client retains the upload ID and re-stages the same image before retrying.
+  stagedObjects.set(stagedPath, mediaBytes);
+  const retryResponse = await finalize(stagedPath);
+  const result = await retryResponse.json();
+
+  assert.equal(retryResponse.status, 200);
+  assert.equal(result.mediaPath, `${userId}/draft-1/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa`);
+  assert.equal(finalObjectsWritten, 1);
+  assert.equal(finalObjects.size, 1);
+});
+
+test('a linked drop conflict removes the newly staged attachment', async () => {
+  const mediaBytes = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
+  const mismatchedBytes = Buffer.from(mediaBytes);
+  mismatchedBytes[0] ^= 1;
+  const finalPath = `${userId}/draft-1/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa`;
+  const stagedObjects = new Map([[stagedPath, mediaBytes]]);
+  const removedPaths = [];
+  const linkedDropServiceClient = {
+    storage: {
+      from: () => ({
+        download: async (path) => {
+          const bytes = path === stagedPath ? stagedObjects.get(path) : mismatchedBytes;
+          return { data: new Blob([bytes]), error: null };
+        },
+        upload: async () => { throw new Error('A linked drop must not be overwritten'); },
+        remove: async (paths) => {
+          removedPaths.push(...paths);
+          for (const path of paths) stagedObjects.delete(path);
+          return { error: null };
+        },
+      }),
+    },
+    from: () => ({
+      select() { return this; },
+      eq() { return this; },
+      maybeSingle: async () => ({
+        data: { media_path: finalPath, media_mime_type: 'image/gif', media_size_bytes: mediaBytes.length },
+        error: null,
+      }),
+    }),
+  };
+  globalThis.__dropFinalizeSupabaseFactory = (_url, key) => key === 'local-anon' ? authClient : linkedDropServiceClient;
+
+  const response = await POST(new Request('http://localhost/api/drop-media/finalize', {
+    method: 'POST',
+    headers: { authorization: 'Bearer local-test', 'content-type': 'application/json' },
+    body: JSON.stringify({ stagedPath, payloadKind: 'gif' }),
+  }));
+
+  assert.equal(response.status, 409);
+  assert.deepEqual(removedPaths, [stagedPath]);
+  assert.equal(stagedObjects.has(stagedPath), false);
+});

@@ -468,14 +468,13 @@ export async function syncDropToBackend(draft: LetterDraftState, confirmedRecipi
   let mediaMimeType: string | null = mediaFile?.type || null;
   let mediaSizeBytes: number | null = mediaFile?.size || null;
   if (mediaFile) {
-    const stagedPath = createStagedDropMediaPath(context.user.id, draft.id, crypto.randomUUID());
+    const stagedPath = createStagedDropMediaPath(context.user.id, draft.id, draft.mediaUploadId || crypto.randomUUID());
     if (!stagedPath) return { ok: false, error: 'This draft cannot accept an image attachment. Start a new draft and try again.' };
     stagedMediaPath = stagedPath;
     const { error } = await context.supabase.storage.from('drop-media').upload(stagedPath, mediaFile, {
       contentType: mediaFile.type,
       upsert: false,
     });
-    if (error) return { ok: false, error: 'The image did not finish uploading. Your draft is still here—try again.' };
     const removeStagedMedia = async () => {
       try {
         await context.supabase.storage.from('drop-media').remove([stagedPath]);
@@ -505,7 +504,7 @@ export async function syncDropToBackend(draft: LetterDraftState, confirmedRecipi
       const validMediaPath = result?.mediaPath === expectedPath || isDropMediaFinalPath(result?.mediaPath, context.user.id, draft.id);
       if (!response.ok || !result || typeof result.mediaPath !== 'string' || !validMediaPath || typeof result.mediaMimeType !== 'string' || typeof result.mediaSizeBytes !== 'number') {
         await removeStagedMedia();
-        return { ok: false, error: result?.error || 'The image could not be validated. Your draft is still here—try again.' };
+        return { ok: false, error: result?.error || (error ? 'The image did not finish uploading. Your draft is still here—try again.' : 'The image could not be validated. Your draft is still here—try again.') };
       }
       mediaPath = result.mediaPath;
       mediaMimeType = result.mediaMimeType;

@@ -34,10 +34,16 @@ function client() {
   return createClient(supabaseUrl, anonKey, { auth: { autoRefreshToken: false, persistSession: false } });
 }
 
-async function availablePort() {
+async function assertTestPortFree(port) {
   const server = createServer();
-  await new Promise((resolveListen, reject) => server.once('error', reject).listen(0, '127.0.0.1', resolveListen));
-  const { port } = server.address();
+  await new Promise((resolveListen, reject) => {
+    server.once('error', reject).listen(port, '127.0.0.1', resolveListen);
+  }).catch((error) => {
+    if (error?.code === 'EADDRINUSE') {
+      throw new Error("Drop's local Supabase smoke test uses port " + port + " (main app port 4004). Stop its owner before retrying.");
+    }
+    throw error;
+  });
   await new Promise((resolveClose) => server.close(resolveClose));
   return port;
 }
@@ -112,7 +118,7 @@ async function createTestAccount(label) {
 }
 
 try {
-  const port = await availablePort();
+  const port = await assertTestPortFree(5004);
   const appUrl = await startApp(port);
   const sender = await createTestAccount('sender');
   const recipient = await createTestAccount('recipient');
@@ -338,8 +344,20 @@ try {
     body: JSON.stringify({ stagedPath, payloadKind: 'gif' }),
   });
   assert.equal(finalizeResponse.status, 200, 'The validated local GIF should be finalized');
-  const media = await finalizeResponse.json();
-  assert.equal(media.mediaPath, `${sender.id}/${mediaDropId}/${uploadId}`);
+  await finalizeResponse.arrayBuffer(); // Model a lost response before the drop row is linked.
+  const { error: retryStageError } = await sender.client.storage.from('drop-media').upload(stagedPath, new Blob([gifBytes], { type: 'image/gif' }), {
+    contentType: 'image/gif',
+    upsert: false,
+  });
+  assert.ifError(retryStageError);
+  const lostResponseRetry = await fetch(appUrl + '/api/drop-media/finalize', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + sender.token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ stagedPath, payloadKind: 'gif' }),
+  });
+  assert.equal(lostResponseRetry.status, 200, 'A retry with the same upload ID should recover the unlinked final GIF');
+  const media = await lostResponseRetry.json();
+  assert.equal(media.mediaPath, finalPath, 'A retry should return the already-stored final path');
   assert.equal(media.mediaMimeType, 'image/gif');
   assert.ok(media.mediaSizeBytes > 0 && media.mediaSizeBytes <= 8 * 1024 * 1024);
   mediaPaths.add(media.mediaPath);
@@ -371,11 +389,11 @@ try {
   const retryUploadId = randomUUID();
   const retryStagedPath = `${sender.id}/pending/${mediaDropId}/${retryUploadId}`;
   mediaPaths.add(retryStagedPath);
-  const { error: retryStageError } = await sender.client.storage.from('drop-media').upload(retryStagedPath, new Blob([gifBytes], { type: 'image/gif' }), {
+  const { error: linkedRetryStageError } = await sender.client.storage.from('drop-media').upload(retryStagedPath, new Blob([gifBytes], { type: 'image/gif' }), {
     contentType: 'image/gif',
     upsert: false,
   });
-  assert.ifError(retryStageError);
+  assert.ifError(linkedRetryStageError);
   const retryFinalizeResponse = await fetch(`${appUrl}/api/drop-media/finalize`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${sender.token}`, 'Content-Type': 'application/json' },

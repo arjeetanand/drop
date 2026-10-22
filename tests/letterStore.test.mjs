@@ -32,6 +32,38 @@ test('transfers the starter draft and refreshes the preserved account draft snap
   }
 });
 
+test('retains a media upload ID when a draft is saved and resumed', () => {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const values = new Map();
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { localStorage: { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) } },
+  });
+  try {
+    setLocalAccountId('media-retry-account');
+    const mediaUploadId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    const mediaDraft = saveLetterDraft({
+      id: 'draft-media-retry',
+      content: 'A caption for the photo.',
+      payloadKind: 'image',
+      mediaUploadId,
+    });
+
+    startNewLetter();
+    const resumedDraft = getLetterDraftById(mediaDraft.id);
+
+    assert.ok(resumedDraft);
+    assert.equal(resumedDraft?.mediaUploadId, mediaUploadId);
+    setActiveLetterDraft(resumedDraft);
+    assert.equal(getLetterDraft().mediaUploadId, mediaUploadId);
+    assert.equal(saveLetterDraft({ content: 'Retrying the same photo.' }).mediaUploadId, mediaUploadId);
+  } finally {
+    setLocalAccountId(null);
+    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
+    else delete globalThis.window;
+  }
+});
+
 test('restores only each account’s drafts, sent copy, and journey notes across A-B-A switching', () => {
   const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
   const values = new Map();
