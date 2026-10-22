@@ -9,6 +9,7 @@ Updated: 2026-10-23
 - Current branch: `feat/relay-token-fragment`, created from the pushed recipient-first composer checkpoint `20af1a2`.
 - Recipient-first composer commit: `a9049cf` (`feat: put recipient first in drop composer`), pushed to `origin/feat/recipient-first-compose`.
 - Relay token URL commit: `fd5a327` (`fix: keep relay bearer tokens out of request URLs`), pushed to `origin/feat/relay-token-fragment`; no pull request has been created.
+- Handoff/docs commits on this branch: `629f480` and `7fc824f`, both pushed to `origin/feat/relay-token-fragment`.
 - Live sender reaction commit: `9c375a1` (`feat: notify senders about new drop reactions`), pushed to `origin/feat/live-reaction-feedback`.
 - The current branch also includes the pushed inbox checkpoint from `feat/drop-live-inbox-arrival`; its prior commits are listed below.
 - Live inbox commit: `1cf321d` (`feat: surface new drops in live inbox`), pushed to `origin/feat/drop-live-inbox-arrival`; not merged and no pull request created.
@@ -70,4 +71,4 @@ Updated: 2026-10-23
 
 ## Run locally
 
-From /Users/arjeetanand/projects/drop, run npm ci, then ./run.sh. Drop uses http://localhost:4004; ./run.sh stop stops the project-owned process. The local Supabase smoke environment uses port 5004 and browser QA is reserved port 6004. The current branch is `feat/relay-token-fragment` at `fd5a327`, pushed to origin; it is not merged and has no pull request. Earlier inbox and route work remains on its separately pushed task branches.
+From /Users/arjeetanand/projects/drop, run npm ci, then ./run.sh. Drop uses http://localhost:4004; ./run.sh stop stops the project-owned process. The local Supabase smoke environment uses port 5004 and browser QA is reserved port 6004. The current branch is `feat/relay-token-fragment` at `7fc824f`, pushed to origin; it is not merged and has no pull request. Earlier inbox and route work remains on its separately pushed task branches.
