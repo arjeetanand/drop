@@ -1,7 +1,7 @@
 import { getLocalAccountId, localAccountStorageKey } from './localAccountScope.ts';
 
 // GPS utilities for the human relay system.
-// Uses browser-native geolocation + Nominatim for reverse geocoding (no API key).
+// Location access is browser-native; coordinates are never sent to a geocoding service.
 
 export interface LatLng {
   lat: number;
@@ -56,46 +56,6 @@ export function formatDistance(km: number): string {
 }
 
 /**
- * Reverse geocode lat/lng to a neighborhood name via Nominatim.
- * Returns a human-readable area name, never a full address.
- * Falls back gracefully if the network request fails.
- */
-export async function reverseGeocode(coords: LatLng): Promise<string> {
-  try {
-    const url = `https://nominatim.openstreetmap.org/reverse?lat=${coords.lat}&lon=${coords.lng}&format=json&zoom=14&addressdetails=1`;
-    const response = await fetch(url, {
-      headers: { 'Accept-Language': 'en', 'User-Agent': 'DearExe-HumanRelay/1.0' },
-    });
-    if (!response.ok) throw new Error('Nominatim request failed');
-    const data = await response.json() as {
-      address?: {
-        neighbourhood?: string;
-        suburb?: string;
-        quarter?: string;
-        city_district?: string;
-        town?: string;
-        city?: string;
-        county?: string;
-      };
-    };
-    const addr = data.address ?? {};
-    return (
-      addr.neighbourhood ||
-      addr.suburb ||
-      addr.quarter ||
-      addr.city_district ||
-      addr.town ||
-      addr.city ||
-      addr.county ||
-      'Unknown area'
-    );
-  } catch {
-    // Never expose precise coordinates when reverse geocoding is unavailable.
-    return 'Nearby area';
-  }
-}
-
-/**
  * Get the current position as a Promise.
  * Rejects with a friendly message if permission denied.
  */
@@ -128,6 +88,11 @@ export async function getOptionalCurrentPosition(): Promise<LatLng | null> {
   } catch {
     return null;
   }
+}
+
+/** Only read the current position after the person explicitly opts in. */
+export async function getConsentedCurrentPosition(consented: boolean): Promise<LatLng | null> {
+  return consented ? getOptionalCurrentPosition() : null;
 }
 
 /**

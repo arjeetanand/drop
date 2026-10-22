@@ -177,11 +177,15 @@ Commit each completed code change separately with a descriptive message and push
 - [ ] Instant drops bypass relay screens and location requests.
 - [ ] Relay-mode drops retain existing handoff and journey history behavior.
 - [x] Active carriers see their route/handoff history without private message, media, or exact location data.
+- [x] QR and manual PIN handoffs request current device location only after a clear, unchecked-by-default opt-in; manual neighborhood entry remains available.
+- [x] Remove third-party reverse geocoding from the relay handoff flow; successful-handoff location outcomes are announced to screen readers.
 
 **Verification:**
 - [ ] Test an existing letter relay and a new media relay through one handoff.
 - [x] Unit coverage verifies denied/unavailable location and confirms manual and QR handoffs do not invent coordinates.
 - [x] A capability-gated route RPC returns only names, neighborhoods, carrier notes, and timestamps; SQL coverage checks active, consumed, and invalid tokens plus private-data exclusions.
+- [x] Playwright/Chrome on a 390px viewport verified QR with location unchecked, opted in, and denied; manual PIN with location opted in; and token invite with a manual neighborhood. It observed zero geocoder requests and no page runtime errors. The fixture used synthetic handoff data.
+- [ ] Legacy QR URLs still send the previous carrier's coordinates to Drop when opened; migrate issued QR links to a server-side capability before claiming those legacy coordinates stay off the server.
 - [ ] Browser end-to-end check: complete a valid carrier-issued handoff with location denied or unavailable.
 
 **Dependencies:** Tasks 1, 4, and 5.

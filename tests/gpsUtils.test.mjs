@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { clearActiveCarry, getActiveCarry, getOptionalCurrentPosition, isHandoffQRExpired, saveActiveCarry } from '../lib/gpsUtils.ts';
+import { clearActiveCarry, getActiveCarry, getConsentedCurrentPosition, getOptionalCurrentPosition, isHandoffQRExpired, saveActiveCarry } from '../lib/gpsUtils.ts';
 import { setLocalAccountId } from '../lib/localAccountScope.ts';
 
 test('active carry helpers keep explicit account data isolated across a switch', (t) => {
@@ -54,6 +54,28 @@ test('optional location falls back on denial or device unavailability', async (t
     value: { geolocation: { getCurrentPosition: (success) => success({ coords: { latitude: 10, longitude: 20 } }) } },
   });
   assert.deepEqual(await getOptionalCurrentPosition(), { lat: 10, lng: 20 });
+});
+
+test('location is not requested unless the person opts in', async (t) => {
+  const previousNavigator = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+  t.after(() => {
+    if (previousNavigator) Object.defineProperty(globalThis, 'navigator', previousNavigator);
+    else delete globalThis.navigator;
+  });
+
+  let requests = 0;
+  Object.defineProperty(globalThis, 'navigator', {
+    configurable: true,
+    value: { geolocation: { getCurrentPosition: (success) => {
+      requests += 1;
+      success({ coords: { latitude: 10, longitude: 20 } });
+    } } },
+  });
+
+  assert.equal(await getConsentedCurrentPosition(false), null);
+  assert.equal(requests, 0);
+  assert.deepEqual(await getConsentedCurrentPosition(true), { lat: 10, lng: 20 });
+  assert.equal(requests, 1);
 });
 
 test('handoff QR expiry uses the ten-minute lifetime', () => {

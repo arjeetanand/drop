@@ -14,3 +14,5 @@ Open `http://localhost:4004`. Run `./run.sh` again to restart Drop, or `./run.sh
 Drop uses port 4004 for the main app, 5004 for its isolated local Supabase smoke test, and 6004 for browser QA. The smoke test only accepts a loopback Supabase URL from `.env.local`; it does not reset the local database.
 
 Run checks with `npm test`, `npm run lint`, `npm run typecheck`, and `npm run build -- --webpack`. For authenticated local Supabase verification, start the documented local Supabase stack, then run `npm run test:local-supabase`.
+
+Relay handoffs request current device location only after an explicit opt-in. Optional GPS is used for the local proximity check and, after a successful handoff, saved in this browser; neighborhood labels can be entered manually. Legacy QR links still include the previous carrier's coordinates in the URL, which is sent to Drop when that link is opened.

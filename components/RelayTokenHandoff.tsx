@@ -4,7 +4,7 @@ import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, MapPin, Navigation, ShieldCheck } from 'lucide-react';
 import { acceptRelayHandoffToken } from '@/lib/relayStore';
-import { getCurrentPosition, reverseGeocode, saveActiveCarry } from '@/lib/gpsUtils';
+import { saveActiveCarry } from '@/lib/gpsUtils';
 import { getLocalAccountId, isCurrentLocalAccount } from '@/lib/localAccountScope';
 import { isRelayToken } from '@/lib/relayValidation';
 
@@ -28,27 +28,8 @@ export function RelayTokenHandoff({ token, destination, backHref, method }: Rela
   const [neighborhood, setNeighborhood] = useState('');
   const [note, setNote] = useState('');
   const [error, setError] = useState('');
-  const [locationNotice, setLocationNotice] = useState('');
-  const [savingLocation, setSavingLocation] = useState(false);
   const [accepting, setAccepting] = useState(false);
   const [accepted, setAccepted] = useState(false);
-
-  const suggestNeighborhood = async () => {
-    setSavingLocation(true);
-    setLocationNotice('');
-    try {
-      const position = await getCurrentPosition();
-      const area = await reverseGeocode(position);
-      setNeighborhood(area);
-      setLocationNotice('Added the neighborhood name. Exact coordinates stay on your device.');
-    } catch (locationError) {
-      setLocationNotice(locationError instanceof Error
-        ? `${locationError.message} You can still continue without location.`
-        : 'Location is unavailable. You can still continue without it.');
-    } finally {
-      setSavingLocation(false);
-    }
-  };
 
   const handleAccept = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -129,7 +110,7 @@ export function RelayTokenHandoff({ token, destination, backHref, method }: Rela
           <p className="eyebrow text-[#2b45f7]">{method} handoff</p>
           <h2 className="mt-2 font-headline-md text-2xl text-ink-navy">Add your hand to the route.</h2>
           <p className="mt-2 text-sm leading-relaxed text-on-surface-variant">
-            You’ll carry a sealed drop toward {destination || 'the recipient area'}. Add a neighborhood if you like; precise location is optional.
+            You’ll carry a sealed drop toward {destination || 'the recipient area'}. Type a neighborhood if you like; this invite does not access your device location.
           </p>
         </div>
       </div>
@@ -160,18 +141,8 @@ export function RelayTokenHandoff({ token, destination, backHref, method }: Rela
               className="input-field mt-2 !min-h-12 !rounded-xl"
               placeholder="Nearby area"
             />
+            <span className="field-help mt-2 block">Optional. Type a neighborhood label; no device location is requested.</span>
           </label>
-
-          <button
-            type="button"
-            onClick={() => void suggestNeighborhood()}
-            disabled={savingLocation}
-            className="button-secondary !min-h-11 !rounded-xl"
-          >
-            <MapPin className="h-4 w-4 text-[#2b45f7]" aria-hidden="true" />
-            {savingLocation ? 'Finding your area…' : 'Suggest my neighborhood'}
-          </button>
-          {locationNotice && <p className="text-xs leading-relaxed text-on-surface-variant" role="status" aria-live="polite">{locationNotice}</p>}
 
           <label htmlFor="relay-carrier-note" className="field-label block">
             Note for the next carrier <span className="font-normal text-on-surface-variant">(optional)</span>
