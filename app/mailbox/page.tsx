@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Mail, PenLine, Search, X } from 'lucide-react';
 import { LiveDropCue, LiveDropStatus } from '@/components/LiveDropCue';
@@ -14,6 +14,12 @@ export default function Mailbox() {
   const { letters, arrival, arrivalCount, dismissArrival, reaction, reactionCount, dismissReaction } = useLiveInbox();
   const [activeTab, setActiveTab] = useState<MailboxFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const clearSearch = () => {
+    setSearchQuery('');
+    searchInputRef.current?.focus();
+  };
 
   const counts = useMemo(() => getMailboxCounts(letters), [letters]);
 
@@ -87,14 +93,15 @@ export default function Mailbox() {
             <label htmlFor="mailbox-search" className="sr-only">Search drops</label>
             <input
               id="mailbox-search"
+              ref={searchInputRef}
               type="search"
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
               placeholder="Find a drop"
-              className="input-field pl-10 pr-10"
+              className="input-field appearance-none pl-10 pr-10"
             />
             {searchQuery && (
-              <button type="button" onClick={() => setSearchQuery('')} aria-label="Clear search" className="absolute right-2 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center text-on-surface-variant hover:text-ink-navy">
+              <button type="button" onClick={clearSearch} aria-label="Clear search" className="absolute right-2 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center text-on-surface-variant hover:text-ink-navy">
                 <X className="h-4 w-4" aria-hidden="true" />
               </button>
             )}
@@ -117,7 +124,7 @@ export default function Mailbox() {
               </p>
               <div className="mt-5 flex flex-wrap justify-center gap-3">
                 {emptyState.kind === 'search' ? (
-                  <button type="button" onClick={() => setSearchQuery('')} className="button-secondary">Clear search</button>
+                  <button type="button" onClick={clearSearch} className="button-secondary">Clear search</button>
                 ) : (
                   <Link href={emptyState.actionHref} className="button-primary !rounded-xl !bg-[#2b45f7] !text-white !border-[#2b45f7]">
                     {emptyState.actionLabel} <ArrowRight className="h-4 w-4" aria-hidden="true" />

@@ -256,6 +256,12 @@
     background: #ede9e0;
   }
 
+  .input-field[type='search']::-webkit-search-cancel-button {
+    -webkit-appearance: none;
+    appearance: none;
+    display: none;
+  }
+
   .input-field,
   .select-field {
     min-height: 2.75rem;
