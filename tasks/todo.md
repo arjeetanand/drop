@@ -300,3 +300,11 @@ Commit each completed code change separately with a descriptive message and push
 - [x] Commit `9c375a1` is pushed to `feat/live-reaction-feedback`. The local GitHub clone already has `.env.local` at mode 600; it is ignored by Git, so there was nothing to copy from OneDrive. The former OneDrive Drop directory is absent, and `/letter` remains untouched.
 - [ ] Run `tests/db/drop_reaction_broadcast.sql` against a disposable local database; Docker and temporary PostgreSQL startup are unavailable in this environment.
 - [ ] Verify mobile/desktop rendering and screen-reader behavior in a browser, then verify cross-account reactions after a Free hosted Supabase project is available.
+
+## Current follow-up — 2026-10-23 (relay acceptance retry recovery)
+
+- [x] Persist the same relay request ID and exact carrier details in tab-scoped storage, keyed by a SHA-256 fingerprint of the invite and active local account.
+- [x] Restore and lock those details after refresh, expire saved attempts after 24 hours, and clear them only after the local carrier pass is saved.
+- [x] Add regression tests for key scoping, exact retry restoration, expiry and malformed data cleanup, and unavailable browser storage.
+- [x] npm test passes 113/113; lint, typecheck, Webpack production build, bash -n run.sh, and git diff --check pass. The app restarted on port 4004 and /, /relay/scan, and /relay/handoff returned HTTP 200.
+- [ ] Verify an interrupted acceptance and page refresh in a rendered browser against local Supabase; browser automation and local Supabase are unavailable in this session.

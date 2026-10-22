@@ -26,3 +26,7 @@ Sender route views refresh immediately, every 15 seconds while visible, and when
 Signed-in Home and Mailbox listen for private recipient-scoped Realtime Broadcasts, then reload drop rows through the existing RLS query; broadcasts contain only the drop ID. A visible-tab 60-second refresh recovers missed signals. Apply `20261022100000_drop_inbox_broadcast.sql` with the other migrations before expecting hosted arrival cues.
 
 Senders also get private reaction-change signals containing only the drop ID. Home, Mailbox, and an open sent-drop page reload the reaction through participant RLS, with a visible-tab recovery refresh. Apply `20261022110000_drop_reaction_broadcast.sql` after the inbox broadcast migration before expecting hosted reaction updates.
+
+## Relay retry recovery
+
+Carrier invite accepts keep the exact attempt details in the current browser tab for up to 24 hours. If the response is interrupted, refresh the same invite in that tab and choose “Retry same handoff”; Drop clears the record after the carrier pass is saved.
