@@ -23,6 +23,7 @@ import {
   parseHandoffQRPayload,
 } from '@/lib/gpsUtils';
 import { confirmHandoffFromQR, getRelayState } from '@/lib/relayStore';
+import { resolveRelayToken } from '@/lib/relayInviteUrl';
 import { getLocalAccountId, isCurrentLocalAccount, localAccountStorageKey } from '@/lib/localAccountScope';
 
 type ScanPhase = 'preview' | 'locating' | 'confirmed' | 'expired' | 'invalid' | 'error';
@@ -58,11 +59,13 @@ function ScanContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const encoded = searchParams.get('d') ?? '';
-  const token = searchParams.get('token') ?? '';
+  const queryToken = searchParams.get('token');
   const tokenLetterId = searchParams.get('letter') ?? '';
   const tokenDestination = searchParams.get('dest') ?? 'Recipient area';
   const payload = useMemo(() => (encoded ? parseHandoffQRPayload(encoded) : null), [encoded]);
 
+  const [token, setToken] = useState(queryToken ?? '');
+  const [tokenReady, setTokenReady] = useState(Boolean(queryToken));
   const [phase, setPhase] = useState<ScanPhase>(encoded ? 'preview' : 'invalid');
   const [name, setName] = useState('');
   const [note, setNote] = useState('');
@@ -74,6 +77,19 @@ function ScanContent() {
   const errorSummaryRef = useRef<HTMLDivElement>(null);
   // shortcut: blocks repeat submits in this tab only; cross-device replay needs server-backed claims.
   const submittingRef = useRef(false);
+
+  useEffect(() => {
+    const resolvedToken = resolveRelayToken(queryToken, window.location.hash);
+    setToken(resolvedToken);
+    setTokenReady(true);
+
+    if (queryToken && resolvedToken) {
+      const safeUrl = new URL(window.location.href);
+      safeUrl.searchParams.delete('token');
+      safeUrl.hash = new URLSearchParams({ token: resolvedToken }).toString();
+      window.history.replaceState(window.history.state, '', safeUrl);
+    }
+  }, [queryToken]);
 
   useEffect(() => {
     setName('');
@@ -199,6 +215,10 @@ function ScanContent() {
   const manualHref = payload
     ? `/relay/handoff?d=${encodeURIComponent(encoded)}&letter=${encodeURIComponent(payload.letterId)}&pin=${encodeURIComponent(payload.pin)}`
     : '/relay/handoff';
+
+  if (!encoded && !token && !tokenReady) {
+    return <main className="page-shell"><div className="page-container max-w-3xl"><p className="meta" role="status">Opening your secure carrier invite…</p></div></main>;
+  }
 
   if (token) {
     const backHref = tokenLetterId

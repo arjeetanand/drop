@@ -16,6 +16,7 @@ import { getJourneyNotes, getLetterDraft, getLettersWithDraft, saveJourneyNotes,
 import { getInitialRelayState, getRelayState, getRelayStats, getRemoteRelayHandoffs, issueRelayHandoffToken, relayToTrackingEvents, type RelayState } from '@/lib/relayStore';
 import { mergeRemoteRelayHandoffs } from '@/components/relayPresentation';
 import { startRelayRouteRefresh, type RelayRouteRefreshController } from '@/lib/relayRouteRefresh';
+import { buildRelayScanUrl } from '@/lib/relayInviteUrl';
 
 interface SenderInvite {
   url: string;
@@ -225,11 +226,12 @@ function JourneyDetail({ requestedLetterId }: { requestedLetterId: string }) {
     setError('');
     try {
       const issued = await issueRelayHandoffToken(letterId);
-      const url = new URL('/relay/scan', window.location.origin);
-      url.searchParams.set('token', issued.token);
-      url.searchParams.set('letter', letterId);
-      url.searchParams.set('dest', destination);
-      setInvite({ url: url.toString(), expiresAt: issued.expiresAt });
+      const url = buildRelayScanUrl(window.location.origin, {
+        token: issued.token,
+        letterId,
+        destination,
+      });
+      setInvite({ url, expiresAt: issued.expiresAt });
       setNow(Date.now());
     } catch (inviteError) {
       setError(inviteError instanceof Error ? inviteError.message : 'A carrier invite could not be created. Try again.');

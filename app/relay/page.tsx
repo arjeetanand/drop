@@ -32,6 +32,7 @@ import {
   type RelayState,
 } from '@/lib/relayStore';
 import { getLetterDraft, getLetterDraftById } from '@/lib/letterStore';
+import { buildRelayScanUrl } from '@/lib/relayInviteUrl';
 import { shareInviteLink } from '@/lib/shareInvite';
 
 type ViewMode = 'sender' | 'carrier';
@@ -153,12 +154,11 @@ function RelayContent() {
     setInviteUrl('');
     try {
       const issued = await issueRelayHandoffToken(letterId);
-      const params = new URLSearchParams({
+      const url = buildRelayScanUrl(window.location.origin, {
         token: issued.token,
-        letter: letterId,
-        dest: destination,
+        letterId,
+        destination,
       });
-      const url = `${window.location.origin}/relay/scan?${params.toString()}`;
       setInviteUrl(url);
       setInviteExpiresAt(issued.expiresAt);
       setNotice('Carrier invite ready. It expires in 10 minutes.');

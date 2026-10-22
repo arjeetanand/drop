@@ -8,6 +8,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { clearActiveCarry, getActiveCarry, type ActiveCarry } from '@/lib/gpsUtils';
 import { getCarrierRelayRoute, getRelayHandoffStatus, issueRelayPassFromCarrier, type CarrierRelayRouteEvent, type RelayHandoffStatus, type IssuedRelayToken } from '@/lib/relayStore';
 import { getLocalAccountId, isCurrentLocalAccount } from '@/lib/localAccountScope';
+import { buildRelayScanUrl } from '@/lib/relayInviteUrl';
 import { shareInviteLink } from '@/lib/shareInvite';
 
 type CarryPhase = 'loading' | 'carrying' | 'pass-on' | 'confirmed' | 'unavailable';
@@ -79,7 +80,7 @@ function CarryContent() {
   const remainingMs = pass ? Math.max(0, Date.parse(pass.expiresAt) - now) : 0;
   const expired = remainingMs <= 0;
   const passUrl = pass && typeof window !== 'undefined'
-    ? `${window.location.origin}/relay/scan?token=${encodeURIComponent(pass.token)}&letter=${encodeURIComponent(letterId)}&dest=${encodeURIComponent(destination)}`
+    ? buildRelayScanUrl(window.location.origin, { token: pass.token, letterId, destination })
     : '';
 
   const handlePassOn = async () => {
