@@ -7,6 +7,7 @@ Updated: 2026-10-22
 - Active code checkout: /Users/arjeetanand/projects/drop
 - GitHub remote: private repository arjeetanand/drop
 - Current branch: feat/drop-live-inbox-arrival (based on `87a2e10`, the pushed `feat/relay-route-live-refresh` checkpoint)
+- Live inbox commit: `1cf321d` (`feat: surface new drops in live inbox`), pushed to `origin/feat/drop-live-inbox-arrival`; not merged and no pull request created.
 - Prior feature commits, pushed to origin/feat/relay-route-live-refresh:
   - 21f8120 (feat: refresh shared relay routes live)
   - bc21947 (security: restrict relay route reads to public columns)
@@ -34,13 +35,14 @@ Updated: 2026-10-22
 - For commits bc21947 and 21f8120, `npm test` passed 93/93, `npm run lint`, `npx tsc --noEmit --incremental false`, and `npm run build -- --webpack` passed. The relay column-privilege SQL regression passed against a throwaway local PostgreSQL cluster in `/private/tmp`; the hosted Supabase project was not touched.
 - Live inbox slice: `npm test` passed 101/101, `npm run lint`, `npx tsc --noEmit --incremental false`, `git diff --check`, and `npm run build -- --webpack` passed. Focused regressions cover a signaled drop during the first inbox response and a broadcast arriving during an in-flight read. The build emitted only the existing Browserslist freshness and ambiguous Tailwind easing warnings. Home and Mailbox each returned HTTP 200 on the local app at port 4004.
 - The inbox unit tests mock Supabase Realtime; the new broadcast policy and trigger have not been applied to local or hosted Supabase. Account-to-account delivery is not verified.
-- The local Supabase config was not loaded by a running stack and email-link sign-in was not verified; no local Supabase service was running. The change was pushed to the task branch, not merged.
+- The live inbox feature is committed and pushed to its task branch; main/default branch was not changed.
+- The local Supabase config was not loaded by a running stack and email-link sign-in was not verified; no local Supabase service was running.
 - Playwright/Chrome at 390px checked QR handoff with location unchecked, opted in, and denied; manual PIN with location opted in; and a secure token invite with a manual neighborhood. The checks saw zero geocoder requests and no page runtime errors. Fixtures used synthetic data; this is not a hosted or cross-device handoff test.
 - The prior production build completed. Next emitted non-fatal Browserslist freshness and ambiguous Tailwind class warnings.
 - Browser and screen-reader checks of the new route UI were not available in this environment; no Chromium/Playwright/DevTools runtime is configured. A rendered check at phone and desktop widths remains pending.
 - `./run.sh` serves the GitHub clone at `http://localhost:4004`; `/relay?letter=drop-route-check` and `/journey?letter=drop-route-check` each returned HTTP 200.
 - `.env.local` is present in the active checkout, mode 600, ignored by Git, and untracked. Its contents were not read or staged.
-- The feature branch contains the pushed security and route UI changes and is not merged. No pull request was created.
+- The earlier route-security work remains on `feat/relay-route-live-refresh`, is not merged, and has no pull request.
 
 ## Remaining work
 
@@ -54,4 +56,4 @@ Updated: 2026-10-22
 
 ## Run locally
 
-From /Users/arjeetanand/projects/drop, run npm ci, then ./run.sh. Drop uses http://localhost:4004; ./run.sh stop stops the project-owned process. The local Supabase smoke environment uses port 5004 and browser QA is reserved port 6004. The current feature branch is feat/drop-live-inbox-arrival. Prior route work remains pushed on feat/relay-route-live-refresh at bc21947 and 21f8120.
+From /Users/arjeetanand/projects/drop, run npm ci, then ./run.sh. Drop uses http://localhost:4004; ./run.sh stop stops the project-owned process. The local Supabase smoke environment uses port 5004 and browser QA is reserved port 6004. The current feature branch is feat/drop-live-inbox-arrival at 1cf321d. Prior route work remains pushed on feat/relay-route-live-refresh at bc21947 and 21f8120.
