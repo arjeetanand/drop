@@ -279,4 +279,6 @@ Commit each completed code change separately with a descriptive message and push
 - [x] Playwright/Chrome opened a sample drop, saved a reaction, and confirmed device-only status at 360px, 390px, and 430px. The only console error was the browser's automatic request for missing /favicon.ico; no page runtime errors occurred.
 - [x] npm test passes (84/84), lint and typecheck pass, and the Webpack production build passes with the test font mock. Turbopack could not build the isolated copy because its node_modules symlink points outside the filesystem root.
 - [x] Push commit e18dda6 on ux/reaction-spacing-8px to origin.
+- [x] Install locked dependencies in the active GitHub clone, rerun the project checks there, and serve that checkout from run.sh on port 4004; the three-width browser flow passes against it.
+- [x] npm ci reported 15 audit advisories (1 moderate, 13 high, 1 critical); dependency versions were left unchanged.
 - [ ] Check keyboard interaction, reduced-motion behavior, desktop layout, and real-device safe areas; hosted account-to-account behavior remains open.

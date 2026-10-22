@@ -7,7 +7,7 @@ Updated: 2026-10-22
 - Active code checkout: /Users/arjeetanand/projects/drop
 - GitHub remote: private repository arjeetanand/drop
 - Current branch: ux/reaction-spacing-8px
-- Latest commit: e18dda6f01aaa48b290d1705dd89535c48808f2e (fix: improve mobile reaction tap spacing), pushed to origin
+- Latest code commit: e18dda6f01aaa48b290d1705dd89535c48808f2e (fix: improve mobile reaction tap spacing), pushed to origin; subsequent commits record handoff/checklist updates.
 - Parent commit: 3bd2b5341dfb9cbefba8b2405085d2c0d3cd2dee
 - The branch is not merged and no pull request was created.
 - The former OneDrive path /Users/arjeetanand/Library/CloudStorage/OneDrive-OracleCorporation/projects/drop is absent. No folder was available to delete; no files were removed. /letter was not touched.
@@ -21,12 +21,13 @@ Updated: 2026-10-22
 
 ## Verification
 
-- Playwright using Chrome tested /letter/incoming-1 at 360px, 390px, and 430px. It revealed and opened the sample, saved a reaction, and confirmed the device-only status copy and selected aria-pressed state.
+- Playwright using Chrome tested /letter/incoming-1 in the isolated copy and repeated the flow against the active checkout at 360px, 390px, and 430px. It revealed and opened the sample, saved a reaction, and confirmed the device-only status copy and selected aria-pressed state.
 - All five buttons measured at least 44×44px; the 360px row had an 8px gap and 252px width; document width stayed within each viewport.
 - npm test: 84/84 passed. npm run lint, npm run typecheck, git diff --check, and npm run build -- --webpack passed.
 - Checks ran in an isolated copy with the same tracked source and lockfile. The default Turbopack build failed because that copy's node_modules symlink points outside its filesystem root; the Webpack production build passed.
 - The browser's automatic request for /favicon.ico returned 404; no page runtime errors were observed. The favicon remains a small UI cleanup item.
-- The browser check used an isolated copy; the active checkout still needs locked dependencies installed before running ./run.sh.
+- npm ci reported 15 audit advisories (1 moderate, 13 high, 1 critical). No dependency upgrades or audit fixes were applied.
+- npm ci completed in the active checkout; ./run.sh is serving that checkout at http://localhost:4004 with the local test font mock.
 
 ## Remaining work
 
