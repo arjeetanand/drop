@@ -6,7 +6,8 @@ Updated: 2026-10-23
 
 - Active code checkout: /Users/arjeetanand/projects/drop
 - GitHub remote: private repository arjeetanand/drop
-- Current branch: `feat/live-reaction-feedback`, created from the pushed inbox checkpoint `245a507`.
+- Current branch: `feat/recipient-first-compose`, created from the pushed reaction checkpoint `2d2f6ac`.
+- Recipient-first composer commit: `a9049cf` (`feat: put recipient first in drop composer`), pushed to `origin/feat/recipient-first-compose`.
 - Live sender reaction commit: `9c375a1` (`feat: notify senders about new drop reactions`), pushed to `origin/feat/live-reaction-feedback`.
 - The current branch also includes the pushed inbox checkpoint from `feat/drop-live-inbox-arrival`; its prior commits are listed below.
 - Live inbox commit: `1cf321d` (`feat: surface new drops in live inbox`), pushed to `origin/feat/drop-live-inbox-arrival`; not merged and no pull request created.
@@ -32,6 +33,7 @@ Updated: 2026-10-23
 - Added a live incoming-drop cue for Home and Mailbox. Supabase Broadcast sends only the drop ID to the recipient's private topic; the client reloads through the existing row-level-security query. The visible tab retries every 60 seconds, and signals that overlap an inbox fetch queue one follow-up read.
 - Home reuses the featured incoming-drop card for the “Just landed” label; Mailbox has a dismissible direct-open cue. Burst arrivals get a count; only dispatched or delivered received drops are eligible.
 - Added sender reaction cues on Home and Mailbox and live reaction refresh on open sent-drop pages. A private sender-scoped Broadcast contains only the drop ID; reaction content is reloaded through participant RLS. Reconnect and visible-tab refresh recover missed signals, baseline and duplicate reactions are suppressed, and accessible status text names the reaction. A database guard rejects moving a reaction to a different drop.
+- Reordered the composer so account readiness and recipient confirmation appear before note, photo, GIF, and styling controls. Existing recipient checks, draft persistence, invite flow, and send handling are reused.
 
 ## Verification
 
@@ -39,6 +41,7 @@ Updated: 2026-10-23
 - For commits bc21947 and 21f8120, `npm test` passed 93/93, `npm run lint`, `npx tsc --noEmit --incremental false`, and `npm run build -- --webpack` passed. The relay column-privilege SQL regression passed against a throwaway local PostgreSQL cluster in `/private/tmp`; the hosted Supabase project was not touched.
 - Live inbox slice: `npm test` passed 101/101, `npm run lint`, `npx tsc --noEmit --incremental false`, `git diff --check`, and `npm run build -- --webpack` passed. Focused regressions cover a signaled drop during the first inbox response and a broadcast arriving during an in-flight read. The build emitted only the existing Browserslist freshness and ambiguous Tailwind easing warnings. Home and Mailbox each returned HTTP 200 on the local app at port 4004.
 - Live sender reaction slice `9c375a1`: `npm test` passed 107/107, `npm run lint`, `npx tsc --noEmit --incremental false`, `npm run build`, `git diff --check`, and `bash -n run.sh` passed. Five routes (`/`, `/mailbox`, `/letter/incoming-1`, `/compose`, `/journey`) returned HTTP 200 from the local app on port 4004. The feature commit is pushed to `origin/feat/live-reaction-feedback`; a separate documentation commit follows it on the same branch.
+- Recipient-first composer `a9049cf`: `npm test` passed 107/107, lint, typecheck, Webpack production build, and `git diff --check` passed. Home, Compose, and Mailbox returned HTTP 200 on port 4004. Rendered viewport, keyboard, and safe-area checks remain open because browser automation is unavailable. The disposable PostgreSQL reaction-broadcast fixture also remains unverified; the isolated server failed with `shmget: Operation not permitted` in this sandbox. Build output included the existing Browserslist freshness and Tailwind easing warnings.
 - The SQL fixture `tests/db/drop_reaction_broadcast.sql` is written but was not run: Docker was unavailable and a temporary PostgreSQL startup failed in this environment. Hosted cross-account delivery and rendered browser/screen-reader checks remain unverified.
 - The inbox unit tests mock Supabase Realtime; the new broadcast policy and trigger have not been applied to local or hosted Supabase. Account-to-account delivery is not verified.
 - The live inbox feature is committed and pushed to its task branch; main/default branch was not changed.
@@ -59,8 +62,9 @@ Updated: 2026-10-23
 - Apply `20261022000000_restrict_relay_handoff_column_select.sql` to the Free Drop Supabase project when that project is available; only the disposable local PostgreSQL regression has been run so far.
 - Restart local Supabase after its runtime is available, then verify email-link return to port 4004.
 - Verify Home/Mailbox arrival rendering at phone and desktop sizes, keyboard behavior, and screen-reader status announcements when browser automation is available; check real-device keyboard/safe-area behavior.
+- Verify the recipient-first composer in a rendered browser at 360px, 390px, and 430px, including the account-ready and signed-out states, invite return, keyboard, and safe-area behavior.
 - Continue to keep /letter read-only and do all new Drop work in /Users/arjeetanand/projects/drop.
 
 ## Run locally
 
-From /Users/arjeetanand/projects/drop, run npm ci, then ./run.sh. Drop uses http://localhost:4004; ./run.sh stop stops the project-owned process. The local Supabase smoke environment uses port 5004 and browser QA is reserved port 6004. The current feature branch is `feat/live-reaction-feedback`, with feature commit `9c375a1` followed by a separate checklist and handoff commit. The pushed inbox implementation remains on `feat/drop-live-inbox-arrival` at `1cf321d`, and prior route work remains pushed on `feat/relay-route-live-refresh` at `bc21947` and `21f8120`.
+From /Users/arjeetanand/projects/drop, run npm ci, then ./run.sh. Drop uses http://localhost:4004; ./run.sh stop stops the project-owned process. The local Supabase smoke environment uses port 5004 and browser QA is reserved port 6004. The current branch is `feat/recipient-first-compose` at `a9049cf`, pushed to origin; it is not merged and has no pull request. The inbox implementation remains on `feat/drop-live-inbox-arrival` at `1cf321d`, and prior route work remains pushed on `feat/relay-route-live-refresh` at `bc21947` and `21f8120`.

@@ -11,6 +11,8 @@ npm ci
 
 Open `http://localhost:4004`. Run `./run.sh` again to restart Drop, or `./run.sh stop` to stop it. Without Supabase credentials, the app runs with local demo data. Real account-to-account media delivery needs the Supabase migrations and private storage setup in [SUPABASE_SETUP.md](./SUPABASE_SETUP.md).
 
+The composer shows account readiness and recipient selection before the note, photo, or GIF controls. Recipient lookup and invite detours preserve the existing local draft.
+
 Drop uses port 4004 for the main app, 5004 for its isolated local Supabase smoke test, and 6004 for browser QA. The smoke test only accepts a loopback Supabase URL from `.env.local`; it does not reset the local database.
 
 Keep local credentials in the ignored `.env.local` file at the project root. Local Supabase Auth redirects are configured for ports 4004, 5004, and 6004, with the legacy 3000 callback retained. Restart the local Supabase stack after changing `supabase/config.toml`.

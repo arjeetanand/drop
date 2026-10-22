@@ -127,6 +127,7 @@ Commit each completed code change separately with a descriptive message and push
 - [x] Choosing an incompatible format preserves the saved attachment and explains how to remove it; the photo flow and reload recovery pass in the local browser.
 - [x] The sender explicitly checks the recipient handle, sees the matched account, and must reconfirm if the normalized handle changes; failed lookups leave the local draft and attachment intact.
 - [x] A confirmed not-found result offers a generic `/invite` link without draft content; the composer saves before sharing and does not mark the drop sent.
+- [x] The composer surfaces account readiness and asks who receives the drop before showing payload and styling controls; draft/send behavior stays in the existing flow.
 
 **Verification:**
 - [ ] Complete one send for each payload kind with Supabase configured.
@@ -135,6 +136,7 @@ Commit each completed code change separately with a descriptive message and push
 - [x] Local authenticated browser flow sent a text drop to a confirmed recipient; Google OAuth and hosted behavior remain open.
 - [x] Unit coverage verifies confirmation only matches the current normalized handle; local Supabase smoke verifies exact and missing handle lookup results.
 - [x] Authenticated browser check confirmed a recipient handle, then verified changing it clears confirmation and disables sending.
+- [ ] Recheck the recipient-first composer in a rendered browser at 360px, 390px, and 430px; browser automation is unavailable in this environment.
 
 **Dependencies:** Tasks 1–3.
 
