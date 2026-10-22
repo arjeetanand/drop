@@ -2,7 +2,13 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
-## Current Checkpoint — 2026-10-18
+## Current Checkpoint — 2026-10-22
+
+- Local Supabase Auth now allows Drop callbacks on the documented 4004, 5004, and 6004 ports for loopback hosts, while retaining port 3000. The focused redirect test, all 86 unit tests, lint, and TypeScript checks pass.
+- Reloading local Supabase and completing email-link sign-in remain pending because no local services are running in this environment. Hosted Supabase account-to-account verification is also still open.
+- The OneDrive `projects/drop` folder is absent. The active clone at `/Users/arjeetanand/projects/drop` already has the ignored `.env.local`; no secret was staged.
+
+## Previous Checkpoint — 2026-10-18
 
 - The mixed-payload/private-media foundation is pushed as `04cc01f`. The mobile-first desk, inbox, composer, and received-drop/reaction UI are implemented and locally verified: 3 unit tests, lint, typecheck, production build, plus browser checks at 463px and desktop width.
 - Media finalization validates decoded image bytes server-side, strips source metadata by re-encoding, and binds new rows to their exact storage object metadata. Unit checks and the local Postgres policy smoke test pass; hosted Supabase account-to-account verification remains open.
