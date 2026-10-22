@@ -8,6 +8,7 @@ Updated: 2026-10-22
 - GitHub remote: private repository arjeetanand/drop
 - Current branch: feat/drop-live-inbox-arrival (based on `87a2e10`, the pushed `feat/relay-route-live-refresh` checkpoint)
 - Live inbox commit: `1cf321d` (`feat: surface new drops in live inbox`), pushed to `origin/feat/drop-live-inbox-arrival`; not merged and no pull request created.
+- Handoff follow-up: `49b68a3` (`docs: record live inbox delivery`), the current branch head.
 - Prior feature commits, pushed to origin/feat/relay-route-live-refresh:
   - 21f8120 (feat: refresh shared relay routes live)
   - bc21947 (security: restrict relay route reads to public columns)
@@ -56,4 +57,4 @@ Updated: 2026-10-22
 
 ## Run locally
 
-From /Users/arjeetanand/projects/drop, run npm ci, then ./run.sh. Drop uses http://localhost:4004; ./run.sh stop stops the project-owned process. The local Supabase smoke environment uses port 5004 and browser QA is reserved port 6004. The current feature branch is feat/drop-live-inbox-arrival at 1cf321d. Prior route work remains pushed on feat/relay-route-live-refresh at bc21947 and 21f8120.
+From /Users/arjeetanand/projects/drop, run npm ci, then ./run.sh. Drop uses http://localhost:4004; ./run.sh stop stops the project-owned process. The local Supabase smoke environment uses port 5004 and browser QA is reserved port 6004. The current feature branch is feat/drop-live-inbox-arrival at 49b68a3; its implementation commit is 1cf321d. Prior route work remains pushed on feat/relay-route-live-refresh at bc21947 and 21f8120.
