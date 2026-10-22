@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import {
@@ -11,6 +11,7 @@ import {
   Navigation,
   Package,
   QrCode,
+  RefreshCw,
   Route,
   Share2,
   ShieldCheck,
@@ -20,6 +21,7 @@ import { currentFocusDraft } from '@/data/mockData';
 import { RouteMap } from '@/components/RouteMap';
 import { TrackingTimeline } from '@/components/TrackingTimeline';
 import { mergeRemoteRelayHandoffs } from '@/components/relayPresentation';
+import { startRelayRouteRefresh, type RelayRouteRefreshController } from '@/lib/relayRouteRefresh';
 import {
   getInitialRelayState,
   getRemoteRelayHandoffs,
@@ -49,6 +51,13 @@ function RelayContent() {
   const [copied, setCopied] = useState(false);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
+  const [routeCheckedAt, setRouteCheckedAt] = useState<number | null>(null);
+  const [routeRefreshError, setRouteRefreshError] = useState(false);
+  const [routeRefreshing, setRouteRefreshing] = useState(false);
+  const [routeAnnouncement, setRouteAnnouncement] = useState('');
+  const relayRef = useRef(relay);
+  const routeHasLoadedRef = useRef(false);
+  const routeRefreshRef = useRef<RelayRouteRefreshController | null>(null);
 
   useEffect(() => {
     const draft = getLetterDraftById(letterId) || (getLetterDraft().id === letterId ? getLetterDraft() : null);
@@ -57,6 +66,7 @@ function RelayContent() {
       recipient: draft?.address.name || draft?.recipient || 'your correspondent',
     });
     setRelay(localRelay);
+    relayRef.current = localRelay;
     setDestination(
       localRelay.destinationNeighborhood
       || draft?.address.city
@@ -69,16 +79,70 @@ function RelayContent() {
       setNotice('');
     }
 
-    let active = true;
-    void getRemoteRelayHandoffs(letterId).then((remote) => {
-      if (active && remote) setRelay(mergeRemoteRelayHandoffs(localRelay, remote));
-    });
-    return () => {
-      active = false;
-    };
   }, [carrierMode, joinRequested, letterId]);
 
+  useEffect(() => {
+    if (viewMode !== 'sender') return;
+
+    routeHasLoadedRef.current = false;
+    setRouteCheckedAt(null);
+    setRouteRefreshError(false);
+    setRouteRefreshing(false);
+    setRouteAnnouncement('');
+
+    const controller = startRelayRouteRefresh({
+      load: async () => {
+        const handoffs = await getRemoteRelayHandoffs(letterId);
+        if (handoffs === null) throw new Error('Relay route updates are unavailable.');
+        return handoffs;
+      },
+      onData: (remote) => {
+        const previousIds = new Set(relayRef.current.handoffs.map((handoff) => handoff.id));
+        const newHandoff = routeHasLoadedRef.current
+          ? remote.find((handoff) => !previousIds.has(handoff.id))
+          : undefined;
+        routeHasLoadedRef.current = true;
+        setRouteCheckedAt(Date.now());
+        setRouteRefreshError(false);
+        setRouteAnnouncement(newHandoff
+          ? `New handoff recorded: ${newHandoff.name}${newHandoff.neighborhood ? ` in ${newHandoff.neighborhood}` : ''}.`
+          : '');
+        const merged = mergeRemoteRelayHandoffs(relayRef.current, remote);
+        relayRef.current = merged;
+        setRelay(merged);
+      },
+      onError: () => {
+        setRouteRefreshError(true);
+        setRouteAnnouncement('');
+      },
+    });
+
+    routeRefreshRef.current = controller;
+    return () => {
+      controller.stop();
+      if (routeRefreshRef.current === controller) routeRefreshRef.current = null;
+    };
+  }, [letterId, viewMode]);
+
+  const refreshRoute = () => {
+    const controller = routeRefreshRef.current;
+    if (!controller) return;
+    setRouteRefreshing(true);
+    setRouteRefreshError(false);
+    void controller.refresh().finally(() => {
+      if (routeRefreshRef.current === controller) setRouteRefreshing(false);
+    });
+  };
+
+  useEffect(() => {
+    relayRef.current = relay;
+  }, [relay]);
+
   const stats = getRelayStats(relay);
+  const hasCarrier = relay.handoffs.some((handoff) => handoff.role === 'carrier');
+  const lastRouteCheckTime = routeCheckedAt
+    ? new Date(routeCheckedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' })
+    : '';
   const waypoints = relay.gpsWaypoints ?? [];
   const completedHandoffs = relay.handoffs.filter((handoff) => !handoff.next);
 
@@ -180,12 +244,14 @@ function RelayContent() {
           <>
             <section className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
               <div className="min-w-0 rounded-3xl bg-[#2b45f7] p-5 text-white shadow-[0_20px_50px_rgba(43,69,247,.18)] sm:p-8">
-                <p className="font-mono text-[0.66rem] font-bold uppercase tracking-[0.18em] text-white/75">Human relay · in progress</p>
+                <p className="font-mono text-[0.66rem] font-bold uppercase tracking-[0.18em] text-white/75">{hasCarrier ? 'Human relay · in progress' : 'Human relay · waiting for its first carrier'}</p>
                 <h1 className="mt-4 max-w-3xl font-headline-md text-4xl font-semibold leading-[1.02] tracking-[-0.045em] sm:text-5xl">
-                  Your drop is on a journey.
+                  {hasCarrier ? 'Your drop is on a journey.' : 'Your drop is ready to travel.'}
                 </h1>
                 <p className="mt-4 max-w-2xl text-base leading-relaxed text-white/85 sm:text-lg">
-                  “{relay.subject}” is traveling toward {relay.recipient}. Carriers can see the route and handoff details; the drop stays sealed.
+                  {hasCarrier
+                    ? `“${relay.subject}” is traveling toward ${relay.recipient}. Carriers can see the route and handoff details; the drop stays sealed.`
+                    : `“${relay.subject}” is ready to travel toward ${relay.recipient}. Invite someone you trust to carry it; the drop stays sealed.`}
                 </p>
 
                 <div className="mt-7 grid grid-cols-3 border-y border-white/20 py-4">
@@ -251,6 +317,28 @@ function RelayContent() {
 
             <section className="mt-10 grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(280px,.65fr)] lg:items-start">
               <div className="min-w-0">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[rgba(16,42,67,.1)] bg-white px-4 py-3">
+                  <div>
+                    <p className="eyebrow text-[#2b45f7]">Live route</p>
+                    <p className={`mt-1 text-xs ${routeRefreshError ? 'text-[#9d392e]' : 'text-on-surface-variant'}`} role="status" aria-live="polite" aria-atomic="true">
+                      {routeRefreshing
+                        ? 'Checking route updates…'
+                        : routeRefreshError
+                        ? routeCheckedAt ? `Updates unavailable. Showing the route last checked at ${lastRouteCheckTime}.` : 'Could not load shared route updates. Your saved route is still available.'
+                        : routeAnnouncement || (routeCheckedAt ? 'No new handoffs. Checked just now.' : 'Checking for route updates…')}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={refreshRoute}
+                    disabled={routeRefreshing}
+                    aria-busy={routeRefreshing}
+                    className="button-secondary !min-h-11 !rounded-xl"
+                  >
+                    <RefreshCw className={`h-4 w-4 text-[#2b45f7] ${routeRefreshing ? 'animate-spin' : ''}`} aria-hidden="true" />
+                    {routeRefreshing ? 'Checking…' : routeRefreshError ? 'Try again' : 'Refresh route'}
+                  </button>
+                </div>
                 <div className="flex flex-wrap items-end justify-between gap-4">
                   <div><p className="eyebrow text-[#2b45f7]">Route map</p><h2 className="section-title mt-2">Every hand leaves a stop.</h2></div>
                   <span className="meta">{waypoints.length} mapped stops</span>

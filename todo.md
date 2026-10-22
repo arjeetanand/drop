@@ -2,6 +2,15 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
+## Current Checkpoint — 2026-10-22 (Live relay route)
+
+- [x] Sender relay and journey views refresh route state immediately, every 15 seconds while visible, and on tab return; manual refresh has loading, success, and saved-route error states.
+- [x] Empty journeys say they are waiting for the first carrier; expired invites hide QR/copy controls, announce expiry once, and offer a replacement.
+- [x] Added a focused regression for refresh lifecycle and request coalescing; `npm test` passes 93/93, lint, TypeScript, and the production build pass.
+- [x] Added a Supabase migration and SQL regression for participant route reads and hidden handoff token/idempotency columns.
+- [x] Executed the SQL regression against a throwaway PostgreSQL cluster in `/private/tmp`; it passed and did not touch Supabase.
+- [ ] Check the rendered route screens at phone and desktop sizes when a browser runtime is available; hosted account-to-account verification remains open because no hosted Drop project exists.
+
 ## Current Checkpoint — 2026-10-22
 
 - Local Supabase Auth now allows Drop callbacks on the documented 4004, 5004, and 6004 ports for loopback hosts, while retaining port 3000. The focused redirect test, all 86 unit tests, lint, and TypeScript checks pass.

@@ -1,9 +1,9 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { ArrowLeft, ArrowRight, Check, Clock3, Copy, MapPin, QrCode, Route as RouteIcon, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Clock3, Copy, MapPin, QrCode, RefreshCw, Route as RouteIcon, ShieldCheck } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { LetterCard } from '@/components/LetterCard';
 import { RelayChain } from '@/components/RelayChain';
@@ -15,6 +15,7 @@ import { getJourneyLetters } from '@/lib/journeyView';
 import { getJourneyNotes, getLetterDraft, getLettersWithDraft, saveJourneyNotes, type JourneyNote } from '@/lib/letterStore';
 import { getInitialRelayState, getRelayState, getRelayStats, getRemoteRelayHandoffs, issueRelayHandoffToken, relayToTrackingEvents, type RelayState } from '@/lib/relayStore';
 import { mergeRemoteRelayHandoffs } from '@/components/relayPresentation';
+import { startRelayRouteRefresh, type RelayRouteRefreshController } from '@/lib/relayRouteRefresh';
 
 interface SenderInvite {
   url: string;
@@ -88,6 +89,13 @@ function JourneyDetail({ requestedLetterId }: { requestedLetterId: string }) {
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [routeCheckedAt, setRouteCheckedAt] = useState<number | null>(null);
+  const [routeRefreshError, setRouteRefreshError] = useState(false);
+  const [routeRefreshing, setRouteRefreshing] = useState(false);
+  const [routeAnnouncement, setRouteAnnouncement] = useState('');
+  const relayRef = useRef(relay);
+  const routeHasLoadedRef = useRef(false);
+  const routeRefreshRef = useRef<RelayRouteRefreshController | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -102,10 +110,7 @@ function JourneyDetail({ requestedLetterId }: { requestedLetterId: string }) {
         setLoading(false);
         return;
       }
-      const [remoteJourney, remoteHandoffs] = await Promise.all([
-        getRemoteJourney(requestedLetterId).catch(() => null),
-        getRemoteRelayHandoffs(requestedLetterId).catch(() => []),
-      ]);
+      const remoteJourney = await getRemoteJourney(requestedLetterId).catch(() => null);
       if (!active) return;
       const initial = getRelayState(requestedLetterId, {
         subject: selectedLetter?.subject || draft.subject || currentFocusDraft.subject,
@@ -113,7 +118,8 @@ function JourneyDetail({ requestedLetterId }: { requestedLetterId: string }) {
       });
       setJourneyLetter(selectedLetter);
       setLetterId(requestedLetterId);
-      setRelay(remoteHandoffs?.length ? mergeRemoteRelayHandoffs(initial, remoteHandoffs) : initial);
+      setRelay(initial);
+      relayRef.current = initial;
       setNotes(remoteJourney?.notes.length ? remoteJourney.notes : getJourneyNotes(requestedLetterId));
       setLoading(false);
     };
@@ -122,12 +128,73 @@ function JourneyDetail({ requestedLetterId }: { requestedLetterId: string }) {
   }, [requestedLetterId]);
 
   useEffect(() => {
+    if (!journeyLetter || journeyLetter.id !== letterId) return;
+
+    routeHasLoadedRef.current = false;
+    setRouteCheckedAt(null);
+    setRouteRefreshError(false);
+    setRouteRefreshing(false);
+    setRouteAnnouncement('');
+
+    const controller = startRelayRouteRefresh({
+      load: async () => {
+        const handoffs = await getRemoteRelayHandoffs(letterId);
+        if (handoffs === null) throw new Error('Relay route updates are unavailable.');
+        return handoffs;
+      },
+      onData: (remote) => {
+        const previousIds = new Set(relayRef.current.handoffs.map((handoff) => handoff.id));
+        const newHandoff = routeHasLoadedRef.current
+          ? remote.find((handoff) => !previousIds.has(handoff.id))
+          : undefined;
+        routeHasLoadedRef.current = true;
+        setRouteCheckedAt(Date.now());
+        setRouteRefreshError(false);
+        setRouteAnnouncement(newHandoff
+          ? `New handoff recorded: ${newHandoff.name}${newHandoff.neighborhood ? ` in ${newHandoff.neighborhood}` : ''}.`
+          : '');
+        const merged = mergeRemoteRelayHandoffs(relayRef.current, remote);
+        relayRef.current = merged;
+        setRelay(merged);
+      },
+      onError: () => {
+        setRouteRefreshError(true);
+        setRouteAnnouncement('');
+      },
+    });
+
+    routeRefreshRef.current = controller;
+    return () => {
+      controller.stop();
+      if (routeRefreshRef.current === controller) routeRefreshRef.current = null;
+    };
+  }, [journeyLetter, letterId]);
+
+  const refreshRoute = () => {
+    const controller = routeRefreshRef.current;
+    if (!controller) return;
+    setRouteRefreshing(true);
+    setRouteRefreshError(false);
+    void controller.refresh().finally(() => {
+      if (routeRefreshRef.current === controller) setRouteRefreshing(false);
+    });
+  };
+
+  useEffect(() => {
+    relayRef.current = relay;
+  }, [relay]);
+
+  useEffect(() => {
     if (!invite) return;
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, [invite]);
 
   const stats = getRelayStats(relay);
+  const hasCarrier = relay.handoffs.some((handoff) => handoff.role === 'carrier');
+  const lastRouteCheckTime = routeCheckedAt
+    ? new Date(routeCheckedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' })
+    : '';
   const events = relayToTrackingEvents(relay);
   const destination = relay.destinationNeighborhood || relay.recipient || 'Recipient area';
   const inviteRemainingMs = invite ? Math.max(0, Date.parse(invite.expiresAt) - now) : 0;
@@ -212,8 +279,8 @@ function JourneyDetail({ requestedLetterId }: { requestedLetterId: string }) {
           <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
             <div className="max-w-2xl">
               <span className="inline-flex items-center gap-2 rounded-full bg-[#2b45f7]/[0.08] px-3 py-1.5 font-mono text-[0.62rem] font-bold uppercase tracking-[0.12em] text-[#2b45f7]"><span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />Journey tracker</span>
-              <h1 className="mt-4 font-headline-md text-3xl font-semibold leading-tight tracking-[-0.035em] text-ink-navy sm:text-4xl">A sealed drop, in motion.</h1>
-              <p className="mt-3 text-sm leading-relaxed text-on-surface-variant sm:text-base">Follow the route of “{relay.subject}” toward {relay.recipient}. Carriers can update the route without opening the drop.</p>
+              <h1 className="mt-4 font-headline-md text-3xl font-semibold leading-tight tracking-[-0.035em] text-ink-navy sm:text-4xl">{hasCarrier ? 'A sealed drop, in motion.' : 'A sealed drop, ready to travel.'}</h1>
+              <p className="mt-3 text-sm leading-relaxed text-on-surface-variant sm:text-base">{hasCarrier ? `Follow the route of “${relay.subject}” toward ${relay.recipient}. Carriers can update the route without opening the drop.` : `“${relay.subject}” is waiting for its first carrier. Invite someone you trust; the drop stays sealed.`}</p>
             </div>
             <button type="button" onClick={() => void handleInviteCarrier()} disabled={issuingInvite} className="button-primary min-h-12 w-full !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white sm:w-auto">
               <QrCode className="h-4 w-4" aria-hidden="true" />{issuingInvite ? 'Creating invite…' : 'Invite a carrier'}<ArrowRight className="h-4 w-4" aria-hidden="true" />
@@ -231,26 +298,51 @@ function JourneyDetail({ requestedLetterId }: { requestedLetterId: string }) {
 
         {invite && (
           <section className="mt-4 rounded-3xl border border-[rgba(16,42,67,.12)] bg-white p-5 shadow-[0_12px_36px_rgba(16,42,67,.06)] sm:mt-5 sm:p-7">
+            <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{inviteExpired ? 'Carrier invite expired. Make a new invite to continue.' : ''}</p>
             <div className="grid gap-5 sm:grid-cols-[1fr_auto] sm:items-center">
               <div>
                 <p className="eyebrow text-[#2b45f7]">Carrier invite</p>
                 <h2 className="mt-2 font-headline-md text-2xl text-ink-navy">Share the next hand.</h2>
                 <p className="mt-2 max-w-xl text-sm leading-relaxed text-on-surface-variant">This one-time invite expires in ten minutes. It contains no drop content or media.</p>
                 <div className="mt-4 flex flex-wrap items-center gap-2">
-                  <span className={`inline-flex min-h-9 items-center gap-2 rounded-full px-3 text-xs font-bold ${inviteExpired ? 'bg-[#f3efe7] text-on-surface-variant' : 'bg-[#2b45f7]/[0.08] text-[#2b45f7]'}`} role="status" aria-live="polite"><Clock3 className="h-3.5 w-3.5" aria-hidden="true" />{inviteExpired ? 'Invite expired' : `Expires in ${Math.floor(inviteRemainingMs / 60000)}:${String(Math.floor((inviteRemainingMs % 60000) / 1000)).padStart(2, '0')}`}</span>
+                  <span className={`inline-flex min-h-9 items-center gap-2 rounded-full px-3 text-xs font-bold ${inviteExpired ? 'bg-[#f3efe7] text-on-surface-variant' : 'bg-[#2b45f7]/[0.08] text-[#2b45f7]'}`} aria-label={inviteExpired ? 'Invite expired' : `Invite expires in ${Math.floor(inviteRemainingMs / 60000)}:${String(Math.floor((inviteRemainingMs % 60000) / 1000)).padStart(2, '0')}`}><Clock3 className="h-3.5 w-3.5" aria-hidden="true" />{inviteExpired ? 'Invite expired' : `Expires in ${Math.floor(inviteRemainingMs / 60000)}:${String(Math.floor((inviteRemainingMs % 60000) / 1000)).padStart(2, '0')}`}</span>
                   <span className="inline-flex min-h-9 items-center gap-2 rounded-full bg-[#f5f3ed] px-3 text-xs font-bold text-ink-navy"><ShieldCheck className="h-3.5 w-3.5 text-[#2b45f7]" aria-hidden="true" />Route only</span>
                 </div>
                 <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                  <button type="button" onClick={() => void copyInvite()} className="button-secondary min-h-11 !rounded-xl"><Copy className="h-4 w-4" aria-hidden="true" />{copied ? 'Link copied' : 'Copy invite link'}</button>
+                  {!inviteExpired && <button type="button" onClick={() => void copyInvite()} className="button-secondary min-h-11 !rounded-xl"><Copy className="h-4 w-4" aria-hidden="true" />{copied ? 'Link copied' : 'Copy invite link'}</button>}
                   {inviteExpired && <button type="button" onClick={() => void handleInviteCarrier()} disabled={issuingInvite} className="button-quiet min-h-11"><QrCode className="h-4 w-4" aria-hidden="true" />Make a new invite</button>}
                 </div>
               </div>
-              <div className="mx-auto flex w-fit items-center justify-center rounded-2xl border border-[rgba(16,42,67,.12)] bg-white p-3 sm:mx-0" role="img" aria-label="One-time secure carrier invite QR code"><QRCodeSVG value={invite.url} size={180} level="M" includeMargin={false} /></div>
+              {inviteExpired
+                ? <div className="mx-auto flex h-48 w-48 flex-col items-center justify-center gap-2 rounded-2xl border border-[rgba(16,42,67,.12)] bg-[#f5f3ed] p-4 text-center text-sm font-semibold text-on-surface-variant sm:mx-0"><Clock3 className="h-5 w-5" aria-hidden="true" />Invite expired</div>
+                : <div className="mx-auto flex w-fit items-center justify-center rounded-2xl border border-[rgba(16,42,67,.12)] bg-white p-3 sm:mx-0" role="img" aria-label="One-time secure carrier invite QR code"><QRCodeSVG value={invite.url} size={180} level="M" includeMargin={false} /></div>}
             </div>
           </section>
         )}
 
         <section className="mt-8 grid gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(290px,.65fr)] lg:items-start">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[rgba(16,42,67,.1)] bg-white px-4 py-3 lg:col-span-2">
+            <div>
+              <p className="eyebrow text-[#2b45f7]">Live route</p>
+              <p className={`mt-1 text-xs ${routeRefreshError ? 'text-[#9d392e]' : 'text-on-surface-variant'}`} role="status" aria-live="polite" aria-atomic="true">
+                {routeRefreshing
+                  ? 'Checking route updates…'
+                  : routeRefreshError
+                  ? routeCheckedAt ? `Updates unavailable. Showing the route last checked at ${lastRouteCheckTime}.` : 'Could not load shared route updates. Your saved route is still available.'
+                  : routeAnnouncement || (routeCheckedAt ? 'No new handoffs. Checked just now.' : 'Checking for route updates…')}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={refreshRoute}
+              disabled={routeRefreshing}
+              aria-busy={routeRefreshing}
+              className="button-secondary !min-h-11 !rounded-xl"
+            >
+              <RefreshCw className={`h-4 w-4 text-[#2b45f7] ${routeRefreshing ? 'animate-spin' : ''}`} aria-hidden="true" />
+              {routeRefreshing ? 'Checking…' : routeRefreshError ? 'Try again' : 'Refresh route'}
+            </button>
+          </div>
           <div className="min-w-0 space-y-5">
             <section className="overflow-hidden rounded-3xl border border-[rgba(16,42,67,.12)] bg-white p-4 shadow-[0_12px_36px_rgba(16,42,67,.05)] sm:p-6">
               <div className="flex flex-wrap items-end justify-between gap-3"><div><p className="eyebrow">Route map</p><h2 className="mt-1 font-headline-md text-2xl text-ink-navy">Every hand leaves a stop.</h2></div><span className="font-mono text-[0.62rem] text-on-surface-variant">{relay.gpsWaypoints?.length || 0} stops</span></div>
