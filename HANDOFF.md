@@ -6,7 +6,8 @@ Updated: 2026-10-23
 
 - Active code checkout: /Users/arjeetanand/projects/drop
 - GitHub remote: private repository arjeetanand/drop
-- Current branch: feat/relay-handoff-refresh-recovery, based on feat/relay-token-fragment at 0b211ee and pushed to origin; no pull request has been created.
+- Current branch: `feat/mailbox-filter-empty-states`, based on `bef0ed4`, pushed to origin; no pull request has been created.
+- Mailbox empty-state feature commit: `10efead` (`feat: tailor mailbox empty states to filters`), pushed to `origin/feat/mailbox-filter-empty-states`; the docs update is committed separately.
 - Recipient-first composer commit: `a9049cf` (`feat: put recipient first in drop composer`), pushed to `origin/feat/recipient-first-compose`.
 - Relay token URL commit: `fd5a327` (`fix: keep relay bearer tokens out of request URLs`), pushed to `origin/feat/relay-token-fragment`; no pull request has been created.
 - Prior handoff/docs commits on feat/relay-token-fragment: 629f480 and 7fc824f, both pushed to origin.
@@ -38,6 +39,7 @@ Updated: 2026-10-23
 - Home reuses the featured incoming-drop card for the “Just landed” label; Mailbox has a dismissible direct-open cue. Burst arrivals get a count; only dispatched or delivered received drops are eligible.
 - Added sender reaction cues on Home and Mailbox and live reaction refresh on open sent-drop pages. A private sender-scoped Broadcast contains only the drop ID; reaction content is reloaded through participant RLS. Reconnect and visible-tab refresh recover missed signals, baseline and duplicate reactions are suppressed, and accessible status text names the reaction. A database guard rejects moving a reaction to a different drop.
 - Reordered the composer so account readiness and recipient confirmation appear before note, photo, GIF, and styling controls. Existing recipient checks, draft persistence, invite flow, and send handling are reused.
+- Added filter-specific mailbox empty states for All, Samples, On a journey, Received, Sent, and Drafts. Received points to handle setup; in-transit drops point to the relay composer. Empty-search feedback is announced accessibly, and clearing it preserves the selected filter.
 
 ## Verification
 
@@ -48,13 +50,14 @@ Updated: 2026-10-23
 - Recipient-first composer `a9049cf`: `npm test` passed 107/107, lint, typecheck, Webpack production build, and `git diff --check` passed. Home, Compose, and Mailbox returned HTTP 200 on port 4004. Rendered viewport, keyboard, and safe-area checks remain open because browser automation is unavailable. The disposable PostgreSQL reaction-broadcast fixture also remains unverified; the isolated server failed with `shmget: Operation not permitted` in this sandbox. Build output included the existing Browserslist freshness and Tailwind easing warnings.
 - Relay token URL slice `fd5a327`: `npm test` passed 109/109, lint, `npx tsc --noEmit --incremental false`, Webpack production build, and `git diff --cached --check` passed. `/relay/scan` returned HTTP 200 on the local app at port 4004. Browser interaction with a real fragment invite remains unverified because browser automation is unavailable. The build reported the existing Browserslist freshness and Tailwind easing warnings.
 - Relay acceptance retry recovery a3a2ca9: focused tests pass 4/4, full npm test passes 113/113, lint, typecheck, Webpack production build, bash -n run.sh, and diff check pass. Home and relay routes return HTTP 200 on port 4004. The rendered lost-response refresh flow remains unverified.
+- Mailbox filter empty states `10efead`: `npm test` passes 118/118, lint, typecheck, Webpack production build, `bash -n run.sh`, and `git diff --check` pass. `/`, `/mailbox`, `/profile`, and `/compose?new=1&mode=relay` return HTTP 200 on port 4004. Isolated Chrome verified filter/search behavior and no horizontal overflow at 360px, 390px, and 430px; screen-reader and real-device verification remain open.
 - The SQL fixture `tests/db/drop_reaction_broadcast.sql` is written but was not run: Docker was unavailable and a temporary PostgreSQL startup failed in this environment. Hosted cross-account delivery and rendered browser/screen-reader checks remain unverified.
 - The inbox unit tests mock Supabase Realtime; the new broadcast policy and trigger have not been applied to local or hosted Supabase. Account-to-account delivery is not verified.
 - The live inbox feature is committed and pushed to its task branch; main/default branch was not changed.
 - The local Supabase config was not loaded by a running stack and email-link sign-in was not verified; no local Supabase service was running.
 - Playwright/Chrome at 390px checked QR handoff with location unchecked, opted in, and denied; manual PIN with location opted in; and a secure token invite with a manual neighborhood. The checks saw zero geocoder requests and no page runtime errors. Fixtures used synthetic data; this is not a hosted or cross-device handoff test.
 - The prior production build completed. Next emitted non-fatal Browserslist freshness and ambiguous Tailwind class warnings.
-- Browser and screen-reader checks of the new route UI were not available in this environment; no Chromium/Playwright/DevTools runtime is configured. A rendered check at phone and desktop widths remains pending.
+- The mailbox empty-state update was rendered in isolated headless Chrome at 360px, 390px, and 430px with no horizontal overflow. The Received search-empty state retained an H2 with polite live announcement, clearing search retained the filter, and the transit action opened the relay composer. Real screen-reader and device checks remain open.
 - `./run.sh` serves the local clone at `http://localhost:4004`; the app is left running. `/relay/scan` returned HTTP 200 after the relay URL change.
 - `.env.local` is present in the active checkout, mode 600, ignored by Git, and untracked. Its values were not displayed or staged.
 - The earlier route-security work remains on `feat/relay-route-live-refresh`, is not merged, and has no pull request.
@@ -74,4 +77,4 @@ Updated: 2026-10-23
 
 ## Run locally
 
-From /Users/arjeetanand/projects/drop, run npm ci, then ./run.sh. Drop uses http://localhost:4004; ./run.sh stop stops the project-owned process. The local Supabase smoke environment uses port 5004 and browser QA is reserved port 6004. Feature code commit a3a2ca9 is pushed to origin/feat/relay-handoff-refresh-recovery; the branch is not merged and has no pull request. A separate handoff documentation commit follows on the same branch.
+From /Users/arjeetanand/projects/drop, run npm ci, then ./run.sh. Drop uses http://localhost:4004; ./run.sh stop stops the project-owned process. The local Supabase smoke environment uses port 5004 and browser QA is reserved port 6004. Current feature commit `10efead` is pushed to `origin/feat/mailbox-filter-empty-states`; the branch is not merged and has no pull request. The documentation update is delivered in a separate commit.

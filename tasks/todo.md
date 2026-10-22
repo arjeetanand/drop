@@ -308,3 +308,13 @@ Commit each completed code change separately with a descriptive message and push
 - [x] Add regression tests for key scoping, exact retry restoration, expiry and malformed data cleanup, and unavailable browser storage.
 - [x] npm test passes 113/113; lint, typecheck, Webpack production build, bash -n run.sh, and git diff --check pass. The app restarted on port 4004 and /, /relay/scan, and /relay/handoff returned HTTP 200.
 - [ ] Verify an interrupted acceptance and page refresh in a rendered browser against local Supabase; browser automation and local Supabase are unavailable in this session.
+
+## Current follow-up — 2026-10-23 (mailbox filter empty states)
+
+- [x] Add distinct empty-state copy and next steps for All, Samples, On a journey, Received, Sent, and Drafts. Received directs people to profile handle setup; in-transit drops direct to the relay composer.
+- [x] Announce empty search results politely and clear the query while preserving the selected filter; whitespace-only queries count as empty.
+- [x] `npm test` passes 118/118, `npm run lint`, `npx tsc --noEmit --incremental false`, `npm run build -- --webpack`, `bash -n run.sh`, and `git diff --check` pass. `/`, `/mailbox`, `/profile`, and `/compose?new=1&mode=relay` return HTTP 200 on port 4004.
+- [x] Isolated Chrome verified no horizontal overflow at 360px, 390px, and 430px, confirmed the Received search-empty announcement and filter-preserving clear action, and followed the transit action to the relay composer.
+- [x] Code commit `10efead` is pushed to `origin/feat/mailbox-filter-empty-states`. This documentation update is committed separately.
+- [x] The old OneDrive `projects/drop` directory is absent from the synced path and connected folder listing. The local clone already has ignored `.env.local` at mode 600, so no file copy was needed; no secret values were read. The `/letter` folder was not changed.
+- [ ] Verify screen-reader announcements and real-device keyboard/safe-area behavior. Hosted account-to-account delivery and broader Drop acceptance remain open.
