@@ -262,3 +262,12 @@ Commit each completed code change separately with a descriptive message and push
 - [x] Replace opaque email-link network/response parsing errors with a clear retry message while preserving actionable Supabase Auth API errors; covered by three focused tests and shipped in `6cc9873`.
 - [x] Verified invite email sign-in, profile save/sync, and share-back in Edge against the loopback Supabase stack. A disposable account completed `/invite` → `/profile?invite=1` → synced handle → share-back; the copied payload contained only `@handle` and the local public `/u/<handle>` URL. Checked the flow at 360px and 390px, then removed the exact Auth user/profile and Mailpit message. No hosted project was used.
 - [x] Restricted public profile reads to username, display name, and bio; account metadata stays owner-only. Local Supabase smoke checks anonymous grants, signed-in owner scoping, recipient lookup, and mailbox sender embedding. `npm test` passes 81/81, lint, typecheck, and production build pass.
+
+## Current follow-up — 2026-10-22
+
+- [x] Save a stable media upload ID with each selected attachment and reuse it when a draft resumes or retries.
+- [x] Recover an unlinked final object after a lost response only when its bytes match the freshly validated retry; reject different media for a linked draft and attempt to remove its new staging object.
+- [x] Add regression coverage for lost-response recovery, one final object, staged cleanup on a linked-media conflict, and draft upload-ID persistence.
+- [x] Verification passed in an isolated checkout using the same commit and lockfile: `npm test` (84/84), lint, typecheck, `npm run build -- --webpack`, local smoke-script syntax, `bash -n run.sh`, and `git diff --check`.
+- [x] Exercise `run.sh` start/restart/stop and confirm the home and compose routes return HTTP 200 in the isolated checkout; the active checkout still needs its locked dependencies installed before it can run locally.
+- [ ] Run the authenticated local Supabase smoke and test a real lost-response retry in the browser. The local auth health endpoint on `127.0.0.1:54321` was unavailable; no local database was started or reset, and no hosted project exists.
