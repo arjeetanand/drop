@@ -451,12 +451,49 @@ function Composer() {
           <p className="eyebrow">Make a drop</p>
           <h1 className="mt-2 font-headline-md text-4xl font-semibold leading-[1.02] tracking-[-0.045em] text-ink-navy sm:text-5xl">Send a little moment.</h1>
           <p className="mt-3 max-w-xl text-sm leading-relaxed text-on-surface-variant sm:text-base">One person, one thing you wanted them to see. The rest can wait.</p>
+          {accountState !== 'connected' && <div className="rounded-xl border border-[#e9d6c7] bg-[#fff6ec] p-4"><p className="text-sm font-semibold text-ink-navy">{accountState === 'checking' ? 'Checking your account…' : accountState === 'unavailable' ? 'Preview mode' : 'Connect your account to send.'}</p><p className="mt-1 text-xs leading-relaxed text-on-surface-variant">{accountState === 'unavailable' ? 'Sign-in isn’t available in this preview. Your drafts stay on this device.' : 'A private drop can only reach someone with a Drop account.'}</p><Link href={profileHref} onClick={saveBeforeLeaving} aria-disabled={attachmentSaving || Boolean(file && !attachmentSaved)} className="mt-2 inline-flex min-h-11 items-center text-xs font-bold text-[#2b45f7]">{accountState === 'unavailable' ? 'Account options' : 'Your profile'} <ArrowRightIcon /></Link></div>}
+          {accountState === 'connected' && <p className="mt-4 rounded-xl border border-[#cae6d5] bg-[#f0f9f3] px-4 py-3 text-sm font-semibold text-[#26734f]" role="status">Your account is ready. Start by choosing who gets this drop.</p>}
         </div>
 
         <form onSubmit={handleSend} aria-busy={deleting} className="mt-6 sm:mt-8">
           <fieldset disabled={deleting} aria-label="Compose drop" className="m-0 min-w-0 space-y-4 border-0 p-0 sm:space-y-5">
+          <section className="rounded-2xl border border-[rgba(16,42,67,.12)] bg-white/55 p-4 sm:p-6">
+            <p className="eyebrow">First · your person</p>
+            <label htmlFor="drop-recipient" className="field-label mt-1 block">Who should get this drop?</label>
+            <div className="mt-2 flex items-center rounded-xl border border-[rgba(16,42,67,.14)] bg-white px-3 focus-within:ring-2 focus-within:ring-[#2b45f7]/35">
+              <span className="font-mono text-sm font-bold text-[#2b45f7]">@</span>
+              <input id="drop-recipient" value={recipient.replace(/^@/, '')} onChange={handleRecipientChange} disabled={sending || sharingInvite} className="min-h-12 min-w-0 flex-1 border-0 bg-transparent px-2 text-base text-ink-navy outline-none placeholder:text-on-surface-variant/60 disabled:opacity-60" placeholder="their.username" autoCapitalize="none" autoCorrect="off" spellCheck={false} aria-invalid={recipientHasValue && !recipientUsername} aria-describedby={recipientHasValue && !recipientUsername ? 'drop-recipient-help drop-recipient-error' : 'drop-recipient-help'} />
+            </div>
+            <p id="drop-recipient-help" className="field-help mt-2">They need a Drop account. Your drop is private between you two. Handles use 2–24 letters, numbers, periods, underscores, or hyphens.</p>
+            {recentRecipients.length > 0 && <div className="mt-3">
+              <p className="field-help">Recent people from your sent drops</p>
+              <div role="group" aria-label="Recent recipients" className="mt-2 flex flex-wrap gap-2">
+                {recentRecipients.map(({ username, displayName }) => <button key={username} type="button" aria-label={`Check ${displayName} (@${username})`} onClick={() => selectRecentRecipient(username)} disabled={sending || sharingInvite} className="inline-flex min-h-12 min-w-0 max-w-full flex-col items-start justify-center rounded-xl border border-[rgba(16,42,67,.14)] bg-white/75 px-3 py-1.5 text-left transition-colors hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2b45f7] disabled:opacity-50">
+                  <span className="block max-w-[10rem] truncate text-xs font-semibold text-ink-navy">{displayName}</span>
+                  <span className="block max-w-[10rem] truncate font-mono text-[0.62rem] text-on-surface-variant">@{username}</span>
+                </button>)}
+              </div>
+            </div>}
+            {recipientHasValue && !recipientUsername && <p id="drop-recipient-error" className="error-notice mt-2" role="status" aria-live="polite">Enter a valid Drop handle to send.</p>}
+            <button type="button" onClick={() => void checkRecipient()} disabled={!recipientUsername || recipientCheck.status === 'checking' || accountState !== 'connected' || sending || sharingInvite} className="button-secondary mt-3 !min-h-12 w-full !rounded-xl disabled:opacity-45">{recipientCheck.status === 'checking' ? 'Checking…' : recipientCheck.status === 'found' || recipientCheck.status === 'not-found' ? 'Check again' : recipientCheck.status === 'idle' ? 'Check handle' : 'Try again'}</button>
+            {recipientCheck.status === 'checking' && recipientCheck.username === recipientUsername && <p className="field-help mt-2" role="status" aria-live="polite">Checking @{recipientUsername}…</p>}
+            {confirmedRecipient && <p className="mt-2 text-sm font-semibold text-[#26734f]" role="status" aria-live="polite">Recipient confirmed: {confirmedRecipient.displayName} (@{confirmedRecipient.username})</p>}
+            {recipientCheck.status === 'not-found' && recipientCheck.username === recipientUsername && <>
+              <p className="error-notice mt-2" role="status" aria-live="polite">No Drop account found for @{recipientUsername}.</p>
+              <div className="mt-3 rounded-xl border border-[rgba(16,42,67,.12)] bg-white/75 p-3">
+                <p className="text-xs leading-relaxed text-on-surface-variant">Your draft stays here. Invite them to Drop, then check their handle again.</p>
+                <button type="button" onClick={() => void inviteRecipient()} disabled={sharingInvite || sending || deleting} className="button-secondary mt-3 !min-h-12 w-full !rounded-xl disabled:opacity-50">
+                  <Share2 className="h-4 w-4" aria-hidden="true" />{sharingInvite ? 'Opening share…' : 'Invite them to Drop'}
+                </button>
+                {inviteNotice && <p className="field-help mt-2 break-words" role="status" aria-live="polite">{inviteNotice}</p>}
+                {manualInviteUrl && <code tabIndex={0} aria-label="Select and copy this invite link" className="mt-2 block select-all break-all rounded-lg bg-[#f5f1e9] px-2 py-1.5 font-mono text-[0.68rem] text-ink-navy">{manualInviteUrl}</code>}
+              </div>
+            </>}
+            {recipientCheck.status === 'error' && recipientCheck.username === recipientUsername && <p className="error-notice mt-2" role="status" aria-live="polite">Couldn’t check that handle. Try again.</p>}
+          </section>
+
           <fieldset>
-            <legend className="field-label">What are we sending?</legend>
+            <legend className="field-label">Then, what are we sending?</legend>
             <div className="mt-2 grid grid-cols-3 gap-2">
               {([
                 ['text', 'A note', Type],
@@ -509,40 +546,6 @@ function Composer() {
             </div>
           </section>
 
-          <section className="rounded-2xl border border-[rgba(16,42,67,.12)] bg-white/55 p-4 sm:p-6">
-            <label htmlFor="drop-recipient" className="field-label">Send to one person</label>
-            <div className="mt-2 flex items-center rounded-xl border border-[rgba(16,42,67,.14)] bg-white px-3 focus-within:ring-2 focus-within:ring-[#2b45f7]/35">
-              <span className="font-mono text-sm font-bold text-[#2b45f7]">@</span>
-              <input id="drop-recipient" value={recipient.replace(/^@/, '')} onChange={handleRecipientChange} disabled={sending || sharingInvite} className="min-h-12 min-w-0 flex-1 border-0 bg-transparent px-2 text-base text-ink-navy outline-none placeholder:text-on-surface-variant/60 disabled:opacity-60" placeholder="their.username" autoCapitalize="none" autoCorrect="off" spellCheck={false} aria-invalid={recipientHasValue && !recipientUsername} aria-describedby={recipientHasValue && !recipientUsername ? 'drop-recipient-help drop-recipient-error' : 'drop-recipient-help'} />
-            </div>
-            <p id="drop-recipient-help" className="field-help mt-2">They need a Drop account so the note stays between you two. Handles use 2–24 letters, numbers, periods, underscores, or hyphens.</p>
-            {recentRecipients.length > 0 && <div className="mt-3">
-              <p className="field-help">Recent people from your sent drops</p>
-              <div role="group" aria-label="Recent recipients" className="mt-2 flex flex-wrap gap-2">
-                {recentRecipients.map(({ username, displayName }) => <button key={username} type="button" aria-label={`Check ${displayName} (@${username})`} onClick={() => selectRecentRecipient(username)} disabled={sending || sharingInvite} className="inline-flex min-h-12 min-w-0 max-w-full flex-col items-start justify-center rounded-xl border border-[rgba(16,42,67,.14)] bg-white/75 px-3 py-1.5 text-left transition-colors hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2b45f7] disabled:opacity-50">
-                  <span className="block max-w-[10rem] truncate text-xs font-semibold text-ink-navy">{displayName}</span>
-                  <span className="block max-w-[10rem] truncate font-mono text-[0.62rem] text-on-surface-variant">@{username}</span>
-                </button>)}
-              </div>
-            </div>}
-            {recipientHasValue && !recipientUsername && <p id="drop-recipient-error" className="error-notice mt-2" role="status" aria-live="polite">Enter a valid Drop handle to send.</p>}
-            <button type="button" onClick={() => void checkRecipient()} disabled={!recipientUsername || recipientCheck.status === 'checking' || accountState !== 'connected' || sending || sharingInvite} className="button-secondary mt-3 !min-h-12 w-full !rounded-xl disabled:opacity-45">{recipientCheck.status === 'checking' ? 'Checking…' : recipientCheck.status === 'found' || recipientCheck.status === 'not-found' ? 'Check again' : recipientCheck.status === 'idle' ? 'Check handle' : 'Try again'}</button>
-            {recipientCheck.status === 'checking' && recipientCheck.username === recipientUsername && <p className="field-help mt-2" role="status" aria-live="polite">Checking @{recipientUsername}…</p>}
-            {confirmedRecipient && <p className="mt-2 text-sm font-semibold text-[#26734f]" role="status" aria-live="polite">Recipient confirmed: {confirmedRecipient.displayName} (@{confirmedRecipient.username})</p>}
-            {recipientCheck.status === 'not-found' && recipientCheck.username === recipientUsername && <>
-              <p className="error-notice mt-2" role="status" aria-live="polite">No Drop account found for @{recipientUsername}.</p>
-              <div className="mt-3 rounded-xl border border-[rgba(16,42,67,.12)] bg-white/75 p-3">
-                <p className="text-xs leading-relaxed text-on-surface-variant">Your draft stays here. Invite them to Drop, then check their handle again.</p>
-                <button type="button" onClick={() => void inviteRecipient()} disabled={sharingInvite || sending || deleting} className="button-secondary mt-3 !min-h-12 w-full !rounded-xl disabled:opacity-50">
-                  <Share2 className="h-4 w-4" aria-hidden="true" />{sharingInvite ? 'Opening share…' : 'Invite them to Drop'}
-                </button>
-                {inviteNotice && <p className="field-help mt-2 break-words" role="status" aria-live="polite">{inviteNotice}</p>}
-                {manualInviteUrl && <code tabIndex={0} aria-label="Select and copy this invite link" className="mt-2 block select-all break-all rounded-lg bg-[#f5f1e9] px-2 py-1.5 font-mono text-[0.68rem] text-ink-navy">{manualInviteUrl}</code>}
-              </div>
-            </>}
-            {recipientCheck.status === 'error' && recipientCheck.username === recipientUsername && <p className="error-notice mt-2" role="status" aria-live="polite">Couldn’t check that handle. Try again.</p>}
-          </section>
-
           <fieldset className="rounded-2xl border border-[rgba(16,42,67,.12)] bg-white/55 p-4 sm:p-6">
             <legend className="field-label px-1">How should it get there?</legend>
             <div className="mt-1 grid grid-cols-2 gap-2">
@@ -567,7 +570,6 @@ function Composer() {
 
           {error && <p className="notice error-notice" role="alert">{error}</p>}
           {notice && !error && <p className="notice" role="status">{notice}</p>}
-          {accountState !== 'connected' && <div className="rounded-xl border border-[#e9d6c7] bg-[#fff6ec] p-4"><p className="text-sm font-semibold text-ink-navy">{accountState === 'checking' ? 'Checking your account…' : accountState === 'unavailable' ? 'Preview mode' : 'Connect your account to send.'}</p><p className="mt-1 text-xs leading-relaxed text-on-surface-variant">{accountState === 'unavailable' ? 'Sign-in isn’t available in this preview. Your drafts stay on this device.' : 'A private drop can only reach someone with a Drop account.'}</p><Link href={profileHref} onClick={saveBeforeLeaving} aria-disabled={attachmentSaving || Boolean(file && !attachmentSaved)} className="mt-2 inline-flex min-h-11 items-center text-xs font-bold text-[#2b45f7]">{accountState === 'unavailable' ? 'Account options' : 'Your profile'} <ArrowRightIcon /></Link></div>}
 
           <div className="flex flex-col gap-2 pb-3">
             <Link href={draft ? `/compose/preview?letter=${encodeURIComponent(draft.id)}` : '/compose/preview'} onClick={saveBeforeLeaving} className="button-secondary !min-h-12 !rounded-xl"><Eye className="h-4 w-4" aria-hidden="true" /> Preview as recipient</Link>
