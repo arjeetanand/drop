@@ -4,13 +4,14 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Mail, PenLine, Search, X } from 'lucide-react';
 import { LiveDropCue, LiveDropStatus } from '@/components/LiveDropCue';
+import { LiveReactionCue } from '@/components/LiveReactionCue';
 import { LetterCard } from '@/components/LetterCard';
 import { useLiveInbox } from '@/lib/useLiveInbox';
 import { filterMailboxLetters, getMailboxCounts, type MailboxFilter } from '@/lib/mailboxView';
 import { cn } from '@/lib/utils';
 
 export default function Mailbox() {
-  const { letters, arrival, arrivalCount, dismissArrival } = useLiveInbox();
+  const { letters, arrival, arrivalCount, dismissArrival, reaction, reactionCount, dismissReaction } = useLiveInbox();
   const [activeTab, setActiveTab] = useState<MailboxFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -44,6 +45,7 @@ export default function Mailbox() {
 
         <LiveDropStatus letter={arrival} count={arrivalCount} />
         {arrival && <div className="mt-5"><LiveDropCue letter={arrival} count={arrivalCount} onDismiss={dismissArrival} /></div>}
+        <LiveReactionCue letter={reaction} count={reactionCount} onDismiss={dismissReaction} />
 
         <section className="grid grid-cols-2 gap-0 border-b border-[rgba(16,42,67,0.13)] py-7 sm:grid-cols-4">
           {[

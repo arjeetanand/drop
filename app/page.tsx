@@ -5,6 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowRight, ArrowUpRight, Camera, Mail, RefreshCw, Sparkles, Zap } from 'lucide-react';
 import { LiveDropStatus } from '@/components/LiveDropCue';
+import { LiveReactionCue } from '@/components/LiveReactionCue';
 import { LetterCard } from '@/components/LetterCard';
 import { writingPrompts } from '@/data/mockData';
 import { getRemoteProfile } from '@/lib/letterBackend';
@@ -12,7 +13,7 @@ import { defaultUserProfile, getUserProfileForCurrentAccount, type UserProfile }
 import { useLiveInbox } from '@/lib/useLiveInbox';
 
 export default function HomeDesk() {
-  const { letters, arrival, arrivalCount, dismissArrival } = useLiveInbox();
+  const { letters, arrival, arrivalCount, dismissArrival, reaction, reactionCount, dismissReaction } = useLiveInbox();
   const [profile, setProfile] = useState<UserProfile>(defaultUserProfile);
   const [promptIndex, setPromptIndex] = useState(0);
 
@@ -47,6 +48,7 @@ export default function HomeDesk() {
         </header>
 
         <LiveDropStatus letter={arrival} count={arrivalCount} />
+        <LiveReactionCue letter={reaction} count={reactionCount} onDismiss={dismissReaction} />
 
         <section className="mt-7 grid gap-4 md:mt-12 md:grid-cols-[minmax(0,1fr)_minmax(250px,.72fr)] md:gap-5">
           <div className="overflow-hidden rounded-[1.5rem] bg-[#2b45f7] p-6 text-white shadow-[0_16px_36px_rgba(43,69,247,.15)] sm:p-9">

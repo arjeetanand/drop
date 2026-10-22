@@ -12,6 +12,7 @@ import { matchesStoredDropMetadata, type DropSendIntent, type StoredDropSend } f
 import { fetchAllPages } from '@/lib/fetchAllPages';
 import { uniqueRecentDropRecipients, type RecentDropRecipient, type RecentDropRecipientRow } from '@/lib/recentDropRecipients';
 import { subscribeToDropInbox } from '@/lib/dropInboxRealtime';
+import { subscribeToDropReactions } from '@/lib/dropReactionRealtime';
 
 type LetterRow = {
   id: string;
@@ -318,7 +319,7 @@ export async function getRemoteLetters(): Promise<MockLetter[] | null> {
   try {
     const { data: reactions, error: reactionError } = await context.supabase
       .from('letter_reactions')
-      .select('letter_id, emoji')
+      .select('letter_id, emoji, updated_at')
       .in('letter_id', letters.map((letter) => letter.id))
       .returns<DropReactionRow[]>();
     return reactionError || !reactions ? letters : mergeDropReactions(letters, reactions);
@@ -331,6 +332,15 @@ export async function subscribeToIncomingDropInbox(onDropSignal: (dropId?: strin
   try {
     const context = await getAuthenticatedClient();
     return context ? subscribeToDropInbox(context.supabase, context.user.id, onDropSignal) : () => {};
+  } catch {
+    return () => {};
+  }
+}
+
+export async function subscribeToSenderDropReactions(onDropSignal: (dropId?: string) => void): Promise<() => void> {
+  try {
+    const context = await getAuthenticatedClient();
+    return context ? subscribeToDropReactions(context.supabase, context.user.id, onDropSignal) : () => {};
   } catch {
     return () => {};
   }
@@ -387,9 +397,29 @@ export async function getRemoteLetterById(letterId: string): Promise<MockLetter 
     const { data: signed } = await context.supabase.storage.from('drop-media').createSignedUrl(data.media_path, 60);
     letter.mediaUrl = signed?.signedUrl;
   }
-  const { data: reaction } = await context.supabase.from('letter_reactions').select('emoji').eq('letter_id', letterId).maybeSingle<{ emoji: string }>();
-  letter.reaction = reaction?.emoji;
+  letter.reaction = await readRemoteReaction(context, letterId) ?? undefined;
   return letter;
+}
+
+async function readRemoteReaction(context: AuthenticatedContext, letterId: string): Promise<string | null> {
+  try {
+    const { data, error } = await context.supabase.from('letter_reactions')
+      .select('emoji')
+      .eq('letter_id', letterId)
+      .maybeSingle<{ emoji: string }>();
+    return error || !data || typeof data.emoji !== 'string' ? null : data.emoji;
+  } catch {
+    return null;
+  }
+}
+
+export async function getRemoteReaction(letterId: string): Promise<string | null> {
+  try {
+    const context = await getAuthenticatedClient();
+    return context ? readRemoteReaction(context, letterId) : null;
+  } catch {
+    return null;
+  }
 }
 
 function eventsForDraft(draft: LetterDraftState): TrackingEvent[] {

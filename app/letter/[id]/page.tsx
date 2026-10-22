@@ -1,16 +1,18 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, ArrowRight, Check, LockKeyhole, MailOpen, Sparkles } from 'lucide-react';
 import { useParams, useSearchParams } from 'next/navigation';
 import type { MockLetter } from '@/data/mockData';
-import { getRemoteLetterById, getRemoteLetters, saveRemoteReaction } from '@/lib/letterBackend';
+import { getRemoteLetterById, getRemoteLetters, getRemoteReaction, saveRemoteReaction, subscribeToSenderDropReactions } from '@/lib/letterBackend';
 import { getLetterById } from '@/lib/letterStore';
 import { DEMO_REACTION_EMOJIS, saveDemoReaction } from '@/lib/demoReactionStore';
 import { getSupabaseBrowserClient, isSupabaseAuthConfigured } from '@/lib/supabaseBrowser';
 import { getDraftAttachment } from '@/lib/letterMediaStore';
 import { ReducedMotionGif } from '@/components/ReducedMotionGif';
+import { getReactionName } from '@/components/LiveReactionCue';
+import { startVisibleDataRefresh, type VisibleDataRefreshController } from '@/lib/relayRouteRefresh';
 
 function LoadingLetter() {
   return (
@@ -91,7 +93,9 @@ export default function LetterArrivalPage() {
   const [contentLoading, setContentLoading] = useState(false);
   const [contentNotice, setContentNotice] = useState('');
   const [reactionNotice, setReactionNotice] = useState('');
+  const [reactionAnnouncement, setReactionAnnouncement] = useState('');
   const [savingReaction, setSavingReaction] = useState(false);
+  const currentReactionRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     setLoading(true);
@@ -102,6 +106,7 @@ export default function LetterArrivalPage() {
     setOpened(false);
     setContentNotice('');
     setReactionNotice('');
+    setReactionAnnouncement('');
 
     if (!letterId) {
       setLoading(false);
@@ -170,6 +175,46 @@ export default function LetterArrivalPage() {
       if (mediaObjectUrl) URL.revokeObjectURL(mediaObjectUrl);
     };
   }, [letterId, senderView]);
+
+  const senderDropId = letter && letter.direction === 'sent' && !letter.sample && !letter.localDemo ? letter.id : null;
+
+  useEffect(() => {
+    currentReactionRef.current = letter?.reaction;
+  }, [letter?.id, letter?.reaction]);
+
+  useEffect(() => {
+    if (!senderDropId) return;
+
+    let active = true;
+    let stopRealtime = () => {};
+    let refresh: VisibleDataRefreshController | null = null;
+    refresh = startVisibleDataRefresh({
+      load: () => getRemoteReaction(senderDropId),
+      intervalMs: 60_000,
+      queueOneWhileInFlight: true,
+      onData: (nextReaction) => {
+        if (!active || !nextReaction || nextReaction === currentReactionRef.current) return;
+        currentReactionRef.current = nextReaction;
+        setLetter((current) => current?.id === senderDropId ? { ...current, reaction: nextReaction } : current);
+        const who = letter?.recipient?.trim() || 'Your recipient';
+        const subject = letter?.subject?.trim() || 'your drop';
+        setReactionAnnouncement(`${who} reacted to “${subject}” with ${getReactionName(nextReaction)}.`);
+      },
+    });
+
+    void subscribeToSenderDropReactions((dropId) => {
+      if (!dropId || dropId === senderDropId) void refresh?.refresh();
+    }).then((stop) => {
+      if (!active) stop();
+      else stopRealtime = stop;
+    });
+
+    return () => {
+      active = false;
+      refresh?.stop();
+      stopRealtime();
+    };
+  }, [letter?.recipient, letter?.subject, senderDropId]);
 
   const revealFragments = () => {
     setRevealed(true);
@@ -274,6 +319,7 @@ export default function LetterArrivalPage() {
 
         {letter.sample && <p className="notice mt-5" role="status">{letter.direction === 'received' ? 'Sample drop · this is an example, not a message you received. Reactions stay on this device.' : 'Sample drop · an example only. Nothing was sent or delivered.'}</p>}
         {letter.localDemo && <p className="notice mt-5" role="status">Same-device demo · nothing was sent or shared.</p>}
+        <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{reactionAnnouncement}</p>
 
         <section className="mt-12 max-w-[760px]">
           <p className="eyebrow">{letter.sample ? 'Sample drop' : letter.localDemo ? senderView ? 'Sender view' : 'Recipient demo' : letter.direction === 'sent' ? 'Your sent drop' : isReceived ? 'A drop for you' : 'Drop preview'}</p>

@@ -24,6 +24,7 @@ export interface MockLetter {
   mediaSizeBytes?: number;
   mediaUrl?: string;
   reaction?: string;
+  reactionUpdatedAt?: string;
   localDemo?: boolean;
   sample?: boolean;
 }
