@@ -45,6 +45,6 @@ The transaction checks sender-only relay starts, short-lived passes, one-time te
 
 ## Relay handoffs
 
-Apply `20261018000100_relay_handoff_tokens.sql` after the existing letter and media migrations. Relay invites are bearer links: the first invite expires after 10 minutes, and accepting it issues a carrier capability that lasts 30 days. A carrier capability can mint a fresh 10-minute handoff pass when its holder is ready to pass the drop on. Share each invite only with the intended next carrier. Carriers can add route events but cannot read the drop's text or media.
+Apply `20261018000100_relay_handoff_tokens.sql` and `20261022000000_restrict_relay_handoff_column_select.sql` after the existing letter and media migrations. The later migration grants authenticated participants only the route columns and keeps the bearer token and retry key private. Relay invites are bearer links: the first invite expires after 10 minutes, and accepting it issues a carrier capability that lasts 30 days. A carrier capability can mint a fresh 10-minute handoff pass when its holder is ready to pass the drop on. Share each invite only with the intended next carrier. Carriers can add route events but cannot read the drop's text or media. Sender route views refresh immediately, every 15 seconds while visible, and when the tab returns; a manual refresh is also available.
 
 Without Supabase credentials, the app runs with local seeded examples and local text drafts. Real sends and cross-account media delivery are unavailable in that mode.
