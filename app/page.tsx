@@ -4,33 +4,33 @@ import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowRight, ArrowUpRight, Camera, Mail, RefreshCw, Sparkles, Zap } from 'lucide-react';
+import { LiveDropStatus } from '@/components/LiveDropCue';
 import { LetterCard } from '@/components/LetterCard';
-import { mockLetters, writingPrompts, type MockLetter } from '@/data/mockData';
-import { getRemoteLetters, getRemoteProfile } from '@/lib/letterBackend';
-import { getLetterDraft, getLettersWithDraft } from '@/lib/letterStore';
+import { writingPrompts } from '@/data/mockData';
+import { getRemoteProfile } from '@/lib/letterBackend';
 import { defaultUserProfile, getUserProfileForCurrentAccount, type UserProfile } from '@/lib/userStore';
+import { useLiveInbox } from '@/lib/useLiveInbox';
 
 export default function HomeDesk() {
-  const [letters, setLetters] = useState<MockLetter[]>(mockLetters);
+  const { letters, arrival, arrivalCount, dismissArrival } = useLiveInbox();
   const [profile, setProfile] = useState<UserProfile>(defaultUserProfile);
   const [promptIndex, setPromptIndex] = useState(0);
 
   useEffect(() => {
     setPromptIndex(Math.floor(Date.now() / 86_400_000) % writingPrompts.length);
     let active = true;
-    void Promise.all([getRemoteLetters(), getRemoteProfile()]).then(([remoteLetters, remoteProfile]) => {
-      if (!active) return;
-      const merged = new Map(getLettersWithDraft(getLetterDraft()).map((letter) => [letter.id, letter]));
-      remoteLetters?.forEach((letter) => merged.set(letter.id, letter));
-      setLetters(Array.from(merged.values()));
-      setProfile(remoteProfile || getUserProfileForCurrentAccount());
+    void getRemoteProfile().then((remoteProfile) => {
+      if (active) setProfile(remoteProfile || getUserProfileForCurrentAccount());
     }).catch(() => {
-      if (active) setLetters(getLettersWithDraft(getLetterDraft()));
+      if (active) setProfile(getUserProfileForCurrentAccount());
     });
     return () => { active = false; };
   }, []);
 
   const incoming = letters.filter((letter) => letter.direction === 'received' && !letter.sample).slice(0, 2);
+  const featured = arrival ?? incoming[0];
+  const isNewArrival = Boolean(arrival && featured?.id === arrival.id);
+  const arrivalLabel = arrivalCount > 1 ? `${arrivalCount} new drops` : 'Just landed';
 
   return (
     <main className="page-shell page-enter !pt-5 sm:!pt-8">
@@ -46,6 +46,8 @@ export default function HomeDesk() {
           </Link>
         </header>
 
+        <LiveDropStatus letter={arrival} count={arrivalCount} />
+
         <section className="mt-7 grid gap-4 md:mt-12 md:grid-cols-[minmax(0,1fr)_minmax(250px,.72fr)] md:gap-5">
           <div className="overflow-hidden rounded-[1.5rem] bg-[#2b45f7] p-6 text-white shadow-[0_16px_36px_rgba(43,69,247,.15)] sm:p-9">
             <p className="font-mono text-[0.68rem] font-bold uppercase tracking-[0.16em] text-white/70">Your little corner of the internet</p>
@@ -57,17 +59,17 @@ export default function HomeDesk() {
             <p className="mt-6 flex items-center gap-2 text-xs text-white/70"><Zap className="h-3.5 w-3.5" aria-hidden="true" /> Instant by default · private between you two</p>
           </div>
 
-          {incoming[0] ? (
-            <Link href={`/letter/${encodeURIComponent(incoming[0].id)}`} aria-label={`Open drop from ${incoming[0].sender || 'a correspondent'}: ${incoming[0].subject}`} className="group relative flex min-h-[250px] flex-col overflow-hidden rounded-[1.5rem] bg-gradient-to-br from-[#e1e7ff] via-[#f5e5d7] to-[#fff7ed] p-5 text-ink-navy shadow-[0_12px_30px_rgba(16,42,67,.07)] sm:min-h-[300px] md:min-h-0">
+          {featured ? (
+            <Link href={`/letter/${encodeURIComponent(featured.id)}`} onClick={() => { if (isNewArrival) dismissArrival(); }} aria-label={`Open drop from ${featured.sender || 'a correspondent'}: ${featured.subject}`} className="group relative flex min-h-[250px] flex-col overflow-hidden rounded-[1.5rem] bg-gradient-to-br from-[#e1e7ff] via-[#f5e5d7] to-[#fff7ed] p-5 text-ink-navy shadow-[0_12px_30px_rgba(16,42,67,.07)] sm:min-h-[300px] md:min-h-0">
               <span className="absolute -right-8 -top-10 h-44 w-44 rounded-full bg-white/35 blur-2xl" aria-hidden="true" />
               <span className="relative flex items-center justify-between gap-3">
-                <span className="inline-flex items-center gap-2 rounded-full bg-white/85 px-3 py-1.5 font-mono text-[0.62rem] font-bold uppercase tracking-[0.12em]"><Mail className="h-3.5 w-3.5" aria-hidden="true" />In your inbox</span>
-                <span className="rounded-full bg-[#152b43]/[0.07] px-3 py-1.5 font-mono text-[0.62rem] font-bold uppercase tracking-[0.12em]">{incoming[0].payloadKind === 'image' ? 'Photo' : incoming[0].payloadKind || 'Note'}</span>
+                <span className="inline-flex items-center gap-2 rounded-full bg-white/85 px-3 py-1.5 font-mono text-[0.62rem] font-bold uppercase tracking-[0.12em]"><Mail className="h-3.5 w-3.5" aria-hidden="true" />{isNewArrival ? arrivalLabel : 'In your inbox'}</span>
+                <span className="rounded-full bg-[#152b43]/[0.07] px-3 py-1.5 font-mono text-[0.62rem] font-bold uppercase tracking-[0.12em]">{featured.payloadKind === 'image' ? 'Photo' : featured.payloadKind || 'Note'}</span>
               </span>
               <span className="relative mt-auto block pt-10">
-                <span className="block font-mono text-[0.62rem] uppercase tracking-[0.12em] text-ink-navy/65">From {incoming[0].sender || 'a correspondent'}</span>
-                <span className="mt-1 block font-headline-md text-2xl font-semibold">{incoming[0].subject}</span>
-                <span className="mt-2 block line-clamp-3 text-sm leading-relaxed text-ink-navy/75">{incoming[0].excerpt}</span>
+                <span className="block font-mono text-[0.62rem] uppercase tracking-[0.12em] text-ink-navy/65">From {featured.sender || 'a correspondent'}</span>
+                <span className="mt-1 block font-headline-md text-2xl font-semibold">{featured.subject}</span>
+                <span className="mt-2 block line-clamp-3 text-sm leading-relaxed text-ink-navy/75">{featured.excerpt}</span>
                 <span className="mt-4 inline-flex items-center gap-1 text-xs font-bold">Open your drop <ArrowUpRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" aria-hidden="true" /></span>
               </span>
             </Link>

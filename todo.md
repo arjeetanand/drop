@@ -2,6 +2,14 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
+## Current Checkpoint — 2026-10-22 (Live inbox arrival)
+
+- [x] Home and Mailbox refresh the inbox when a private recipient-scoped broadcast arrives, then read drop data through the existing RLS query; a visible-tab 60-second refresh recovers missed signals.
+- [x] Home marks the featured new drop without adding a third copy of the arrival cue; Mailbox gives a direct-open and dismiss action. Burst arrivals are counted, and drafts/sealed rows do not trigger cues.
+- [x] A broadcast during an in-flight fetch queues one follow-up sync, and a signaled row in the first inbox response is still announced. `npm test` passes 101/101, lint and TypeScript pass, `git diff --check` is clean, and `npm run build -- --webpack` passes.
+- [ ] Apply `20261022100000_drop_inbox_broadcast.sql` and verify two separate accounts against the Free Supabase project; no hosted Drop project or running local Supabase service is available yet.
+- [ ] Check rendered Home/Mailbox layouts at phone and desktop sizes and verify screen-reader announcements when a browser runtime is available.
+
 ## Current Checkpoint — 2026-10-22 (Live relay route)
 
 - [x] Sender relay and journey views refresh route state immediately, every 15 seconds while visible, and on tab return; manual refresh has loading, success, and saved-route error states.

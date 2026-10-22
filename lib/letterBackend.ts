@@ -11,6 +11,7 @@ import { mergeDropReactions, type DropReactionRow } from '@/lib/mergeDropReactio
 import { matchesStoredDropMetadata, type DropSendIntent, type StoredDropSend } from '@/lib/dropSendRecovery';
 import { fetchAllPages } from '@/lib/fetchAllPages';
 import { uniqueRecentDropRecipients, type RecentDropRecipient, type RecentDropRecipientRow } from '@/lib/recentDropRecipients';
+import { subscribeToDropInbox } from '@/lib/dropInboxRealtime';
 
 type LetterRow = {
   id: string;
@@ -323,6 +324,15 @@ export async function getRemoteLetters(): Promise<MockLetter[] | null> {
     return reactionError || !reactions ? letters : mergeDropReactions(letters, reactions);
   } catch {
     return letters;
+  }
+}
+
+export async function subscribeToIncomingDropInbox(onDropSignal: (dropId?: string) => void): Promise<() => void> {
+  try {
+    const context = await getAuthenticatedClient();
+    return context ? subscribeToDropInbox(context.supabase, context.user.id, onDropSignal) : () => {};
+  } catch {
+    return () => {};
   }
 }
 

@@ -1,6 +1,7 @@
-export const RELAY_ROUTE_REFRESH_INTERVAL_MS = 15_000;
+export const VISIBLE_DATA_REFRESH_INTERVAL_MS = 15_000;
+export const RELAY_ROUTE_REFRESH_INTERVAL_MS = VISIBLE_DATA_REFRESH_INTERVAL_MS;
 
-export interface RelayRouteRefreshRuntime {
+export interface VisibleDataRefreshRuntime {
   isVisible(): boolean;
   setInterval(callback: () => void, delayMs: number): unknown;
   clearInterval(interval: unknown): void;
@@ -8,19 +9,24 @@ export interface RelayRouteRefreshRuntime {
   onFocus(listener: () => void): () => void;
 }
 
-interface RelayRouteRefreshOptions<T> {
+interface VisibleDataRefreshOptions<T> {
   load: () => Promise<T | null | undefined>;
   onData: (data: T) => void;
   onError?: (error: unknown) => void;
-  runtime?: RelayRouteRefreshRuntime;
+  runtime?: VisibleDataRefreshRuntime;
+  intervalMs?: number;
+  queueOneWhileInFlight?: boolean;
 }
 
-export interface RelayRouteRefreshController {
+export interface VisibleDataRefreshController {
   refresh(): Promise<void>;
   stop(): void;
 }
 
-function getBrowserRuntime(): RelayRouteRefreshRuntime {
+export type RelayRouteRefreshRuntime = VisibleDataRefreshRuntime;
+export type RelayRouteRefreshController = VisibleDataRefreshController;
+
+function getBrowserRuntime(): VisibleDataRefreshRuntime {
   return {
     isVisible: () => document.visibilityState === 'visible',
     setInterval: (callback, delayMs) => window.setInterval(callback, delayMs),
@@ -36,15 +42,18 @@ function getBrowserRuntime(): RelayRouteRefreshRuntime {
   };
 }
 
-/** Refresh a caller-owned relay route while its page is visible. */
-export function startRelayRouteRefresh<T>({
+/** Refresh caller-owned data while the page is visible, without overlapping reads. */
+export function startVisibleDataRefresh<T>({
   load,
   onData,
   onError,
   runtime = getBrowserRuntime(),
-}: RelayRouteRefreshOptions<T>): RelayRouteRefreshController {
+  intervalMs = VISIBLE_DATA_REFRESH_INTERVAL_MS,
+  queueOneWhileInFlight = false,
+}: VisibleDataRefreshOptions<T>): VisibleDataRefreshController {
   let active = true;
   let inFlight: Promise<void> | null = null;
+  let refreshQueued = false;
   let interval: unknown | null = null;
 
   const stopInterval = () => {
@@ -56,7 +65,10 @@ export function startRelayRouteRefresh<T>({
 
   const refresh = () => {
     if (!active || !runtime.isVisible()) return Promise.resolve();
-    if (inFlight) return inFlight;
+    if (inFlight) {
+      if (queueOneWhileInFlight) refreshQueued = true;
+      return inFlight;
+    }
 
     const request = (async () => {
       try {
@@ -68,7 +80,12 @@ export function startRelayRouteRefresh<T>({
     })();
     inFlight = request;
     const clearInFlight = () => {
-      if (inFlight === request) inFlight = null;
+      if (inFlight !== request) return;
+      inFlight = null;
+      if (refreshQueued) {
+        refreshQueued = false;
+        if (active && runtime.isVisible()) void refresh();
+      }
     };
     void request.then(clearInFlight, clearInFlight);
     return request;
@@ -76,7 +93,7 @@ export function startRelayRouteRefresh<T>({
 
   const startInterval = () => {
     if (!active || interval !== null || !runtime.isVisible()) return;
-    interval = runtime.setInterval(() => { void refresh(); }, RELAY_ROUTE_REFRESH_INTERVAL_MS);
+    interval = runtime.setInterval(() => { void refresh(); }, intervalMs);
   };
 
   const refreshWhenVisible = () => {
@@ -109,8 +126,9 @@ export function startRelayRouteRefresh<T>({
     removeFocusListener();
   };
 
-  return {
-    refresh: refreshWhenVisible,
-    stop,
-  };
+  return { refresh: refreshWhenVisible, stop };
 }
+
+// Keep the existing export stable for relay-route consumers while sharing the
+// same visible-tab refresh primitive with the inbox.
+export const startRelayRouteRefresh = startVisibleDataRefresh;

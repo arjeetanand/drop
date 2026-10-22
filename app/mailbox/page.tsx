@@ -1,40 +1,18 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Mail, PenLine, Search, X } from 'lucide-react';
+import { LiveDropCue, LiveDropStatus } from '@/components/LiveDropCue';
 import { LetterCard } from '@/components/LetterCard';
-import { mockLetters, type MockLetter } from '@/data/mockData';
-import { getRemoteLetters } from '@/lib/letterBackend';
-import { getLetterDraft, getLettersWithDraft } from '@/lib/letterStore';
+import { useLiveInbox } from '@/lib/useLiveInbox';
 import { filterMailboxLetters, getMailboxCounts, type MailboxFilter } from '@/lib/mailboxView';
 import { cn } from '@/lib/utils';
 
 export default function Mailbox() {
-  const [letters, setLetters] = useState<MockLetter[]>(mockLetters);
+  const { letters, arrival, arrivalCount, dismissArrival } = useLiveInbox();
   const [activeTab, setActiveTab] = useState<MailboxFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
-
-  useEffect(() => {
-    let active = true;
-    const loadLetters = async () => {
-      const draft = getLetterDraft();
-      const remoteLetters = await getRemoteLetters();
-      if (!active) return;
-      const localLetters = getLettersWithDraft(draft);
-      if (!remoteLetters?.length) {
-        setLetters(localLetters);
-        return;
-      }
-      const merged = new Map(localLetters.map((letter) => [letter.id, letter]));
-      remoteLetters.forEach((letter) => merged.set(letter.id, letter));
-      setLetters(Array.from(merged.values()));
-    };
-    void loadLetters();
-    return () => {
-      active = false;
-    };
-  }, []);
 
   const counts = useMemo(() => getMailboxCounts(letters), [letters]);
 
@@ -63,6 +41,9 @@ export default function Mailbox() {
             Make a drop
           </Link>
         </header>
+
+        <LiveDropStatus letter={arrival} count={arrivalCount} />
+        {arrival && <div className="mt-5"><LiveDropCue letter={arrival} count={arrivalCount} onDismiss={dismissArrival} /></div>}
 
         <section className="grid grid-cols-2 gap-0 border-b border-[rgba(16,42,67,0.13)] py-7 sm:grid-cols-4">
           {[
