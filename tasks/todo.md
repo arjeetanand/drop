@@ -2,7 +2,7 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
-## Current Checkpoint — 2026-10-19
+## Checkpoint notes through — 2026-10-19
 
 - Added passwordless email-link sign-in alongside Google. Both disposable accounts signed in and synced profiles through local Supabase/Inbucket. `npm test` passes 70/70, lint passes, and a clean Next.js 16.3 production build passes. The two-account photo/GIF composer send-open-react flow remains unverified because the in-app browser did not open its file chooser; Edge's ChatGPT extension needs “Allow access to file URLs” enabled for this local test. No hosted Supabase project or SMTP is configured.
 - At 390px in Edge, the composer selected the bundled PNG and GIF fixtures through the normal file picker, previewed each as the recipient, opened each same-device demo, saved a reaction, and showed it on the sender copy. This verifies local draft/demo behavior only; the two sent demo records remain in browser storage because sent demos cannot be deleted in the UI. Hosted account-to-account delivery remains unverified.
@@ -275,6 +275,8 @@ Commit each completed code change separately with a descriptive message and push
 ## Current follow-up — 2026-10-22 (reaction privacy and mobile sizing)
 
 - [x] Explain that live reactions are visible only to the sender and recipient, matching the participant-only Supabase read policy; distinguish device-only sample and demo reactions.
-- [x] Keep all five reaction controls in one row with 44px targets and 4px gaps. At the reviewed 360px layout, the row needs 236px versus about 248px available.
-- [x] Existing suite passes (84/84), lint and typecheck pass, and the Webpack production build passes with Next.js's test font mock because outbound Google Fonts requests resolve as ENOTFOUND.
-- [ ] Render and use the reaction picker at 360px, 390px, and 430px, including keyboard and reduced-motion checks; browser automation is unavailable in this session.
+- [x] Keep all five reaction controls in one row with 44px minimum targets and 8px gaps. At 360px, the row is 252px wide and each button measures 44×44px; at 390px and 430px the buttons grow, with no horizontal overflow.
+- [x] Playwright/Chrome opened a sample drop, saved a reaction, and confirmed device-only status at 360px, 390px, and 430px. The only console error was the browser's automatic request for missing /favicon.ico; no page runtime errors occurred.
+- [x] npm test passes (84/84), lint and typecheck pass, and the Webpack production build passes with the test font mock. Turbopack could not build the isolated copy because its node_modules symlink points outside the filesystem root.
+- [x] Push commit e18dda6 on ux/reaction-spacing-8px to origin.
+- [ ] Check keyboard interaction, reduced-motion behavior, desktop layout, and real-device safe areas; hosted account-to-account behavior remains open.
