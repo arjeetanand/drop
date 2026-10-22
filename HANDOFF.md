@@ -19,7 +19,7 @@ Updated: 2026-10-23
 - Base checkpoint: 132f12c (docs: update Drop migration and auth handoff), on origin/fix/local-auth-redirects.
 - Parent checkpoint: aebdc53 (docs: record relay location verification).
 - `feat/live-reaction-feedback` tracks its GitHub branch; it is not merged and no pull request was created.
-- The former OneDrive path `/Users/arjeetanand/Library/CloudStorage/OneDrive-OracleCorporation/projects/drop` is absent from the synced filesystem, and `projects` has no immediate `*drop*` match. No deletion was performed because the target is already absent. The separate `/letter` folder was not opened or changed.
+- The former OneDrive path `/Users/arjeetanand/Library/CloudStorage/OneDrive-OracleCorporation/projects/drop` is absent from the synced filesystem. A read-only listing of the connected OneDrive `projects` folder returned 16 immediate children and none named `drop`; no deletion was performed because the target is already absent. The separate `letter` folder was not opened or changed.
 - `.env.local` is already present in `/Users/arjeetanand/projects/drop`, has mode 600, is ignored by Git, and is not tracked. No copy was needed because the OneDrive source directory is absent. Its values were not displayed or committed; the configured Supabase URL was checked as loopback-only.
 
 ## Change inventory
