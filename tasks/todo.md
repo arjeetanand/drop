@@ -318,3 +318,13 @@ Commit each completed code change separately with a descriptive message and push
 - [x] Code commit `10efead` is pushed to `origin/feat/mailbox-filter-empty-states`. This documentation update is committed separately.
 - [x] The old OneDrive `projects/drop` directory is absent from the synced path and connected folder listing. The local clone already has ignored `.env.local` at mode 600, so no file copy was needed; no secret values were read. The `/letter` folder was not changed.
 - [ ] Verify screen-reader announcements and real-device keyboard/safe-area behavior. Hosted account-to-account delivery and broader Drop acceptance remain open.
+
+## Current follow-up — 2026-10-23 (mailbox search focus and local checkout)
+
+- [x] Return focus to the search input after either clear action while preserving the selected mailbox filter.
+- [x] Hide the native WebKit search cancel control to prevent a duplicate clear icon beside Drop's accessible button.
+- [x] Run 118 unit tests, lint, TypeScript, and `git diff --check`; all pass.
+- [x] Build in an isolated copy with Next.js Google Fonts responses mocked because sandbox DNS could not resolve `fonts.googleapis.com`.
+- [x] Confirm `/` and `/mailbox` return HTTP 200 on the local app at port 4004.
+- [x] Confirm the OneDrive Drop directory is absent and `.env.local` already exists in the local clone with mode 600 and Git ignore coverage; preserve `/letter`.
+- [ ] Capture a final browser screenshot after the native clear-control rule; the isolated Chrome launch exited with code 134. Screen-reader and real-device checks remain open.

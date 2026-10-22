@@ -13,7 +13,7 @@ Open `http://localhost:4004`. Run `./run.sh` again to restart Drop, or `./run.sh
 
 The composer shows account readiness and recipient selection before the note, photo, or GIF controls. Recipient lookup and invite detours preserve the existing local draft.
 
-Mailbox empty states now respond to the selected filter and offer a matching next step; an empty search can be cleared without changing the filter.
+Mailbox empty states now respond to the selected filter and offer a matching next step; clearing a search keeps the selected filter and returns focus to the search field.
 
 Drop uses port 4004 for the main app, 5004 for its isolated local Supabase smoke test, and 6004 for browser QA. The smoke test only accepts a loopback Supabase URL from `.env.local`; it does not reset the local database.
 

@@ -6,7 +6,7 @@ Updated: 2026-10-23
 
 - Active code checkout: /Users/arjeetanand/projects/drop
 - GitHub remote: private repository arjeetanand/drop
-- Current branch: `feat/mailbox-filter-empty-states`, based on `bef0ed4`, pushed to origin; no pull request has been created.
+- Current branch: `fix/mailbox-search-focus`, based on `3472bd0`; code commit `bbf9df8` is pushed to origin. No pull request has been created.
 - Mailbox empty-state feature commit: `10efead` (`feat: tailor mailbox empty states to filters`), pushed to `origin/feat/mailbox-filter-empty-states`; the docs update is committed separately.
 - Recipient-first composer commit: `a9049cf` (`feat: put recipient first in drop composer`), pushed to `origin/feat/recipient-first-compose`.
 - Relay token URL commit: `fd5a327` (`fix: keep relay bearer tokens out of request URLs`), pushed to `origin/feat/relay-token-fragment`; no pull request has been created.
@@ -40,6 +40,7 @@ Updated: 2026-10-23
 - Added sender reaction cues on Home and Mailbox and live reaction refresh on open sent-drop pages. A private sender-scoped Broadcast contains only the drop ID; reaction content is reloaded through participant RLS. Reconnect and visible-tab refresh recover missed signals, baseline and duplicate reactions are suppressed, and accessible status text names the reaction. A database guard rejects moving a reaction to a different drop.
 - Reordered the composer so account readiness and recipient confirmation appear before note, photo, GIF, and styling controls. Existing recipient checks, draft persistence, invite flow, and send handling are reused.
 - Added filter-specific mailbox empty states for All, Samples, On a journey, Received, Sent, and Drafts. Received points to handle setup; in-transit drops point to the relay composer. Empty-search feedback is announced accessibly, and clearing it preserves the selected filter.
+- Mailbox search clear actions now return focus to the search input and preserve the selected filter. The native WebKit search cancel control is hidden so the accessible custom clear button is the only visible clear affordance.
 
 ## Verification
 
@@ -58,6 +59,7 @@ Updated: 2026-10-23
 - Playwright/Chrome at 390px checked QR handoff with location unchecked, opted in, and denied; manual PIN with location opted in; and a secure token invite with a manual neighborhood. The checks saw zero geocoder requests and no page runtime errors. Fixtures used synthetic data; this is not a hosted or cross-device handoff test.
 - The prior production build completed. Next emitted non-fatal Browserslist freshness and ambiguous Tailwind class warnings.
 - The mailbox empty-state update was rendered in isolated headless Chrome at 360px, 390px, and 430px with no horizontal overflow. The Received search-empty state retained an H2 with polite live announcement, clearing search retained the filter, and the transit action opened the relay composer. Real screen-reader and device checks remain open.
+- Search-focus refinement `bbf9df8`: 118/118 unit tests, lint, TypeScript, and `git diff --check` passed. A Webpack production build passed in an isolated copy with Google Fonts responses mocked; live font downloads were unavailable because DNS could not resolve `fonts.googleapis.com`. The built CSS contains the native search-cancel suppression rule. Local `/` and `/mailbox` return HTTP 200. The interaction was previously verified in Chrome, but a fresh screenshot after the CSS fix remains pending because the isolated Chrome launch exited with code 134.
 - `./run.sh` serves the local clone at `http://localhost:4004`; the app is left running. `/relay/scan` returned HTTP 200 after the relay URL change.
 - `.env.local` is present in the active checkout, mode 600, ignored by Git, and untracked. Its values were not displayed or staged.
 - The earlier route-security work remains on `feat/relay-route-live-refresh`, is not merged, and has no pull request.
@@ -77,4 +79,4 @@ Updated: 2026-10-23
 
 ## Run locally
 
-From /Users/arjeetanand/projects/drop, run npm ci, then ./run.sh. Drop uses http://localhost:4004; ./run.sh stop stops the project-owned process. The local Supabase smoke environment uses port 5004 and browser QA is reserved port 6004. Current feature commit `10efead` is pushed to `origin/feat/mailbox-filter-empty-states`; the branch is not merged and has no pull request. The documentation update is delivered in a separate commit.
+From /Users/arjeetanand/projects/drop, run npm ci, then ./run.sh. Drop uses http://localhost:4004; ./run.sh stop stops the project-owned process. The local Supabase smoke environment uses port 5004 and browser QA is reserved port 6004. Code commit `bbf9df8` is pushed to `origin/fix/mailbox-search-focus`; the branch is not merged and has no pull request. The handoff and checklist updates are committed separately.
