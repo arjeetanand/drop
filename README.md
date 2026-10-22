@@ -22,3 +22,5 @@ Relay handoffs request current device location only after an explicit opt-in. Op
 Sender route views refresh immediately, every 15 seconds while visible, and when the tab returns; the refresh control reports new handoffs and keeps the saved route visible when remote reads fail. Apply `20261022000000_restrict_relay_handoff_column_select.sql` with the other Supabase migrations so authenticated participants can read route details without access to handoff tokens or retry keys.
 
 Signed-in Home and Mailbox listen for private recipient-scoped Realtime Broadcasts, then reload drop rows through the existing RLS query; broadcasts contain only the drop ID. A visible-tab 60-second refresh recovers missed signals. Apply `20261022100000_drop_inbox_broadcast.sql` with the other migrations before expecting hosted arrival cues.
+
+Senders also get private reaction-change signals containing only the drop ID. Home, Mailbox, and an open sent-drop page reload the reaction through participant RLS, with a visible-tab recovery refresh. Apply `20261022110000_drop_reaction_broadcast.sql` after the inbox broadcast migration before expecting hosted reaction updates.

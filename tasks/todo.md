@@ -286,3 +286,13 @@ Commit each completed code change separately with a descriptive message and push
 - [x] Install locked dependencies in the active GitHub clone, rerun the project checks there, and serve that checkout from run.sh on port 4004; the three-width browser flow passes against it.
 - [x] npm ci reported 15 audit advisories (1 moderate, 13 high, 1 critical); dependency versions were left unchanged.
 - [ ] Check keyboard interaction, reduced-motion behavior, desktop layout, and real-device safe areas; hosted account-to-account behavior remains open.
+
+## Current follow-up — 2026-10-23 (live sender reaction feedback)
+
+- [x] Add a private sender-scoped reaction Broadcast containing only the drop ID; reload the participant-visible reaction through RLS.
+- [x] Keep Home, Mailbox, and an open sent-drop page current; suppress baseline and duplicate reactions and announce changes accessibly.
+- [x] Prevent a recipient from moving a reaction to a different drop; add SQL regression coverage for the rejected move.
+- [x] `npm test` passes 107/107, `npm run lint`, `npx tsc --noEmit --incremental false`, `npm run build`, `bash -n run.sh`, and `git diff --check` pass. Local `/`, `/mailbox`, `/letter/incoming-1`, `/compose`, and `/journey` return HTTP 200 on port 4004.
+- [x] Commit `9c375a1` is pushed to `feat/live-reaction-feedback`. The local GitHub clone already has `.env.local` at mode 600; it is ignored by Git, so there was nothing to copy from OneDrive. The former OneDrive Drop directory is absent, and `/letter` remains untouched.
+- [ ] Run `tests/db/drop_reaction_broadcast.sql` against a disposable local database; Docker and temporary PostgreSQL startup are unavailable in this environment.
+- [ ] Verify mobile/desktop rendering and screen-reader behavior in a browser, then verify cross-account reactions after a Free hosted Supabase project is available.
