@@ -21,10 +21,10 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 
 ## Workspace and Delivery
 
-- `/drop` is the new app and the only write target. `/letter` is read-only inspiration; source files and its existing uncommitted work must remain untouched.
-- Use the existing empty private GitHub repository `arjeetanand/drop`. Copy the working app into this folder without `.git`, environment secrets, generated output, or installed dependencies; preserve the plan files already here.
-- Verify each implementation slice before committing and push each passing commit to `main`.
-- The earlier design chat did not record a final selection. Use its playful paper direction as the default: warm paper, cobalt actions, expressive media, small postmark details, and thumb-first navigation.
+- The active app checkout is /Users/arjeetanand/projects/drop and is the only Drop write target. The previous OneDrive path is absent locally and the connected OneDrive projects folder has no Drop folder. Keep /letter read-only.
+- The active checkout is linked to the existing private GitHub repository arjeetanand/drop; .env.local stays in the active checkout, is ignored by Git, and must never be committed.
+- Work on a dedicated task branch; verify, commit, and push each passing slice to its branch. Ask for approval before merging to the default branch.
+- Keep the established visual direction: warm paper, cobalt actions, expressive media, small postmark details, and thumb-first navigation.
 
 ## Product Scope and Decisions
 

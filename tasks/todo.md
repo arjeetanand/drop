@@ -271,3 +271,10 @@ Commit each completed code change separately with a descriptive message and push
 - [x] Verification passed in an isolated checkout using the same commit and lockfile: `npm test` (84/84), lint, typecheck, `npm run build -- --webpack`, local smoke-script syntax, `bash -n run.sh`, and `git diff --check`.
 - [x] Exercise `run.sh` start/restart/stop and confirm the home and compose routes return HTTP 200 in the isolated checkout; the active checkout still needs its locked dependencies installed before it can run locally.
 - [ ] Run the authenticated local Supabase smoke and test a real lost-response retry in the browser. The local auth health endpoint on `127.0.0.1:54321` was unavailable; no local database was started or reset, and no hosted project exists.
+
+## Current follow-up — 2026-10-22 (reaction privacy and mobile sizing)
+
+- [x] Explain that live reactions are visible only to the sender and recipient, matching the participant-only Supabase read policy; distinguish device-only sample and demo reactions.
+- [x] Keep all five reaction controls in one row with 44px targets and 4px gaps. At the reviewed 360px layout, the row needs 236px versus about 248px available.
+- [x] Existing suite passes (84/84), lint and typecheck pass, and the Webpack production build passes with Next.js's test font mock because outbound Google Fonts requests resolve as ENOTFOUND.
+- [ ] Render and use the reaction picker at 360px, 390px, and 430px, including keyboard and reduced-motion checks; browser automation is unavailable in this session.
