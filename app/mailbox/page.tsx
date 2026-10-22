@@ -7,7 +7,7 @@ import { LiveDropCue, LiveDropStatus } from '@/components/LiveDropCue';
 import { LiveReactionCue } from '@/components/LiveReactionCue';
 import { LetterCard } from '@/components/LetterCard';
 import { useLiveInbox } from '@/lib/useLiveInbox';
-import { filterMailboxLetters, getMailboxCounts, type MailboxFilter } from '@/lib/mailboxView';
+import { filterMailboxLetters, getMailboxCounts, getMailboxEmptyState, type MailboxFilter } from '@/lib/mailboxView';
 import { cn } from '@/lib/utils';
 
 export default function Mailbox() {
@@ -27,6 +27,7 @@ export default function Mailbox() {
   ];
 
   const filteredLetters = useMemo(() => filterMailboxLetters(letters, activeTab, searchQuery), [activeTab, letters, searchQuery]);
+  const emptyState = getMailboxEmptyState(activeTab, searchQuery);
 
   return (
     <main className="page-shell page-enter">
@@ -104,13 +105,24 @@ export default function Mailbox() {
           {filteredLetters.length ? filteredLetters.map((letter) => <LetterCard key={letter.id} letter={letter} showExcerpt />) : (
             <div className="panel-muted my-10 rounded-2xl p-8 text-center sm:p-10">
               <Mail className="mx-auto h-7 w-7 text-on-surface-variant" aria-hidden="true" />
-              <h2 className="mt-4 font-headline-md text-2xl text-ink-navy">No drops in this little corner yet.</h2>
+              <h2
+                className="mt-4 font-headline-md text-2xl text-ink-navy"
+                aria-live={emptyState.kind === 'search' ? 'polite' : undefined}
+                aria-atomic={emptyState.kind === 'search' ? 'true' : undefined}
+              >
+                {emptyState.title}
+              </h2>
               <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-on-surface-variant">
-                {searchQuery ? 'Try a different search or clear the filter.' : 'Send something small to get this started.'}
+                {emptyState.description}
               </p>
               <div className="mt-5 flex flex-wrap justify-center gap-3">
-                {searchQuery && <button type="button" onClick={() => setSearchQuery('')} className="button-secondary">Clear search</button>}
-                <Link href="/compose?new=1" className="button-primary !rounded-xl !bg-[#2b45f7] !text-white !border-[#2b45f7]">Make a drop <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
+                {emptyState.kind === 'search' ? (
+                  <button type="button" onClick={() => setSearchQuery('')} className="button-secondary">Clear search</button>
+                ) : (
+                  <Link href={emptyState.actionHref} className="button-primary !rounded-xl !bg-[#2b45f7] !text-white !border-[#2b45f7]">
+                    {emptyState.actionLabel} <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                  </Link>
+                )}
               </div>
             </div>
           )}
