@@ -6,13 +6,20 @@ Build Drop as a mobile-first private sharing app where a person can send a photo
 
 The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailbox, and relay foundations. Existing letters continue to work as text drops, and their routes and saved content remain readable. The build covers the end-to-end mobile flow: choose content, attach an image or GIF, choose a recipient, send, open, react, and optionally follow a relay.
 
+## Implementation Status — 2026-10-24 (Home demo)
+
+- Home now links directly to a no-sign-in photo/GIF demo. It reuses the recipient reveal, reaction, and sender-copy screens, uses bundled media, and clearly says the sample stays on this device and is not sent or shared.
+- The demo saves into the current account’s local history without replacing the active draft. Its attachment write and rollback use the account captured before fetching the bundled media; account-switch regression checks cover changes before and during the IndexedDB write.
+- Verification: `npm test` passed 241/241; lint, no-incremental TypeScript, Webpack production build, smoke-script syntax, and `git diff --check` passed. The isolated Chrome smoke passed keyboard Home navigation, the full GIF/reaction/reload/sender-copy path at 390×844, and no horizontal overflow on Home and the chooser at 360, 390, and 430px. It observed no Auth, RPC, or Storage-write requests.
+- This is local demo evidence only. Hosted account-to-account sends, actual 30-day Storage cleanup, screen-reader use, and physical-device keyboard/safe-area behavior remain open. The approved 30-day cutoff for valid abandoned staging uploads is already in the retention migration; this slice did not change it.
+
 ## Implementation Status — 2026-10-18
 
 - The unknown-handle claim regression coverage now follows photo and GIF drops through three access states: before profile setup, after profile setup but before claim, and after explicit claim. The local Auth/Storage smoke and rollback-only SQL fixture check participant access and outsider denial; runtime verification still needs an isolated Supabase project with the media cleanup schedule configured.
 - Task 1 is complete. The mixed-payload model, default text behavior for older drafts, and compatible recipient routes are in place.
 - The core mobile sharing, receive, reaction, and optional relay flows have local implementations. Detailed code and browser checks are recorded in `tasks/todo.md`.
 - Seeded demo reactions now persist on this device and appear on the mailbox card; they are clearly marked as local and do not notify a sender.
-- Preview now offers an explicit same-device demo for instant drops: recipient reveal, local reaction, then a sender copy. The mailbox labels it as a demo and excludes it from the Sent count; it is never represented as delivered or shared.
+- Preview offers an explicit same-device demo for instant drops: recipient reveal, local reaction, then a sender copy. The mailbox labels it as a demo and excludes it from real Sent counts; its local completion state does not mean a message was sent or a notification delivered.
 - A disposable PostgreSQL regression test now covers relay token authorization, retry recovery, rotation/revocation, optional coordinates, participant-only route visibility, and private token-table denial.
 - Signed-in mailbox cards now show participant-visible reactions on sent drops; hosted account-to-account verification remains open.
 - First-use profile setup preserves customized local identity, suggests an editable account-specific handle, and only creates a sender profile after confirmed absence. Per-account unsynced edits survive lookup recovery, and handle conflicts stay recoverable on-device. The local smoke test verifies rejected updates and duplicate first-use inserts leave existing profiles unchanged. Authenticated browser onboarding remains unverified.
@@ -23,7 +30,7 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 
 - `/drop` is the new app and the only write target. `/letter` is read-only inspiration; source files and its existing uncommitted work must remain untouched.
 - Use the existing empty private GitHub repository `arjeetanand/drop`. Copy the working app into this folder without `.git`, environment secrets, generated output, or installed dependencies; preserve the plan files already here.
-- Verify each implementation slice before committing and push each passing commit to `main`.
+- Verify each implementation slice before committing and push each passing task-branch commit to `origin`. Merge into `main` only with explicit approval.
 - The earlier design chat did not record a final selection. Use its playful paper direction as the default: warm paper, cobalt actions, expressive media, small postmark details, and thumb-first navigation.
 
 ## Product Scope and Decisions

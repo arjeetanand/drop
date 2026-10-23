@@ -2,6 +2,15 @@
 
 Updated: 2026-10-24
 
+## Latest checkpoint — no-sign-in Home photo/GIF demo (2026-10-24)
+
+- Home now offers **Try a demo drop**. The chooser opens a bundled photo or GIF in the existing recipient reveal, reaction, and sender-copy flow without sign-in or a handle. The sample is stored locally, sends no notification, and leaves the active draft intact.
+- Demo media writes capture one local account scope before fetching the bundled asset. A stale account is rejected before the IndexedDB write; a switch during the write is rejected and rollback targets only the captured account. Tests cover active-draft preservation and both account-switch windows.
+- Verification: `npm test` passed 241/241; lint, no-incremental TypeScript, `npm run build -- --webpack`, `node --check scripts/browser-demo-smoke.mjs`, and `git diff --check` passed. The isolated Chrome smoke passed keyboard Home navigation, GIF reveal/open/reaction/reload/sender-copy at 390×844, and no horizontal overflow on Home and the chooser at 360, 390, and 430px. It observed no Auth, RPC, or Storage-write requests. The build reported the existing Browserslist freshness and ambiguous Tailwind easing warnings.
+- The user reconfirmed automatic deletion of valid abandoned staging uploads after 30 days. The existing migration already matches this rule; no retention code or hosted resource changed. Physical cleanup, hosted two-account sending, screen-reader behavior, and physical-device keyboard/safe-area checks remain unverified.
+- Active checkout: `/Users/arjeetanand/projects/drop`; the OneDrive `projects/drop` path is absent. Code commits `8c44f1c` (`feat: add local photo and GIF demo`) and `74db67a` (`test: cover account-scoped demo rollback`) are pushed to `origin/feat/home-demo-drop`. The README, plan, checklist, handoff, and learning entry are being committed separately on this branch. No PR or merge was created. `/letter` and `.env.local` were not changed or staged.
+- Next: continue the larger mobile-sharing plan by verifying real account-to-account media send and the cleanup worker only after the approved Free Supabase project is configured; then cover screen readers and physical-device safe-area/keyboard behavior.
+
 ## Latest checkpoint — unknown-handle photo/GIF claim coverage (2026-10-24)
 
 - Extended `scripts/local-supabase-smoke.mjs` to create and finalize a disposable PNG and GIF claim invite for the same signed-in account with no Drop profile. It asserts that rows, downloads, and signed URLs stay unavailable before profile setup and after profile setup until the claimant explicitly claims each invite. After claim, sender and claimant can read the row/media while an outsider cannot; the sender status RPC contains both IDs. Cleanup tracks staging and final object paths and removes them through the Supabase Storage API.

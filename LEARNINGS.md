@@ -682,3 +682,33 @@ Profile creation makes an account eligible to claim; it must not itself unlock a
 ### Git and remaining gaps
 
 Code commit `adc648b` (`test: cover unknown-handle photo and GIF claims`) is pushed to `origin/test/unknown-handle-media-claim-smoke`. Documentation, checklist, handoff, README, plan, and this learning entry are committed separately on the same branch. No PR or merge was created. `/letter`, `.env.local`, and hosted resources were not changed. Next: rerun both Supabase checks on an isolated project with the required cleanup schedule and Vault values, then complete browser and actual 30-day cleanup verification.
+
+## 2026-10-24 — Add a discoverable on-device photo/GIF demo
+
+### Issue
+
+The richer recipient/reaction/sender-copy demo was behind the composer preview, so a first-time visitor had to start composing and enter a handle even though the sample never sends. Account switching during the sample load also needed to remain isolated from attachment storage.
+
+### Cause
+
+The demo entry was not available from Home. The attachment helper captured whichever account was active when it was called, while the demo flow had already captured its intended account before awaiting the bundled media fetch.
+
+### Resolution
+
+- Add a direct Home link and a chooser for bundled photo and GIF samples. Reuse recipient reveal, local reaction, and sender-copy behavior, with clear on-device/no-send copy.
+- Save a separate local demo record without replacing the active draft. Pass the account captured before the fetch through the media write and demo creation; reject stale writes and remove any partial attachment only from that captured account.
+- Add regression coverage for active-draft preservation, account isolation, a switch during sample fetch, and switches during the IndexedDB write. Add an isolated Chrome smoke for keyboard navigation, responsive overflow, GIF reveal/reaction/reload/sender copy, and prohibited backend writes.
+
+### Learning
+
+For an account-scoped async file flow, capture the account before the first `await` and pass it through every storage write, final record creation, and rollback. Browser checks should compare rendered text without assuming CSS letter casing and wait for real scrolling behavior before judging whether a control is reachable.
+
+### Verification
+
+- `npm test` passed 241/241; `npm run lint`, `npx tsc --noEmit --incremental false`, `npm run build -- --webpack`, `node --check scripts/browser-demo-smoke.mjs`, and `git diff --check` passed.
+- Isolated Chrome completed Home keyboard navigation, GIF recipient reveal/open, reaction, reload persistence, and sender copy at 390×844. Home and chooser had no horizontal overflow at 360, 390, and 430px. The request gate observed no Auth, RPC, or Storage-write requests and no cross-origin requests.
+- The build emitted the existing Browserslist freshness and ambiguous Tailwind easing warnings.
+
+### Git and remaining gaps
+
+Code commits `8c44f1c` (`feat: add local photo and GIF demo`) and `74db67a` (`test: cover account-scoped demo rollback`) are pushed to `origin/feat/home-demo-drop`; project notes are committed separately on the same branch. The approved 30-day deletion for valid abandoned staging uploads is already in the existing migration; no retention code changed. Hosted account-to-account sends, actual Storage cleanup, screen-reader behavior, and physical-device keyboard/safe-area checks remain open. `/letter` and `.env.local` were not changed or staged; no PR or merge was created.
