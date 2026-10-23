@@ -15,7 +15,7 @@ import { getJourneyLetters } from '@/lib/journeyView';
 import { getJourneyNotes, getLetterDraft, getLettersWithDraft, saveJourneyNotes, type JourneyNote } from '@/lib/letterStore';
 import { getInitialRelayState, getRelayState, getRelayStats, getRemoteRelayHandoffs, issueRelayHandoffToken, relayToTrackingEvents, type RelayState } from '@/lib/relayStore';
 import { mergeRemoteRelayHandoffs } from '@/components/relayPresentation';
-import { startRelayRouteRefresh, type RelayRouteRefreshController } from '@/lib/relayRouteRefresh';
+import { startRelayRouteRefresh, startVisibleDataRefresh, type RelayRouteRefreshController } from '@/lib/relayRouteRefresh';
 import { buildRelayScanUrl } from '@/lib/relayInviteUrl';
 
 interface SenderInvite {
@@ -127,6 +127,18 @@ function JourneyDetail({ requestedLetterId }: { requestedLetterId: string }) {
     void loadJourney();
     return () => { active = false; };
   }, [requestedLetterId]);
+
+  useEffect(() => {
+    const controller = startVisibleDataRefresh({
+      load: () => getRemoteJourneyLetter(letterId),
+      onData: (latest) => {
+        setJourneyLetter((current) => current && current.id === latest.id
+          ? { ...current, status: latest.status, activityAt: latest.activityAt }
+          : current);
+      },
+    });
+    return () => controller.stop();
+  }, [letterId]);
 
   useEffect(() => {
     if (!journeyLetter || journeyLetter.id !== letterId) return;
@@ -284,10 +296,17 @@ function JourneyDetail({ requestedLetterId }: { requestedLetterId: string }) {
               <h1 className="mt-4 font-headline-md text-3xl font-semibold leading-tight tracking-[-0.035em] text-ink-navy sm:text-4xl">{hasCarrier ? 'A sealed drop, in motion.' : 'A sealed drop, ready to travel.'}</h1>
               <p className="mt-3 text-sm leading-relaxed text-on-surface-variant sm:text-base">{hasCarrier ? `Follow the route of “${relay.subject}” toward ${relay.recipient}. Carriers can update the route without opening the drop.` : `“${relay.subject}” is waiting for its first carrier. Invite someone you trust; the drop stays sealed.`}</p>
             </div>
-            <button type="button" onClick={() => void handleInviteCarrier()} disabled={issuingInvite} className="button-primary min-h-12 w-full !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white sm:w-auto">
-              <QrCode className="h-4 w-4" aria-hidden="true" />{issuingInvite ? 'Creating invite…' : 'Invite a carrier'}<ArrowRight className="h-4 w-4" aria-hidden="true" />
-            </button>
+            {journeyLetter.status === 'delivered' ? (
+              <span className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#e9f4ed] px-4 text-sm font-bold text-[#276a4d]" role="status">
+                <Check className="h-4 w-4" aria-hidden="true" /> Drop collected
+              </span>
+            ) : (
+              <button type="button" onClick={() => void handleInviteCarrier()} disabled={issuingInvite} className="button-primary min-h-12 w-full !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white sm:w-auto">
+                <QrCode className="h-4 w-4" aria-hidden="true" />{issuingInvite ? 'Creating invite…' : 'Invite a carrier'}<ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </button>
+            )}
           </div>
+          {journeyLetter.status === 'delivered' && <p className="mt-5 rounded-xl bg-[#e9f4ed] px-4 py-3 text-sm leading-relaxed text-[#276a4d]" role="status">Your recipient confirmed it arrived. The sealed drop is now ready for them to open.</p>}
           {error && <p className="notice error-notice mt-5" role="alert" aria-live="assertive">{error}</p>}
           {notice && <p className="notice mt-5" role="status" aria-live="polite">{notice}</p>}
         </section>

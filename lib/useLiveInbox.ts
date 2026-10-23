@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { mockLetters, type MockLetter } from '@/data/mockData';
 import { getRemoteLetters, subscribeToIncomingDropInbox, subscribeToSenderDropReactions } from '@/lib/letterBackend';
 import { getLetterDraft, getLettersWithDraft } from '@/lib/letterStore';
@@ -19,31 +19,35 @@ export function useLiveInbox(initialLetters: MockLetter[] = mockLetters) {
   const [reactionCount, setReactionCount] = useState(0);
   const seenIncomingIds = useRef<Set<string> | null>(null);
   const seenReactions = useRef<Map<string, string> | null>(null);
+  const refreshControllerRef = useRef<VisibleDataRefreshController | null>(null);
+
+  const refreshInbox = useCallback(() => {
+    return refreshControllerRef.current?.refresh() ?? Promise.resolve();
+  }, []);
 
   useEffect(() => {
     let active = true;
     let stopRealtime = () => {};
     let stopReactionRealtime = () => {};
-    let refresh: VisibleDataRefreshController | null = null;
     const signaledDropIds = new Set<string>();
     const signaledReactionDropIds = new Set<string>();
 
     setLetters(getLettersWithDraft(getLetterDraft()));
     void subscribeToSenderDropReactions((dropId) => {
       if (dropId) signaledReactionDropIds.add(dropId);
-      void refresh?.refresh();
+      void refreshControllerRef.current?.refresh();
     }).then((stop) => {
       if (!active) stop();
       else stopReactionRealtime = stop;
     });
     void subscribeToIncomingDropInbox((dropId) => {
       if (dropId) signaledDropIds.add(dropId);
-      void refresh?.refresh();
+      void refreshControllerRef.current?.refresh();
     }).then((stop) => {
       if (!active) stop();
       else {
         stopRealtime = stop;
-        refresh = startVisibleDataRefresh({
+        const refreshController = startVisibleDataRefresh({
           load: getRemoteLetters,
           intervalMs: LIVE_INBOX_RECOVERY_INTERVAL_MS,
           queueOneWhileInFlight: true,
@@ -51,7 +55,15 @@ export function useLiveInbox(initialLetters: MockLetter[] = mockLetters) {
             if (!active) return;
 
             const remoteLetters = mailbox.letters;
-            const update = getLiveInboxUpdate(remoteLetters, seenIncomingIds.current, signaledDropIds);
+            const pendingRelayIds = new Set(remoteLetters
+              .filter((letter) => letter.direction === 'received'
+                && letter.status === 'dispatched'
+                && !letter.sample
+                && !letter.localDemo)
+              .map((letter) => letter.id));
+            const arrivalEligibleLetters = remoteLetters.filter((letter) => !pendingRelayIds.has(letter.id));
+            const update = getLiveInboxUpdate(arrivalEligibleLetters, seenIncomingIds.current, signaledDropIds);
+            pendingRelayIds.forEach((dropId) => update.receivedIds.add(dropId));
             const reactionUpdate = mailbox.reactionsHydrated
               ? getLiveReactionUpdate(
                   remoteLetters,
@@ -83,12 +95,14 @@ export function useLiveInbox(initialLetters: MockLetter[] = mockLetters) {
             setLetters(mergeInboxLetters(localLetters, displayLetters));
           },
         });
+        refreshControllerRef.current = refreshController;
       }
     });
 
     return () => {
       active = false;
-      refresh?.stop();
+      refreshControllerRef.current?.stop();
+      refreshControllerRef.current = null;
       stopRealtime();
       stopReactionRealtime();
     };
@@ -96,6 +110,7 @@ export function useLiveInbox(initialLetters: MockLetter[] = mockLetters) {
 
   return {
     letters,
+    refreshInbox,
     arrival,
     arrivalCount,
     reaction,

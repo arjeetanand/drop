@@ -71,7 +71,7 @@ export function getMailboxCounts(letters: MockLetter[]) {
   return {
     total: realDrops.length,
     transit: realDrops.filter((letter) => letter.status === 'dispatched').length,
-    received: realDrops.filter((letter) => letter.direction === 'received').length,
+    received: realDrops.filter((letter) => letter.direction === 'received' && letter.status === 'delivered').length,
     sent: realDrops.filter((letter) => !letter.localDemo && letter.direction !== 'received' && letter.status !== 'draft' && letter.status !== 'sealed').length,
     drafts: realDrops.filter((letter) => letter.status === 'draft' || letter.status === 'sealed').length,
     samples: letters.filter((letter) => letter.sample).length,
@@ -83,7 +83,7 @@ export function filterMailboxLetters(letters: MockLetter[], filter: MailboxFilte
   return letters.filter((letter) => {
     if (filter === 'samples' ? !letter.sample : letter.sample) return false;
     if (filter === 'transit' && letter.status !== 'dispatched') return false;
-    if (filter === 'received' && letter.direction !== 'received') return false;
+    if (filter === 'received' && (letter.direction !== 'received' || letter.status !== 'delivered')) return false;
     if (filter === 'sent' && (letter.localDemo || letter.direction === 'received' || letter.status === 'draft' || letter.status === 'sealed')) return false;
     if (filter === 'drafts' && letter.status !== 'draft' && letter.status !== 'sealed') return false;
     if (!query) return true;

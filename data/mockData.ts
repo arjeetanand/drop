@@ -9,6 +9,14 @@ export interface RecipientInviteProgress {
   manualLinkAvailable?: boolean;
 }
 
+export interface RelayRecipientProgress {
+  handoffCount: number;
+  latestCarrier: string | null;
+  latestNeighborhood: string | null;
+  latestNote: string | null;
+  latestHandoffAt: string | null;
+}
+
 export interface MockLetter {
   id: string;
   recipient: string;
@@ -31,6 +39,7 @@ export interface MockLetter {
   mediaSizeBytes?: number;
   mediaUrl?: string;
   recipientInviteProgress?: RecipientInviteProgress;
+  relayProgress?: RelayRecipientProgress;
   reaction?: string;
   reactionUpdatedAt?: string;
   localDemo?: boolean;

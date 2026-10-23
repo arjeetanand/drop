@@ -6,12 +6,13 @@ import { ArrowRight, Mail, PenLine, Search, X } from 'lucide-react';
 import { LiveDropCue, LiveDropStatus } from '@/components/LiveDropCue';
 import { LiveReactionCue } from '@/components/LiveReactionCue';
 import { LetterCard } from '@/components/LetterCard';
+import { RelayRecipientCard } from '@/components/RelayRecipientCard';
 import { useLiveInbox } from '@/lib/useLiveInbox';
 import { filterMailboxLetters, getMailboxCounts, getMailboxEmptyState, type MailboxFilter } from '@/lib/mailboxView';
 import { cn } from '@/lib/utils';
 
 export default function Mailbox() {
-  const { letters, arrival, arrivalCount, dismissArrival, reaction, reactionCount, dismissReaction } = useLiveInbox();
+  const { letters, arrival, arrivalCount, dismissArrival, reaction, reactionCount, dismissReaction, refreshInbox } = useLiveInbox();
   const [activeTab, setActiveTab] = useState<MailboxFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -109,7 +110,14 @@ export default function Mailbox() {
         </section>
 
         <section className="mt-2">
-          {filteredLetters.length ? filteredLetters.map((letter) => <LetterCard key={letter.id} letter={letter} showExcerpt />) : (
+          {filteredLetters.length ? filteredLetters.map((letter) => (
+            letter.direction === 'received'
+              && letter.status === 'dispatched'
+              && !letter.sample
+              && !letter.localDemo
+              ? <RelayRecipientCard key={letter.id} letter={letter} onRefresh={refreshInbox} />
+              : <LetterCard key={letter.id} letter={letter} showExcerpt />
+          )) : (
             <div className="panel-muted my-10 rounded-2xl p-8 text-center sm:p-10">
               <Mail className="mx-auto h-7 w-7 text-on-surface-variant" aria-hidden="true" />
               <h2

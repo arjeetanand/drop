@@ -37,6 +37,18 @@ type LetterRow = {
   media_size_bytes: number | null;
 };
 
+type RecipientRelayDropRow = {
+  id: string;
+  sender_display_name: string | null;
+  created_at: string;
+  dispatched_at: string | null;
+  handoff_count: number;
+  latest_carrier: string | null;
+  latest_neighborhood: string | null;
+  latest_note: string | null;
+  latest_handoff_at: string | null;
+};
+
 type ProfileRow = {
   id: string;
   username: string;
@@ -299,6 +311,29 @@ function rowToLetter(row: LetterRow, userId: string, revealContent = false): Moc
   };
 }
 
+function rowToRecipientRelayDrop(row: RecipientRelayDropRow): MockLetter {
+  const activityAt = row.latest_handoff_at || row.dispatched_at || row.created_at;
+  return {
+    id: row.id,
+    recipient: 'you',
+    sender: row.sender_display_name || 'Someone you know',
+    direction: 'received',
+    date: new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(activityAt)),
+    activityAt,
+    status: 'dispatched',
+    excerpt: 'The private part stays sealed while this drop travels.',
+    subject: 'A drop is on its way',
+    deliveryMode: 'relay',
+    relayProgress: {
+      handoffCount: row.handoff_count,
+      latestCarrier: row.latest_carrier,
+      latestNeighborhood: row.latest_neighborhood,
+      latestNote: row.latest_note,
+      latestHandoffAt: row.latest_handoff_at,
+    },
+  };
+}
+
 const MAILBOX_SELECT = 'id, sender_id, sender_profile:public_profiles!letters_sender_id_fkey(username), recipient_id, sender_display_name, recipient_username, recipient_name, subject, teaser, status, seal_id, dispatched_at, delivered_at, created_at, payload_kind, delivery_mode, media_path, media_mime_type, media_size_bytes';
 const LETTER_SELECT = `${MAILBOX_SELECT}, content`;
 
@@ -357,10 +392,31 @@ export async function getRemoteLetters(): Promise<RemoteMailboxSnapshot | null> 
 
   if (!mailbox) return null;
   const letters = mailbox.letters.map((row) => rowToLetter(row, context.user.id));
+  const { data: recipientRelayRows, error: recipientRelayError } = await context.supabase
+    .rpc('get_recipient_relay_drops')
+    .returns<RecipientRelayDropRow[]>();
+  const recipientRelayDrops = recipientRelayError || !Array.isArray(recipientRelayRows)
+    ? []
+    : recipientRelayRows.map((row) => rowToRecipientRelayDrop(row as RecipientRelayDropRow));
+  const displayLetters = mailbox.reactions
+    ? mergeDropReactions(letters, mailbox.reactions)
+    : letters;
   return {
-    letters: mailbox.reactions ? mergeDropReactions(letters, mailbox.reactions) : letters,
+    letters: [...displayLetters, ...recipientRelayDrops],
     reactionsHydrated: mailbox.reactions !== null,
   };
+}
+
+export async function collectRemoteRelayDrop(letterId: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const context = await getAuthenticatedClient();
+    if (!context) return { ok: false, error: 'Sign in as the drop recipient to collect it.' };
+    const { error } = await context.supabase.rpc('collect_relay_drop', { p_letter_id: letterId });
+    if (error) return { ok: false, error: 'This drop could not be collected. Check your connection and try again.' };
+    return { ok: true };
+  } catch {
+    return { ok: false, error: 'This drop could not be collected. Check your connection and try again.' };
+  }
 }
 
 export async function subscribeToIncomingDropInbox(onDropSignal: (dropId?: string) => void): Promise<() => void> {

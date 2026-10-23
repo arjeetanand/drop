@@ -13,6 +13,7 @@ import { getDraftAttachment } from '@/lib/letterMediaStore';
 import { withFallbackTimeout } from '@/lib/withFallbackTimeout';
 import { ReducedMotionGif } from '@/components/ReducedMotionGif';
 import { getReactionName } from '@/components/LiveReactionCue';
+import { RelayRecipientCard } from '@/components/RelayRecipientCard';
 import { startVisibleDataRefresh, type VisibleDataRefreshController } from '@/lib/relayRouteRefresh';
 
 function LoadingLetter() {
@@ -366,10 +367,46 @@ export default function LetterArrivalPage() {
 
   const sender = letter.localDemo ? 'You' : letter.sender || 'A correspondent';
   const isReceived = letter.localDemo ? !senderView : letter.direction === 'received';
+  const relayInTransit = isReceived
+    && !letter.sample
+    && !letter.localDemo
+    && letter.status === 'dispatched';
   const encodedLetterId = encodeURIComponent(letter.id);
   const dropBackHref = isReceived && !letter.sample && letter.senderUsername
     ? `/compose?new=1&recipient=${encodeURIComponent(`@${letter.senderUsername}`)}`
     : null;
+
+  if (relayInTransit) {
+    const refreshCollectedRelay = async () => {
+      const mailbox = await getRemoteLetters();
+      const collectedLetter = mailbox?.letters.find((candidate) => candidate.id === letter.id
+        && candidate.direction === 'received'
+        && candidate.status === 'delivered');
+      if (!collectedLetter) throw new Error('The collected drop could not be reloaded yet.');
+      setLetter(collectedLetter);
+    };
+
+    return (
+      <main className="page-shell page-enter">
+        <div className="page-container max-w-[760px]">
+          <header className="page-header">
+            <Link
+              href="/mailbox"
+              className="button-quiet -ml-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f7f4ee]"
+            >
+              <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+              Back to mailbox
+            </Link>
+          </header>
+          <section className="mt-8">
+            <p className="eyebrow">On its way</p>
+            <h1 className="display-title mt-3 max-w-[12ch]">This drop is still traveling.</h1>
+            <RelayRecipientCard letter={letter} onRefresh={refreshCollectedRelay} />
+          </section>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="page-shell page-enter">

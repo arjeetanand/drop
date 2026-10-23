@@ -24,6 +24,19 @@ test('keeps sample drops out of mailbox totals and received filters while preser
   assert.deepEqual(filterMailboxLetters(drops, 'samples', 'Example').map((letter) => letter.id), ['sample-in']);
 });
 
+test('keeps recipient relays in Transit until they collect the drop', () => {
+  const relays = [
+    { id: 'relay-in-transit', subject: 'On the way', recipient: 'me', direction: 'received', status: 'dispatched', deliveryMode: 'relay' },
+    { id: 'legacy-relay-in-transit', subject: 'Still traveling', recipient: 'me', direction: 'received', status: 'dispatched', deliveryMode: 'instant' },
+    { id: 'relay-collected', subject: 'It arrived', recipient: 'me', direction: 'received', status: 'delivered', deliveryMode: 'relay' },
+    { id: 'relay-sent', subject: 'Sent out', recipient: 'you', direction: 'sent', status: 'dispatched', deliveryMode: 'relay' },
+  ];
+
+  assert.deepEqual(getMailboxCounts(relays), { total: 4, transit: 3, received: 1, sent: 1, drafts: 0, samples: 0 });
+  assert.deepEqual(filterMailboxLetters(relays, 'received', '').map((letter) => letter.id), ['relay-collected']);
+  assert.deepEqual(filterMailboxLetters(relays, 'transit', '').map((letter) => letter.id), ['relay-in-transit', 'legacy-relay-in-transit', 'relay-sent']);
+});
+
 test('shows search recovery without changing the active mailbox filter', () => {
   assert.deepEqual(getMailboxEmptyState('received', '  no match  '), {
     kind: 'search',
