@@ -2,6 +2,8 @@
 
 Drop is a mobile-first way to send a friend a photo, meme, GIF, or personal note as a private drop. Sending is instant by default; a human relay is an optional journey.
 
+The append-only engineering learning log is in [LEARNINGS.md](./LEARNINGS.md); it records solved issues, causes, verification evidence, and Git checkpoints.
+
 ## Run locally
 
 ```bash

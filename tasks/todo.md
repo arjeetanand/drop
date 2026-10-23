@@ -11,6 +11,13 @@ Tasks are ordered by dependency. Progress is recorded at each tested and pushed 
 - [x] Code commit `84e5ba2` is pushed to `origin/feat/persistent-claim-status`; documentation is committed separately.
 - [ ] Verify the sender flow in a rendered browser with a screen reader and across two accounts after the three claim migrations are applied to the approved Free project.
 
+## Checkpoint — persistent engineering learning log (2026-10-23)
+
+- [x] Add `LEARNINGS.md` with dated issue, cause, fix, verification, Git, and follow-up notes, including the completed sender claim-status slice.
+- [x] Add a repository instruction to append a learning entry after each completed code-change or issue-resolution slice, and link the log from README.
+- [x] `git diff --check` passes; this documentation-only update did not require application tests.
+- [x] Save this workflow on dedicated branch `docs/drop-learning-log`, based on pushed commit `0b11a73`.
+
 ## Checkpoint notes through — 2026-10-19
 
 - Added passwordless email-link sign-in alongside Google. Both disposable accounts signed in and synced profiles through local Supabase/Inbucket. `npm test` passes 70/70, lint passes, and a clean Next.js 16.3 production build passes. The two-account photo/GIF composer send-open-react flow remains unverified because the in-app browser did not open its file chooser; Edge's ChatGPT extension needs “Allow access to file URLs” enabled for this local test. No hosted Supabase project or SMTP is configured.
