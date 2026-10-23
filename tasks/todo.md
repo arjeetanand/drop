@@ -2,6 +2,15 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
+## Checkpoint — sender journey after relay collection (2026-10-23)
+
+- [x] Keep the sender's relay chain and custody timeline consistent with the recipient's durable collection status and timestamp.
+- [x] Add a regression for waiting versus collected presentation and confirm projections do not mutate saved handoff state.
+- [x] `npm test` passes 159/159; `npm run lint`, `npx tsc --noEmit --incremental false`, and `git diff --check` pass.
+- [x] Code commit `d9eeadb` is pushed to `origin/feat/journey-collection-receipt`.
+- [ ] Complete rendered mobile/desktop interaction and screen-reader checks; the available browser remained at "Checking your account…".
+- [ ] Re-run the production build when `fonts.googleapis.com` is reachable; this attempt stopped at DNS `ENOTFOUND` while fetching existing Google Fonts.
+
 ## Checkpoint — persistent sender claim status (2026-10-23)
 
 - [x] Sent cards and sender detail retain “Claimed by [name]” after reload; ordinary delivered notes remain “Delivered,” and the live announcement remains one-time.

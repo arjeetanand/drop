@@ -2,6 +2,15 @@
 
 Updated: 2026-10-23
 
+## Latest checkpoint — sender journey after relay collection
+
+- Fixed a mismatch where the sender header reported a collected drop while the relay chain and custody timeline still showed the recipient as the next stop. The journey now derives the recipient stop from durable `delivered` status and uses the stored collection activity time; it leaves the saved handoff route unchanged.
+- Added regression coverage for dispatched and collected states, event text/time, repeat-safe projection, and unchanged handoff state. The append-only learning entry is in [LEARNINGS.md](./LEARNINGS.md).
+- Verification: `npm test` passed 159/159; lint, no-incremental TypeScript, and `git diff --check` passed. Production build was attempted from an isolated source copy and stopped because sandbox DNS returned `ENOTFOUND fonts.googleapis.com` for existing Google Fonts in `app/layout.tsx`.
+- Local browser QA at 390×844 confirmed `/` and Next layout assets respond, but the page remained at “Checking your account…” and no rendered interaction or screenshot was verified. Screen-reader, device, and hosted two-account behavior remain open.
+- Code commit `d9eeadb` (`fix: reflect relay collection in sender journey`) is pushed to `origin/feat/journey-collection-receipt`; the documentation and learning-log update will follow in a separate commit. The local app remains on port 4004. No PR or merge was created.
+- Next: retry the production build where Google Fonts resolve, then verify the relay collection journey in an authenticated browser at mobile and desktop widths.
+
 ## Latest verified checkpoint — persistent sender claim status
 
 - Added a forward-only sender-status RPC over the private invite table. It returns only claimed drop IDs for the authenticated sender and verifies the matching row is a delivered instant text note; invite tokens and recipient account IDs remain private. The UI maps that status to “Claimed by [name]” in Sent and sender detail, including after a reload. Ordinary delivered notes stay “Delivered,” and the live one-time announcement remains.
@@ -39,7 +48,7 @@ Updated: 2026-10-23
 
 - Active code checkout: /Users/arjeetanand/projects/drop
 - GitHub remote: private repository arjeetanand/drop
-- Current branch: `docs/drop-learning-log` is based on pushed commit `0b11a73` from `feat/persistent-claim-status`. The claim-status code commit `84e5ba2` and its handoff commit `0b11a73` are pushed. The earlier accountless-claim feature commit `68daec5` is on `feat/claim-completion-feedback`, based on `e6be604` on `feat/invite-first-drop-resilience`, whose latest feature commit is `e3d5c5b`. Earlier commits include `75f8a89` (relay recipient collection), `8493097` (sender reaction race safety), `6f618ed` (invite storage guard), and `41c409e` (profile copy fallback). No pull request has been created.
+- Current branch: `feat/journey-collection-receipt` is based on pushed commit `4b45809` and includes pushed code commit `d9eeadb`. The documentation and learning-log commit is pending. Earlier commits include `84e5ba2` (persistent sender claim status), `0b11a73` (learning-log setup), `75f8a89` (relay recipient collection), `8493097` (sender reaction race safety), `6f618ed` (invite storage guard), and `41c409e` (profile copy fallback). No pull request has been created.
 - Previous mailbox search-focus branch: `fix/mailbox-search-focus`, code commit `bbf9df8` pushed to origin; no pull request has been created.
 - Mailbox empty-state feature commit: `10efead` (`feat: tailor mailbox empty states to filters`), pushed to `origin/feat/mailbox-filter-empty-states`; the docs update is committed separately.
 - Recipient-first composer commit: `a9049cf` (`feat: put recipient first in drop composer`), pushed to `origin/feat/recipient-first-compose`.
@@ -126,4 +135,4 @@ Updated: 2026-10-23
 
 ## Run locally
 
-From /Users/arjeetanand/projects/drop, run npm ci, then ./run.sh. Drop uses http://localhost:4004; ./run.sh stop stops the project-owned process. The local Supabase smoke environment uses port 5004 and browser QA is reserved port 6004. Code commit `c1d57e0` and its separate documentation commit are pushed to `origin/feat/draft-invite-progress`; the branch is not merged and has no pull request.
+From /Users/arjeetanand/projects/drop, run npm ci, then ./run.sh. Drop uses http://localhost:4004; ./run.sh stop stops the project-owned process. The local Supabase smoke environment uses port 5004 and browser QA is reserved port 6004. Current code commit `d9eeadb` is pushed to `origin/feat/journey-collection-receipt`; the documentation and learning-log update is the next commit. The branch is not merged and has no pull request.

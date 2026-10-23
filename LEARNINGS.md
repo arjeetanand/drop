@@ -2,6 +2,38 @@
 
 Append one dated entry for every completed code-change or issue-resolution slice. Keep the record evidence-based: issue, cause, resolution, verification, Git checkpoint, and remaining gaps. Do not store credentials or private content here.
 
+## 2026-10-23 — Align the sender journey after relay collection
+
+### Issue
+
+After a recipient collected a relayed drop, the sender header showed “Drop collected,” but the route chain still labeled the recipient as “Next stop” and the custody timeline still said the recipient was waiting. The event also used the route-step creation time instead of the recorded collection time.
+
+### Cause
+
+Collection is persisted on the drop as delivered status and an activity timestamp. The route handoff still has its original `next` flag, and the sender journey's route and event projections were reading that flag without the drop's durable collection status.
+
+### Resolution
+
+- Derived a recipient-collection presentation from the loaded delivered journey drop and passed it to both the route chain and custody timeline.
+- Used one pure presentation helper so the chain and timeline agree that the recipient stop is collected. The timeline uses the persisted collection activity time; the saved handoff state remains unchanged.
+- Added a regression covering the waiting state, collected label and note, collection date, repeat-safe projection, and unchanged route state.
+
+### Learning
+
+- When a journey's underlying drop lifecycle advances, every related projection must reconcile against the durable lifecycle state; a route-step flag can remain stale by design.
+- Keep UI projections pure and test both sides of the transition, including that rendering the new state does not rewrite the historical route.
+
+### Verification
+
+- `npm test`: 159/159 passed.
+- `npm run lint`, `npx tsc --noEmit --incremental false`, and `git diff --check`: passed.
+- `npm run build -- --webpack`: attempted in an isolated source copy; Next.js could not resolve `fonts.googleapis.com` (`ENOTFOUND`) for the existing Google Fonts in `app/layout.tsx`. No font or app configuration was changed.
+- Browser QA at 390×844 received HTTP 200 for `/` and local Next layout assets, but the page remained at “Checking your account…”. No rendered interaction, screenshot, screen-reader, or device behavior was verified.
+
+### Git and remaining gaps
+
+Code commit `d9eeadb` (`fix: reflect relay collection in sender journey`) is pushed to `origin/feat/journey-collection-receipt`. This learning entry, checklist, README, plan, and handoff update are being committed separately. Authenticated browser, screen-reader, real-device, and hosted two-account checks remain open; retry the production build when Google Fonts are reachable.
+
 ## 2026-10-23 — Persist sender claim status
 
 ### Issue
