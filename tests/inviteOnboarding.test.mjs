@@ -8,6 +8,7 @@ test('keeps invite context on profile and through auth callback routes', () => {
   assert.equal(profileRoute(true), '/profile?invite=1');
   assert.equal(profileRoute(false), '/profile');
   assert.equal(profileRoute(true, '/compose?letter=draft-1'), '/profile?invite=1&next=%2Fcompose%3Fletter%3Ddraft-1');
+  assert.equal(profileRoute(true, '/claim'), '/profile?invite=1&next=%2Fclaim');
   assert.equal(authCallbackRoute(true), '/auth/callback?invite=1');
   assert.equal(authCallbackRoute(false), '/auth/callback');
 });

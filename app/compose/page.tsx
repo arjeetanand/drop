@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { AlignCenter, AlignLeft, AlignRight, ArrowLeft, Check, Eye, FileImage, ImagePlus, Minus, Plus, Send, Share2, Trash2, Type, X } from 'lucide-react';
 import { getSealInfo, mockSeals, waxColors, writingPrompts, type DropDeliveryMode, type DropPayloadKind } from '@/data/mockData';
 import { canDeleteLocalDraft, clearRecipientInviteProgressForDraft, completeSuccessfulSend, deleteLocalDraft, getLetterDraft, getLetterDraftById, isLetterDraftPersisted, recordRecipientInviteProgress, restoreDeletedDraft, saveLetterDraft, setActiveLetterDraft, startNewLetter, type LetterDraftState, type LetterAlignment } from '@/lib/letterStore';
-import { getRemoteRecentDropRecipients, lookupDropRecipient, syncDropToBackend } from '@/lib/letterBackend';
+import { getRemoteRecentDropRecipients, issueDropClaimInvite, lookupDropRecipient, syncDropToBackend } from '@/lib/letterBackend';
 import { getSupabaseBrowserClient } from '@/lib/supabaseBrowser';
 import { isDropPayloadKindCompatibleWithMedia, isDropRecipientConfirmed, normalizeDropRecipient, validateDropMedia } from '@/lib/dropValidation';
 import { deleteDraftAttachment, getDraftAttachment, saveDraftAttachment } from '@/lib/letterMediaStore';
@@ -14,6 +14,7 @@ import { getLocalAccountId, isCurrentLocalAccount } from '@/lib/localAccountScop
 import { ReducedMotionGif } from '@/components/ReducedMotionGif';
 import { cn } from '@/lib/utils';
 import { shareInviteLink } from '@/lib/shareInvite';
+import { buildDropClaimUrl, createDropClaimSharePayload, createDropClaimToken } from '@/lib/dropClaim';
 import type { RecentDropRecipient } from '@/lib/recentDropRecipients';
 
 type RecipientCheck =
@@ -56,6 +57,7 @@ function Composer() {
   const [notice, setNotice] = useState('');
   const [inviteNotice, setInviteNotice] = useState('');
   const [manualInviteUrl, setManualInviteUrl] = useState('');
+  const [privateClaimUrl, setPrivateClaimUrl] = useState('');
   const [sharingInvite, setSharingInvite] = useState(false);
 
   useEffect(() => {
@@ -77,6 +79,7 @@ function Composer() {
     setDraft(current);
     setInviteNotice('');
     setManualInviteUrl(current.recipientInviteProgress?.manualLinkAvailable ? `${window.location.origin}/invite` : '');
+    setPrivateClaimUrl('');
     setContent(current.content);
     setRecipient(requestedRecipient);
     recipientCheckRequest.current += 1;
@@ -168,6 +171,17 @@ function Composer() {
   const complete = Boolean(confirmedRecipient && recipientUsername && (payloadKind === 'text' ? content.trim() : file));
   const currentSeal = getSealInfo(sealId, sealMonogram, sealColor);
   const profileHref = draft ? `/profile?next=${encodeURIComponent(`/compose?letter=${encodeURIComponent(draft.id)}`)}#account` : '/profile#account';
+  const canSendPrivateClaim = Boolean(
+    accountState === 'connected'
+      && recipientCheck.status === 'not-found'
+      && recipientCheck.username === recipientUsername
+      && payloadKind === 'text'
+      && deliveryMode === 'instant'
+      && !file
+      && !attachmentLoading
+      && !attachmentSaving
+      && content.trim(),
+  );
 
   const updateKind = (kind: DropPayloadKind) => {
     setError('');
@@ -280,6 +294,7 @@ function Composer() {
     setError('');
     setInviteNotice('');
     setManualInviteUrl('');
+    setPrivateClaimUrl('');
   };
 
   const checkRecipient = async (value = recipientUsername) => {
@@ -316,7 +331,84 @@ function Composer() {
     setError('');
     setInviteNotice('');
     setManualInviteUrl('');
+    setPrivateClaimUrl('');
     void checkRecipient(username);
+  };
+
+  const sharePrivateClaimInvite = async () => {
+    if (!draft || !canSendPrivateClaim || sharingInvite || sending || deletingRef.current) return;
+    const request = recipientCheckRequest.current;
+    const next = makeDraft();
+    if (!next) return;
+    const accountId = getLocalAccountId();
+    if (!isLetterDraftPersisted(next, accountId)) {
+      setSaved(false);
+      setInviteNotice('Your note could not be saved on this device. Check browser storage before sharing a private link.');
+      return;
+    }
+
+    setSending(true);
+    setSharingInvite(true);
+    setError('');
+    setInviteNotice('');
+    setManualInviteUrl('');
+    setPrivateClaimUrl('');
+    try {
+      const token = createDropClaimToken();
+      const issued = await issueDropClaimInvite(next, accountId, token);
+      if (request !== recipientCheckRequest.current || !isCurrentLocalAccount(accountId)) return;
+      if (!issued.ok || !issued.letterId) {
+        setInviteNotice(issued.error || 'This private note could not be saved. Your draft is still here—try again.');
+        return;
+      }
+
+      const dispatchedAt = issued.dispatchedAt || new Date().toISOString();
+      const sent = completeSuccessfulSend(next, accountId, 'claim_pending', dispatchedAt, {});
+      setDraft(sent || { ...next, status: 'claim_pending', dispatchedAt, updatedAt: new Date().toISOString() });
+      setSaved(Boolean(sent));
+
+      const inviteUrl = buildDropClaimUrl(window.location.origin, token);
+      if (!inviteUrl) {
+        setInviteNotice('Your note is saved in Sent, but this browser could not prepare its private link. Open the note in Sent and try again.');
+        return;
+      }
+      const payload = createDropClaimSharePayload(inviteUrl);
+      const result = await shareInviteLink(
+        inviteUrl,
+        navigator.share ? (details) => navigator.share(details) : undefined,
+        async (url) => {
+          if (!navigator.clipboard) throw new Error('Clipboard unavailable');
+          await navigator.clipboard.writeText(url);
+        },
+        payload,
+      );
+      if (request !== recipientCheckRequest.current || !isCurrentLocalAccount(accountId)) return;
+      if (result === 'shared' || result === 'copied') {
+        router.push(`/sent?letter=${encodeURIComponent(issued.letterId)}&sync=cloud&mode=instant&claim=1`);
+        return;
+      }
+      setPrivateClaimUrl(inviteUrl);
+      setInviteNotice(result === 'cancelled'
+        ? 'Nothing was shared yet. Copy this private link when you’re ready.'
+        : 'Sharing is unavailable. Copy this private link to send it yourself.');
+    } catch {
+      if (isCurrentLocalAccount(accountId)) setInviteNotice('The private link could not be prepared. Your draft is still here—try again.');
+    } finally {
+      setSharingInvite(false);
+      setSending(false);
+    }
+  };
+
+  const copyPrivateClaimInvite = async () => {
+    if (!privateClaimUrl) return;
+    try {
+      if (!navigator.clipboard) throw new Error('Clipboard unavailable');
+      await navigator.clipboard.writeText(privateClaimUrl);
+      if (!draft) return;
+      router.push(`/sent?letter=${encodeURIComponent(draft.id)}&sync=cloud&mode=instant&claim=1`);
+    } catch {
+      setInviteNotice('Copy is unavailable here. Select the link above and copy it manually.');
+    }
   };
 
   const inviteRecipient = async () => {
@@ -510,12 +602,24 @@ function Composer() {
           <p className="eyebrow">Make a drop</p>
           <h1 className="mt-2 font-headline-md text-4xl font-semibold leading-[1.02] tracking-[-0.045em] text-ink-navy sm:text-5xl">Send a little moment.</h1>
           <p className="mt-3 max-w-xl text-sm leading-relaxed text-on-surface-variant sm:text-base">One person, one thing you wanted them to see. The rest can wait.</p>
-          {accountState !== 'connected' && <div className="rounded-xl border border-[#e9d6c7] bg-[#fff6ec] p-4"><p className="text-sm font-semibold text-ink-navy">{accountState === 'checking' ? 'Checking your account…' : accountState === 'unavailable' ? 'Preview mode' : 'Connect your account to send.'}</p><p className="mt-1 text-xs leading-relaxed text-on-surface-variant">{accountState === 'unavailable' ? 'Sign-in isn’t available in this preview. Your drafts stay on this device.' : 'A private drop can only reach someone with a Drop account.'}</p><Link href={profileHref} onClick={saveBeforeLeaving} aria-disabled={attachmentSaving || Boolean(file && !attachmentSaved)} className="mt-2 inline-flex min-h-11 items-center text-xs font-bold text-[#2b45f7]">{accountState === 'unavailable' ? 'Account options' : 'Your profile'} <ArrowRightIcon /></Link></div>}
+        {accountState !== 'connected' && <div className="rounded-xl border border-[#e9d6c7] bg-[#fff6ec] p-4"><p className="text-sm font-semibold text-ink-navy">{accountState === 'checking' ? 'Checking your account…' : accountState === 'unavailable' ? 'Preview mode' : 'Connect your account to send.'}</p><p className="mt-1 text-xs leading-relaxed text-on-surface-variant">{accountState === 'unavailable' ? 'Sign-in isn’t available in this preview. Your drafts stay on this device.' : 'Connect your account to send a private note or invite someone to claim one.'}</p><Link href={profileHref} onClick={saveBeforeLeaving} aria-disabled={attachmentSaving || Boolean(file && !attachmentSaved)} className="mt-2 inline-flex min-h-11 items-center text-xs font-bold text-[#2b45f7]">{accountState === 'unavailable' ? 'Account options' : 'Your profile'} <ArrowRightIcon /></Link></div>}
           {accountState === 'connected' && <p className="mt-4 rounded-xl border border-[#cae6d5] bg-[#f0f9f3] px-4 py-3 text-sm font-semibold text-[#26734f]" role="status">Your account is ready. Start by choosing who gets this drop.</p>}
         </div>
 
-        <form onSubmit={handleSend} aria-busy={deleting} className="mt-6 sm:mt-8">
-          <fieldset disabled={deleting} aria-label="Compose drop" className="m-0 min-w-0 space-y-4 border-0 p-0 sm:space-y-5">
+        {draft?.status === 'claim_pending' ? <section className="mt-6 rounded-2xl border border-[rgba(16,42,67,.12)] bg-[#fffdf9] p-5 shadow-[0_8px_24px_rgba(16,42,67,.04)] sm:mt-8 sm:p-7" aria-labelledby="claim-pending-title">
+          <p className="eyebrow">Private note sent</p>
+          <h2 id="claim-pending-title" className="mt-2 font-headline-md text-3xl font-semibold leading-tight text-ink-navy">Waiting for them to claim.</h2>
+          <p className="mt-3 text-sm leading-relaxed text-on-surface-variant">The note is saved in your account. They’ll need to sign in, set up a Drop handle, and claim the link before they can read it.</p>
+          {privateClaimUrl && <div className="mt-5 rounded-xl border border-[#e9d6c7] bg-[#fff6ec] p-4">
+            <p className="text-sm font-semibold text-ink-navy">Anyone holding this link can claim the note.</p>
+            <p className="mt-1 text-xs leading-relaxed text-on-surface-variant">Share it directly with the person you had in mind.</p>
+            <code tabIndex={0} aria-label="Select and copy this private note link" className="mt-3 block select-all break-all rounded-lg bg-white/80 px-2 py-2 font-mono text-[0.68rem] text-ink-navy">{privateClaimUrl}</code>
+            <button type="button" onClick={() => void copyPrivateClaimInvite()} className="button-primary mt-3 !min-h-12 w-full !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white">Copy private note link</button>
+          </div>}
+          {inviteNotice && <p className="field-help mt-3" role="status" aria-live="polite">{inviteNotice}</p>}
+          <Link href="/mailbox" className="button-secondary mt-5 !min-h-12 !rounded-xl">Open your mailbox <ArrowRightIcon /></Link>
+        </section> : <form onSubmit={handleSend} aria-busy={deleting} className="mt-6 sm:mt-8">
+          <fieldset disabled={deleting || sending} aria-label="Compose drop" className="m-0 min-w-0 space-y-4 border-0 p-0 sm:space-y-5">
           <section className="rounded-2xl border border-[rgba(16,42,67,.12)] bg-white/55 p-4 sm:p-6">
             <p className="eyebrow">First · your person</p>
             <label htmlFor="drop-recipient" className="field-label mt-1 block">Who should get this drop?</label>
@@ -523,7 +627,7 @@ function Composer() {
               <span className="font-mono text-sm font-bold text-[#2b45f7]">@</span>
               <input id="drop-recipient" value={recipient.replace(/^@/, '')} onChange={handleRecipientChange} disabled={sending || sharingInvite} className="min-h-12 min-w-0 flex-1 border-0 bg-transparent px-2 text-base text-ink-navy outline-none placeholder:text-on-surface-variant/60 disabled:opacity-60" placeholder="their.username" autoCapitalize="none" autoCorrect="off" spellCheck={false} aria-invalid={recipientHasValue && !recipientUsername} aria-describedby={recipientHasValue && !recipientUsername ? 'drop-recipient-help drop-recipient-error' : 'drop-recipient-help'} />
             </div>
-            <p id="drop-recipient-help" className="field-help mt-2">They need a Drop account. Your drop is private between you two. Handles use 2–24 letters, numbers, periods, underscores, or hyphens.</p>
+            <p id="drop-recipient-help" className="field-help mt-2">They need a Drop account to open a note. If they don’t have one yet, you can share a private claim link. Handles use 2–24 letters, numbers, periods, underscores, or hyphens.</p>
             {pendingInvite && <div className="mt-2 rounded-lg bg-[#f5f1e9] px-3 py-2 text-sm leading-relaxed text-ink-navy">
               <p role="status" aria-atomic="true">{sharingInvite
                 ? 'Opening the invite…'
@@ -552,7 +656,14 @@ function Composer() {
             {recipientCheck.status === 'not-found' && recipientCheck.username === recipientUsername && <>
               <p className="error-notice mt-2" role="status" aria-live="polite">No Drop account found for @{recipientUsername}.</p>
               <div className="mt-3 rounded-xl border border-[rgba(16,42,67,.12)] bg-white/75 p-3">
-                {!pendingInvite && <p className="text-xs leading-relaxed text-on-surface-variant">Your draft stays here. Invite them to Drop, then check their handle again.</p>}
+                {!pendingInvite && <p className="text-xs leading-relaxed text-on-surface-variant">{canSendPrivateClaim ? 'Send this instant note as a private link, or invite them to Drop and check their handle again.' : 'Your draft stays here. Invite them to Drop, then check their handle again. Private claim links are for instant text notes.'}</p>}
+                {canSendPrivateClaim && <div className="rounded-lg bg-[#eef1ff] p-3">
+                  <p className="text-sm font-semibold text-ink-navy">Send this note with a private link</p>
+                  <p className="mt-1 text-xs leading-relaxed text-on-surface-variant">The note stays sealed until they sign in, set up a Drop handle, and claim it. Anyone holding the link can claim it.</p>
+                  <button type="button" onClick={() => void sharePrivateClaimInvite()} disabled={sharingInvite || sending || deleting} className="button-primary mt-3 !min-h-12 w-full !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white disabled:opacity-50">
+                    <Share2 className="h-4 w-4" aria-hidden="true" />{sharingInvite ? 'Preparing private link…' : 'Send a private note link'}
+                  </button>
+                </div>}
                 <button type="button" onClick={() => void inviteRecipient()} disabled={sharingInvite || sending || deleting} className="button-secondary mt-3 !min-h-12 w-full !rounded-xl disabled:opacity-50">
                   <Share2 className="h-4 w-4" aria-hidden="true" />{sharingInvite ? 'Opening share…' : pendingInvite ? 'Share invite again' : 'Invite them to Drop'}
                 </button>
@@ -653,7 +764,7 @@ function Composer() {
             </div>
           </div>
           </fieldset>
-        </form>
+        </form>}
       </div>
     </main>
   );

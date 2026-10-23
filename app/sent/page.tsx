@@ -18,14 +18,36 @@ function SentContent() {
     setDraft(requestedId ? getLetterDraftById(requestedId) || getLetterDraft() : getLetterDraft());
   }, [searchParams]);
 
-  const letterId = draft?.id || currentFocusDraft.id;
+  const letterId = draft?.id || searchParams.get('letter') || currentFocusDraft.id;
   const syncedToCloud = searchParams.get('sync') === 'cloud';
   const instant = searchParams.get('mode') === 'instant';
+  const claimPending = searchParams.get('claim') === '1';
   const relay = getRelayState(letterId, {
     subject: draft?.subject || currentFocusDraft.subject,
     recipient: draft?.address.name || draft?.recipient || 'your correspondent',
   });
   const stats = getRelayStats(relay);
+  if (claimPending) {
+    return (
+      <main className="page-shell page-enter">
+        <div className="page-container max-w-[760px]">
+          <header className="flex items-center justify-between gap-4">
+            <Link href="/mailbox" className="button-quiet -ml-2">Back to mailbox <ArrowRight className="h-4 w-4 rotate-180" aria-hidden="true" /></Link>
+            <span className="status-mark"><Check className="h-3.5 w-3.5" aria-hidden="true" /> Waiting to be claimed</span>
+          </header>
+          <section className="mt-12 rounded-[1.5rem] bg-[#2b45f7] p-6 text-white sm:p-10">
+            <p className="font-mono text-[0.68rem] font-bold uppercase tracking-[0.16em] text-white/70">Private link sent ✨</p>
+            <h1 className="mt-3 font-headline-md text-4xl font-semibold leading-tight tracking-[-0.04em] sm:text-5xl">A drop is waiting for them.</h1>
+            <p className="mt-4 max-w-lg text-sm leading-relaxed text-white/80 sm:text-base">Your note is in Sent. They’ll need to sign in, choose a Drop handle, and claim the link before it opens. Anyone holding the link can claim it.</p>
+            <div className="mt-7 flex flex-col gap-2 sm:flex-row">
+              <Link href={`/letter/${encodeURIComponent(letterId)}`} className="button-secondary !min-h-12 !rounded-xl !border-white/20 !bg-white !text-[#223bdc]">Open your copy <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
+              <Link href="/mailbox" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-white/30 px-4 text-sm font-bold text-white hover:bg-white/10">View Sent</Link>
+            </div>
+          </section>
+        </div>
+      </main>
+    );
+  }
   if (instant) {
     return (
       <main className="page-shell page-enter">

@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, ArrowRight, Check, LockKeyhole, MailOpen, Sparkles } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, LockKeyhole, MailOpen, Share2, Sparkles } from 'lucide-react';
 import { useParams, useSearchParams } from 'next/navigation';
 import type { MockLetter } from '@/data/mockData';
-import { getRemoteDropDirection, getRemoteLetterById, getRemoteLetters, getRemoteReactionSnapshot, saveRemoteReaction, subscribeToSenderDropReactions } from '@/lib/letterBackend';
+import { getRemoteDropDirection, getRemoteLetterById, getRemoteLetters, getRemoteReactionSnapshot, reissueDropClaimInvite, saveRemoteReaction, subscribeToSenderDropReactions } from '@/lib/letterBackend';
 import { getLetterById } from '@/lib/letterStore';
 import { getInitialSenderReactionBaseline, getSenderReactionReadUpdate } from '@/lib/liveReactionState';
 import { DEMO_REACTION_EMOJIS, saveDemoReaction } from '@/lib/demoReactionStore';
@@ -15,6 +15,11 @@ import { ReducedMotionGif } from '@/components/ReducedMotionGif';
 import { getReactionName } from '@/components/LiveReactionCue';
 import { RelayRecipientCard } from '@/components/RelayRecipientCard';
 import { startVisibleDataRefresh, type VisibleDataRefreshController } from '@/lib/relayRouteRefresh';
+import { buildDropClaimUrl, createDropClaimSharePayload, createDropClaimToken } from '@/lib/dropClaim';
+import { getLocalAccountId, isCurrentLocalAccount } from '@/lib/localAccountScope';
+import { shareInviteLink } from '@/lib/shareInvite';
+
+const inFlightClaimReissues = new Set<string>();
 
 function LoadingLetter() {
   return (
@@ -97,6 +102,9 @@ export default function LetterArrivalPage() {
   const [reactionNotice, setReactionNotice] = useState('');
   const [reactionAnnouncement, setReactionAnnouncement] = useState('');
   const [savingReaction, setSavingReaction] = useState(false);
+  const [sharingClaimLink, setSharingClaimLink] = useState(false);
+  const [claimLinkUrl, setClaimLinkUrl] = useState('');
+  const [claimLinkNotice, setClaimLinkNotice] = useState('');
   const currentReactionRef = useRef<string | undefined>(undefined);
   const baselineReactionOnDirectReadRef = useRef(false);
   const initialReactionBaselineRef = useRef<{ available: boolean; reaction: string | null } | null>(null);
@@ -114,6 +122,9 @@ export default function LetterArrivalPage() {
     setContentNotice('');
     setReactionNotice('');
     setReactionAnnouncement('');
+    setClaimLinkUrl('');
+    setClaimLinkNotice('');
+    setSharingClaimLink(false);
     baselineReactionOnDirectReadRef.current = false;
     initialReactionBaselineRef.current = null;
     reactionSignalGenerationRef.current = 0;
@@ -315,6 +326,89 @@ export default function LetterArrivalPage() {
     setOpened(true);
   };
 
+  const shareFreshClaimLink = async () => {
+    if (!letter || letter.status !== 'claim_pending' || letter.direction !== 'sent'
+      || sharingClaimLink || inFlightClaimReissues.has(letter.id)) return;
+    inFlightClaimReissues.add(letter.id);
+    const accountId = getLocalAccountId();
+    setSharingClaimLink(true);
+    setClaimLinkUrl('');
+    setClaimLinkNotice('');
+    try {
+      const performReissue = async () => {
+        const detail = await getRemoteLetterById(letter.id);
+        if (!isCurrentLocalAccount(accountId)) return;
+        if (!detail || detail.direction !== 'sent' || detail.status !== 'claim_pending'
+          || (detail.payloadKind || 'text') !== 'text' || (detail.deliveryMode || 'instant') !== 'instant'
+          || !detail.excerpt.trim()) {
+          setClaimLinkNotice('A fresh link could not be prepared. Check your connection and try again.');
+          return;
+        }
+        const token = createDropClaimToken();
+        const url = buildDropClaimUrl(window.location.origin, token);
+        if (!url) {
+          setClaimLinkNotice('This browser could not prepare a private link. Try again from the original device.');
+          return;
+        }
+        const issued = await reissueDropClaimInvite(detail.id, accountId, token);
+        if (!isCurrentLocalAccount(accountId)) return;
+        if (!issued.ok) {
+          setClaimLinkNotice(issued.error || 'A fresh link could not be saved. Try again.');
+          return;
+        }
+        const payload = createDropClaimSharePayload(url);
+        const result = await shareInviteLink(
+          url,
+          navigator.share ? (details) => navigator.share(details) : undefined,
+          async (shareUrl) => {
+            if (!navigator.clipboard) throw new Error('Clipboard unavailable');
+            await navigator.clipboard.writeText(shareUrl);
+          },
+          payload,
+        );
+        if (!isCurrentLocalAccount(accountId)) return;
+        if (result === 'shared' || result === 'copied') {
+          setClaimLinkNotice('Fresh private link sent. The older link has been replaced.');
+        } else {
+          setClaimLinkUrl(url);
+          setClaimLinkNotice(result === 'cancelled'
+            ? 'Nothing was shared yet. Copy the fresh link when you’re ready; the older link has been replaced.'
+            : 'Sharing is unavailable. Copy the fresh link to send it yourself; the older link has been replaced.');
+        }
+      };
+
+      if (navigator.locks?.request) {
+        let acquired = false;
+        await navigator.locks.request(`drop-claim-reissue:${letter.id}`, { ifAvailable: true }, async (lock) => {
+          if (!lock) return;
+          acquired = true;
+          await performReissue();
+        });
+        if (!acquired && isCurrentLocalAccount(accountId)) {
+          setClaimLinkNotice('A fresh link is already being shared in another tab. Wait for it to finish before trying again.');
+        }
+      } else {
+        await performReissue();
+      }
+    } catch {
+      if (isCurrentLocalAccount(accountId)) setClaimLinkNotice('A fresh private link could not be prepared. Try again.');
+    } finally {
+      inFlightClaimReissues.delete(letter.id);
+      setSharingClaimLink(false);
+    }
+  };
+
+  const copyFreshClaimLink = async () => {
+    if (!claimLinkUrl) return;
+    try {
+      if (!navigator.clipboard) throw new Error('Clipboard unavailable');
+      await navigator.clipboard.writeText(claimLinkUrl);
+      setClaimLinkNotice('Fresh private link copied. The older link has been replaced.');
+    } catch {
+      setClaimLinkNotice('Copy is unavailable here. Select the fresh link above and copy it manually.');
+    }
+  };
+
   const react = async (emoji: string) => {
     if (!letter || savingReaction) return;
     setSavingReaction(true);
@@ -424,6 +518,19 @@ export default function LetterArrivalPage() {
 
         {letter.sample && <p className="notice mt-5" role="status">{letter.direction === 'received' ? 'Sample drop · this is an example, not a message you received. Reactions stay on this device.' : 'Sample drop · an example only. Nothing was sent or delivered.'}</p>}
         {letter.localDemo && <p className="notice mt-5" role="status">Same-device demo · nothing was sent or shared.</p>}
+        {letter.direction === 'sent' && letter.status === 'claim_pending' && <section className="mt-6 max-w-[760px] rounded-2xl border border-[#e9d6c7] bg-[#fff6ec] p-4 sm:p-5" aria-labelledby="claim-link-heading">
+          <p className="eyebrow">Private claim link</p>
+          <h2 id="claim-link-heading" className="mt-2 font-headline-md text-2xl text-ink-navy">Waiting for them to claim.</h2>
+          <p className="mt-2 text-sm leading-relaxed text-on-surface-variant">If their link expired or got lost, share a fresh one. Anyone holding the current link can claim the note; making a fresh link replaces the old one.</p>
+          <button type="button" onClick={() => void shareFreshClaimLink()} disabled={sharingClaimLink} className="button-primary mt-4 !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white disabled:opacity-50">
+            <Share2 className="h-4 w-4" aria-hidden="true" />{sharingClaimLink ? 'Preparing fresh link…' : 'Share a fresh private link'}
+          </button>
+          {claimLinkNotice && <p className="field-help mt-3 break-words" role="status" aria-live="polite">{claimLinkNotice}</p>}
+          {claimLinkUrl && <>
+            <code tabIndex={0} aria-label="Select and copy the fresh private note link" className="mt-3 block select-all break-all rounded-lg bg-white/80 px-2 py-2 font-mono text-[0.68rem] text-ink-navy">{claimLinkUrl}</code>
+            <button type="button" onClick={() => void copyFreshClaimLink()} className="button-secondary mt-2 !min-h-11 !rounded-xl">Copy fresh private link</button>
+          </>}
+        </section>}
         <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{reactionAnnouncement}</p>
 
         <section className="mt-12 max-w-[760px]">
@@ -450,7 +557,7 @@ export default function LetterArrivalPage() {
               </div>
               <span className="status-mark success self-start">
                 <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
-                {letter.sample ? 'Sample · not sent' : letter.localDemo ? senderView ? 'Demo copy' : 'Demo · not sent' : letter.direction === 'sent' ? 'Sent' : 'Received'}
+                {letter.sample ? 'Sample · not sent' : letter.localDemo ? senderView ? 'Demo copy' : 'Demo · not sent' : letter.status === 'claim_pending' ? 'Waiting to be claimed' : letter.direction === 'sent' ? 'Sent' : 'Received'}
               </span>
             </div>
 
@@ -576,7 +683,7 @@ export default function LetterArrivalPage() {
                 </div>
                 <div className="flex items-start justify-between gap-4 py-3">
                   <dt className="meta">Privacy</dt>
-                  <dd className="text-right text-sm font-semibold text-[#4f9d7a]">{letter.sample ? 'Example · no recipient' : letter.localDemo ? 'Only on this device' : letter.deliveryMode === 'relay' || letter.status === 'dispatched' ? 'Sealed during the journey' : 'Private to you two'}</dd>
+                  <dd className="text-right text-sm font-semibold text-[#4f9d7a]">{letter.sample ? 'Example · no recipient' : letter.localDemo ? 'Only on this device' : letter.status === 'claim_pending' ? 'Private claim link' : letter.deliveryMode === 'relay' || letter.status === 'dispatched' ? 'Sealed during the journey' : 'Private to you two'}</dd>
                 </div>
               </dl>
             </section>

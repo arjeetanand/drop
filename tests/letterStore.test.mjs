@@ -265,6 +265,28 @@ test('completes a sent draft by ID and preserves a different active draft', () =
   }
 });
 
+test('persists a private claim as an unclaimed sent receipt', () => {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const values = new Map();
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { localStorage: { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value), removeItem: (key) => values.delete(key) } },
+  });
+  try {
+    setLocalAccountId('claim-owner');
+    const draft = saveLetterDraft({ id: 'draft-private-claim', recipient: '@new.friend', content: 'A private note.' });
+    const sent = completeSuccessfulSend(draft, 'claim-owner', 'claim_pending', '2026-10-23T00:00:00.000Z', {});
+
+    assert.equal(sent?.status, 'claim_pending');
+    assert.equal(getLetterDraftById(draft.id)?.status, 'claim_pending');
+    assert.equal(getLettersWithDraft().find((letter) => letter.id === draft.id)?.status, 'claim_pending');
+  } finally {
+    setLocalAccountId(null);
+    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
+    else delete globalThis.window;
+  }
+});
+
 test('clears only progress for the recipient of the completed send', () => {
   const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
   const values = new Map();

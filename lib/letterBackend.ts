@@ -13,6 +13,7 @@ import { fetchAllPages, fetchPagedMailbox } from '@/lib/fetchAllPages';
 import { uniqueRecentDropRecipients, type RecentDropRecipient, type RecentDropRecipientRow } from '@/lib/recentDropRecipients';
 import { subscribeToDropInbox } from '@/lib/dropInboxRealtime';
 import { subscribeToDropReactions } from '@/lib/dropReactionRealtime';
+import { isDropClaimToken } from '@/lib/dropClaim';
 
 type LetterRow = {
   id: string;
@@ -288,7 +289,7 @@ function rowToLetter(row: LetterRow, userId: string, revealContent = false): Moc
   const mediaFallback = row.payload_kind === 'gif' ? 'A GIF is waiting behind the seal.' : row.payload_kind === 'image' ? 'A photo is waiting behind the seal.' : 'A sealed drop waiting to be opened.';
   return {
     id: row.id,
-    recipient: row.recipient_name || row.recipient_username || 'your correspondent',
+    recipient: row.status === 'claim_pending' ? 'your invited friend' : row.recipient_name || row.recipient_username || 'your correspondent',
     sender: row.sender_display_name || undefined,
     senderUsername: row.sender_profile?.username || undefined,
     direction: row.sender_id === userId ? 'sent' : 'received',
@@ -576,6 +577,78 @@ function eventsForDraft(draft: LetterDraftState): TrackingEvent[] {
     done: index <= activeIndex,
     current: index === activeIndex,
   }));
+}
+
+export async function issueDropClaimInvite(draft: Pick<LetterDraftState, 'id' | 'subject' | 'content' | 'payloadKind' | 'deliveryMode'>, expectedAccountId: string | null, token: string): Promise<{ ok: boolean; error?: string; letterId?: string; dispatchedAt?: string }> {
+  if (!expectedAccountId) return { ok: false, error: 'Connect a Drop account before sending a private note invite.' };
+  if (draft.payloadKind !== 'text' || draft.deliveryMode !== 'instant' || !draft.content.trim()) {
+    return { ok: false, error: 'Private claim links are available for instant text notes with content.' };
+  }
+  if (!isDropClaimToken(token)) return { ok: false, error: 'This private invite could not be prepared. Try again.' };
+  const context = await getAuthenticatedClient();
+  if (!context) return { ok: false, error: 'Connect a Drop account before sending a private note invite.' };
+  if (context.user.id !== expectedAccountId || !isCurrentLocalAccount(expectedAccountId)) {
+    return { ok: false, error: 'Your account changed while you were preparing this note. Review it and try again.' };
+  }
+
+  try {
+    const { data, error } = await context.supabase.rpc('issue_drop_claim_invite', {
+      p_letter_id: draft.id,
+      p_subject: draft.subject.trim() || 'A note for you',
+      p_content: draft.content,
+      p_token: token,
+    });
+    if (error || data !== draft.id) {
+      return { ok: false, error: 'The private note could not be saved. Your draft is still here—try again.' };
+    }
+    if (!isCurrentLocalAccount(expectedAccountId)) {
+      return { ok: false, error: 'Your account changed while the note was being saved. Check Sent before retrying.' };
+    }
+    return { ok: true, letterId: data, dispatchedAt: new Date().toISOString() };
+  } catch {
+    return { ok: false, error: 'The private note could not be saved. Your draft is still here—try again.' };
+  }
+}
+
+export async function reissueDropClaimInvite(letterId: string, expectedAccountId: string | null, token: string): Promise<{ ok: boolean; error?: string; letterId?: string }> {
+  if (!expectedAccountId) return { ok: false, error: 'Connect a Drop account before sharing a fresh private note link.' };
+  if (!isDropClaimToken(token)) return { ok: false, error: 'This private invite could not be prepared. Try again.' };
+  const context = await getAuthenticatedClient();
+  if (!context) return { ok: false, error: 'Connect a Drop account before sharing a fresh private note link.' };
+  if (context.user.id !== expectedAccountId || !isCurrentLocalAccount(expectedAccountId)) {
+    return { ok: false, error: 'Your account changed while you were preparing this link. Try again.' };
+  }
+
+  try {
+    const { data, error } = await context.supabase.rpc('reissue_drop_claim_invite', {
+      p_letter_id: letterId,
+      p_token: token,
+    });
+    if (error || data !== letterId) {
+      return { ok: false, error: 'A fresh private link could not be saved. Try again.' };
+    }
+    if (!isCurrentLocalAccount(expectedAccountId)) {
+      return { ok: false, error: 'Your account changed while the link was being saved. Try again.' };
+    }
+    return { ok: true, letterId: data };
+  } catch {
+    return { ok: false, error: 'A fresh private link could not be saved. Try again.' };
+  }
+}
+
+export async function claimDropInvite(token: string): Promise<{ ok: boolean; error?: string; letterId?: string }> {
+  if (!isDropClaimToken(token)) return { ok: false, error: 'This invite link is incomplete. Open the original link again.' };
+  const context = await getAuthenticatedClient();
+  if (!context) return { ok: false, error: 'Sign in and set up a Drop profile before claiming this note.' };
+  try {
+    const { data, error } = await context.supabase.rpc('claim_drop_invite', { p_token: token });
+    if (error || typeof data !== 'string' || !data) {
+      return { ok: false, error: 'This invite is expired, already claimed, or no longer available. Ask the sender for a fresh link.' };
+    }
+    return { ok: true, letterId: data };
+  } catch {
+    return { ok: false, error: 'The invite could not be claimed right now. Your link is still here—try again.' };
+  }
 }
 
 export async function syncDropToBackend(draft: LetterDraftState, confirmedRecipientId: string, expectedAccountId: string | null, mediaFile?: File): Promise<{ ok: boolean; error?: string; mediaPath?: string; mediaMimeType?: string; mediaSizeBytes?: number; dispatchedAt?: string }> {

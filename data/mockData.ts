@@ -1,4 +1,4 @@
-export type LetterStatus = 'draft' | 'sealed' | 'dispatched' | 'delivered';
+export type LetterStatus = 'draft' | 'sealed' | 'dispatched' | 'delivered' | 'claim_pending';
 export type DropPayloadKind = 'text' | 'image' | 'gif';
 export type DropDeliveryMode = 'instant' | 'relay';
 export type RecipientInviteProgressStatus = 'shared' | 'copied' | 'cancelled' | 'unavailable';

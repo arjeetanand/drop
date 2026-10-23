@@ -24,6 +24,17 @@ test('keeps sample drops out of mailbox totals and received filters while preser
   assert.deepEqual(filterMailboxLetters(drops, 'samples', 'Example').map((letter) => letter.id), ['sample-in']);
 });
 
+test('keeps unclaimed private notes in Sent without treating them as drafts or journeys', () => {
+  const pending = [
+    { id: 'claim-pending', subject: 'A private note', recipient: 'your invited friend', direction: 'sent', status: 'claim_pending', deliveryMode: 'instant' },
+  ];
+
+  assert.deepEqual(getMailboxCounts(pending), { total: 1, transit: 0, received: 0, sent: 1, drafts: 0, samples: 0 });
+  assert.deepEqual(filterMailboxLetters(pending, 'sent', '').map((letter) => letter.id), ['claim-pending']);
+  assert.deepEqual(filterMailboxLetters(pending, 'drafts', ''), []);
+  assert.deepEqual(filterMailboxLetters(pending, 'transit', ''), []);
+});
+
 test('keeps recipient relays in Transit until they collect the drop', () => {
   const relays = [
     { id: 'relay-in-transit', subject: 'On the way', recipient: 'me', direction: 'received', status: 'dispatched', deliveryMode: 'relay' },

@@ -11,6 +11,7 @@ const statusConfig: Record<LetterStatus, { label: string; icon: typeof Mail; ton
   sealed: { label: 'Sealed', icon: PackageCheck, tone: 'text-[#8a611b]' },
   dispatched: { label: 'On a journey', icon: Clock3, tone: 'text-[#276a4d]' },
   delivered: { label: 'Delivered', icon: CheckCircle2, tone: 'text-[#276a4d]' },
+  claim_pending: { label: 'Waiting for them to claim', icon: Clock3, tone: 'text-[#8a611b]' },
 };
 
 export function LetterCard({ letter, showExcerpt = false }: { letter: MockLetter; showExcerpt?: boolean }) {
@@ -46,6 +47,8 @@ export function LetterCard({ letter, showExcerpt = false }: { letter: MockLetter
           ? letter.recipientInviteProgress
             ? letter.recipientInviteProgress.status === 'shared' || letter.recipientInviteProgress.status === 'copied' ? 'Check handle' : 'Resume invite'
             : 'Keep making it'
+          : letter.status === 'claim_pending'
+          ? 'View sent note'
           : letter.status === 'sealed'
             ? 'Send it'
             : letter.deliveryMode === 'relay' || letter.status === 'dispatched'
