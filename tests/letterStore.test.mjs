@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { copyGuestDraftToAccount, dispatchLetter, getGuestDraftById, getJourneyNotes, getLetterDraft, getLetterDraftById, getLettersWithDraft, saveJourneyNotes, saveLetterDraft, setActiveLetterDraft, startNewLetter } from '../lib/letterStore.ts';
+import { clearRecipientInviteProgressForDraft, completeSuccessfulSend, copyGuestDraftToAccount, dispatchLetter, getGuestDraftById, getJourneyNotes, getLetterDraft, getLetterDraftById, getLettersWithDraft, recordRecipientInviteProgress, saveJourneyNotes, saveLetterDraft, setActiveLetterDraft, startNewLetter } from '../lib/letterStore.ts';
 import { setLocalAccountId } from '../lib/localAccountScope.ts';
 
 test('transfers the starter draft and refreshes the preserved account draft snapshot', async () => {
@@ -57,6 +57,233 @@ test('retains a media upload ID when a draft is saved and resumed', () => {
     setActiveLetterDraft(resumedDraft);
     assert.equal(getLetterDraft().mediaUploadId, mediaUploadId);
     assert.equal(saveLetterDraft({ content: 'Retrying the same photo.' }).mediaUploadId, mediaUploadId);
+  } finally {
+    setLocalAccountId(null);
+    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
+    else delete globalThis.window;
+  }
+});
+
+test('persists each invite outcome with the matching account draft and mailbox card', () => {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const values = new Map();
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { localStorage: { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) } },
+  });
+  try {
+    setLocalAccountId('invite-owner');
+    const draft = saveLetterDraft({ id: 'draft-invite-progress', recipient: '@New.Friend' });
+    for (const status of ['shared', 'copied', 'cancelled', 'unavailable']) {
+      const updated = recordRecipientInviteProgress(draft.id, 'invite-owner', '@New.Friend', status);
+      assert.deepEqual(updated?.recipientInviteProgress, {
+        username: 'new.friend',
+        status,
+        ...(status === 'unavailable' ? { manualLinkAvailable: true } : {}),
+      });
+      const saved = getLetterDraftById(draft.id);
+      assert.deepEqual(saved?.recipientInviteProgress, updated?.recipientInviteProgress);
+      assert.deepEqual(getLettersWithDraft().find((letter) => letter.id === draft.id)?.recipientInviteProgress, saved?.recipientInviteProgress);
+    }
+
+    setLocalAccountId('other-account');
+    assert.equal(recordRecipientInviteProgress(draft.id, 'invite-owner', 'different.friend', 'shared'), null);
+    assert.equal(getLetterDraftById(draft.id), null);
+
+    setLocalAccountId('invite-owner');
+    assert.equal(clearRecipientInviteProgressForDraft(draft.id, 'other-account'), null);
+    assert.deepEqual(getLetterDraftById(draft.id)?.recipientInviteProgress, { username: 'new.friend', status: 'unavailable', manualLinkAvailable: true });
+    assert.equal(clearRecipientInviteProgressForDraft(draft.id, 'invite-owner')?.recipientInviteProgress, undefined);
+    assert.equal(getLetterDraftById(draft.id)?.recipientInviteProgress, undefined);
+  } finally {
+    setLocalAccountId(null);
+    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
+    else delete globalThis.window;
+  }
+});
+
+test('restores the manual invite link after a cancelled retry of an unavailable invite', () => {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const values = new Map();
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { localStorage: { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) } },
+  });
+  try {
+    setLocalAccountId('invite-cancel-retry-owner');
+    const draft = saveLetterDraft({ id: 'draft-invite-cancel-retry', recipient: '@retry.friend' });
+    recordRecipientInviteProgress(draft.id, 'invite-cancel-retry-owner', 'retry.friend', 'unavailable');
+    const cancelled = recordRecipientInviteProgress(draft.id, 'invite-cancel-retry-owner', 'retry.friend', 'cancelled', true);
+
+    assert.deepEqual(cancelled?.recipientInviteProgress, {
+      username: 'retry.friend',
+      status: 'cancelled',
+      manualLinkAvailable: true,
+    });
+    assert.deepEqual(getLetterDraftById(draft.id)?.recipientInviteProgress, cancelled?.recipientInviteProgress);
+  } finally {
+    setLocalAccountId(null);
+    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
+    else delete globalThis.window;
+  }
+});
+
+test('an invite result updates its original draft in history without touching the active draft', () => {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const values = new Map();
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { localStorage: { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) } },
+  });
+  try {
+    setLocalAccountId('invite-history-owner');
+    const original = saveLetterDraft({ id: 'draft-invite-history', recipient: '@history.friend' });
+    const active = startNewLetter();
+
+    const updated = recordRecipientInviteProgress(original.id, 'invite-history-owner', 'history.friend', 'copied');
+
+    assert.deepEqual(updated?.recipientInviteProgress, { username: 'history.friend', status: 'copied' });
+    assert.deepEqual(getLetterDraftById(original.id)?.recipientInviteProgress, updated?.recipientInviteProgress);
+    assert.equal(getLetterDraft().id, active.id);
+    assert.equal(getLetterDraft().recipientInviteProgress, undefined);
+    assert.equal(clearRecipientInviteProgressForDraft(original.id, 'invite-history-owner')?.recipientInviteProgress, undefined);
+  } finally {
+    setLocalAccountId(null);
+    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
+    else delete globalThis.window;
+  }
+});
+
+test('ignores an invite result when the saved recipient changed during sharing', () => {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const values = new Map();
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { localStorage: { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) } },
+  });
+  try {
+    setLocalAccountId('invite-recipient-owner');
+    const draft = saveLetterDraft({ id: 'draft-invite-recipient-check', recipient: '@before.friend' });
+    saveLetterDraft({ recipient: '@after.friend' });
+
+    assert.equal(recordRecipientInviteProgress(draft.id, 'invite-recipient-owner', 'before.friend', 'shared'), null);
+    assert.equal(getLetterDraft().recipientInviteProgress, undefined);
+  } finally {
+    setLocalAccountId(null);
+    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
+    else delete globalThis.window;
+  }
+});
+
+test('hydrates the previous local invite reminder shape into the current progress state', () => {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const values = new Map([['dear-exe:active-letter:v1', JSON.stringify({
+    id: 'draft-legacy-invite',
+    recipient: '@Old.Friend',
+    status: 'draft',
+    updatedAt: '2026-10-20T00:00:00.000Z',
+    inviteFollowUp: { username: 'Old.Friend', method: 'copied' },
+  })]]);
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { localStorage: { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) } },
+  });
+  try {
+    setLocalAccountId(null);
+    assert.deepEqual(getLetterDraft().recipientInviteProgress, { username: 'old.friend', status: 'copied' });
+    assert.equal(Object.hasOwn(getLetterDraft(), 'inviteFollowUp'), false);
+  } finally {
+    setLocalAccountId(null);
+    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
+    else delete globalThis.window;
+  }
+});
+
+test('completes a sent draft by ID and preserves a different active draft', () => {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const values = new Map();
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { localStorage: { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value), removeItem: (key) => values.delete(key) } },
+  });
+  try {
+    setLocalAccountId('send-owner');
+    const original = saveLetterDraft({ id: 'draft-send-race', recipient: '@to.send' });
+    const submittedDraft = recordRecipientInviteProgress(original.id, 'send-owner', 'to.send', 'shared');
+    startNewLetter();
+    const active = saveLetterDraft({ id: 'draft-active-after-navigation', content: 'Keep this one open.' });
+
+    const sent = completeSuccessfulSend(submittedDraft, 'send-owner', 'delivered', '2026-10-23T00:00:00.000Z', {
+      mediaPath: 'private-media/sent.png',
+      mediaMimeType: 'image/png',
+      mediaSizeBytes: 1024,
+    });
+
+    assert.equal(sent?.id, original.id);
+    assert.equal(sent?.status, 'delivered');
+    assert.equal(sent?.mediaPath, 'private-media/sent.png');
+    assert.equal(sent?.recipientInviteProgress, undefined);
+    assert.equal(getLetterDraft().id, active.id);
+    assert.equal(getLetterDraftById(original.id)?.status, 'delivered');
+    assert.equal(getLettersWithDraft().find((letter) => letter.id === original.id)?.recipientInviteProgress, undefined);
+  } finally {
+    setLocalAccountId(null);
+    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
+    else delete globalThis.window;
+  }
+});
+
+test('clears only progress for the recipient of the completed send', () => {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const values = new Map();
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { localStorage: { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value), removeItem: (key) => values.delete(key) } },
+  });
+  try {
+    setLocalAccountId('send-progress-owner');
+    const draft = saveLetterDraft({
+      id: 'draft-send-progress-match',
+      recipient: '@sent.friend',
+      recipientInviteProgress: { username: 'other.friend', status: 'copied' },
+    });
+
+    const sent = completeSuccessfulSend(draft, 'send-progress-owner', 'delivered', '2026-10-23T00:00:00.000Z', {
+      mediaPath: undefined,
+      mediaMimeType: undefined,
+      mediaSizeBytes: undefined,
+    });
+
+    assert.deepEqual(sent?.recipientInviteProgress, { username: 'other.friend', status: 'copied' });
+  } finally {
+    setLocalAccountId(null);
+    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
+    else delete globalThis.window;
+  }
+});
+
+test('does not mark newer same-draft edits sent when an older version finishes sending', () => {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const values = new Map();
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { localStorage: { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value), removeItem: (key) => values.delete(key) } },
+  });
+  try {
+    setLocalAccountId('send-edited-owner');
+    const submitted = saveLetterDraft({ id: 'draft-edited-in-flight', recipient: '@same.friend', content: 'The version sent.' });
+    saveLetterDraft({ content: 'Newer edits not sent.' });
+
+    const sent = completeSuccessfulSend(submitted, 'send-edited-owner', 'delivered', '2026-10-23T00:00:00.000Z', {
+      mediaPath: undefined,
+      mediaMimeType: undefined,
+      mediaSizeBytes: undefined,
+    });
+
+    assert.equal(sent, null);
+    assert.equal(getLetterDraft().content, 'Newer edits not sent.');
+    assert.equal(getLetterDraft().status, 'draft');
+    assert.equal(getLettersWithDraft().find((letter) => letter.id === submitted.id)?.status, 'draft');
   } finally {
     setLocalAccountId(null);
     if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);

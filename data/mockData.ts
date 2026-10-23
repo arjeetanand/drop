@@ -1,6 +1,13 @@
 export type LetterStatus = 'draft' | 'sealed' | 'dispatched' | 'delivered';
 export type DropPayloadKind = 'text' | 'image' | 'gif';
 export type DropDeliveryMode = 'instant' | 'relay';
+export type RecipientInviteProgressStatus = 'shared' | 'copied' | 'cancelled' | 'unavailable';
+
+export interface RecipientInviteProgress {
+  username: string;
+  status: RecipientInviteProgressStatus;
+  manualLinkAvailable?: boolean;
+}
 
 export interface MockLetter {
   id: string;
@@ -23,6 +30,7 @@ export interface MockLetter {
   mediaMimeType?: string;
   mediaSizeBytes?: number;
   mediaUrl?: string;
+  recipientInviteProgress?: RecipientInviteProgress;
   reaction?: string;
   reactionUpdatedAt?: string;
   localDemo?: boolean;

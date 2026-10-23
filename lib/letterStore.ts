@@ -1,5 +1,5 @@
 import { currentFocusDraft, mockAddress, mockFieldNotes, mockLetters } from '../data/mockData.ts';
-import type { DropDeliveryMode, DropPayloadKind, LetterStatus, MockLetter } from '../data/mockData.ts';
+import type { DropDeliveryMode, DropPayloadKind, LetterStatus, MockLetter, RecipientInviteProgress, RecipientInviteProgressStatus } from '../data/mockData.ts';
 import { getDemoReactions } from './demoReactionStore.ts';
 import { normalizeDropRecipient } from './dropValidation.ts';
 import { getLocalAccountId, localAccountStorageKey } from './localAccountScope.ts';
@@ -36,6 +36,7 @@ export interface LetterDraftState {
   mediaMimeType?: string;
   mediaSizeBytes?: number;
   mediaUploadId?: string;
+  recipientInviteProgress?: RecipientInviteProgress;
   status: LetterStatus;
   updatedAt: string;
   dispatchedAt?: string;
@@ -91,13 +92,33 @@ function blankDraft(): LetterDraftState {
 
 function hydrateDraft(value: Partial<LetterDraftState>): LetterDraftState {
   const fallback = defaultDraft();
-  return {
+  const legacy = value as Partial<LetterDraftState> & {
+    inviteFollowUp?: { username?: unknown; method?: unknown; status?: unknown; manualLinkAvailable?: unknown };
+  };
+  const rawProgress = legacy.recipientInviteProgress ?? legacy.inviteFollowUp;
+  const rawStatus = rawProgress?.status ?? legacy.inviteFollowUp?.method;
+  const inviteUsername = typeof rawProgress?.username === 'string'
+    ? normalizeDropRecipient(rawProgress.username)
+    : null;
+  const hydrated: LetterDraftState = {
     ...fallback,
     ...value,
     payloadKind: value.payloadKind ?? 'text',
     deliveryMode: value.deliveryMode ?? 'instant',
     address: { ...mockAddress, ...(value.address ?? {}) },
   };
+  if (inviteUsername && ['shared', 'copied', 'cancelled', 'unavailable'].includes(String(rawStatus))) {
+    const manualLinkAvailable = rawProgress?.manualLinkAvailable === true || rawStatus === 'unavailable';
+    hydrated.recipientInviteProgress = {
+      username: inviteUsername,
+      status: rawStatus as RecipientInviteProgressStatus,
+      ...(manualLinkAvailable ? { manualLinkAvailable: true } : {}),
+    };
+  } else {
+    delete hydrated.recipientInviteProgress;
+  }
+  delete (hydrated as LetterDraftState & { inviteFollowUp?: unknown }).inviteFollowUp;
+  return hydrated;
 }
 
 function canUseStorage() {
@@ -332,6 +353,7 @@ export function saveLetterDraft(
     ...updates,
     updatedAt: new Date().toISOString(),
   };
+  if (next.recipientInviteProgress === undefined) delete next.recipientInviteProgress;
 
   if (canUseStorage()) {
     try {
@@ -342,6 +364,66 @@ export function saveLetterDraft(
   }
 
   return next;
+}
+
+function updateDraftById(
+  draftId: string,
+  accountId: string | null,
+  updates: Partial<Omit<LetterDraftState, 'id' | 'updatedAt'>>,
+  expectedProgressUsername?: string,
+): LetterDraftState | null {
+  if (!canUseStorage() || getLocalAccountId() !== accountId) return null;
+
+  const active = readStoredLetterDraft(accountId);
+  if (active?.id === draftId) {
+    if (expectedProgressUsername && active.recipientInviteProgress?.username !== expectedProgressUsername) return null;
+    if (updates.recipientInviteProgress
+      && normalizeDropRecipient(active.recipient) !== updates.recipientInviteProgress.username) return null;
+    const updated = hydrateDraft({ ...active, ...updates, updatedAt: new Date().toISOString() });
+    try {
+      window.localStorage.setItem(localAccountStorageKey(STORAGE_KEY, accountId), JSON.stringify(updated));
+      return updated;
+    } catch {
+      return null;
+    }
+  }
+
+  const history = getDraftHistory(accountId);
+  const index = history.findIndex((draft) => draft.id === draftId);
+  if (index < 0) return null;
+  if (expectedProgressUsername && history[index].recipientInviteProgress?.username !== expectedProgressUsername) return null;
+  if (updates.recipientInviteProgress
+    && normalizeDropRecipient(history[index].recipient) !== updates.recipientInviteProgress.username) return null;
+  const updated = hydrateDraft({ ...history[index], ...updates, updatedAt: new Date().toISOString() });
+  history[index] = updated;
+  return saveDraftHistory(history, accountId) ? updated : null;
+}
+
+export function recordRecipientInviteProgress(
+  draftId: string,
+  accountId: string | null,
+  username: string,
+  status: RecipientInviteProgressStatus,
+  manualLinkAvailable = status === 'unavailable',
+): LetterDraftState | null {
+  const normalizedUsername = normalizeDropRecipient(username);
+  if (!normalizedUsername) return null;
+  return updateDraftById(draftId, accountId, {
+    recipientInviteProgress: {
+      username: normalizedUsername,
+      status,
+      ...(manualLinkAvailable ? { manualLinkAvailable: true } : {}),
+    },
+  });
+}
+
+export function clearRecipientInviteProgressForDraft(
+  draftId: string,
+  accountId: string | null,
+  expectedUsername?: string,
+): LetterDraftState | null {
+  const normalizedUsername = expectedUsername ? normalizeDropRecipient(expectedUsername) : undefined;
+  return updateDraftById(draftId, accountId, { recipientInviteProgress: undefined }, normalizedUsername ?? undefined);
 }
 
 function getLetterHistory(accountId = getLocalAccountId()): MockLetter[] {
@@ -427,18 +509,104 @@ export function saveJourneyNotes(notes: JourneyNote[], letterId = currentFocusDr
   }
 }
 
-export function dispatchLetter(letterId = getLetterDraft().id, status: LetterStatus = 'dispatched', dispatchedAt = new Date().toISOString()): LetterDraftState {
-  const source = getLetterDraftById(letterId) ?? getLetterDraft();
-  const activeSource = source.id === getLetterDraft().id ? source : setActiveLetterDraft(source);
-  const dispatched = saveLetterDraft({
+export function completeSuccessfulSend(
+  submittedDraft: LetterDraftState,
+  accountId: string | null,
+  status: LetterStatus,
+  dispatchedAt: string,
+  metadata: Pick<LetterDraftState, 'mediaPath' | 'mediaMimeType' | 'mediaSizeBytes'>,
+): LetterDraftState | null {
+  if (!canUseStorage() || getLocalAccountId() !== accountId) return null;
+
+  const activeKey = localAccountStorageKey(STORAGE_KEY, accountId);
+  const draftsKey = localAccountStorageKey(DRAFT_HISTORY_STORAGE_KEY, accountId);
+  const lettersKey = localAccountStorageKey(HISTORY_STORAGE_KEY, accountId);
+  let previous: Array<[string, string | null]>;
+  try {
+    previous = [activeKey, draftsKey, lettersKey].map((key) => [key, window.localStorage.getItem(key)]);
+  } catch {
+    return null;
+  }
+
+  const active = readStoredLetterDraft(accountId);
+  const history = getDraftHistory(accountId);
+  const source = active?.id === submittedDraft.id ? active : history.find((draft) => draft.id === submittedDraft.id);
+  const normalizedRecipient = normalizeDropRecipient(submittedDraft.recipient);
+  const submittedComposition = [
+    submittedDraft.recipient,
+    submittedDraft.subject,
+    submittedDraft.content,
+    submittedDraft.fontSize,
+    submittedDraft.alignment,
+    submittedDraft.address,
+    submittedDraft.sealId,
+    submittedDraft.sealColor,
+    submittedDraft.sealMonogram,
+    submittedDraft.payloadKind,
+    submittedDraft.deliveryMode,
+    submittedDraft.mediaPath,
+    submittedDraft.mediaMimeType,
+    submittedDraft.mediaSizeBytes,
+    submittedDraft.mediaUploadId,
+    submittedDraft.status,
+  ];
+  const currentComposition = source && [
+    source.recipient,
+    source.subject,
+    source.content,
+    source.fontSize,
+    source.alignment,
+    source.address,
+    source.sealId,
+    source.sealColor,
+    source.sealMonogram,
+    source.payloadKind,
+    source.deliveryMode,
+    source.mediaPath,
+    source.mediaMimeType,
+    source.mediaSizeBytes,
+    source.mediaUploadId,
+    source.status,
+  ];
+  if (!source || !normalizedRecipient || normalizeDropRecipient(source.recipient) !== normalizedRecipient
+    || JSON.stringify(currentComposition) !== JSON.stringify(submittedComposition)) return null;
+
+  const next = hydrateDraft({
+    ...source,
+    ...metadata,
+    ...(source.recipientInviteProgress?.username === normalizedRecipient ? { recipientInviteProgress: undefined } : {}),
     status,
     dispatchedAt,
+    updatedAt: new Date().toISOString(),
   });
-  const history = getLetterHistory().filter((letter) => letter.id !== dispatched.id);
-  saveLetterHistory([...history, draftAsLetter(dispatched)]);
-  const draftHistory = getDraftHistory().filter((draft) => draft.id !== dispatched.id && draft.id !== activeSource.id);
-  saveDraftHistory([...draftHistory, dispatched]);
-  return dispatched;
+  const nextDraftHistory = [...history.filter((draft) => draft.id !== submittedDraft.id), next];
+  const nextLetterHistory = [...getLetterHistory(accountId).filter((letter) => letter.id !== submittedDraft.id), draftAsLetter(next)];
+
+  try {
+    window.localStorage.setItem(draftsKey, JSON.stringify(nextDraftHistory));
+    if (active?.id === submittedDraft.id) window.localStorage.setItem(activeKey, JSON.stringify(next));
+    window.localStorage.setItem(lettersKey, JSON.stringify(nextLetterHistory));
+    return next;
+  } catch {
+    try {
+      previous.forEach(([key, value]) => {
+        if (value === null) window.localStorage.removeItem(key);
+        else window.localStorage.setItem(key, value);
+      });
+    } catch {
+      // Keep the send result authoritative; recovery remains available through the account sync.
+    }
+    return null;
+  }
+}
+
+export function dispatchLetter(letterId = getLetterDraft().id, status: LetterStatus = 'dispatched', dispatchedAt = new Date().toISOString()): LetterDraftState {
+  const source = getLetterDraftById(letterId) ?? getLetterDraft();
+  return completeSuccessfulSend(source, getLocalAccountId(), status, dispatchedAt, {
+    mediaPath: source.mediaPath,
+    mediaMimeType: source.mediaMimeType,
+    mediaSizeBytes: source.mediaSizeBytes,
+  }) ?? source;
 }
 
 export function saveLocalDemoDrop(letterId: string): LetterDraftState | null {
@@ -474,6 +642,7 @@ export function draftAsLetter(draft: LetterDraftState): MockLetter {
     mediaPath: draft.mediaPath,
     mediaMimeType: draft.mediaMimeType,
     mediaSizeBytes: draft.mediaSizeBytes,
+    ...(draft.recipientInviteProgress ? { recipientInviteProgress: draft.recipientInviteProgress } : {}),
     localDemo: draft.localDemo,
   };
 }

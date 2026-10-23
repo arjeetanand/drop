@@ -43,7 +43,9 @@ export function LetterCard({ letter, showExcerpt = false }: { letter: MockLetter
       : isReceived
         ? 'Open drop'
         : letter.status === 'draft'
-          ? 'Keep making it'
+          ? letter.recipientInviteProgress
+            ? letter.recipientInviteProgress.status === 'shared' || letter.recipientInviteProgress.status === 'copied' ? 'Check handle' : 'Resume invite'
+            : 'Keep making it'
           : letter.status === 'sealed'
             ? 'Send it'
             : letter.deliveryMode === 'relay' || letter.status === 'dispatched'
@@ -82,6 +84,13 @@ export function LetterCard({ letter, showExcerpt = false }: { letter: MockLetter
             <Icon className="h-3.5 w-3.5" aria-hidden="true" />
             {isReceived && letter.reaction ? `Reacted ${letter.reaction}` : letter.reaction ? `They reacted ${letter.reaction}` : config.label}
           </span>
+          {letter.status === 'draft' && letter.recipientInviteProgress && <span className="mt-1 block max-w-xl text-xs leading-relaxed text-on-surface-variant">{letter.recipientInviteProgress.status === 'shared'
+            ? `Invite shared · check @${letter.recipientInviteProgress.username} when they join.`
+            : letter.recipientInviteProgress.status === 'copied'
+              ? `Invite link copied · check @${letter.recipientInviteProgress.username} when they join.`
+              : letter.recipientInviteProgress.status === 'cancelled'
+                ? 'Invite not shared · pick up where you left off.'
+                : 'Invite link ready to copy from your draft.'}</span>}
         </span>
       </div>
       <span className="flex items-center justify-between gap-5 sm:flex-col sm:items-end sm:justify-center">
