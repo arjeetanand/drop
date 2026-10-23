@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AlignCenter, AlignLeft, AlignRight, ArrowLeft, Check, Eye, FileImage, ImagePlus, Minus, Plus, Send, Share2, Trash2, Type, X } from 'lucide-react';
 import { getSealInfo, mockSeals, waxColors, writingPrompts, type DropDeliveryMode, type DropPayloadKind } from '@/data/mockData';
-import { canDeleteLocalDraft, clearRecipientInviteProgressForDraft, completeSuccessfulSend, deleteLocalDraft, getLetterDraft, getLetterDraftById, recordRecipientInviteProgress, restoreDeletedDraft, saveLetterDraft, setActiveLetterDraft, startNewLetter, type LetterDraftState, type LetterAlignment } from '@/lib/letterStore';
+import { canDeleteLocalDraft, clearRecipientInviteProgressForDraft, completeSuccessfulSend, deleteLocalDraft, getLetterDraft, getLetterDraftById, isLetterDraftPersisted, recordRecipientInviteProgress, restoreDeletedDraft, saveLetterDraft, setActiveLetterDraft, startNewLetter, type LetterDraftState, type LetterAlignment } from '@/lib/letterStore';
 import { getRemoteRecentDropRecipients, lookupDropRecipient, syncDropToBackend } from '@/lib/letterBackend';
 import { getSupabaseBrowserClient } from '@/lib/supabaseBrowser';
 import { isDropPayloadKindCompatibleWithMedia, isDropRecipientConfirmed, normalizeDropRecipient, validateDropMedia } from '@/lib/dropValidation';
@@ -324,10 +324,15 @@ function Composer() {
     const request = recipientCheckRequest.current;
     const savedDraft = makeDraft();
     if (!savedDraft) return;
+    const accountId = getLocalAccountId();
+    if (!isLetterDraftPersisted(savedDraft, accountId)) {
+      setSaved(false);
+      setInviteNotice('Your draft could not be saved on this device. Check browser storage and try again before sharing.');
+      return;
+    }
     const inviteUsername = normalizeDropRecipient(savedDraft.recipient);
     const hadManualInviteLink = savedDraft.recipientInviteProgress?.username === inviteUsername
       && Boolean(savedDraft.recipientInviteProgress.manualLinkAvailable);
-    const accountId = getLocalAccountId();
     const draftId = savedDraft.id;
     setDraft(savedDraft);
     setSaved(true);

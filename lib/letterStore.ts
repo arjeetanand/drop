@@ -366,6 +366,14 @@ export function saveLetterDraft(
   return next;
 }
 
+export function isLetterDraftPersisted(
+  draft: LetterDraftState,
+  accountId = getLocalAccountId(),
+): boolean {
+  const stored = readStoredLetterDraft(accountId);
+  return Boolean(stored && JSON.stringify(stored) === JSON.stringify(hydrateDraft(draft)));
+}
+
 function updateDraftById(
   draftId: string,
   accountId: string | null,

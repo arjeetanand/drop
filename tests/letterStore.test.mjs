@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { clearRecipientInviteProgressForDraft, completeSuccessfulSend, copyGuestDraftToAccount, dispatchLetter, getGuestDraftById, getJourneyNotes, getLetterDraft, getLetterDraftById, getLettersWithDraft, recordRecipientInviteProgress, saveJourneyNotes, saveLetterDraft, setActiveLetterDraft, startNewLetter } from '../lib/letterStore.ts';
+import { clearRecipientInviteProgressForDraft, completeSuccessfulSend, copyGuestDraftToAccount, dispatchLetter, getGuestDraftById, getJourneyNotes, getLetterDraft, getLetterDraftById, getLettersWithDraft, isLetterDraftPersisted, recordRecipientInviteProgress, saveJourneyNotes, saveLetterDraft, setActiveLetterDraft, startNewLetter } from '../lib/letterStore.ts';
 import { setLocalAccountId } from '../lib/localAccountScope.ts';
 
 test('transfers the starter draft and refreshes the preserved account draft snapshot', async () => {
@@ -25,6 +25,38 @@ test('transfers the starter draft and refreshes the preserved account draft snap
     setLocalAccountId(null);
     assert.equal(getLetterDraftById(guestDraft.id)?.content, guestDraft.content);
     assert.equal(getGuestDraftById(guestDraft.id)?.content, guestDraft.content);
+  } finally {
+    setLocalAccountId(null);
+    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
+    else delete globalThis.window;
+  }
+});
+
+test('verifies the active draft can be read back before it is shared', () => {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const values = new Map();
+  let rejectWrites = false;
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: {
+      localStorage: {
+        getItem: (key) => values.get(key) ?? null,
+        setItem: (key, value) => {
+          if (rejectWrites) throw new Error('storage full');
+          values.set(key, value);
+        },
+      },
+    },
+  });
+  try {
+    setLocalAccountId('invite-storage-check');
+    const persistedDraft = saveLetterDraft({ id: 'draft-persisted-before-invite', content: 'Ready to share.' });
+    assert.equal(isLetterDraftPersisted(persistedDraft), true);
+
+    rejectWrites = true;
+    const unsavedDraft = saveLetterDraft({ id: 'draft-rejected-before-invite', content: 'Keep this private.' });
+    assert.equal(isLetterDraftPersisted(unsavedDraft), false);
+    assert.equal(getLetterDraft().id, persistedDraft.id);
   } finally {
     setLocalAccountId(null);
     if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
