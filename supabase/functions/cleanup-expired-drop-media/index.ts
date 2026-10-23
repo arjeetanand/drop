@@ -1,5 +1,10 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import { isValidCleanupJob, removeOrConfirmAbsent, validJobPath } from './cleanup.ts';
+import {
+  isValidCleanupJob,
+  reconcileAndLeaseCleanupJobs,
+  removeOrConfirmAbsent,
+  validJobPath,
+} from './cleanup.ts';
 
 const MAX_BATCH_SIZE = 25;
 
@@ -52,9 +57,17 @@ Deno.serve(async (request) => {
   const supabase = createClient(url, key, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
-  const { data, error } = await supabase.rpc('lease_expired_drop_media_cleanup_jobs', { p_limit: MAX_BATCH_SIZE });
+  const { data, error, reconciliationError, reconciled } = await reconcileAndLeaseCleanupJobs(
+    () => supabase.rpc('reconcile_orphan_drop_media_cleanup_jobs', { p_limit: MAX_BATCH_SIZE }),
+    () => supabase.rpc('lease_expired_drop_media_cleanup_jobs', { p_limit: MAX_BATCH_SIZE }),
+    MAX_BATCH_SIZE,
+  );
   if (error || !Array.isArray(data)) {
-    return json(503, { error: 'Cleanup jobs could not be leased.' });
+    return json(503, {
+      error: 'Cleanup jobs could not be leased.',
+      reconciliationFailed: Boolean(reconciliationError),
+      reconciled,
+    });
   }
 
   let removed = 0;
@@ -98,6 +111,15 @@ Deno.serve(async (request) => {
     else retried += 1;
   }
 
-  if (finishFailures > 0) return json(503, { processed: data.length, removed, retried, finishFailures });
-  return json(200, { processed: data.length, removed, retried });
+  if (finishFailures > 0 || reconciliationError) {
+    return json(503, {
+      reconciled,
+      reconciliationFailed: Boolean(reconciliationError),
+      processed: data.length,
+      removed,
+      retried,
+      finishFailures,
+    });
+  }
+  return json(200, { reconciled, processed: data.length, removed, retried });
 });

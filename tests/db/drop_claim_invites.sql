@@ -38,6 +38,7 @@ create table storage.buckets (
 create table storage.objects (
   bucket_id text not null,
   name text not null,
+  created_at timestamptz default pg_catalog.now(),
   metadata jsonb not null default '{}'::jsonb,
   primary key (bucket_id, name)
 );
@@ -53,6 +54,7 @@ alter table storage.objects enable row level security;
 \ir ../../supabase/migrations/20261023130000_drop_claimed_sender_broadcast.sql
 \ir ../../supabase/migrations/20261023140000_sender_claimed_drop_status.sql
 \ir ../../supabase/migrations/20261023150000_private_media_claim_invites.sql
+\ir ../../supabase/migrations/20261023160000_reconcile_orphan_drop_media.sql
 
 insert into auth.users (id) values
   ('11111111-1111-4111-8111-111111111111'),
@@ -146,10 +148,37 @@ do $$ begin
     or not pg_catalog.has_function_privilege('service_role', 'public.lease_expired_drop_media_cleanup_jobs(integer)', 'execute')
     or pg_catalog.has_function_privilege('anon', 'public.finish_expired_drop_media_cleanup_job(bigint,uuid,boolean,text)', 'execute')
     or pg_catalog.has_function_privilege('authenticated', 'public.finish_expired_drop_media_cleanup_job(bigint,uuid,boolean,text)', 'execute')
-    or not pg_catalog.has_function_privilege('service_role', 'public.finish_expired_drop_media_cleanup_job(bigint,uuid,boolean,text)', 'execute') then
+    or not pg_catalog.has_function_privilege('service_role', 'public.finish_expired_drop_media_cleanup_job(bigint,uuid,boolean,text)', 'execute')
+    or pg_catalog.has_function_privilege('anon', 'public.reconcile_orphan_drop_media_cleanup_jobs(integer)', 'execute')
+    or pg_catalog.has_function_privilege('authenticated', 'public.reconcile_orphan_drop_media_cleanup_jobs(integer)', 'execute')
+    or not pg_catalog.has_function_privilege('service_role', 'public.reconcile_orphan_drop_media_cleanup_jobs(integer)', 'execute') then
     raise exception 'Media invite and cleanup RPC grants are not restricted to their intended roles';
   end if;
 end $$;
+
+set local role service_role;
+do $$
+declare
+  v_rejected boolean;
+begin
+  v_rejected := false;
+  begin
+    perform public.reconcile_orphan_drop_media_cleanup_jobs(0);
+  exception when sqlstate '22023' then
+    v_rejected := true;
+  end;
+  if not v_rejected then raise exception 'the orphan scanner accepted an empty batch'; end if;
+
+  v_rejected := false;
+  begin
+    perform public.reconcile_orphan_drop_media_cleanup_jobs(26);
+  exception when sqlstate '22023' then
+    v_rejected := true;
+  end;
+  if not v_rejected then raise exception 'the orphan scanner accepted an oversized batch'; end if;
+end
+$$;
+reset role;
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', current_setting('test.sender'), true);
@@ -1186,5 +1215,165 @@ begin
   end if;
 end
 $$;
+
+-- The scheduled scan advances through an indexed page of old Storage objects.
+-- It queues only finalized, valid, unlinked drop-media paths after 30 days;
+-- linked media, pending uploads, malformed paths, recent objects, and other
+-- buckets stay out of the queue.
+select set_config(
+  'test.reconcile_old_time',
+  pg_catalog.date_trunc('minute', pg_catalog.clock_timestamp() - interval '32 days')::text,
+  true
+);
+
+with old_time as (
+  select current_setting('test.reconcile_old_time')::timestamptz as created_at
+)
+insert into storage.objects (bucket_id, name, metadata, created_at)
+select
+  'drop-media',
+  '11111111-1111-4111-8111-111111111111/orphan-sweep-' || pg_catalog.lpad(n::text, 2, '0') || '/' || pg_catalog.gen_random_uuid()::text,
+  '{"mimetype":"image/png","size":"123"}'::jsonb,
+  old_time.created_at
+from pg_catalog.generate_series(1, 26) as n
+cross join old_time;
+
+insert into storage.objects (bucket_id, name, metadata, created_at) values
+  ('drop-media', '11111111-1111-4111-8111-111111111111/orphan-invalid/not-a-uuid',
+    '{"mimetype":"image/png","size":"123"}'::jsonb,
+    current_setting('test.reconcile_old_time')::timestamptz + interval '1 day'),
+  ('drop-media', '11111111-1111-4111-8111-111111111111/pending/stale-draft/550e8400-e29b-41d4-a716-446655440007',
+    '{"mimetype":"image/png","size":"123"}'::jsonb,
+    current_setting('test.reconcile_old_time')::timestamptz + interval '1 day'),
+  ('other-bucket', '11111111-1111-4111-8111-111111111111/orphan-other-bucket/550e8400-e29b-41d4-a716-446655440008',
+    '{"mimetype":"image/png","size":"123"}'::jsonb,
+    current_setting('test.reconcile_old_time')::timestamptz + interval '1 day'),
+  ('drop-media', '11111111-1111-4111-8111-111111111111/orphan-recent/550e8400-e29b-41d4-a716-446655440009',
+    '{"mimetype":"image/png","size":"123"}'::jsonb,
+    current_setting('test.reconcile_old_time')::timestamptz + interval '3 days');
+
+update storage.objects
+set created_at = current_setting('test.reconcile_old_time')::timestamptz + interval '1 day'
+where bucket_id = 'drop-media'
+  and name = '11111111-1111-4111-8111-111111111111/claim-media-gif/550e8400-e29b-41d4-a716-446655440001';
+
+set local role service_role;
+select set_config(
+  'test.reconcile_first_count',
+  public.reconcile_orphan_drop_media_cleanup_jobs(25)::text,
+  true
+);
+reset role;
+do $$
+begin
+  if current_setting('test.reconcile_first_count')::integer <> 25
+    or (select count(*) from private.drop_media_cleanup_jobs j where j.letter_id like 'orphan-sweep-%') <> 25
+    or exists (
+      select 1 from private.drop_media_cleanup_jobs j
+      where j.letter_id = 'orphan-sweep-26'
+    ) then
+    raise exception 'the orphan reconciliation page did not queue exactly 25 objects';
+  end if;
+end
+$$;
+
+set local role service_role;
+select set_config(
+  'test.reconcile_second_count',
+  public.reconcile_orphan_drop_media_cleanup_jobs(25)::text,
+  true
+);
+reset role;
+do $$
+begin
+  if current_setting('test.reconcile_second_count')::integer <> 1
+    or (select count(*) from private.drop_media_cleanup_jobs j where j.letter_id like 'orphan-sweep-%') <> 26 then
+    raise exception 'the orphan reconciliation cursor did not advance to the next old object';
+  end if;
+  if exists (
+    select 1 from private.drop_media_cleanup_jobs j
+    where j.media_path in (
+      '11111111-1111-4111-8111-111111111111/orphan-invalid/not-a-uuid',
+      '11111111-1111-4111-8111-111111111111/pending/stale-draft/550e8400-e29b-41d4-a716-446655440007',
+      '11111111-1111-4111-8111-111111111111/orphan-other-bucket/550e8400-e29b-41d4-a716-446655440008',
+      '11111111-1111-4111-8111-111111111111/orphan-recent/550e8400-e29b-41d4-a716-446655440009',
+      '11111111-1111-4111-8111-111111111111/claim-media-gif/550e8400-e29b-41d4-a716-446655440001'
+    )
+  ) then
+    raise exception 'reconciliation queued linked, pending, malformed, recent, or other-bucket media';
+  end if;
+end
+$$;
+
+do $$
+declare
+  v_passes integer := 0;
+begin
+  loop
+    exit when (select s.last_created_at from private.drop_media_cleanup_scan_state s where s.id = 1) is null;
+    if v_passes >= 10 then
+      raise exception 'the orphan scanner failed to finish its bounded pass';
+    end if;
+    perform public.reconcile_orphan_drop_media_cleanup_jobs(25);
+    v_passes := v_passes + 1;
+  end loop;
+
+  if (select last_created_at from private.drop_media_cleanup_scan_state where id = 1) is not null
+    or (select last_media_path from private.drop_media_cleanup_scan_state where id = 1) is not null then
+    raise exception 'the orphan scanner did not reset its cursor after reaching the end';
+  end if;
+end
+$$;
+
+-- An old object inserted behind the previous cursor must become visible after
+-- the scan wraps. An object just over 30 days old is eligible; the 29-day
+-- control above remains recent and must stay out of the queue.
+insert into storage.objects (bucket_id, name, metadata, created_at) values
+  ('drop-media', '11111111-1111-4111-8111-111111111111/orphan-sweep-wrap/550e8400-e29b-41d4-a716-446655440010',
+    '{"mimetype":"image/png","size":"123"}'::jsonb,
+    pg_catalog.clock_timestamp() - interval '33 days'),
+  ('drop-media', '11111111-1111-4111-8111-111111111111/orphan-near-cutoff/550e8400-e29b-41d4-a716-446655440011',
+    '{"mimetype":"image/png","size":"123"}'::jsonb,
+    pg_catalog.clock_timestamp() - interval '30 days' - interval '5 minutes');
+
+set local role service_role;
+select set_config(
+  'test.reconcile_wrap_first_count',
+  public.reconcile_orphan_drop_media_cleanup_jobs(25)::text,
+  true
+);
+select set_config(
+  'test.reconcile_wrap_second_count',
+  public.reconcile_orphan_drop_media_cleanup_jobs(25)::text,
+  true
+);
+reset role;
+do $$
+begin
+  if current_setting('test.reconcile_wrap_first_count')::integer <> 1
+    or current_setting('test.reconcile_wrap_second_count')::integer <> 1
+    or not exists (
+      select 1 from private.drop_media_cleanup_jobs j
+      where j.media_path = '11111111-1111-4111-8111-111111111111/orphan-sweep-wrap/550e8400-e29b-41d4-a716-446655440010'
+    )
+    or not exists (
+      select 1 from private.drop_media_cleanup_jobs j
+      where j.media_path = '11111111-1111-4111-8111-111111111111/orphan-near-cutoff/550e8400-e29b-41d4-a716-446655440011'
+    )
+    or (select count(*) from private.drop_media_cleanup_jobs j where j.letter_id like 'orphan-sweep-%') <> 27 then
+    raise exception 'the wrapped scan missed an old orphan or the near-cutoff object';
+  end if;
+end
+$$;
+
+set local role service_role;
+select public.reconcile_orphan_drop_media_cleanup_jobs(25);
+select public.reconcile_orphan_drop_media_cleanup_jobs(25);
+reset role;
+do $$ begin
+  if (select count(*) from private.drop_media_cleanup_jobs j where j.letter_id like 'orphan-sweep-%') <> 27 then
+    raise exception 'a repeated wrapped scan created duplicate orphan jobs';
+  end if;
+end $$;
 
 rollback;
