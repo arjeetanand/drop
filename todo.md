@@ -2,15 +2,16 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
-## Current Checkpoint — 2026-10-24 (No-sign-in Home photo/GIF demo)
+## Current Checkpoint — 2026-10-24 (Rendered demo viewport matrix)
 
 - [x] Add a Home entry and demo chooser that take a visitor into the existing recipient reveal, reaction, and sender-copy journey without sign-in or a handle.
 - [x] Keep demo media local, preserve the active draft, and bind media save/rollback to the account captured before the sample fetch; add account-switch regression checks.
-- [x] Verify 241/241 tests, lint, no-incremental TypeScript, Webpack production build, browser-smoke syntax, and `git diff --check`.
-- [x] Isolated Chrome smoke passes the keyboard Home action and complete GIF/reaction/reload/sender-copy flow at 390×844; Home and chooser have no horizontal overflow at 360, 390, or 430px. No Auth, RPC, or Storage-write request occurred.
-- [x] Code commits `8c44f1c` and `74db67a` are pushed to `origin/feat/home-demo-drop`.
+- [x] Rerun `npm test` (241/241), `npm run lint`, no-incremental TypeScript, `node --check scripts/browser-demo-smoke.mjs`, and `git diff --check`.
+- [x] Isolated Chrome smoke passes complete GIF/reaction/reload/sender-copy flows at 360×844, 390×844, 430×844, and 1440×900; the bundled photo flow passes at 390×844. Touch passes at 360px; keyboard activation passes at 390px, 430px, and desktop.
+- [x] Home and chooser have no horizontal overflow at 360, 390, 430, and 1440px. The page-scoped gate observes no cross-origin, Auth, RPC, or Storage-write requests.
+- [x] Code commit `81a5646` is pushed to `origin/test/demo-accessible-viewports`.
 - [x] Reconfirm the 30-day deletion choice for valid abandoned staging uploads; the existing migration already implements this cutoff, so no retention code changed here.
-- [ ] Verify hosted account-to-account sends, actual 30-day Storage deletion, screen-reader behavior, and physical-device keyboard/safe-area behavior when the approved project and devices are available.
+- [ ] Verify hosted account-to-account sends, actual 30-day Storage deletion, screen-reader behavior, and physical-device keyboard/safe-area behavior when the approved project and devices are available. Chrome touch input timed out at 430px, so that flow uses keyboard in the automated matrix.
 
 ## Current Checkpoint — 2026-10-24 (Unknown-handle photo/GIF claims)
 

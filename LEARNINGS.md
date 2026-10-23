@@ -712,3 +712,33 @@ For an account-scoped async file flow, capture the account before the first `awa
 ### Git and remaining gaps
 
 Code commits `8c44f1c` (`feat: add local photo and GIF demo`) and `74db67a` (`test: cover account-scoped demo rollback`) are pushed to `origin/feat/home-demo-drop`; project notes are committed separately on the same branch. The approved 30-day deletion for valid abandoned staging uploads is already in the existing migration; no retention code changed. Hosted account-to-account sends, actual Storage cleanup, screen-reader behavior, and physical-device keyboard/safe-area checks remain open. `/letter` and `.env.local` were not changed or staged; no PR or merge was created.
+
+## 2026-10-24 — Expand rendered demo viewport verification
+
+### Issue
+
+The browser smoke checked Home and the chooser at three phone widths but ran the complete GIF journey only at 390px. It did not cover the bundled photo flow or a desktop path. Its exact button-label and viewport-width checks also failed against CSS text casing and a desktop scrollbar.
+
+### Cause
+
+The smoke encoded a single end-to-end viewport, exact visible labels, and `documentElement.clientWidth` as the requested browser width. A separate Chrome touch-emulation command timed out at 430px; that does not prove an app touch failure.
+
+### Resolution
+
+- Extend the isolated Chrome smoke to complete GIF flows at 360×844, 390×844, 430×844, and 1440×900, plus the bundled photo flow at 390×844. Verify focus-visible semantics and keyboard activation along the 390, 430, and desktop flows; use touch at 360px.
+- Match current chooser labels by their visible text, compare rendered Photo/GIF labels without assuming CSS casing, and compare requested viewport size with `window.innerWidth` while checking overflow against the layout width.
+- Allow optional screenshots under a new folder outside the repository. Record that the user confirmed valid abandoned staging uploads should be deleted after 30 days; the existing cleanup migration already implements the cutoff, so no retention code or hosted resource changed.
+
+### Learning
+
+Rendered browser checks should use the browser viewport for breakpoint assertions and the document layout width for overflow checks. Text transforms can change rendered casing, and native button activation should be exercised with a real keyboard key. If CDP touch input times out at one viewport, use another verified input path there and record the specific gap instead of calling the app broken.
+
+### Verification
+
+- `npm test` passed 241/241; `npm run lint`, `npx tsc --noEmit --incremental false`, `node --check scripts/browser-demo-smoke.mjs`, and `git diff --check` passed. `npm run typecheck` hit a sandbox EPERM while writing ignored `tsconfig.tsbuildinfo`; the no-incremental TypeScript check passed. A production build was not rerun because this slice changed only the browser test script; the previous demo checkpoint build passed.
+- Isolated Chrome passed GIF reveal/open/reaction/reload/sender-copy at 360×844 by touch and 390×844, 430×844, and 1440×900 by keyboard. The photo flow passed at 390×844 by keyboard. Home and chooser had no horizontal overflow at all four widths; the page-scoped gate observed no cross-origin, Auth, RPC, or Storage-write requests. Chrome touch input at 430px timed out, so that width uses keyboard in the smoke.
+- Optional screenshots were captured outside the repository. This local same-device demo does not prove hosted account-to-account delivery, real Storage deletion, screen-reader behavior, or physical-device input.
+
+### Git and remaining gaps
+
+Code commit `81a5646` (`test: expand demo browser viewport coverage`) is pushed to `origin/test/demo-accessible-viewports`. The README, plan, checklist, handoff, and this learning entry are committed separately on the same branch. No PR or merge was created. `/letter`, `.env.local`, and hosted resources were not changed. Next: validate the real two-account photo/GIF claim flow and physical Storage cleanup only against the approved Free project, then complete screen-reader and device checks.

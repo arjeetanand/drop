@@ -6,12 +6,13 @@ Build Drop as a mobile-first private sharing app where a person can send a photo
 
 The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailbox, and relay foundations. Existing letters continue to work as text drops, and their routes and saved content remain readable. The build covers the end-to-end mobile flow: choose content, attach an image or GIF, choose a recipient, send, open, react, and optionally follow a relay.
 
-## Implementation Status — 2026-10-24 (Home demo)
+## Implementation Status — 2026-10-24 (Home demo browser verification)
 
 - Home now links directly to a no-sign-in photo/GIF demo. It reuses the recipient reveal, reaction, and sender-copy screens, uses bundled media, and clearly says the sample stays on this device and is not sent or shared.
 - The demo saves into the current account’s local history without replacing the active draft. Its attachment write and rollback use the account captured before fetching the bundled media; account-switch regression checks cover changes before and during the IndexedDB write.
-- Verification: `npm test` passed 241/241; lint, no-incremental TypeScript, Webpack production build, smoke-script syntax, and `git diff --check` passed. The isolated Chrome smoke passed keyboard Home navigation, the full GIF/reaction/reload/sender-copy path at 390×844, and no horizontal overflow on Home and the chooser at 360, 390, and 430px. It observed no Auth, RPC, or Storage-write requests.
-- This is local demo evidence only. Hosted account-to-account sends, actual 30-day Storage cleanup, screen-reader use, and physical-device keyboard/safe-area behavior remain open. The approved 30-day cutoff for valid abandoned staging uploads is already in the retention migration; this slice did not change it.
+- The isolated Chrome smoke now covers full GIF/reaction/reload/sender-copy flows at 360×844, 390×844, 430×844, and 1440×900, plus the bundled photo flow at 390×844. Touch activation passed at 360px; keyboard activation passed at 390px, 430px, and desktop. Home and the chooser have no horizontal overflow at those widths. The page-scoped gate observed no cross-origin, Auth, RPC, or Storage-write requests.
+- Verification this slice: `npm test` passed 241/241, `npm run lint`, no-incremental TypeScript, browser-script syntax, `git diff --check`, and the rendered Chrome smoke passed. The plain incremental `npm run typecheck` hit a sandbox EPERM writing ignored `tsconfig.tsbuildinfo`; `npx tsc --noEmit --incremental false` passed. The production build was not rerun because only the browser smoke script changed; it passed in the prior demo checkpoint.
+- Chrome touch input timed out at 430px in this environment, so that viewport uses the passing keyboard path. This local demo evidence does not cover hosted account-to-account sends, actual 30-day Storage deletion, screen-reader use, or physical-device keyboard/safe-area behavior. The user confirmed valid abandoned staging uploads should be deleted after 30 days; the existing migration already implements that cutoff, so no retention code or hosted resource changed.
 
 ## Implementation Status — 2026-10-18
 
