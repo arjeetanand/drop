@@ -2,6 +2,15 @@
 
 Updated: 2026-10-24
 
+## Latest checkpoint — private claim share recovery (2026-10-24)
+
+- The composer now says when a private claim link is ready but has not been shared, and keeps the copy action available after a cancelled share sheet. On reload, the copy stays neutral about whether it was shared; **Open saved drop** opens the corresponding encoded detail route for claim status and the existing fresh-link action.
+- Regression coverage checks the unshared/recovered copy and single-segment path encoding. Verification: `npm test` passed 243/243; lint, no-incremental TypeScript, and `git diff --check` passed. Independent review found no concrete issue.
+- The isolated Chrome smoke did not reach its demo flow: the page-level origin gate blocked the configured Supabase auth request, leaving the page at “Checking your account…”. The gate did not cover server-side activity. The new recovery/detail route has no rendered-browser verification yet.
+- The 30-day deletion rule for valid abandoned staging uploads remains confirmed and already implemented. Hosted two-account delivery and actual Storage cleanup remain open until the approved Free project or an isolated local fixture is available.
+- Active checkout: `/Users/arjeetanand/projects/drop`; branch `fix-private-claim-share-cancel-copy`. Code commit `53cbb82` (`fix: make private claim recovery truthful`) is pushed; this handoff and learning entry are recorded in a separate documentation commit on the same branch. No PR or merge was created; `/letter`, `.env.local`, and hosted resources were not changed.
+- Next: render the recovered saved-drop route with a disposable local/Free Supabase auth fixture, then verify the complete two-account photo/GIF claim and 30-day Storage cleanup journey.
+
 ## Latest checkpoint — demo browser viewport coverage (2026-10-24)
 
 - Home now offers **Try a demo drop**. The chooser opens a bundled photo or GIF in the existing recipient reveal, reaction, and sender-copy flow without sign-in or a handle. The sample is stored locally, sends no notification, and leaves the active draft intact.

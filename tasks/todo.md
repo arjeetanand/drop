@@ -2,6 +2,14 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
+## Checkpoint — private claim share recovery (2026-10-24)
+
+- [x] Keep the composer truthful after the share sheet is cancelled: the private link is saved but not shared, and the sender can copy it from the current screen.
+- [x] After recovery/reload, send the sender to the exact saved-drop detail route for claim status and fresh-link controls; encode the ID as one path segment.
+- [x] Add copy-state and route-encoding regressions. `npm test` passes 243/243; lint, no-incremental TypeScript, and `git diff --check` pass. Independent review found no concrete issue. Code commit `53cbb82` is pushed to `origin/fix-private-claim-share-cancel-copy`.
+- [ ] Verify the share-cancel and saved-detail states in a rendered browser. The isolated Chrome smoke stayed at “Checking your account…” because its page-level origin gate blocked the configured auth request; server-side activity was not covered.
+- [ ] Verify real two-account private media claims and physical Storage cleanup after the approved Free project or an isolated local Supabase fixture is available. The 30-day rule for valid abandoned staging uploads remains confirmed and implemented.
+
 ## Checkpoint — private claim send receipt (2026-10-24)
 
 - [x] Keep share-sheet completion distinct from copied links; use neutral copy for legacy/invalid outcomes and keep bearer invite tokens out of receipt query parameters.

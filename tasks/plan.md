@@ -8,6 +8,14 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 
 ## Implementation Status — 2026-10-24
 
+### Latest checkpoint — private claim share recovery (2026-10-24)
+
+- The composer now distinguishes a prepared-but-unshared private link from a recovered claim-pending drop, without claiming the recipient is already waiting. The in-memory link remains copyable after share cancellation; after reload, **Open saved drop** routes to the exact encoded drop ID and its existing status/fresh-link controls.
+- Added regressions for both copy states and for encoding the detail route as one path segment. Independent review found no concrete issue.
+- `npm test` passed 243/243; `npm run lint`, `npx tsc --noEmit --incremental false`, and `git diff --check` passed. The isolated Chrome smoke did not reach its Home flow: its page-level origin gate blocked the configured Supabase auth request and the page remained at “Checking your account…”. That gate does not cover server-side activity; the share-cancel/detail route remains unverified in a rendered browser.
+- Code commit `53cbb82` (`fix: make private claim recovery truthful`) is pushed on `fix-private-claim-share-cancel-copy`; this checkpoint is recorded in a separate documentation commit on the same branch. No PR or merge was created. The 30-day automatic deletion rule for valid abandoned staging media remains confirmed and unchanged.
+- Next: verify the rendered recovery/detail route with a disposable local or approved Free Supabase fixture, then complete the hosted two-account media claim and actual Storage deletion checks.
+
 ### Latest checkpoint — private claim send receipt (2026-10-24)
 
 - Private claim receipts now distinguish a finished share sheet from a clipboard copy. Legacy or invalid outcome query values get neutral copy, while the receipt avoids claiming the recipient received or opened the link.

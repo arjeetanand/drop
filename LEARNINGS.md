@@ -742,3 +742,33 @@ Rendered browser checks should use the browser viewport for breakpoint assertion
 ### Git and remaining gaps
 
 Code commit `81a5646` (`test: expand demo browser viewport coverage`) is pushed to `origin/test/demo-accessible-viewports`. The README, plan, checklist, handoff, and this learning entry are committed separately on the same branch. No PR or merge was created. `/letter`, `.env.local`, and hosted resources were not changed. Next: validate the real two-account photo/GIF claim flow and physical Storage cleanup only against the approved Free project, then complete screen-reader and device checks.
+
+## 2026-10-24 — Recover a saved private claim after share cancellation
+
+### Issue
+
+The composer issues and saves a private claim drop before opening the native share sheet. When the sender cancels, the link remains available to copy, but the screen said “Private drop sent” and “Waiting for them to claim.” After reload, the in-memory link is gone and the recovery copy pointed to `/sent` without the per-drop claim parameters or a path to the detail-page fresh-link control.
+
+### Cause
+
+The UI conflated a persisted claim-pending record with a successful share outcome. Those are separate facts: the database row exists before sharing, while the share/copy outcome may not be durable after reload.
+
+### Resolution
+
+- While the link is still in memory, label it “not shared yet” and retain the direct copy action. After recovery, use neutral saved-drop copy and open the specific encoded `/letter/[id]` detail route for status and fresh-link controls.
+- Add tests for both copy states and single-segment URL encoding. The independent reviewer found no concrete regression.
+- The user reconfirmed that valid abandoned staging uploads should be deleted after 30 days; the existing cleanup policy matches, so this slice changes no retention code or hosted resource.
+
+### Learning
+
+A successful database write does not mean an operating-system share sheet completed. Keep the immediate retry state explicit, but after reload show only durable facts and route the user to the exact saved entity so recovery actions remain reachable.
+
+### Verification
+
+- `npm test` passed 243/243; `npm run lint`, `npx tsc --noEmit --incremental false`, and `git diff --check` passed.
+- Independent review confirmed the detail route accepts the saved claim drop ID and exposes the sender fresh-link controls.
+- The isolated Chrome smoke did not complete its Home flow: its page-level origin gate blocked the configured Supabase auth request, and the rendered page stayed at “Checking your account…”. This gate did not cover server-side activity. Share-cancel/detail rendering remains unverified.
+
+### Git and remaining gaps
+
+Code commit `53cbb82` (`fix: make private claim recovery truthful`) is pushed to `origin/fix-private-claim-share-cancel-copy`. The README, plan, checklist, handoff, and this learning entry are recorded in a separate documentation commit on the same branch. No PR or merge was created. `/letter`, `.env.local`, and hosted resources were not changed. Next: render the recovery route with isolated local/approved Free Supabase auth, then validate the two-account photo/GIF flow and actual 30-day Storage cleanup.
