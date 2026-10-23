@@ -16,6 +16,7 @@ import { ReducedMotionGif } from '@/components/ReducedMotionGif';
 import { cn } from '@/lib/utils';
 import { shareInviteLink } from '@/lib/shareInvite';
 import { buildDropClaimUrl, createDropClaimSharePayload, createDropClaimToken } from '@/lib/dropClaim';
+import { buildSentReceiptPath } from '@/lib/claimReceipt';
 import type { RecentDropRecipient } from '@/lib/recentDropRecipients';
 
 type RecipientCheck =
@@ -468,7 +469,7 @@ function Composer() {
       );
       if (request !== recipientCheckRequest.current || !isCurrentLocalAccount(accountId)) return;
       if (result === 'shared' || result === 'copied') {
-        router.push(`/sent?letter=${encodeURIComponent(issued.letterId)}&sync=cloud&mode=instant&claim=1`);
+        router.push(buildSentReceiptPath({ kind: 'claim', letterId: issued.letterId, shareOutcome: result }));
         return;
       }
       setPrivateClaimUrl(inviteUrl);
@@ -489,7 +490,7 @@ function Composer() {
       if (!navigator.clipboard) throw new Error('Clipboard unavailable');
       await navigator.clipboard.writeText(privateClaimUrl);
       if (!draft) return;
-      router.push(`/sent?letter=${encodeURIComponent(draft.id)}&sync=cloud&mode=instant&claim=1`);
+      router.push(buildSentReceiptPath({ kind: 'claim', letterId: draft.id, shareOutcome: 'copied' }));
     } catch {
       setInviteNotice('Copy is unavailable here. Select the link above and copy it manually.');
     }
@@ -601,7 +602,7 @@ function Composer() {
         return;
       }
       void deleteDraftAttachment(next.id, accountId).catch(() => undefined);
-      router.push(`/sent?letter=${encodeURIComponent(sent.id)}&sync=cloud&mode=${deliveryMode}`);
+      router.push(buildSentReceiptPath({ kind: 'delivery', letterId: sent.id, mode: deliveryMode }));
     } catch {
       if (!isCurrentLocalAccount(accountId)) return;
       setError('Something interrupted the send. Your draft is still here—try again.');

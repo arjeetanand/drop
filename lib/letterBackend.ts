@@ -16,8 +16,11 @@ import { subscribeToDropReactions } from '@/lib/dropReactionRealtime';
 import { isDropClaimToken, resolveDropClaimInviteResult } from '@/lib/dropClaim';
 import { markSenderClaimedDrops } from '@/lib/claimInviteStatus';
 import { withFallbackTimeout } from '@/lib/withFallbackTimeout';
+import { resolveSenderClaimReceiptResult, type SenderClaimReceiptRow } from '@/lib/claimReceipt';
 
 const SENDER_CLAIM_STATUS_TIMEOUT_MS = 5_000;
+
+export type RemoteClaimReceiptLookup = { accountId: string | null; status: boolean | null };
 
 type LetterRow = {
   id: string;
@@ -378,6 +381,29 @@ export async function getRemoteSenderClaimStatusForDrop(letterId: string): Promi
     })(), SENDER_CLAIM_STATUS_TIMEOUT_MS, null);
   } catch {
     return null;
+  }
+}
+
+export async function getRemoteClaimReceiptStatusForDrop(letterId: string): Promise<RemoteClaimReceiptLookup | null> {
+  try {
+    return await withFallbackTimeout((async () => {
+      const context = await getAuthenticatedClient();
+      if (!context) return { accountId: null, status: null };
+      const { data: row, error } = await context.supabase.from('letters')
+        .select('id, status, recipient_id, delivery_mode, payload_kind')
+        .eq('id', letterId)
+        .eq('sender_id', context.user.id)
+        .maybeSingle<SenderClaimReceiptRow>();
+      if (error || !row) return { accountId: context.user.id, status: null };
+      if (row.status === 'claim_pending' && row.recipient_id === null) {
+        return { accountId: context.user.id, status: resolveSenderClaimReceiptResult(row, null) };
+      }
+      if (row.status !== 'delivered') return { accountId: context.user.id, status: null };
+      const claimedDropIds = await readSenderClaimedDropIds(context);
+      return { accountId: context.user.id, status: resolveSenderClaimReceiptResult(row, claimedDropIds) };
+    })(), SENDER_CLAIM_STATUS_TIMEOUT_MS, null);
+  } catch {
+    return { accountId: null, status: null };
   }
 }
 
