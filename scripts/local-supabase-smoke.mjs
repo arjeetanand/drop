@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { cp, mkdtemp, readFile, rm, symlink } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { join, relative, resolve, sep } from 'node:path';
@@ -32,6 +32,11 @@ let temporaryProject;
 
 function client() {
   return createClient(supabaseUrl, anonKey, { auth: { autoRefreshToken: false, persistSession: false } });
+}
+
+function assertClaimDenied(result, message) {
+  assert.equal(result.error?.code, '42501', `${message}: expected an authorization denial`);
+  assert.ok(result.data == null, `${message}: a denied claim must not return a drop ID`);
 }
 
 async function assertTestPortFree(port) {
@@ -124,6 +129,7 @@ try {
   const recipient = await createTestAccount('recipient');
   const outsider = await createTestAccount('outsider');
   const carrier = await createTestAccount('carrier');
+  const claimant = await createTestAccount('claimant');
   const profiles = [
     { id: sender.id, username: `send_${sender.id.slice(0, 8)}`, display_name: 'Smoke Sender', bio: '' },
     { id: recipient.id, username: `recv_${recipient.id.slice(0, 8)}`, display_name: 'Smoke Recipient', bio: '' },
@@ -244,6 +250,115 @@ try {
     .maybeSingle();
   assert.ifError(restoredProfileUpdateError);
   assert.equal(restoredProfileUpdate?.id, sender.id, 'The temporary conditional update should be restored');
+
+  const unknownRecipientHandle = `claim_${claimant.id.slice(0, 8)}`;
+  const { data: unknownRecipientLookup, error: unknownRecipientLookupError } = await sender.client.from('public_profiles')
+    .select('id, username, display_name')
+    .eq('username', unknownRecipientHandle)
+    .maybeSingle();
+  assert.ifError(unknownRecipientLookupError);
+  assert.equal(unknownRecipientLookup, null, 'The claimant must be unknown when the sender creates the invite');
+
+  const claimDropId = `claim-${randomUUID()}`;
+  const firstClaimToken = randomBytes(32).toString('hex');
+  const replacementClaimToken = randomBytes(32).toString('hex');
+  const claimContent = 'Only the newly profiled claimant should receive this private note.';
+  const { data: issuedClaimDropId, error: issueClaimError } = await sender.client.rpc('issue_drop_claim_invite', {
+    p_letter_id: claimDropId,
+    p_subject: 'Unknown handle claim smoke',
+    p_content: claimContent,
+    p_token: firstClaimToken,
+  });
+  assert.ifError(issueClaimError);
+  assert.equal(issuedClaimDropId, claimDropId, 'The sender should create a pending invite for the unknown handle');
+
+  const { data: unclaimedDrop, error: unclaimedDropError } = await claimant.client.from('letters')
+    .select('id, content')
+    .eq('id', claimDropId)
+    .maybeSingle();
+  assert.ifError(unclaimedDropError);
+  assert.equal(unclaimedDrop, null, 'The unprofiled claimant cannot read a pending drop');
+
+  const { data: unprofiledClaim, error: unprofiledClaimError } = await claimant.client.rpc('claim_drop_invite', { p_token: firstClaimToken });
+  assertClaimDenied({ data: unprofiledClaim, error: unprofiledClaimError }, 'An account without a Drop profile cannot claim an invite');
+  const { data: senderSelfClaim, error: senderSelfClaimError } = await sender.client.rpc('claim_drop_invite', { p_token: firstClaimToken });
+  assertClaimDenied({ data: senderSelfClaim, error: senderSelfClaimError }, 'The sender cannot claim their own invite');
+
+  const claimantProfile = {
+    id: claimant.id,
+    username: unknownRecipientHandle,
+    display_name: 'Smoke Claimant',
+    bio: '',
+  };
+  const { error: claimantProfileError } = await claimant.client.from('profiles').upsert(claimantProfile);
+  assert.ifError(claimantProfileError);
+  const { data: profiledRecipientLookup, error: profiledRecipientLookupError } = await sender.client.from('public_profiles')
+    .select('id, username, display_name')
+    .eq('username', unknownRecipientHandle)
+    .maybeSingle();
+  assert.ifError(profiledRecipientLookupError);
+  assert.deepEqual(profiledRecipientLookup, {
+    id: claimant.id,
+    username: unknownRecipientHandle,
+    display_name: 'Smoke Claimant',
+  }, 'The sender can confirm only the public identity needed after profile setup');
+
+  const { data: reissuedClaimDropId, error: reissueClaimError } = await sender.client.rpc('reissue_drop_claim_invite', {
+    p_letter_id: claimDropId,
+    p_token: replacementClaimToken,
+  });
+  assert.ifError(reissueClaimError);
+  assert.equal(reissuedClaimDropId, claimDropId, 'The sender should be able to rotate the pending invite');
+  const { data: replacedTokenClaim, error: replacedTokenClaimError } = await claimant.client.rpc('claim_drop_invite', { p_token: firstClaimToken });
+  assertClaimDenied({ data: replacedTokenClaim, error: replacedTokenClaimError }, 'A replaced link cannot claim the drop');
+
+  const { data: outsiderClaim, error: outsiderClaimError } = await outsider.client.rpc('claim_drop_invite', { p_token: replacementClaimToken });
+  assertClaimDenied({ data: outsiderClaim, error: outsiderClaimError }, 'An unrelated account cannot consume the invite');
+  const { data: claimedDropId, error: claimDropError } = await claimant.client.rpc('claim_drop_invite', { p_token: replacementClaimToken });
+  assert.ifError(claimDropError);
+  assert.equal(claimedDropId, claimDropId, 'The newly profiled claimant should explicitly claim the drop');
+  const { data: retriedClaimDropId, error: retriedClaimError } = await claimant.client.rpc('claim_drop_invite', { p_token: replacementClaimToken });
+  assert.ifError(retriedClaimError);
+  assert.equal(retriedClaimDropId, claimDropId, 'The same claimant can safely retry an ambiguous claim response');
+  const { data: replayedClaim, error: replayedClaimError } = await outsider.client.rpc('claim_drop_invite', { p_token: replacementClaimToken });
+  assertClaimDenied({ data: replayedClaim, error: replayedClaimError }, 'A second account cannot replay a claimed invite');
+
+  for (const account of [sender, claimant]) {
+    const { data, error } = await account.client.from('letters')
+      .select('id, content, recipient_id, status, delivery_mode, payload_kind')
+      .eq('id', claimDropId)
+      .maybeSingle();
+    assert.ifError(error);
+    assert.deepEqual(data, {
+      id: claimDropId,
+      content: claimContent,
+      recipient_id: claimant.id,
+      status: 'delivered',
+      delivery_mode: 'instant',
+      payload_kind: 'text',
+    }, 'Only the sender and intended claimant should read the delivered drop');
+  }
+  const { data: outsiderClaimDrop, error: outsiderClaimDropError } = await outsider.client.from('letters')
+    .select('id')
+    .eq('id', claimDropId);
+  assert.ifError(outsiderClaimDropError);
+  assert.deepEqual(outsiderClaimDrop, [], 'An unrelated account cannot read a claimed drop');
+  const { data: senderClaimedIds, error: senderClaimedIdsError } = await sender.client.rpc('get_sender_claimed_drop_ids');
+  assert.ifError(senderClaimedIdsError);
+  assert.ok(senderClaimedIds?.some((row) => row.letter_id === claimDropId), 'The sender can restore the durable claimed status');
+
+  const { error: claimantReactionError } = await claimant.client.from('letter_reactions').upsert({
+    letter_id: claimDropId,
+    recipient_id: claimant.id,
+    emoji: '🫶',
+  }, { onConflict: 'letter_id' });
+  assert.ifError(claimantReactionError);
+  const { data: senderClaimReaction, error: senderClaimReactionError } = await sender.client.from('letter_reactions')
+    .select('emoji')
+    .eq('letter_id', claimDropId)
+    .maybeSingle();
+  assert.ifError(senderClaimReactionError);
+  assert.equal(senderClaimReaction?.emoji, '🫶', 'The sender should see the claimant reaction after the drop is claimed');
 
   const textDropId = randomUUID();
   const sentAt = new Date().toISOString();
@@ -729,7 +844,8 @@ try {
   assert.equal(collectedLegacyDrop?.delivery_mode, 'relay', 'Collection should normalize a legacy dispatched row for relay history and carrier functions');
   assert.equal(collectedLegacyDrop?.media_path, legacyMediaPath);
 
-  console.log('PASS: four disposable local accounts authenticate and create profiles.');
+  console.log('PASS: five disposable local accounts authenticate; the claim recipient creates a profile after the unknown-handle invite.');
+  console.log('PASS: unknown-handle text invites stay unreadable until claim, invalidate reissued links, reject sender/outsider/replay claims, and restore sender status and reaction.');
   console.log('PASS: sender and recipient read the drop; an unrelated account cannot read or edit it.');
   console.log('PASS: the recipient reacts; the sender sees the reaction; unrelated reaction access is denied.');
   console.log('PASS: the local finalize route validates a GIF, safely reuses an exact retry with a fresh staging path, and keeps media limited to participants.');
