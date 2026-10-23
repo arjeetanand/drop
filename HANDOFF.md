@@ -2,12 +2,21 @@
 
 Updated: 2026-10-23
 
-## Latest checkpoint — Realtime fixture topic scoping
+## Latest checkpoint — media orphan reconciliation
+
+- Added migration `20261023160000_reconcile_orphan_drop_media.sql`: a service-role-only keyset scan examines up to 25 old `drop-media` objects per call, validates finalized path and image/GIF metadata, skips linked or already queued paths, and queues qualifying unlinked objects after 30 days for deletion through the existing Storage API worker.
+- The worker now runs orphan discovery before leasing. Discovery is best-effort: if it fails, existing cleanup jobs still lease and process, then the worker reports a partial failure for the next scheduled run.
+- Verification: `npm test` passed 175/175; lint, no-incremental TypeScript, `git diff --check`, and `bash -n run.sh` passed. The rollback-only `tests/db/drop_claim_invites.sql` fixture passed against disposable local PostgreSQL 16, including page continuation, cursor reset/wrap, an older object behind the cursor, a near-cutoff object, exclusions, invalid limits, grants, and idempotency. `/`, `/compose`, and `/claim` returned HTTP 200 on port 4004.
+- Code commit `ae33ab2` (`feat: reconcile orphaned media cleanup`) is pushed to `origin/feat/media-orphan-reconciliation`. This handoff, setup notes, checklist, plan, README, and learning entry are in a separate documentation commit. No PR or merge was created.
+- No hosted migration, scheduled Edge Function, actual Storage deletion, two-account flow, or rendered browser check ran. Deno is not installed in this environment. The hosted project is not provisioned, so compatibility/query-plan validation for the custom partial index on managed `storage.objects` is still open; concurrent database interleavings also remain untested. Supabase recommends treating its Storage schema as read-only and documents custom indexes for RLS policy performance ([Storage schema guidance](https://supabase.com/docs/guides/storage/schema/design)).
+- The existing Drop development server is healthy at `http://localhost:4004`. Next: validate the `storage.objects` index/migration against the approved Free project, then deploy the new migration before the updated Edge Function and verify two-account claims plus real Storage deletion.
+
+## Previous checkpoint — Realtime fixture topic scoping
 
 - The reaction broadcast fixture now filters direct SQL reads to the simulated channel topic. The prior assertion scanned rows from every topic and treated an authorized `drop-inbox` subscription as if it received `drop-reactions` messages; the production authorization policies were unchanged.
 - Verification: `tests/db/drop_reaction_broadcast.sql` passed on disposable PostgreSQL 16, and `git diff --check` passed.
 - Code commit `88f9b11` (`test: scope Realtime fixture reads by channel topic`) is pushed to `origin/feat/media-orphan-reconciliation`.
-- Hosted Realtime delivery and rendered two-account behavior remain unverified. Next: add bounded discovery for old finalized media objects that missed both sender cleanup queue attempts.
+- Hosted Realtime delivery and rendered two-account behavior remain unverified. Next: validate media orphan reconciliation against the approved hosted Free project.
 
 ## Latest checkpoint — private photo/GIF claim links and cleanup
 
@@ -15,9 +24,9 @@ Updated: 2026-10-23
 - Media claim links last up to 7 days, while the immutable claim/access cutoff is 30 days after first send. The hourly worker queues deletion through the Supabase Storage API and retries failures. Free-project pauses and worker/Storage outages can delay physical deletion.
 - The composer preserves its selected file and rotates the local upload path only after cleanup is confirmed. Finalized but unlinked media normally gets a delayed cleanup tombstone; same-path locks protect recovery and deletion.
 - Verification: `npm test` passed 171/171; lint, no-incremental TypeScript, `git diff --check`, `bash -n run.sh`, and the rollback-only PostgreSQL claim/media fixture passed. `npm run build -- --webpack` passed with existing Browserslist and Tailwind easing warnings. `/`, `/compose`, `/claim`, `/mailbox`, and `/letter/drop-fixture?view=sender` returned HTTP 200 at `127.0.0.1:4004`.
-- No hosted migration, Edge Function schedule, real Storage deletion, cross-account send, or rendered browser interaction was run. Browser/Playwright automation is unavailable. The SQL lock tests are sequential, not concurrent. If both orphan-queue RPC attempts fail during an outage, that finalized object can remain until the sender retries; periodic orphan reconciliation is still needed.
+- No hosted migration, Edge Function schedule, real Storage deletion, cross-account send, or rendered browser interaction was run. Browser/Playwright automation is unavailable. The SQL lock tests are sequential, not concurrent. The new scan covers finalized objects when both orphan-queue attempts fail, but hosted cleanup remains incomplete until the migration and worker are deployed.
 - Code commit `2d578ca` (`feat: add private photo and GIF claim drops`) is pushed to `origin/feat/private-media-claims`. This handoff, checklist, plan, README/setup notes, and learning entry are being committed separately. No PR or merge was created. The local app remains available on port 4004.
-- Next: apply the migration and configure the worker/Vault secrets on the approved Free Supabase project, then verify two-account claim/reissue and actual Storage deletion. Resolve orphan reconciliation and add concurrent database interleaving coverage before production.
+- Next: apply the migrations and configure the worker/Vault secrets on the approved Free Supabase project, then verify two-account claim/reissue and actual Storage deletion. The orphan-discovery gap is covered in the latest checkpoint; concurrent database interleavings remain to test before production.
 
 ## Previous checkpoint — relay collection terminal views
 

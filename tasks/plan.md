@@ -22,6 +22,13 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 - Verification: unit tests, the disposable PostgreSQL policy/transition fixture, lint, TypeScript, production build, and local route smoke checks pass. No hosted migration, scheduled worker, cross-account send, or rendered browser interaction was run.
 - Remaining reliability gap: if both attempts to enqueue an orphaned finalized object fail during an outage, it has no scheduled cleanup job until the sender retries. The SQL fixture also covers lock behavior sequentially, not as concurrent database sessions.
 
+### Reliability follow-up — orphan media reconciliation (2026-10-23)
+
+- Added a service-role-only cursor scan for valid finalized objects in the private `drop-media` bucket that are unlinked and older than 30 days. It queues jobs into the existing Storage API deletion worker, with a 25-object page and cursor reset after each pass.
+- The worker treats discovery as best-effort: a reconciliation error is reported after it continues leasing and processing already-queued jobs, so the optional scan cannot pause existing cleanup.
+- Unit and disposable PostgreSQL coverage exercise worker ordering/error recovery, grants, invalid batch sizes, 25+1 pages, cursor wrap, an object inserted behind the cursor, near-cutoff eligibility, exclusions, and duplicate prevention.
+- Remaining verification: no hosted migration, worker schedule, real Storage deletion, or browser test ran. The migration adds a custom partial index on managed `storage.objects`; check hosted compatibility and the query plan before rollout. Concurrent database interleavings remain untested.
+
 - Task 1 is complete. The mixed-payload model, default text behavior for older drafts, and compatible recipient routes are in place.
 - The core mobile sharing, receive, reaction, and optional relay flows have local implementations. Relay remains in progress until the acceptance checks in `todo.md` are verified.
 - Same-device text, photo, and GIF demos have been checked through recipient reveal/open, reaction, sender copy, and reload. This verifies local media persistence and reaction presentation, not authenticated account-to-account delivery.
@@ -155,6 +162,6 @@ Let a sender share a private text drop with a person who does not yet have a Dro
 ### Remaining follow-ups
 - Verify the rendered sender reissue and recipient claim flows at phone and desktop widths, including profile setup, link cancellation/copy fallback, and accessibility.
 - Apply the media-claim migration and configure the cleanup worker on the approved Free Supabase project; verify two-account photo/GIF claiming, scheduled Storage deletion, and reissue after deployment.
-- Add orphan reconciliation for finalized media when both queue attempts fail, and exercise claim/issue/queue/lease ordering with concurrent database sessions before production.
+- Exercise claim/issue/queue/lease ordering with concurrent database sessions before production.
 - Extend the verified claim path to relay only after hosted media-claim acceptance is complete.
 - Configure and verify the explicitly approved Free hosted Supabase organization/project when secure management access is available. No hosted resources are created by this local slice.

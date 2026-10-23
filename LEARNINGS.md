@@ -217,3 +217,38 @@ When a test fixture models a channel subscription with a table of recorded event
 ### Git and remaining gaps
 
 Code commit `88f9b11` (`test: scope Realtime fixture reads by channel topic`) is pushed to `origin/feat/media-orphan-reconciliation`. Hosted Realtime delivery and the rendered two-account flow remain unverified.
+
+## 2026-10-23 — Reconcile unlinked media after the retention window
+
+### Issue
+
+If both sender-side attempts to enqueue cleanup fail after a finalized photo/GIF upload, the Storage object can remain without a cleanup job. The hourly worker previously processed only rows already present in its queue, so this orphan had no automatic deletion path.
+
+### Cause
+
+The upload and cleanup queue are separate services. A Storage upload can succeed while the app's finalization/queue response fails, leaving no linked drop and no durable cleanup row. The worker cannot recover the object by polling the queue alone.
+
+### Resolution
+
+- Added a service-only cursor RPC that scans up to 25 old private-bucket objects per invocation and queues only validated finalized paths with supported image/GIF metadata, no linked letter, and no existing cleanup job.
+- Set orphan retention to 30 days from the Storage object's creation time. The scanner uses the existing claim-then-media-path lock order and rechecks eligibility before queueing; deletion continues through the Supabase Storage API.
+- Made orphan discovery best-effort in the Edge worker. An unavailable new scan no longer stops it from leasing and processing already-queued cleanup jobs; the worker reports the scan failure after processing.
+- Updated the ordered migration and worker deployment instructions. Apply migration `20261023160000_reconcile_orphan_drop_media.sql` before deploying this worker version.
+
+### Learning
+
+- Cross-service cleanup needs reconciliation for the gap where one service commits work but the follow-up queue write fails.
+- Keep optional discovery from blocking the established retry path. Report partial failure after processing durable work so the existing cleanup keeps making progress.
+- A paged cursor must advance over skipped records and wrap after exhaustion; verify that an older record inserted behind the saved cursor is found after the wrap.
+
+### Verification
+
+- `npm test`: 175/175 passed. `npm run lint`, `npx tsc --noEmit --incremental false`, `git diff --check`, and `bash -n run.sh` passed.
+- The rollback-only `tests/db/drop_claim_invites.sql` fixture passed against disposable local PostgreSQL 16. It checks service-role grants, invalid batch sizes, 25+1 pagination, cursor reset/wrap, backfilled old media, near-cutoff eligibility, linked/pending/malformed/recent/wrong-bucket exclusions, and duplicate prevention.
+- Local route smoke checks returned HTTP 200 for `/`, `/compose`, and `/claim` on port 4004. This was an HTTP check, not a rendered browser test.
+
+### Git and remaining gaps
+
+Code commit `ae33ab2` (`feat: reconcile orphaned media cleanup`) is pushed to `origin/feat/media-orphan-reconciliation`. The handoff, checklist, plan, README/setup notes, and this entry are committed separately. No PR or merge was created. The existing local app remains available at `http://localhost:4004`.
+
+No hosted migration, Edge Function runtime, two-account claim, or actual Storage removal was verified; Deno is unavailable and the hosted Free project is not provisioned. The migration adds a custom partial index on the managed `storage.objects` table. Validate compatibility and its query plan against the approved project before rollout; Supabase recommends treating the Storage schema as read-only and documents custom indexes for RLS policy performance ([Storage schema guidance](https://supabase.com/docs/guides/storage/schema/design)). Concurrent database interleavings also remain untested.

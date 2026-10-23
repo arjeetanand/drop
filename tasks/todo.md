@@ -2,6 +2,16 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
+## Checkpoint — media orphan reconciliation (2026-10-23)
+
+- [x] Add a service-role-only 30-day scan that pages finalized, unlinked, validated private media into the existing Storage API cleanup queue.
+- [x] Keep existing cleanup leasing active when the best-effort orphan scan fails; report reconciliation failures after processing queued work.
+- [x] Extend worker and disposable PostgreSQL coverage for scan errors, 25+1 paging, cursor reset/wrap, an old object behind the cursor, near-cutoff objects, invalid limits, exclusions, grants, and idempotency.
+- [x] `npm test` passes 175/175; lint, no-incremental TypeScript, `git diff --check`, and `tests/db/drop_claim_invites.sql` pass.
+- [x] Code commit and separate documentation commit are pushed to `origin/feat/media-orphan-reconciliation`.
+- [ ] Apply migrations `20261023150000` and `20261023160000` before deploying the updated worker to the approved Free project; verify two-account claims and actual Storage deletion.
+- [ ] Check the custom `storage.objects` index against hosted Supabase compatibility and a representative query plan; test concurrent database interleavings before production.
+
 ## Checkpoint — Realtime fixture topic scoping (2026-10-23)
 
 - [x] Correct the SQL fixture to inspect messages on the simulated Realtime channel topic; keep production authorization policies unchanged.
@@ -444,4 +454,4 @@ Commit each completed code change separately with a descriptive message and push
 - [x] Code commit `2d578ca` is pushed to `origin/feat/private-media-claims`; this checklist, plan, handoff, and learning entry are the separate documentation commit.
 - [ ] Apply the migration and configure the Edge Function/Vault secrets on the approved Free Supabase project; verify two-account photo/GIF claim, reissue, and actual Storage deletion. No hosted project or resources were created in this slice.
 - [ ] Verify the rendered composer, claim, and sender status flows at mobile and desktop sizes; browser automation is unavailable and no browser dependency was installed.
-- [ ] Add orphan reconciliation for a finalized object when both queue RPC attempts fail, and test claim/issue/queue/lease ordering with concurrent database sessions.
+- [x] Add orphan reconciliation for a finalized object when both queue RPC attempts fail; concurrent claim/issue/queue/lease interleavings remain open.
