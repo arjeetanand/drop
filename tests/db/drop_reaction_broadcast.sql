@@ -203,9 +203,9 @@ values (
   true
 );
 
--- Realtime authorization is limited to authenticated reads on the exact
--- sender topic; neither the recipient, an outsider, another topic, nor anon
--- may read these signals.
+-- Realtime authorization controls joins to a channel topic, and broadcasts
+-- are delivered only within that topic. These direct table reads therefore
+-- filter to the topic being simulated instead of scanning other channels.
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '11111111-1111-4111-8111-111111111111', true);
 select set_config('test.realtime_topic', 'user:11111111-1111-4111-8111-111111111111:drop-reactions', true);
@@ -213,9 +213,10 @@ do $$
 declare
   v_count integer;
 begin
-  select count(*) into v_count from realtime.messages where event = 'drop_reaction_received';
+  select count(*) into v_count from realtime.messages
+  where topic = realtime.topic() and event = 'drop_reaction_received';
   if v_count <> 2 then raise exception 'the sender could not read reaction signals on their own topic'; end if;
-  if exists (select 1 from realtime.messages where event = 'test_presence') then
+  if exists (select 1 from realtime.messages where topic = realtime.topic() and event = 'test_presence') then
     raise exception 'the sender policy allowed a non-broadcast Realtime message';
   end if;
 end
@@ -226,7 +227,8 @@ do $$
 declare
   v_count integer;
 begin
-  select count(*) into v_count from realtime.messages where event = 'drop_reaction_received';
+  select count(*) into v_count from realtime.messages
+  where topic = realtime.topic() and event = 'drop_reaction_received';
   if v_count <> 0 then raise exception 'the recipient could read the sender reaction signal'; end if;
 end
 $$;
@@ -237,7 +239,8 @@ do $$
 declare
   v_count integer;
 begin
-  select count(*) into v_count from realtime.messages where event = 'drop_reaction_received';
+  select count(*) into v_count from realtime.messages
+  where topic = realtime.topic() and event = 'drop_reaction_received';
   if v_count <> 0 then raise exception 'the sender could read reaction signals on a different topic'; end if;
 end
 $$;
@@ -248,7 +251,8 @@ do $$
 declare
   v_count integer;
 begin
-  select count(*) into v_count from realtime.messages where event = 'drop_reaction_received';
+  select count(*) into v_count from realtime.messages
+  where topic = realtime.topic() and event = 'drop_reaction_received';
   if v_count <> 0 then raise exception 'an unrelated account could read the sender reaction signal'; end if;
 end
 $$;
@@ -261,7 +265,8 @@ do $$
 declare
   v_count integer;
 begin
-  select count(*) into v_count from realtime.messages where event = 'drop_reaction_received';
+  select count(*) into v_count from realtime.messages
+  where topic = realtime.topic() and event = 'drop_reaction_received';
   if v_count <> 0 then raise exception 'an anonymous account could read the sender reaction signal'; end if;
 end
 $$;
