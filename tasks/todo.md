@@ -2,6 +2,18 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
+## Checkpoint — relay collection terminal views (2026-10-23)
+
+- [x] Derive sender collection only from a delivered relay owned by the sender and use the persisted activity time across Journey and Relay.
+- [x] Complete the map, recipient stop, and custody timeline together; hide carrier invite controls once collection is confirmed.
+- [x] Keep collection unknown when the first status read is unavailable, and preserve a previously confirmed collection through refresh failures.
+- [x] `npm test` passes 161/161; lint, `npx tsc --noEmit --incremental false`, and `git diff --check` pass.
+- [x] `./run.sh start` serves Drop on port 4004; `/`, `/journey?letter=drop-fixture`, and `/relay?letter=drop-fixture` return HTTP 200.
+- [x] Code commit `3ee659a` is pushed to `origin/fix/relay-collection-terminal-state`.
+- [ ] Verify the collected state in a rendered browser at 390×844 and 1440×900. The isolated synthetic fixture failed to hydrate its sender row, so Journey showed unavailable and Relay remained in its waiting state; the collected-state render is not verified.
+- [ ] Check carrier mode, dispatched relay, and delivered instant drops; inspect browser console and accessibility behavior. The current browser pass did not capture console output.
+- [ ] Retry a production build where the existing Google Fonts host resolves, then verify two-account collection after the approved Free Supabase project is provisioned. No database rows or hosted resources changed in this slice.
+
 ## Checkpoint — sender journey after relay collection (2026-10-23)
 
 - [x] Keep the sender's relay chain and custody timeline consistent with the recipient's durable collection status and timestamp.

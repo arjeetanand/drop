@@ -2,16 +2,25 @@
 
 Updated: 2026-10-23
 
-## Latest checkpoint — sender journey after relay collection
+## Latest checkpoint — relay collection terminal views
+
+- Journey and Relay now use the sender's durable delivered relay status and stored activity time to show recipient collection. The map, route chain, custody timeline, and passport complete together; carrier invites disappear after collection. A failed first status read stays unknown, preventing an invite from appearing on an unconfirmed state.
+- Verification: `npm test` passed 161/161; lint, `npx tsc --noEmit --incremental false`, and `git diff --check` passed. The guarded `./run.sh start` serves port 4004; `/`, `/journey?letter=drop-fixture`, and `/relay?letter=drop-fixture` return HTTP 200.
+- Browser QA used a fresh temporary profile and synthetic GET-only fixture. Journey at 390×844 and 1440×900 showed “This journey isn’t available”; Relay at 390×844 showed the waiting state and carrier invite. The fixture did not hydrate a sender row, so no collected-state browser pass is claimed. Console output, desktop Relay, carrier mode, screen-reader, and device behavior remain unchecked.
+- No database rows or hosted resources changed. The production build was not rerun; its prior attempt was blocked by DNS resolution of the existing Google Fonts host. The local app remains available at `http://localhost:4004`.
+- Code commit `3ee659a` (`fix: complete relay collection views`) is pushed to `origin/fix/relay-collection-terminal-state`. This handoff and learning-log update is being committed separately. No PR or merge was created.
+- Next: validate the collected sender views using a valid local authenticated fixture, then check carrier, dispatched, and instant-delivered states. Continue private photo/GIF claim links only after the text claim path is accepted and unclaimed-media retention is decided.
+
+## Previous checkpoint — sender journey after relay collection
 
 - Fixed a mismatch where the sender header reported a collected drop while the relay chain and custody timeline still showed the recipient as the next stop. The journey now derives the recipient stop from durable `delivered` status and uses the stored collection activity time; it leaves the saved handoff route unchanged.
 - Added regression coverage for dispatched and collected states, event text/time, repeat-safe projection, and unchanged handoff state. The append-only learning entry is in [LEARNINGS.md](./LEARNINGS.md).
 - Verification: `npm test` passed 159/159; lint, no-incremental TypeScript, and `git diff --check` passed. Production build was attempted from an isolated source copy and stopped because sandbox DNS returned `ENOTFOUND fonts.googleapis.com` for existing Google Fonts in `app/layout.tsx`.
 - Local browser QA at 390×844 confirmed `/` and Next layout assets respond, but the page remained at “Checking your account…” and no rendered interaction or screenshot was verified. Screen-reader, device, and hosted two-account behavior remain open.
-- Code commit `d9eeadb` (`fix: reflect relay collection in sender journey`) is pushed to `origin/feat/journey-collection-receipt`; the documentation and learning-log update will follow in a separate commit. The local app remains on port 4004. No PR or merge was created.
+- Code commit `d9eeadb` (`fix: reflect relay collection in sender journey`) is pushed to `origin/feat/journey-collection-receipt`; its documentation and learning-log update were committed separately as `fa1ae1c`. The local app remains on port 4004. No PR or merge was created.
 - Next: retry the production build where Google Fonts resolve, then verify the relay collection journey in an authenticated browser at mobile and desktop widths.
 
-## Latest verified checkpoint — persistent sender claim status
+## Previous verified checkpoint — persistent sender claim status
 
 - Added a forward-only sender-status RPC over the private invite table. It returns only claimed drop IDs for the authenticated sender and verifies the matching row is a delivered instant text note; invite tokens and recipient account IDs remain private. The UI maps that status to “Claimed by [name]” in Sent and sender detail, including after a reload. Ordinary delivered notes stay “Delivered,” and the live one-time announcement remains.
 - Added an append-only [LEARNINGS.md](./LEARNINGS.md) and a repository instruction to record the issue, cause, fix, verification, Git checkpoint, and remaining gap for each completed code or issue-resolution slice.

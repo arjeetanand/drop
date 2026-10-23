@@ -11,8 +11,15 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 ### 2026-10-23 relay recipient collection
 
 - Recipient relay cards show only sender and carrier route details while a drop is dispatched; the recipient explicitly collects it before letter content, attachments, events, and reactions become available.
-- Collection updates the sender journey's recipient stop and custody timeline from durable delivered status and collection time, and safely accepts old dispatched rows whose `delivery_mode` still says `instant`. Local Supabase smoke coverage verifies repeat-safe collection and pre-collection privacy for message text, GIF storage, reactions, letter events, and sender journey notes.
-- The relay implementation is in place, but the end-to-end acceptance remains open until rendered mobile/browser checks and hosted two-account verification can run.
+- Collection updates the sender Journey and Relay passport from durable sender-side `delivered` relay status and its activity time. The route map, recipient stop, and custody timeline reach a terminal state together, and carrier invites are hidden after collection. A failed first status read remains unknown so it cannot enable an invite. Legacy dispatched rows whose `delivery_mode` says `instant` remain covered by the compatibility migration.
+- Unit, local Supabase smoke, and route refresh coverage are in place, but rendered collected-state acceptance remains open: the temporary browser fixture did not hydrate a valid sender row. Hosted two-account verification also waits on the approved Free project.
+
+### Planned follow-up — private photo/GIF claim links
+
+- Extend the accepted instant text claim flow to image and GIF drops sent to an unknown handle. Keep relay claim links out of this first media slice.
+- The recipient must explicitly claim before Drop exposes the private media. Sender reissue must use the stored media row, and ambiguous upload/claim retries must preserve any object until the sender row confirms it is unlinked.
+- Acceptance requires pre-claim media denial, post-claim recipient access, outsider/anonymous denial, safe reissue and retry behavior, and persistent sender claim status after reload.
+- Decide how senders cancel or retain unclaimed media after invite expiry before shipping. Expiry currently does not remove the pending drop or its private object.
 
 - Task 1 is complete. The mixed-payload model, default text behavior for older drafts, and compatible recipient routes are in place.
 - The core mobile sharing, receive, reaction, and optional relay flows have local implementations. Relay remains in progress until the acceptance checks in `todo.md` are verified.
