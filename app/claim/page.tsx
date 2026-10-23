@@ -8,6 +8,7 @@ import { claimDropInvite } from '@/lib/letterBackend';
 import { profileRoute } from '@/lib/inviteOnboarding';
 import { getSupabaseBrowserClient } from '@/lib/supabaseBrowser';
 import { isDropClaimToken, readDropClaimTokenFromFragment } from '@/lib/dropClaim';
+import { getClaimJourneySteps, type ClaimJourneyAccountState } from '@/lib/claimJourney';
 import {
   clearDropClaimHandoff,
   canUseDropClaimSessionToken,
@@ -22,14 +23,12 @@ import {
 const CLAIM_TOKEN_KEY = 'drop:claim-token:v1';
 const CLAIM_HANDOFF_SESSION_KEY = 'drop:claim-handoff-id:v1';
 
-type AccountState = 'checking' | 'signed-out' | 'needs-profile' | 'ready' | 'unavailable' | 'error';
-
 export default function ClaimPage() {
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
   const [handoffId, setHandoffId] = useState<string | null>(null);
   const [tokenChecked, setTokenChecked] = useState(false);
-  const [accountState, setAccountState] = useState<AccountState>('checking');
+  const [accountState, setAccountState] = useState<ClaimJourneyAccountState>('checking');
   const [claiming, setClaiming] = useState(false);
   const [notice, setNotice] = useState('');
 
@@ -164,6 +163,7 @@ export default function ClaimPage() {
 
   const claimReturnPath = dropClaimReturnPath(handoffId);
   const profileHref = `${profileRoute(true, claimReturnPath)}#account`;
+  const claimSteps = getClaimJourneySteps(accountState);
 
   return (
     <main className="page-shell page-enter">
@@ -182,10 +182,42 @@ export default function ClaimPage() {
           </div>
 
           <div className="px-6 py-6 sm:px-12 sm:py-8">
-            <div className="flex gap-3 rounded-xl border border-[rgba(16,42,67,.12)] bg-white/75 p-4">
-              <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[#26734f]" aria-hidden="true" />
-              <p className="text-sm leading-relaxed text-ink-navy">Anyone holding this link can claim the drop, and only one Drop account can claim it. The link does not reveal what was sent. Text claim links last 7 days. Media claim links last up to 7 days, with a 30-day claim and access cutoff. After that, Drop queues unclaimed media for deletion; cleanup can be delayed if the free project is paused or unavailable.</p>
+            <div className="rounded-xl border border-[rgba(16,42,67,.12)] bg-white/75 p-4">
+              <div className="flex gap-3">
+                <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[#26734f]" aria-hidden="true" />
+                <div>
+                  <p className="text-sm font-semibold text-ink-navy">Private until you claim it</p>
+                  <p className="mt-1 text-sm leading-relaxed text-on-surface-variant">The link does not reveal what was sent. Anyone holding it can claim the drop once, so share it with the person you trust.</p>
+                </div>
+              </div>
+              <div role="group" aria-label="Claim link expiry" className="mt-4 grid gap-2 sm:grid-cols-2">
+                <p className="rounded-lg bg-[#f5f1e9] px-3 py-2.5 text-sm leading-relaxed text-ink-navy"><span className="block font-semibold">Text link</span>Expires after 7 days.</p>
+                <p className="rounded-lg bg-[#f5f1e9] px-3 py-2.5 text-sm leading-relaxed text-ink-navy"><span className="block font-semibold">Photo/GIF</span>Links last up to 7 days. If unclaimed, media access ends 30 days after it was sent.</p>
+              </div>
+              <details className="mt-3 rounded-lg border border-[rgba(16,42,67,.1)] bg-white/70 px-3 py-2.5">
+                <summary className="min-h-11 cursor-pointer text-sm font-semibold text-ink-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2b45f7]">About media deletion</summary>
+                <p className="pb-1 text-xs leading-relaxed text-on-surface-variant">After the 30-day cutoff, Drop queues unclaimed media for deletion. Physical deletion can be delayed if the Free project is paused or unavailable.</p>
+              </details>
             </div>
+
+            {tokenChecked && token && claimSteps && <ol aria-label="Claim progress" className="mt-5 grid grid-cols-3 gap-2">
+              {claimSteps.map((step, index) => (
+                <li
+                  key={step.id}
+                  aria-current={step.status === 'current' ? 'step' : undefined}
+                  data-status={step.status}
+                  className={`min-w-0 rounded-xl border px-3 py-2.5 ${step.status === 'completed' ? 'border-[#cae6d5] bg-[#f0f9f3]' : step.status === 'current' ? 'border-[#2b45f7] bg-[#eef1ff]' : 'border-[rgba(16,42,67,.12)] bg-white/60'}`}
+                >
+                  <span className="flex items-center justify-between gap-1">
+                    <span className="font-mono text-[0.58rem] font-bold uppercase tracking-[0.08em] text-on-surface-variant">Step {index + 1}</span>
+                    <span className={`font-mono text-[0.55rem] font-bold uppercase tracking-[0.06em] ${step.status === 'completed' ? 'text-[#26734f]' : step.status === 'current' ? 'text-[#2b45f7]' : 'text-on-surface-variant'}`}>
+                      {step.status === 'completed' ? 'Done' : step.status === 'current' ? 'Current' : 'Up next'}
+                    </span>
+                  </span>
+                  <span className="mt-1 block break-words text-xs font-semibold leading-snug text-ink-navy sm:text-sm">{step.label}</span>
+                </li>
+              ))}
+            </ol>}
 
             {!tokenChecked ? <p className="mt-5 text-sm text-on-surface-variant" role="status">Checking this invite…</p> : !token ? (
               <div className="mt-5 rounded-xl bg-[#f5f1e9] p-4">
