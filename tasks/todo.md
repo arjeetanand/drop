@@ -9,6 +9,7 @@ Tasks are ordered by dependency. Progress is recorded at each tested and pushed 
 - [x] `npm test` passes 175/175; lint, `npx tsc --noEmit --incremental false`, `npm run build -- --webpack`, and `git diff --check` pass.
 - [x] `./run.sh start` keeps Drop available at `http://localhost:4004`; `/`, `/sent`, `/relay`, `/claim`, and `/compose` returned HTTP 200.
 - [x] Code commit `d842811` is pushed to `origin/fix/drop-card-contrast`; plan, README, handoff, checklist, and learning log are included in a separate documentation commit.
+- [x] Confirm the product retention decision for unclaimed photo/GIF drops: automatic deletion after 30 days, matching the existing immutable cutoff and cleanup policy.
 - [ ] Verify the unknown-handle photo/GIF claim path, including pre-claim isolation, explicit claim, sender status, replay behavior, and real Storage cleanup.
 - [ ] Verify rendered mobile/desktop behavior, keyboard and screen-reader access when browser automation is available; no browser renderer was exposed in this session.
 - [ ] Apply the approved Free-project migrations/worker and verify hosted claim access, deletion, index compatibility, and concurrent DB behavior.

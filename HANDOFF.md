@@ -2,6 +2,13 @@
 
 Updated: 2026-10-23
 
+## Latest decision — private media retention (2026-10-23)
+
+- The product decision is confirmed: automatically delete unclaimed photo/GIF drops after 30 days. Existing code already matches this: initial media invite issuance sets an immutable 30-day access cutoff, while each bearer link lasts at most 7 days and reissues do not extend the cutoff.
+- `tests/db/drop_claim_invites.sql` covers the cutoff, replay/reissue boundaries, expired access denial, and cleanup job state. It models Storage deletion through the worker RPC; it does not prove a running Edge Function removed a real Storage object.
+- Current environment check: the local app on port 4004 and local Supabase on 54321 are stopped. Supabase CLI and browser automation are unavailable; the installed Docker client cannot reach a daemon. No hosted Supabase resources were accessed or changed.
+- Next: restore a disposable local Supabase runtime without resetting shared state, then add and run an API smoke for unknown-handle photo and GIF issue/claim, sender status, and pre/post-claim Storage access. Follow with rendered sign-in and claim checks when isolated browser automation is available.
+
 ## Latest checkpoint — local verification and card contrast (2026-10-23)
 
 - Improved small text contrast on the home, sent, and relay cobalt cards in `app/page.tsx`, `app/sent/page.tsx`, and `app/relay/page.tsx`. White at 70%/75% opacity on `#2b45f7` measured 3.88:1/4.26:1; the new 80% value measures 4.63:1.

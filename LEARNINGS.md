@@ -285,3 +285,32 @@ The cards use `#2b45f7` with white text at 70% or 75% opacity. After compositing
 Code commit `d842811` (`fix: improve contrast on Drop blue cards`) is pushed to `origin/fix/drop-card-contrast`. The checklist, product plan, README, handoff, and learning entry are included in a separate documentation commit on the same branch. `/letter` and hosted resources were not changed.
 
 The local smoke covers known-recipient flows, not the unknown-handle photo/GIF claim journey. Hosted migrations, the cleanup schedule and actual Storage deletion, the managed Storage index/query plan, concurrent database interleavings, rendered browser/device behavior, and screen-reader acceptance remain open.
+
+## 2026-10-23 — Confirm 30-day retention for unclaimed media
+
+### Issue
+
+The retention period for unclaimed private photo/GIF drops needed a product decision. The invite link and the stored media have separate lifetimes.
+
+### Cause
+
+The invite is a bearer capability that expires after at most 7 days. The media access cutoff and automated cleanup window are separate controls, and reissuing an invite must not extend the data-retention deadline.
+
+### Resolution
+
+- The user confirmed automatic deletion of unclaimed photo/GIF drops after 30 days.
+- Existing code already implements this decision: the media invite RPC sets an immutable 30-day cutoff at initial issue, caps each claim link at 7 days, and routes expired media through the Storage cleanup worker. Reissue does not extend the original cutoff, so no feature code change was needed for this decision.
+
+### Learning
+
+Keep the capability lifetime shorter than the data-retention window, and enforce the data cutoff independently so a fresh link cannot extend retention. A paused free project or unavailable worker/Storage service can delay physical deletion; access must still be denied at the cutoff.
+
+### Verification
+
+- Source inspection confirmed the 30-day assignment and 7-day invite cap in `supabase/migrations/20261023150000_private_media_claim_invites.sql`.
+- The rollback-only `tests/db/drop_claim_invites.sql` fixture contains assertions for the immutable cutoff, reissue behavior, expired access denial, and cleanup worker transitions. Project handoff notes record this fixture passing against disposable PostgreSQL; it was not rerun during this decision update.
+- No live Storage deletion or hosted schedule was verified. Local Supabase and the app were not listening during this turn; no hosted resources were accessed.
+
+### Git and remaining gaps
+
+This is a product-decision and documentation update, not a feature-code change. It confirms the behavior from code commit `2d578ca` (`feat: add private photo and GIF claim drops`) and the cleanup follow-up `ae33ab2` (`feat: reconcile orphaned media cleanup`). The unknown-handle cross-account claim flow, real Storage deletion, hosted schedule, and rendered sign-in/claim journey remain open.
