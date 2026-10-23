@@ -2,6 +2,15 @@
 
 Updated: 2026-10-23
 
+## Latest fix — safe guest draft auth recovery (2026-10-23)
+
+- A sign-in return to a guest draft now stays on the profile recovery screen if copying fails, the requested draft cannot be verified, or the signed-in account changes during transfer. Recovery offers an explicit retry or a safe profile route.
+- Compose navigation requires an account-scoped persisted draft readback. Draft ID collisions use the ID returned by the completed copy. The active Supabase session is checked before and after asynchronous transfer and retry; the account storage lookup does not fall back to seeded or default drafts.
+- Verification: `npm test` passed 206/206; lint, no-incremental TypeScript, `git diff --check`, and `npm run build -- --webpack` passed. Home and Auth callback returned HTTP 200 on port 4004. Independent QA reviewed missing-draft, ID collision, guest-preservation, and account-switch recovery.
+- Branch `fix/guest-draft-return-recovery`; code commit `67095bc` (`fix: preserve safe guest draft auth recovery`) is pushed. This handoff, checklist, README, and learning entry are committed separately on the same branch. No PR or merge was created. `/letter` and hosted resources were not changed.
+- Rendered callback interaction, keyboard/screen-reader behavior, and real cross-account guest photo/GIF transfer remain unverified; the local check was an HTTP route check, not a browser interaction test.
+- Next: verify the recovery controls in a rendered browser, then test guest text/photo/GIF transfer and retry across two disposable accounts when a local or approved Free Supabase project is available.
+
 ## Latest fix — retryable claim verification (2026-10-23)
 
 - A failed claim RPC no longer automatically tells the recipient the invite expired. The claim function maps SQLSTATE `42501` to the generic unavailable/fresh-link message because the database uses it for invalid, expired, revoked, replaced, already-claimed, and other terminal outcomes. Other RPC errors and thrown failures receive calm retry copy without exposing backend text.

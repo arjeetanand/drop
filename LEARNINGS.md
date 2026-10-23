@@ -405,3 +405,34 @@ When a backend error can represent either a terminal business result or an infra
 ### Git and remaining gaps
 
 Code commit `e2e8db7` (`fix: keep claim service failures retryable`) is pushed to `origin/fix/claim-rpc-retry-copy`. The checklist, README, handoff, and this learning entry are committed separately on the same branch. Hosted two-account photo/GIF claim behavior, claim replay/reissue, and actual Storage deletion remain unverified. `/letter` and hosted resources were not changed.
+
+## 2026-10-23 — Recover guest drafts safely after sign-in
+
+### Issue
+
+When sign-in returned to a guest draft, a failed or unverifiable transfer could leave the recovery link pointing at `/compose?letter=<guest-id>`. Compose can then fall back to a different account draft. A session change during an async media copy or retry could also leave the callback using a stale account ID.
+
+### Cause
+
+The callback trusted the requested URL ID after copy failure, and the general draft lookup can include seeded/default fallback data. The transfer spans async Storage work, while a mounted callback can outlive the account session that started it.
+
+### Resolution
+
+- Keep failed or missing draft transfers on the safe profile recovery route and add an explicit retry/check-again action.
+- Add an account-scoped draft lookup that returns only saved account drafts. Resume Compose only after persisted readback, using the returned remapped ID after a collision.
+- Recheck that the active Supabase session matches the intended account before and after async transfer/retry. On mismatch, preserve the recovery state.
+- Keep the guest draft and attachment available through the existing copy/rollback path; never treat an unverified return URL as proof of an account copy.
+
+### Learning
+
+An authenticated redirect is a data boundary. Treat its path as a request, confirm the requested object exists in the current account's storage scope, and recheck identity after every asynchronous operation that can outlive a session change.
+
+### Verification
+
+- The focused guest-draft and store tests pass 26/26. `npm test` passes 206/206; `npm run lint`, `npx tsc --noEmit --incremental false`, `npm run build -- --webpack`, and `git diff --check` pass.
+- Home and Auth callback returned HTTP 200 on local port 4004. Independent QA found and verified fixes for missing guest/account copies and account changes before and after retry.
+- The build emitted a Browserslist freshness warning and an ambiguous Tailwind `ease-[cubic-bezier(...)]` warning. No rendered browser, keyboard, screen-reader, hosted, or real two-account media-transfer check was available; the transfer-failure regression uses a mocked attachment copy.
+
+### Git and remaining gaps
+
+Code commit `67095bc` (`fix: preserve safe guest draft auth recovery`) is pushed to `origin/fix/guest-draft-return-recovery`. The README, checklist, handoff, and this entry are recorded in a separate documentation commit on the same branch. No PR or merge was created. `/letter`, `.env.local`, and hosted resources were not changed. Rendered retry behavior and real cross-account photo/GIF attachment transfer remain open.

@@ -2,6 +2,15 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
+## Checkpoint — guest draft auth recovery (2026-10-23)
+
+- [x] Keep a guest draft auth return on the profile recovery screen when copying fails or neither guest nor account storage can verify the requested draft; provide retry/check-again guidance.
+- [x] Confirm the requested draft is persisted in the signed-in account before reopening Compose, including collision-remapped IDs; check that the active session still matches before and after async transfer/retry.
+- [x] `npm test` passes 206/206; lint, `npx tsc --noEmit --incremental false`, `npm run build -- --webpack`, and `git diff --check` pass. Home and Auth callback return HTTP 200 on port 4004; independent QA approved the final session-race fix.
+- [x] Code commit `67095bc` is pushed to `origin/fix/guest-draft-return-recovery`; this checklist, README, handoff, and learning entry are recorded in a separate documentation commit.
+- [ ] Verify the rendered retry/account-switch states at mobile and desktop sizes with keyboard and screen-reader interaction when browser automation is available.
+- [ ] Verify guest photo/GIF transfer across real accounts and confirm attachment bytes remain accessible after retry; hosted Supabase is not provisioned.
+
 ## Checkpoint — retryable claim verification (2026-10-23)
 
 - [x] Separate claim RPC failures from successful empty results: SQLSTATE `42501` keeps generic unavailable/fresh-link guidance; transport, server, unknown RPC errors, and thrown exceptions get calm retry copy.
