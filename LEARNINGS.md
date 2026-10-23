@@ -1,6 +1,6 @@
 # Drop learning log
 
-Append one dated entry for every completed code-change or issue-resolution slice. Keep the record evidence-based: issue, cause, resolution, verification, Git checkpoint, and remaining gaps. Do not store credentials or private content here.
+Append one dated entry for every completed code-change or issue-resolution slice. Keep the record evidence-based: issue, cause, resolution, a reusable learning, verification, Git checkpoint, and remaining gaps. Tie statements to the actual diff, commit history, and test output. Do not store credentials or private content here.
 
 ## 2026-10-23 — Align the sender journey after relay collection
 
@@ -121,3 +121,31 @@ Each view derived progress from a different source. The route chain used the col
 ### Git
 
 Code commit `3ee659a` (`fix: complete relay collection views`) is pushed to `origin/fix/relay-collection-terminal-state`. This entry and the README, plan, checklist, and handoff update are committed separately on the same branch. No PR or merge was created.
+
+## 2026-10-23 — Make reusable lessons explicit in every entry
+
+### Issue
+
+The repository already kept an append-only issue log, and the user asked that every solved issue also leave a useful learning they can return to, with the record saved alongside the Git work.
+
+### Cause
+
+The previous instruction listed the issue, cause, fix, and verification, but did not require a distinct reusable takeaway. That could leave future entries as changelog notes rather than lessons.
+
+### Resolution
+
+- Clarified that every entry must include a plain-language `Learning` section with a reusable takeaway.
+- Required each entry to be checked against the actual diff, Git branch/commit history, and test output, and to preserve older entries.
+
+### Learning
+
+- A useful engineering record explains both what changed and the principle that should guide the next similar change.
+- Git and test evidence keep the lesson accurate as the project evolves.
+
+### Verification
+
+- `git diff --check`: passed. This documentation-only update did not require application tests.
+
+### Git and remaining gaps
+
+This entry is on branch `feat/private-media-claims`, based on `9dd8ccc`. No application behavior changed.

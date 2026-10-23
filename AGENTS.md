@@ -11,6 +11,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 ## Drop learning log
 
 - Keep `LEARNINGS.md` as an append-only journal for each completed code-change or issue-resolution slice, including small bug fixes. Add the entry before handing the work back.
-- For each entry, record the user-visible issue, its cause, what changed, how it was verified, the code commit and branch when available, and any important follow-up or verification gap. Base it on the actual Git diff and test output.
+- Use the headings `Issue`, `Cause`, `Resolution`, `Learning`, `Verification`, and `Git and remaining gaps`. Write one reusable takeaway in plain language so the entry teaches the user, not just lists a changelog.
+- Base each entry on the actual Git diff, branch/commit history, and test output. Record the code commit and branch when available, and any important follow-up or verification gap; never claim checks that were not run.
 - Append new dated entries at the end; do not rewrite older lessons. If a past entry needs correction, add a dated correction instead.
 - Never copy credentials, tokens, private message content, or other secrets into the log.
