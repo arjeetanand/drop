@@ -8,6 +8,12 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 
 ## Implementation Status — 2026-10-22
 
+### 2026-10-23 relay recipient collection
+
+- Recipient relay cards show only sender and carrier route details while a drop is dispatched; the recipient explicitly collects it before letter content, attachments, events, and reactions become available.
+- Collection updates the sender journey and safely accepts old dispatched rows whose `delivery_mode` still says `instant`. Local Supabase smoke coverage verifies repeat-safe collection and pre-collection privacy for message text, GIF storage, reactions, letter events, and sender journey notes.
+- The relay implementation is in place, but the end-to-end acceptance remains open until rendered mobile/browser checks and hosted two-account verification can run.
+
 - Task 1 is complete. The mixed-payload model, default text behavior for older drafts, and compatible recipient routes are in place.
 - The core mobile sharing, receive, reaction, and optional relay flows have local implementations. Relay remains in progress until the acceptance checks in `todo.md` are verified.
 - Same-device text, photo, and GIF demos have been checked through recipient reveal/open, reaction, sender copy, and reload. This verifies local media persistence and reaction presentation, not authenticated account-to-account delivery.

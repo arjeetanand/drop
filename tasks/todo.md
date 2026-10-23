@@ -351,3 +351,15 @@ Commit each completed code change separately with a descriptive message and push
 - [x] Code commit `8493097` is pushed to `origin/feat/invite-first-drop-resilience`; documentation is committed and pushed separately.
 - [ ] Verify reaction updates in a rendered browser and across two hosted accounts after the Free Supabase project is provisioned. The local detail-route state and Realtime helpers are covered by unit tests; no hosted or browser interaction was run in this slice.
 - [ ] Complete the private photo/GIF relay journey recommended in `plan.md` after local or hosted two-account verification is available.
+
+## Current follow-up — 2026-10-23 (recipient relay collection)
+
+- [x] Add a route-only recipient summary and mailbox card; keep the private drop sealed until the recipient confirms collection.
+- [x] Add recipient-only, repeat-safe collection and refresh the sender journey after collection; normalize legacy `dispatched` rows whose delivery mode is still `instant`.
+- [x] Keep the first migration sealed by status and replace the legacy media-path check with validation on new or changed paths before backfilling historical rows.
+- [x] Extend unit and local Supabase smoke coverage for safe route summaries, message/media/reaction/event/note privacy, legacy dispatched rows, and repeat-safe collection.
+- [x] `npm test` passes 145/145; lint, TypeScript, local Supabase smoke, `bash -n run.sh`, and `git diff --check` pass. Local smoke authenticated four disposable accounts and cleaned them up.
+- [x] `run.sh` serves the local app on port 4004; `/` and `/mailbox` return HTTP 200.
+- [ ] Recheck a fresh production build when the active checkout can write `.next` and Google Fonts are reachable. This turn's active-checkout build hit sandbox `EPERM` on `.next/trace`; a scratch Webpack build stopped when `fonts.googleapis.com` did not resolve. An isolated production build had passed earlier in this feature work.
+- [ ] Verify the recipient card and collection flow in a rendered browser at mobile and desktop sizes, including keyboard and screen-reader behavior.
+- [ ] Apply both relay recipient migrations to the approved Free hosted project and verify two-account delivery when that project is provisioned; no hosted project is available yet.

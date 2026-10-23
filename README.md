@@ -16,6 +16,8 @@ Before sharing an invite, Drop confirms the current draft was written to local s
 
 Mailbox empty states now respond to the selected filter and offer a matching next step; clearing a search keeps the selected filter and returns focus to the search field.
 
+Relay recipients now see a route-only mailbox card while a drop is in transit and choose **I got this drop** before its message or media unlocks. The sender journey reports when collection is confirmed. Apply `20261023000000_relay_recipient_collection.sql` followed by `20261023010000_legacy_dispatched_relay_compatibility.sql`; the second migration safely handles older dispatched rows whose saved media path predates the current path shape.
+
 Drop uses port 4004 for the main app, 5004 for its isolated local Supabase smoke test, and 6004 for browser QA. The smoke test only accepts a loopback Supabase URL from `.env.local`; it does not reset the local database.
 
 Keep local credentials in the ignored `.env.local` file at the project root. Local Supabase Auth redirects are configured for ports 4004, 5004, and 6004, with the legacy 3000 callback retained. Restart the local Supabase stack after changing `supabase/config.toml`.

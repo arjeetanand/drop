@@ -4,18 +4,20 @@ Updated: 2026-10-23
 
 ## Latest verified checkpoint
 
-- Code commit `8493097` (`fix: make sender reaction updates race-safe`) is pushed to `origin/feat/invite-first-drop-resilience`; this documentation checkpoint is committed and pushed separately below. No pull request or merge was created.
-- Mailbox history now pages beyond 1,000 rows with stable ordering and bounded reaction reads. Sender detail routes capture a pre-channel reaction baseline, discard stale results, distinguish an empty reaction from an unavailable read, and compare reaction values to recover a startup change without cross-device clock assumptions. Incoming and signed-out routes do not wait for sender-only baseline data.
-- Verification: `npm test` passed 144/144, lint, `npx tsc --noEmit --incremental false`, `npm run build -- --webpack`, and `git diff --check` passed. The build emitted the existing Browserslist freshness and Tailwind easing warnings. `run.sh` is active on port 4004; the server log records successful home and compose responses, but a direct mailbox HTTP check could not connect from this session. No rendered browser/device or hosted cross-account check was run for this slice.
+- Recipient relay cards now show only sender and carrier route updates while a drop is in transit. The recipient must collect it before letter content, media, reactions, or private journey events become readable; the sender journey refreshes to the collected state.
+- Code commit `75f8a89` (`feat: let recipients collect relay drops`) is pushed to `origin/feat/invite-first-drop-resilience`. This handoff and checklist update are committed separately. No pull request or merge was created.
+- The two ordered migrations add the recipient route summary and repeat-safe collection RPC, gate content and media on `dispatched` status, and normalize older dispatched rows whose `delivery_mode` is still `instant`. The compatibility migration replaces the old media-path check before backfilling, while validating new and changed paths.
+- Verification: `npm test` passed 145/145; lint, `npx tsc --noEmit --incremental false`, local Supabase smoke, `node --check scripts/local-supabase-smoke.mjs`, `bash -n run.sh`, and `git diff --check` passed. Smoke verified four disposable local accounts, route-only summaries, pre-collection privacy for message/media/reactions/events/notes, collection retry safety, and legacy dispatched rows. The focused migration review found no blockers.
+- `run.sh` is active on port 4004; `/` and `/mailbox` returned HTTP 200. No rendered browser, screen-reader, real-device, or hosted cross-account check was run for this slice. The active-checkout production build hit sandbox `EPERM` writing `.next/trace`; a scratch Webpack build could not resolve `fonts.googleapis.com`. An isolated production build had passed earlier in this feature work.
 - The authoritative checkout is `/Users/arjeetanand/projects/drop`. `.env.local` is present, mode 600, ignored, and untracked. The former OneDrive Drop directory is absent, so no file was moved or deleted; `letter` remains untouched.
 - No hosted Supabase project was created. The user approved a distinct Free organization and one Free project; the local Supabase CLI reports that no access token is configured, and no hosted resources were changed. The app's local environment remains loopback-only.
-- Next: rotate the PAT that was pasted into chat, authenticate the CLI locally, then finish the approved Free Supabase setup with no paid add-ons. Apply migrations and verify private photo/GIF relay plus sender/recipient reactions across disposable accounts. Rendered browser, screen-reader, and real-device checks remain open.
+- Next: rotate the Supabase PAT that was pasted into chat, authenticate the CLI locally, then finish the approved Free Supabase setup with no paid add-ons. Apply both recipient relay migrations in order and verify photo/GIF relay plus sender/recipient reactions across disposable accounts. Rendered browser, screen-reader, and real-device checks remain open.
 
 ## Active checkout and Git
 
 - Active code checkout: /Users/arjeetanand/projects/drop
 - GitHub remote: private repository arjeetanand/drop
-- Current branch: `feat/invite-first-drop-resilience`, based on checkpoint `292d423`; code commit `8493097` is pushed to origin. Invite storage guard `6f618ed` and profile copy fallback `41c409e` are earlier pushed commits. No pull request has been created.
+- Current branch: `feat/invite-first-drop-resilience`, based on checkpoint `292d423`; code commits `8493097` and `75f8a89` are pushed to origin. Invite storage guard `6f618ed` and profile copy fallback `41c409e` are earlier pushed commits. No pull request has been created.
 - Previous mailbox search-focus branch: `fix/mailbox-search-focus`, code commit `bbf9df8` pushed to origin; no pull request has been created.
 - Mailbox empty-state feature commit: `10efead` (`feat: tailor mailbox empty states to filters`), pushed to `origin/feat/mailbox-filter-empty-states`; the docs update is committed separately.
 - Recipient-first composer commit: `a9049cf` (`feat: put recipient first in drop composer`), pushed to `origin/feat/recipient-first-compose`.
@@ -35,6 +37,9 @@ Updated: 2026-10-23
 - `.env.local` is already present in `/Users/arjeetanand/projects/drop`, has mode 600, is ignored by Git, and is not tracked. No copy was needed because the OneDrive source directory is absent. Its values were not displayed or committed; the configured Supabase URL was checked as loopback-only.
 
 ## Change inventory
+- Added a recipient-only route summary RPC and mailbox card for in-transit relays. It shows carrier count, latest carrier/neighborhood/note, and a collection action without revealing drop content or media.
+- Added repeat-safe recipient collection. Dispatched rows remain sealed across letter, media, and reaction reads until collection; the sender journey refreshes after delivery. Legacy dispatched rows are normalized to relay on collection.
+- Added migration compatibility for historical media paths: drop the old check before backfill and validate only inserts or changed media paths so existing rows can still transition.
 - Relay token acceptance stores the exact pending attempt in tab-scoped session storage under a SHA-256 fingerprint of the invite and active local account. Refresh restores the same request ID and form details, locks them for an identical retry, expires the attempt after 24 hours, and clears it after the carrier pass is saved in account-scoped local storage.
 
 - Removed third-party reverse geocoding from the relay handoff flow. QR and manual PIN flows ask before accessing current device location; manual neighborhood entry remains available, and location stays in local route history after a successful handoff.
@@ -55,6 +60,8 @@ Updated: 2026-10-23
 - Send receipts now apply to the exact submitted composition. A different active draft is preserved, and edits made to the submitted draft in another tab are not marked sent.
 
 ## Verification
+
+- Recipient collection slice `75f8a89`: `npm test` passed 145/145; lint, TypeScript, local Supabase smoke, script syntax, `bash -n run.sh`, and diff checks passed. `/` and `/mailbox` returned HTTP 200 on port 4004. A fresh production-build attempt is pending an environment with checkout write access and Google Fonts resolution; a previous isolated build passed.
 
 - For commit 429e555, `npm test` passed 86/86, `npm run lint`, `npx tsc --noEmit --incremental false`, and `git diff --check` passed. `.env.local` remained ignored and was not staged.
 - For commits bc21947 and 21f8120, `npm test` passed 93/93, `npm run lint`, `npx tsc --noEmit --incremental false`, and `npm run build -- --webpack` passed. The relay column-privilege SQL regression passed against a throwaway local PostgreSQL cluster in `/private/tmp`; the hosted Supabase project was not touched.
@@ -78,6 +85,10 @@ Updated: 2026-10-23
 - The earlier route-security work remains on `feat/relay-route-live-refresh`, is not merged, and has no pull request.
 
 ## Remaining work
+
+- Verify recipient relay collection in a rendered browser at mobile and desktop widths, including keyboard and screen-reader behavior.
+- Apply `20261023000000_relay_recipient_collection.sql` and `20261023010000_legacy_dispatched_relay_compatibility.sql` to the approved Free Drop Supabase project after it is provisioned, then verify two-account collection and sender journey updates.
+- Re-run the production build in an environment that can write the active checkout's `.next` directory and resolve or mock Google Fonts.
 
 - Legacy `?d=` QR links still put previous-carrier coordinates in the URL and send them to Drop when opened. Use a new server-issued invite for future handoffs; old payloads are not safely convertible.
 - Verify a valid carrier-issued handoff across accounts/devices and against hosted Supabase. No hosted Drop project has been created.
