@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -9,8 +9,10 @@ import { isClaimReturnPath, profileRoute, resolveAuthReturnPath } from '@/lib/in
 import { isAuthAccountCurrent, resolveGuestDraftAuthReturn, resolveStoredDraftAuthReturn } from '@/lib/guestDraftAuthReturn';
 import { copyGuestDraftAttachmentToAccount, deleteDraftAttachment } from '@/lib/letterMediaStore';
 import { copyGuestDraftToAccount, getGuestDraftById, getStoredLetterDraftById } from '@/lib/letterStore';
+import { createAuthCallbackActivity, exchangeAuthCodeWhileActive, type AuthCodeExchangeSlot } from '@/lib/authCallbackSafety';
 
 const AUTH_RETURN_KEY = 'dear-exe:auth-return';
+type AuthExchangeResult = Awaited<ReturnType<NonNullable<ReturnType<typeof getSupabaseBrowserClient>>['auth']['exchangeCodeForSession']>>;
 
 async function isSignedInAs(accountId: string) {
   const supabase = getSupabaseBrowserClient();
@@ -43,6 +45,7 @@ function AuthCallbackContent() {
     kind: 'transfer' | 'verify' | 'session';
   } | null>(null);
   const [retryingTransfer, setRetryingTransfer] = useState(false);
+  const codeExchangeRef = useRef<AuthCodeExchangeSlot<AuthExchangeResult>>({ current: null });
 
   const retryGuestDraftTransfer = async () => {
     if (!pendingTransfer || retryingTransfer) return;
@@ -96,7 +99,7 @@ function AuthCallbackContent() {
   };
 
   useEffect(() => {
-    let active = true;
+    const activity = createAuthCallbackActivity();
     setIsBusy(true);
 
     const getReturnPath = () => {
@@ -107,21 +110,22 @@ function AuthCallbackContent() {
     };
 
     const redirectWithError = (errorMessage: string) => {
-      const nextPath = getReturnPath();
-      if (active) {
+      activity.whileActive(() => {
+        const nextPath = getReturnPath();
         setReturnPath(nextPath || '/profile');
         setClaimReturn(isClaimReturnPath(nextPath));
         setIsBusy(false);
         setMessage(isClaimReturnPath(nextPath)
           ? 'Sign-in could not finish. Returning to your private drop…'
           : 'Sign-in could not finish. Returning to your profile…');
-      }
-      const errorUrl = new URL(profileRoute(inviteContext, nextPath), window.location.origin);
-      errorUrl.searchParams.set('authError', errorMessage);
-      router.replace(`${errorUrl.pathname}${errorUrl.search}`);
+        const errorUrl = new URL(profileRoute(inviteContext, nextPath), window.location.origin);
+        errorUrl.searchParams.set('authError', errorMessage);
+        router.replace(`${errorUrl.pathname}${errorUrl.search}`);
+      });
     };
 
     const finishAuth = async () => {
+      if (!activity.isActive()) return;
       const providerError = searchParams.get('error_description') || searchParams.get('error');
       if (providerError) {
         redirectWithError(providerError);
@@ -138,7 +142,14 @@ function AuthCallbackContent() {
       let signedInUserId = '';
       try {
         if (code) {
-          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+          const exchangeResult = await exchangeAuthCodeWhileActive(
+            codeExchangeRef.current,
+            activity,
+            code,
+            (authCode) => supabase.auth.exchangeCodeForSession(authCode),
+          );
+          if (!exchangeResult.active) return;
+          const { data, error } = exchangeResult.value;
           if (error || !data.session) {
             redirectWithError(error?.message || 'The sign-in code could not be exchanged.');
             return;
@@ -146,6 +157,7 @@ function AuthCallbackContent() {
           signedInUserId = data.session.user.id;
         } else {
           const { data, error } = await supabase.auth.getSession();
+          if (!activity.isActive()) return;
           if (error || !data.session) {
             redirectWithError('The sign-in return did not include a valid session.');
             return;
@@ -155,7 +167,7 @@ function AuthCallbackContent() {
 
         let nextPath = getReturnPath();
         let pendingDraftReturn: { draftId: string; nextPath: string; kind: 'transfer' | 'verify' } | null = null;
-        if (active) {
+        if (activity.isActive()) {
           setReturnPath(nextPath || '/profile');
           setClaimReturn(isClaimReturnPath(nextPath));
           setMessage(isClaimReturnPath(nextPath)
@@ -181,14 +193,13 @@ function AuthCallbackContent() {
               ),
               (accountDraftId, accountId) => getStoredLetterDraftById(accountDraftId, accountId),
             );
+            if (!activity.isActive()) return;
             if (transfer.status === 'retry') {
-              if (active) {
-                setPendingTransfer({ draftId, accountId: signedInUserId, nextPath, kind: 'transfer' });
-                setReturnPath(profileRoute(inviteContext));
-                setClaimReturn(false);
-                setIsBusy(false);
-                setMessage('Your draft is still saved on this device, but it could not be copied into this account. Try again, or return to your profile and sign out to continue on this device.');
-              }
+              setPendingTransfer({ draftId, accountId: signedInUserId, nextPath, kind: 'transfer' });
+              setReturnPath(profileRoute(inviteContext));
+              setClaimReturn(false);
+              setIsBusy(false);
+              setMessage('Your draft is still saved on this device, but it could not be copied into this account. Try again, or return to your profile and sign out to continue on this device.');
               return;
             }
             nextPath = transfer.nextPath;
@@ -200,30 +211,31 @@ function AuthCallbackContent() {
               signedInUserId,
               getStoredLetterDraftById,
             );
+            if (!activity.isActive()) return;
             if (storedDraftReturn.status === 'retry') {
-              if (active) {
-                setPendingTransfer({ draftId, accountId: signedInUserId, nextPath, kind: 'verify' });
-                setReturnPath(profileRoute(inviteContext));
-                setClaimReturn(false);
-                setIsBusy(false);
-                setMessage('This draft could not be verified on this device or in this account. Check again, or return to your profile and sign out to inspect your device drafts.');
-              }
+              setPendingTransfer({ draftId, accountId: signedInUserId, nextPath, kind: 'verify' });
+              setReturnPath(profileRoute(inviteContext));
+              setClaimReturn(false);
+              setIsBusy(false);
+              setMessage('This draft could not be verified on this device or in this account. Check again, or return to your profile and sign out to inspect your device drafts.');
               return;
             }
             nextPath = storedDraftReturn.nextPath;
           }
-          if (pendingDraftReturn && !(await isSignedInAs(signedInUserId))) {
-            if (active) {
+          if (pendingDraftReturn) {
+            const accountIsCurrent = await isSignedInAs(signedInUserId);
+            if (!activity.isActive()) return;
+            if (!accountIsCurrent) {
               setPendingTransfer({ ...pendingDraftReturn, accountId: signedInUserId, kind: 'session' });
               setReturnPath(profileRoute(inviteContext));
               setClaimReturn(false);
               setIsBusy(false);
               setMessage('Your sign-in changed while this draft was being checked. The draft is still safe; return to your profile and sign in to the same account before continuing.');
+              return;
             }
-            return;
           }
         }
-        router.replace(nextPath || profileRoute(inviteContext));
+        activity.whileActive(() => router.replace(nextPath || profileRoute(inviteContext)));
       } catch {
         redirectWithError('The sign-in return could not be verified. Please try again.');
       }
@@ -231,7 +243,7 @@ function AuthCallbackContent() {
 
     void finishAuth();
     return () => {
-      active = false;
+      activity.dispose();
     };
   }, [inviteContext, router, searchParams]);
 
