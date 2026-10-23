@@ -10,6 +10,23 @@ create table auth.users (id uuid primary key);
 create function auth.uid() returns uuid language sql stable as $$
   select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
 $$;
+create schema realtime;
+create table realtime.messages (
+  id bigint generated always as identity primary key,
+  topic text not null,
+  event text not null,
+  payload jsonb not null,
+  is_private boolean not null
+);
+create function realtime.send(payload jsonb, event text, topic text, is_private boolean)
+returns void
+language sql
+security definer
+set search_path = ''
+as $$
+  insert into realtime.messages (topic, event, payload, is_private)
+  values ($3, $2, $1, $4)
+$$;
 create table storage.buckets (
   id text primary key,
   name text not null,
@@ -32,6 +49,7 @@ alter table storage.objects enable row level security;
 \ir ../../supabase/migrations/20261018000400_zz_validated_drop_media.sql
 \ir ../../supabase/migrations/20261019000000_enforce_drop_payload_media_consistency.sql
 \ir ../../supabase/migrations/20261023120000_drop_claim_invites.sql
+\ir ../../supabase/migrations/20261023130000_drop_claimed_sender_broadcast.sql
 
 insert into auth.users (id) values
   ('11111111-1111-4111-8111-111111111111'),
@@ -263,6 +281,24 @@ select set_config(
   true
 );
 reset role;
+do $$
+begin
+  if (select count(*) from realtime.messages where event = 'drop_received') <> 1 then
+    raise exception 'an explicit claim did not emit exactly one sender signal';
+  end if;
+  if exists (
+    select 1 from realtime.messages
+    where event = 'drop_received'
+      and (
+        topic <> 'user:11111111-1111-4111-8111-111111111111:drop-inbox'
+        or payload <> jsonb_build_object('drop_id', current_setting('test.main_letter'))
+        or not is_private
+      )
+  ) then
+    raise exception 'the claim signal was not a private ID-only message to the sender topic';
+  end if;
+end
+$$;
 
 -- A repeated claim is idempotent for its claimant even after the capability
 -- expires. Expiry still blocks first-time claims and other-account replays.
@@ -288,7 +324,6 @@ begin
     or (select count(*) from public.letter_reactions where letter_id = current_setting('test.main_letter')) <> 1 then
     raise exception 'claimed letter or child content was not released to its recipient';
   end if;
-
   begin
     perform public.issue_drop_claim_invite(
       'claim-main', 'A thought for later', 'The private note.', current_setting('test.token_c')
@@ -303,6 +338,11 @@ begin
   end;
 end $$;
 reset role;
+do $$ begin
+  if (select count(*) from realtime.messages where event = 'drop_received') <> 1 then
+    raise exception 'an idempotent same-account claim retry emitted a duplicate signal';
+  end if;
+end $$;
 do $$ begin
   if (select i.expires_at from private.drop_claim_invites i
       where i.letter_id = current_setting('test.main_letter') and i.replaced_at is null)
@@ -493,5 +533,43 @@ do $$ begin
   end;
 end $$;
 reset role;
+
+-- Relay collection still announces to both participants once. Ordinary
+-- delivered-row updates and claim retries must not add duplicate signals.
+insert into public.letters (
+  id, sender_id, recipient_id, subject, content, status, delivery_mode,
+  payload_kind, dispatched_at, delivered_at
+) values (
+  'relay-broadcast-control',
+  '11111111-1111-4111-8111-111111111111',
+  '22222222-2222-4222-8222-222222222222',
+  'Relay control', 'Sealed', 'dispatched', 'relay', 'text', pg_catalog.now(), null
+);
+update public.letters
+set status = 'delivered', delivered_at = pg_catalog.now()
+where id = 'relay-broadcast-control';
+update public.letters
+set updated_at = pg_catalog.now()
+where id = 'relay-broadcast-control';
+do $$
+begin
+  if (select count(*) from realtime.messages where payload->>'drop_id' = 'relay-broadcast-control') <> 3
+    or (select count(*) from realtime.messages where payload->>'drop_id' = 'relay-broadcast-control'
+        and topic = 'user:22222222-2222-4222-8222-222222222222:drop-inbox') <> 2
+    or (select count(*) from realtime.messages where payload->>'drop_id' = 'relay-broadcast-control'
+        and topic = 'user:11111111-1111-4111-8111-111111111111:drop-inbox') <> 1
+    or exists (
+      select 1 from realtime.messages
+      where payload->>'drop_id' = 'relay-broadcast-control'
+        and (payload <> jsonb_build_object('drop_id', 'relay-broadcast-control') or not is_private)
+    ) then
+    raise exception 'relay collection no longer emits one recipient and one sender signal, or emitted duplicate data';
+  end if;
+  if (select count(*) from realtime.messages where event = 'drop_received'
+      and payload->>'drop_id' = current_setting('test.main_letter')) <> 1 then
+    raise exception 'a later row update repeated the completed claim signal';
+  end if;
+end
+$$;
 
 rollback;

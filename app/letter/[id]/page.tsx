@@ -5,8 +5,9 @@ import Link from 'next/link';
 import { ArrowLeft, ArrowRight, Check, LockKeyhole, MailOpen, Share2, Sparkles } from 'lucide-react';
 import { useParams, useSearchParams } from 'next/navigation';
 import type { MockLetter } from '@/data/mockData';
-import { getRemoteDropDirection, getRemoteLetterById, getRemoteLetters, getRemoteReactionSnapshot, reissueDropClaimInvite, saveRemoteReaction, subscribeToSenderDropReactions } from '@/lib/letterBackend';
+import { getRemoteDropDirection, getRemoteLetterById, getRemoteLetters, getRemoteReactionSnapshot, reissueDropClaimInvite, saveRemoteReaction, subscribeToIncomingDropInbox, subscribeToSenderDropReactions } from '@/lib/letterBackend';
 import { getLetterById } from '@/lib/letterStore';
+import { getLiveClaimCompletionUpdate } from '@/lib/liveClaimStatus';
 import { getInitialSenderReactionBaseline, getSenderReactionReadUpdate } from '@/lib/liveReactionState';
 import { DEMO_REACTION_EMOJIS, saveDemoReaction } from '@/lib/demoReactionStore';
 import { getDraftAttachment } from '@/lib/letterMediaStore';
@@ -101,10 +102,12 @@ export default function LetterArrivalPage() {
   const [contentNotice, setContentNotice] = useState('');
   const [reactionNotice, setReactionNotice] = useState('');
   const [reactionAnnouncement, setReactionAnnouncement] = useState('');
+  const [claimAnnouncement, setClaimAnnouncement] = useState('');
   const [savingReaction, setSavingReaction] = useState(false);
   const [sharingClaimLink, setSharingClaimLink] = useState(false);
   const [claimLinkUrl, setClaimLinkUrl] = useState('');
   const [claimLinkNotice, setClaimLinkNotice] = useState('');
+  const currentLetterRef = useRef<MockLetter | null>(null);
   const currentReactionRef = useRef<string | undefined>(undefined);
   const baselineReactionOnDirectReadRef = useRef(false);
   const initialReactionBaselineRef = useRef<{ available: boolean; reaction: string | null } | null>(null);
@@ -122,6 +125,7 @@ export default function LetterArrivalPage() {
     setContentNotice('');
     setReactionNotice('');
     setReactionAnnouncement('');
+    setClaimAnnouncement('');
     setClaimLinkUrl('');
     setClaimLinkNotice('');
     setSharingClaimLink(false);
@@ -243,6 +247,60 @@ export default function LetterArrivalPage() {
   }, [letterId, senderView]);
 
   const senderDropId = letter && letter.direction === 'sent' && !letter.sample && !letter.localDemo ? letter.id : null;
+  const pendingClaimDropId = letter
+    && letter.direction === 'sent'
+    && letter.status === 'claim_pending'
+    && letter.payloadKind === 'text'
+    && letter.deliveryMode === 'instant'
+    && !letter.sample
+    && !letter.localDemo
+    ? letter.id
+    : null;
+
+  useEffect(() => {
+    currentLetterRef.current = letter;
+  }, [letter]);
+
+  useEffect(() => {
+    if (!pendingClaimDropId) return;
+
+    let active = true;
+    let stopRealtime = () => {};
+    const refresh = startVisibleDataRefresh({
+      load: () => getRemoteLetterById(pendingClaimDropId),
+      intervalMs: 60_000,
+      queueOneWhileInFlight: true,
+      onData: (refreshed) => {
+        if (!active) return;
+        const update = getLiveClaimCompletionUpdate(
+          currentLetterRef.current,
+          refreshed,
+          pendingClaimDropId,
+        );
+        if (!update) return;
+
+        currentLetterRef.current = update.letter;
+        setLetter((current) => (
+          current?.id === pendingClaimDropId && current.status === 'claim_pending'
+            ? update.letter
+            : current
+        ));
+        setClaimAnnouncement(update.announcement);
+      },
+    });
+    void subscribeToIncomingDropInbox((dropId) => {
+      if (active && (!dropId || dropId === pendingClaimDropId)) void refresh.refresh();
+    }).then((stop) => {
+      if (!active) stop();
+      else stopRealtime = stop;
+    });
+
+    return () => {
+      active = false;
+      refresh.stop();
+      stopRealtime();
+    };
+  }, [pendingClaimDropId]);
 
   useEffect(() => {
     currentReactionRef.current = letter?.reaction;
@@ -531,6 +589,7 @@ export default function LetterArrivalPage() {
             <button type="button" onClick={() => void copyFreshClaimLink()} className="button-secondary mt-2 !min-h-11 !rounded-xl">Copy fresh private link</button>
           </>}
         </section>}
+        {claimAnnouncement && <p className="notice mt-5" role="status" aria-live="polite">{claimAnnouncement}</p>}
         <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{reactionAnnouncement}</p>
 
         <section className="mt-12 max-w-[760px]">
@@ -557,7 +616,7 @@ export default function LetterArrivalPage() {
               </div>
               <span className="status-mark success self-start">
                 <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
-                {letter.sample ? 'Sample · not sent' : letter.localDemo ? senderView ? 'Demo copy' : 'Demo · not sent' : letter.status === 'claim_pending' ? 'Waiting to be claimed' : letter.direction === 'sent' ? 'Sent' : 'Received'}
+                {letter.sample ? 'Sample · not sent' : letter.localDemo ? senderView ? 'Demo copy' : 'Demo · not sent' : letter.status === 'claim_pending' ? 'Waiting to be claimed' : letter.direction === 'sent' ? claimAnnouncement ? 'Claimed' : 'Sent' : 'Received'}
               </span>
             </div>
 
