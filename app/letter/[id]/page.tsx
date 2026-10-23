@@ -14,7 +14,7 @@ import { DEMO_REACTION_EMOJIS, saveDemoReaction } from '@/lib/demoReactionStore'
 import { getDraftAttachment } from '@/lib/letterMediaStore';
 import { withFallbackTimeout } from '@/lib/withFallbackTimeout';
 import { ReducedMotionGif } from '@/components/ReducedMotionGif';
-import { getReactionName } from '@/components/LiveReactionCue';
+import { getReactionName } from '@/lib/reactionNames';
 import { RelayRecipientCard } from '@/components/RelayRecipientCard';
 import { startVisibleDataRefresh, type VisibleDataRefreshController } from '@/lib/relayRouteRefresh';
 import { buildDropClaimUrl, createDropClaimSharePayload, createDropClaimToken } from '@/lib/dropClaim';
@@ -753,7 +753,7 @@ export default function LetterArrivalPage() {
                         ? 'This demo reaction stays on this device; no one is notified.'
                         : 'Only you and ' + sender + ' can see this reaction.'}
                   </p>
-                  <div className="mt-3 -mx-1 grid w-[calc(100%+0.5rem)] grid-cols-5 gap-2">{DEMO_REACTION_EMOJIS.map((emoji) => <button key={emoji} type="button" onClick={() => void react(emoji)} disabled={savingReaction} aria-label={`React ${emoji}`} aria-pressed={letter.reaction === emoji} className={`flex h-11 min-w-11 items-center justify-center rounded-xl border text-lg transition-colors ${letter.reaction === emoji ? 'border-[#2b45f7] bg-[#2b45f7]/10' : 'border-[rgba(16,42,67,.12)] bg-white hover:bg-[#f5f1e9]'}`}>{emoji}</button>)}</div>
+                  <div className="mt-3 -mx-1 grid w-[calc(100%+0.5rem)] grid-cols-5 gap-2">{DEMO_REACTION_EMOJIS.map((emoji) => <button key={emoji} type="button" onClick={() => void react(emoji)} disabled={savingReaction} aria-label={`React with ${getReactionName(emoji)}`} aria-pressed={letter.reaction === emoji} className={`flex h-11 min-w-11 items-center justify-center rounded-xl border text-lg transition-colors ${letter.reaction === emoji ? 'border-[#2b45f7] bg-[#2b45f7]/10' : 'border-[rgba(16,42,67,.12)] bg-white hover:bg-[#f5f1e9]'}`}>{emoji}</button>)}</div>
                   {reactionNotice && <p className="mt-3 text-xs text-on-surface-variant" role="status" aria-live="polite">{reactionNotice}</p>}
                 </section>}
                 {letter.localDemo && <Link href={senderView ? `/letter/${encodedLetterId}` : `/letter/${encodedLetterId}?view=sender`} className="button-secondary mt-6 w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#fcfaf6]">

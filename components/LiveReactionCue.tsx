@@ -1,23 +1,12 @@
 import Link from 'next/link';
 import { ArrowUpRight, Sparkles, X } from 'lucide-react';
 import type { MockLetter } from '@/data/mockData';
+import { getReactionName } from '@/lib/reactionNames';
 
 interface LiveReactionCueProps {
   letter: MockLetter | null;
   count: number;
   onDismiss: () => void;
-}
-
-const reactionNames: Record<string, string> = {
-  '💜': 'purple heart',
-  '🔥': 'fire',
-  '😂': 'face with tears of joy',
-  '🥹': 'face holding back tears',
-  '🫶': 'heart hands',
-};
-
-export function getReactionName(reaction?: string) {
-  return reaction ? reactionNames[reaction] || 'a reaction' : 'a reaction';
 }
 
 function getReactionCopy(letter: MockLetter, count: number) {

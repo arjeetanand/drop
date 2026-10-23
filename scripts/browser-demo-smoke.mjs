@@ -21,8 +21,15 @@ const LABELS = {
   reveal: 'Reveal demo fragments',
   open: 'Open demo drop',
   senderCopy: 'See your sender copy',
-  reaction: 'React 🫶',
+  reaction: 'React with heart hands',
 };
+const REACTION_BUTTON_LABELS = [
+  'React with purple heart',
+  'React with fire',
+  'React with face with tears of joy',
+  'React with face holding back tears',
+  'React with heart hands',
+];
 
 const interrupted = new AbortController();
 const onSignal = (signal) => interrupted.abort(new Error(`Received ${signal}; stopping the smoke check.`));
@@ -465,6 +472,8 @@ async function runDemoFlow(cdp, {
   await waitUntil(cdp, `the opened ${payloadLabel.toLowerCase()} and reaction controls`, async () => (
     await evaluate(cdp, `Boolean(document.querySelector('#letter-body img')?.complete && document.querySelector('#letter-body img')?.naturalWidth > 0) && document.querySelector('#letter-body')?.innerText.toLocaleLowerCase().includes(${JSON.stringify(payloadLabel.toLocaleLowerCase())}) && Boolean(document.querySelector(${JSON.stringify(`[aria-label="${LABELS.reaction}"]`)}))`)
   ));
+  const reactionLabels = await evaluate(cdp, `Array.from(document.querySelectorAll('section[aria-labelledby="drop-reaction-heading"] button')).map(button => button.getAttribute('aria-label'))`);
+  assert.deepEqual(reactionLabels, REACTION_BUTTON_LABELS, 'Every reaction button should expose a descriptive spoken name.');
   await assertNoFrameworkOverlay(cdp, `Opened ${payloadLabel} drop`);
   await assertNoHorizontalOverflow(cdp, `Opened ${payloadLabel} drop`, viewport.width);
   await activateFlowControl(cdp, { keyboard, selector: `[aria-label="${LABELS.reaction}"]`, expectedTag: 'BUTTON' });
