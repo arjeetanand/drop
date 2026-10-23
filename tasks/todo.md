@@ -2,6 +2,15 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
+## Checkpoint — cleanup endpoint boundary tests (2026-10-23)
+
+- [x] Extract the cleanup Edge Function request handler behind injected environment and service-client dependencies; keep `index.ts` as the Deno adapter.
+- [x] Add nine rejection cases that confirm method, configuration, secret, and content-length failures happen before client/RPC/Storage access; cover an authorized cleanup sequence and a retryable 503.
+- [x] `npm test` passes 196/196; focused endpoint tests pass 12/12; lint, `npx tsc --noEmit --incremental false`, and `git diff --check` pass. `/` and `/claim` return HTTP 200 at `http://localhost:4004`.
+- [x] Code commit `30e3190` is pushed to `origin/fix/cleanup-endpoint-boundary`; this checklist, README, handoff, and learning entry are recorded in a separate documentation commit.
+- [ ] Run a Deno/Supabase Edge bundle or serve check when the CLI/runtime is available; the fake-client tests do not prove deployed configuration or real Storage deletion.
+- [ ] Verify the unknown-handle photo/GIF claim journey and actual 30-day Storage deletion against a disposable local or approved Free Supabase project with two test accounts.
+
 ## Checkpoint — local account-to-account smoke and blue-card contrast (2026-10-23)
 
 - [x] `npm run test:local-supabase` passed with four disposable local accounts: authenticated profiles, sender/recipient access, outsider denial, reactions, GIF finalize/lost-response retry, relay privacy/collection, and legacy relay normalization. The test process exited successfully after cleanup.

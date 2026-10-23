@@ -345,3 +345,33 @@ Treat the auth callback URL as the source of truth for the current return destin
 ### Git and remaining gaps
 
 Code commit `b7483df` (`fix: preserve private claim across auth returns`) is pushed to `origin/fix/claim-email-return`. This learning entry and the checklist, README, and handoff update are included in a separate documentation commit. If the source tab/browser closes before the 10-minute timer runs, an expired localStorage entry may remain until a later Drop claim page prunes it; expiry blocks retrieval meanwhile. Hosted auth, two-account claim, and cross-device behavior remain unverified. `/letter` and hosted resources were not changed.
+
+## 2026-10-23 — Test cleanup endpoint authorization boundary
+
+### Issue
+
+The public-platform cleanup Edge Function owns a service-role client and can reconcile jobs, lease deletions, and remove private Storage objects, but the existing tests covered helper logic rather than its HTTP and authorization boundary.
+
+### Cause
+
+The handler read Deno environment variables and created the privileged Supabase client inside `Deno.serve`, which made its early rejection behavior difficult to exercise from the repository's Node test runner.
+
+### Resolution
+
+- Extract the request handler behind injected environment lookup and client creation while keeping `index.ts` as the thin Deno adapter.
+- Test method/configuration/secret/content-length rejection and assert those paths create no client and make no RPC or Storage calls. Also test the authorized cleanup order and a retryable 503 when finishing a job fails.
+- Preserve the existing secret checks, 25-job bound, cleanup RPC order, Storage path validation, and retry semantics.
+
+### Learning
+
+For a privileged serverless endpoint, inject configuration and the service client at the boundary. This lets local tests prove rejected requests never reach privileged operations without needing production credentials or a hosted project.
+
+### Verification
+
+- The endpoint test passed 12/12; `npm test` passed 196/196; lint, `npx tsc --noEmit --incremental false`, and `git diff --check` passed.
+- Home and Claim returned HTTP 200 on local port 4004. An independent QA review found no required code changes.
+- Deno/Supabase Edge bundling was not verified because the Deno CLI is unavailable. These fake-client tests do not prove hosted secrets/schedule configuration or real Storage deletion.
+
+### Git and remaining gaps
+
+Code commit `30e3190` (`test: cover private media cleanup endpoint boundary`) is pushed to `origin/fix/cleanup-endpoint-boundary`. The checklist, README, handoff, and this learning entry are committed separately on the same branch. Unknown-handle two-account claims, sender status, replay/reissue, hosted deployment, and actual 30-day Storage deletion remain open. `/letter` and hosted resources were not changed.

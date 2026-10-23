@@ -2,6 +2,15 @@
 
 Updated: 2026-10-23
 
+## Latest checkpoint — cleanup endpoint boundary tests (2026-10-23)
+
+- Extracted the cleanup Edge Function into an injectable request handler; `index.ts` now supplies the Deno environment and Supabase client adapter. The endpoint still checks POST, a configured high-entropy request secret, project URL/service key, and bounded content length before constructing a service client.
+- Added nine rejected-request cases that assert zero client/RPC/Storage calls, plus an authorized reconciliation → lease → Storage removal → finish path and a retryable 503 when job finalization fails.
+- Verification: the focused test file passed 12/12; `npm test` passed 196/196; lint, no-incremental TypeScript, and `git diff --check` passed. Home and Claim returned HTTP 200 at `http://localhost:4004`.
+- Independent QA review found no required changes. Deno is not installed; the Supabase CLI was not usable because its version check hit an EPERM telemetry write outside the workspace, so no Edge bundle/deploy check ran. The adapter's client type assertion is not validated by the app TypeScript check. The fake client does not prove real Storage deletion or hosted secret/schedule configuration.
+- Branch `fix/cleanup-endpoint-boundary`; code commit `30e3190` (`test: cover private media cleanup endpoint boundary`) is pushed. This handoff and related checklist/README/learning updates are in a separate docs commit on the same branch. No PR or merge was created. `/letter` and hosted resources were not changed.
+- Next: verify the unknown-handle photo/GIF claim flow with two disposable accounts, pre-claim privacy, claim replay/reissue, sender status, and real Storage deletion after applying the migrations and deploying the worker to a local or approved Free project.
+
 ## Latest fix — claim email return across tabs (2026-10-23)
 
 - On claim entry, the bearer token is captured from the URL fragment and removed from the address. For email or Google sign-in that returns in another tab of the same browser, a random opaque UUID points to a browser-local record with a 10-minute expiry. The receiving tab binds the token to that handoff ID in its own session storage before the shared record is removed, so a stale token cannot resume a different invite. The raw token is never put in query/path URLs or share text. If session storage is unavailable, the shared record stays until expiry. The open tab schedules expiry cleanup, and each claim-page load prunes expired or malformed records if an earlier tab closed before its timer ran. A successful claim clears any remaining handoff. A different browser or device must reopen the original invite.
