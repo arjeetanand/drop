@@ -2,6 +2,13 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
+## Current Checkpoint — 2026-10-24 (Unknown-handle photo/GIF claims)
+
+- [x] Extend the local Auth/Storage smoke and rollback-only SQL fixture to cover photo and GIF invites before profile setup, after profile setup but before explicit claim, and after claim. Sender/claimant access and outsider denial are asserted; staged/final media cleanup stays on Supabase Storage APIs.
+- [x] `npm test` passes 237/237; lint, no-incremental TypeScript, smoke-script syntax, and `git diff --check` pass. Code commit `adc648b` is pushed to `origin/test/unknown-handle-media-claim-smoke`.
+- [ ] Run the local smoke and SQL fixture against an isolated configured runtime. The configured loopback API port is owned by an SSH process, PostgreSQL at 54322 is not listening, and disposable PostgreSQL startup failed at System V shared-memory allocation. No hosted resource was contacted.
+- [ ] Verify the rendered sign-in/claim journey and real 30-day Storage cleanup when browser tooling and the approved Free Supabase project are available.
+
 ## Current Checkpoint — 2026-10-22 (Live inbox arrival)
 
 - [x] Home and Mailbox refresh the inbox when a private recipient-scoped broadcast arrives, then read drop data through the existing RLS query; a visible-tab 60-second refresh recovers missed signals.

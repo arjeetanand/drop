@@ -650,3 +650,35 @@ Keep the outcome of a client action separate from durable server state. Scope as
 ### Git and remaining gaps
 
 Code commit `ac0396f` (`fix: clarify private claim receipts`) is pushed to `origin/fix/private-claim-receipt-outcome`. This learning entry, README, plan, checklist, and handoff are in a separate documentation commit. No PR or merge was created. `/letter`, `.env.local`, and hosted resources were not changed. Next: verify rendered share/copy and status behavior with browser tooling, then validate unknown-handle photo/GIF claims and 30-day cleanup in an isolated local or approved Free Supabase runtime.
+
+## 2026-10-24 — Cover unknown-handle photo and GIF claims
+
+### Issue
+
+The local smoke covered unknown-handle text claims and finalized media for a known recipient, but did not verify that an unknown-handle photo or GIF stays private through profile setup until an explicit claim.
+
+### Cause
+
+The two paths were tested separately: the text smoke exercised account eligibility and invite claiming, while the media smoke exercised upload/finalization and participant Storage access. Neither crossed the unknown-handle/profile/claim boundary for both media types.
+
+### Resolution
+
+- Add PNG and GIF invites to the five-account local smoke using authenticated staging upload and the existing media-finalize route.
+- Verify that row reads, downloads, signed URLs, and claim attempts remain denied before profile setup; repeat the row/media denial after profile setup and before explicit claim.
+- Claim each invite, verify retry safety, sender/claimant access, outsider denial, and durable sender status. Extend the rollback-only SQL fixture for both payload types and the same profile boundary.
+- Keep the user-approved 30-day deadline and cleanup-worker gate unchanged.
+
+### Learning
+
+Profile creation makes an account eligible to claim; it must not itself unlock a private drop. Test the state after profile setup and before the explicit claim, as well as the states before profile setup and after claim.
+
+### Verification
+
+- `npm test` passed 237/237; `npm run lint`, `npx tsc --noEmit --incremental false`, `node --check scripts/local-supabase-smoke.mjs`, and `git diff --check` passed.
+- The local Auth/Storage smoke was not run because loopback port 54321 is owned by an SSH listener and port 54322 has no PostgreSQL service.
+- The rollback-only SQL fixture was not run. Disposable PostgreSQL 16.15 failed to allocate System V shared memory at `shmget`; this is an environment allocation failure, not evidence of a fixture failure.
+- Home returned HTTP 200 on port 4004. No browser-rendered claim flow, hosted account-to-account test, or actual Storage deletion was verified.
+
+### Git and remaining gaps
+
+Code commit `adc648b` (`test: cover unknown-handle photo and GIF claims`) is pushed to `origin/test/unknown-handle-media-claim-smoke`. Documentation, checklist, handoff, README, plan, and this learning entry are committed separately on the same branch. No PR or merge was created. `/letter`, `.env.local`, and hosted resources were not changed. Next: rerun both Supabase checks on an isolated project with the required cleanup schedule and Vault values, then complete browser and actual 30-day cleanup verification.

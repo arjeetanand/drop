@@ -8,6 +8,7 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 
 ## Implementation Status — 2026-10-18
 
+- The unknown-handle claim regression coverage now follows photo and GIF drops through three access states: before profile setup, after profile setup but before claim, and after explicit claim. The local Auth/Storage smoke and rollback-only SQL fixture check participant access and outsider denial; runtime verification still needs an isolated Supabase project with the media cleanup schedule configured.
 - Task 1 is complete. The mixed-payload model, default text behavior for older drafts, and compatible recipient routes are in place.
 - The core mobile sharing, receive, reaction, and optional relay flows have local implementations. Detailed code and browser checks are recorded in `tasks/todo.md`.
 - Seeded demo reactions now persist on this device and appear on the mailbox card; they are clearly marked as local and do not notify a sender.

@@ -2,6 +2,14 @@
 
 Updated: 2026-10-24
 
+## Latest checkpoint — unknown-handle photo/GIF claim coverage (2026-10-24)
+
+- Extended `scripts/local-supabase-smoke.mjs` to create and finalize a disposable PNG and GIF claim invite for the same signed-in account with no Drop profile. It asserts that rows, downloads, and signed URLs stay unavailable before profile setup and after profile setup until the claimant explicitly claims each invite. After claim, sender and claimant can read the row/media while an outsider cannot; the sender status RPC contains both IDs. Cleanup tracks staging and final object paths and removes them through the Supabase Storage API.
+- Extended `tests/db/drop_claim_invites.sql` for the same unprofiled and profiled-but-unclaimed checks, explicit claims for both kinds, post-claim media reads, and durable sender status. The existing media cleanup schedule/Vault gate remains intact. The approved 30-day policy for unclaimed media and abandoned staging uploads is unchanged.
+- Verification: `npm test` passed 237/237; `npm run lint`, `npx tsc --noEmit --incremental false`, `node --check scripts/local-supabase-smoke.mjs`, and `git diff --check` passed. The live local Supabase smoke was not run because loopback port 54321 is owned by an SSH listener and PostgreSQL at 54322 did not respond. The SQL fixture was not run: a disposable PostgreSQL 16.15 server failed at `shmget` while allocating System V shared memory. Home returned HTTP 200 on port 4004 after `./run.sh start`; rendered browser behavior was not checked.
+- Code commit `adc648b` (`test: cover unknown-handle photo and GIF claims`) is pushed to `origin/test/unknown-handle-media-claim-smoke`. Documentation and the append-only learning entry are being committed separately on the same branch. No PR or merge was created. `/letter`, `.env.local`, and hosted Supabase resources were not changed.
+- Next: rerun the SQL fixture and local Auth/Storage smoke only after a disposable Supabase project with the hourly cleanup schedule and Vault values is available. Then verify the rendered mobile/desktop claim path and actual 30-day cleanup against the approved Free project.
+
 ## Latest checkpoint — private claim send receipt (2026-10-24)
 
 - The Sent claim receipt distinguishes a completed share sheet from a copied link, uses neutral wording for missing/invalid legacy outcome flags, and does not say the recipient received or opened it. Waiting comes from an owner-filtered pending row; claimed requires the sender-scoped claim-status RPC. Status refreshes on focus/visibility/auth changes, is keyed to drop and account, suppresses stale responses, and is announced politely to assistive technology.
