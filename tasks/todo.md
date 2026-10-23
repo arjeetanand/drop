@@ -363,3 +363,15 @@ Commit each completed code change separately with a descriptive message and push
 - [ ] Recheck a fresh production build when the active checkout can write `.next` and Google Fonts are reachable. This turn's active-checkout build hit sandbox `EPERM` on `.next/trace`; a scratch Webpack build stopped when `fonts.googleapis.com` did not resolve. An isolated production build had passed earlier in this feature work.
 - [ ] Verify the recipient card and collection flow in a rendered browser at mobile and desktop sizes, including keyboard and screen-reader behavior.
 - [ ] Apply both relay recipient migrations to the approved Free hosted project and verify two-account delivery when that project is provisioned; no hosted project is available yet.
+
+## Current follow-up — accountless private claim invite (text first)
+
+- [x] Add a one-time, seven-day sender-bound token digest and authenticated issue/reissue/claim RPCs; keep claim records inaccessible through direct anon/authenticated table access.
+- [x] Add unit and disposable PostgreSQL coverage for fragment-only token transport, generic share copy, pending-note privacy, explicit claim, token rotation, expiry, outsider/replay denial, whitespace-preserving reissue, and same-account retries after expiry.
+- [x] Add a sender-visible `claim_pending` state distinct from draft, relay, and delivered mail; do not infer it from `recipient_id IS NULL`.
+- [x] Add the text-only instant claim path to composer, the recipient claim flow, and profile/auth continuation. Preserve ordinary unknown-handle invite behavior for media and relay.
+- [x] `npm test` passes 151/151; lint, `npx tsc --noEmit --incremental false`, the isolated PostgreSQL claim fixture, and `git diff --check` pass.
+- [ ] Production build remains unchecked: the active checkout cannot write `.next/trace`, and a scratch build cannot resolve `fonts.googleapis.com` for `next/font`.
+- [ ] Rendered browser, screen-reader, and real-device claim/reissue checks remain open; browser automation is unavailable in this environment.
+- [ ] Verify auth/profile return and two-account claiming against the approved Free hosted Supabase project after it is available. No hosted resources were created by this slice.
+- [ ] Next: finish rendered text-claim acceptance, then extend verified claims to private photo/GIF and relay drops.

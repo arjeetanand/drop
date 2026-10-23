@@ -2,7 +2,17 @@
 
 Updated: 2026-10-23
 
-## Latest verified checkpoint
+## Latest verified checkpoint — accountless private text claim
+
+- Added a text-first claim link for instant notes sent to an unknown handle. The recipient must sign in, set up a Drop profile, and explicitly claim the note. Tokens use 256-bit secure randomness, travel in the URL fragment, and only their SHA-256 digest is stored; note text and recipient handles are absent from share copy.
+- Added sender `claim_pending` status and a detail-page reissue action. Reissue reads exact stored content inside an authenticated RPC, also works after invite expiry, and refuses claimed or revoked notes. A per-tab guard and, where supported, Web Locks keep concurrent reissue/share calls from replacing one another in the same browser; a later operation from another device can invalidate a link already shared.
+- Added an isolated PostgreSQL fixture for RLS, RPC grants, digest storage, expiry, token rotation, whitespace preservation, claim replay, and sender/outsider denial. Code commit `e3d5c5b` (`feat: add private text drop claim links`) is pushed to `origin/feat/invite-first-drop-resilience`; docs commit follows separately. No PR or merge was created.
+- Verification: `npm test` passed 151/151; `npm run lint`, `npx tsc --noEmit --incremental false`, the isolated PostgreSQL claim fixture, and `git diff --check` passed. `/`, `/compose`, `/claim`, `/mailbox`, and `/letter/incoming-1` each returned HTTP 200 on port 4004. `npm run typecheck` could not write `.tsbuildinfo` in this checkout; the equivalent no-incremental TypeScript check passed.
+- Production build remains unverified: the active checkout cannot write `.next/trace`, while an isolated copy failed to resolve Google Fonts (`fonts.googleapis.com`). Browser automation, screen-reader/device checks, and hosted two-account claim behavior remain open. The local app is running at `http://localhost:4004`.
+- `.env.local` is already in `/Users/arjeetanand/projects/drop`, mode 600 and ignored by Git. The OneDrive Drop directory is absent, so there was nothing to move or delete; `/letter` remains untouched. No hosted Supabase resources were created; authenticated management access is still needed for the approved Free organization/project. Rotate the PAT that was pasted into chat before using it again.
+- Next: verify the rendered claim and reissue flows, then provision the Free Supabase setup through secure local CLI authentication and test two disposable accounts. Extend private claims to photo/GIF and relay after the text path is accepted.
+
+## Previous verified checkpoint — recipient relay collection
 
 - Recipient relay cards now show only sender and carrier route updates while a drop is in transit. The recipient must collect it before letter content, media, reactions, or private journey events become readable; the sender journey refreshes to the collected state.
 - Code commit `75f8a89` (`feat: let recipients collect relay drops`) is pushed to `origin/feat/invite-first-drop-resilience`. This handoff and checklist update are committed separately. No pull request or merge was created.
@@ -17,7 +27,7 @@ Updated: 2026-10-23
 
 - Active code checkout: /Users/arjeetanand/projects/drop
 - GitHub remote: private repository arjeetanand/drop
-- Current branch: `feat/invite-first-drop-resilience`, based on checkpoint `292d423`; code commits `8493097` and `75f8a89` are pushed to origin. Invite storage guard `6f618ed` and profile copy fallback `41c409e` are earlier pushed commits. No pull request has been created.
+- Current branch: `feat/invite-first-drop-resilience` tracks origin; latest code commit `e3d5c5b` is pushed. Earlier commits include `75f8a89` (relay recipient collection), `8493097` (sender reaction race safety), `6f618ed` (invite storage guard), and `41c409e` (profile copy fallback). No pull request has been created.
 - Previous mailbox search-focus branch: `fix/mailbox-search-focus`, code commit `bbf9df8` pushed to origin; no pull request has been created.
 - Mailbox empty-state feature commit: `10efead` (`feat: tailor mailbox empty states to filters`), pushed to `origin/feat/mailbox-filter-empty-states`; the docs update is committed separately.
 - Recipient-first composer commit: `a9049cf` (`feat: put recipient first in drop composer`), pushed to `origin/feat/recipient-first-compose`.
@@ -33,7 +43,7 @@ Updated: 2026-10-23
 - Base checkpoint: 132f12c (docs: update Drop migration and auth handoff), on origin/fix/local-auth-redirects.
 - Parent checkpoint: aebdc53 (docs: record relay location verification).
 - `feat/live-reaction-feedback` tracks its GitHub branch; it is not merged and no pull request was created.
-- The former OneDrive path `/Users/arjeetanand/Library/CloudStorage/OneDrive-OracleCorporation/projects/drop` is absent from the synced filesystem. A read-only listing of the connected OneDrive `projects` folder returned 16 immediate children and none named `drop`; no deletion was performed because the target is already absent. The separate `letter` folder was not opened or changed.
+- The former OneDrive path `/Users/arjeetanand/Library/CloudStorage/OneDrive-OracleCorporation/projects/drop` is absent from the synced filesystem. A read-only listing of the connected OneDrive `projects` folder returned 16 immediate children and none named `drop`; no deletion was performed because the target is already absent. The separate `letter` folder was left unchanged.
 - `.env.local` is already present in `/Users/arjeetanand/projects/drop`, has mode 600, is ignored by Git, and is not tracked. No copy was needed because the OneDrive source directory is absent. Its values were not displayed or committed; the configured Supabase URL was checked as loopback-only.
 
 ## Change inventory

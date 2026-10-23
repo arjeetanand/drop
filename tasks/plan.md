@@ -114,3 +114,37 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 
 - Revisit group sharing and GIF search after the one-to-one image/GIF flow is working.
 - Confirm the upload size cap against the configured Supabase plan during implementation; the initial design should surface the limit before upload.
+
+## Accountless private claim invite — text-first vertical slice
+
+### Objective
+Let a sender share a private text drop with a person who does not yet have a Drop account. The recipient signs in or creates an account, sets up a Drop profile, and explicitly claims the drop. Until that claim succeeds, only the sender can read the letter; the claim URL contains no content or recipient details.
+
+### Scope and boundaries
+- First release supports instant text drops only. Photo/GIF and relay claim links follow after the text path passes privacy and retry checks.
+- The link is a high-entropy bearer capability: anyone who receives the forwarded link can claim it. Tell the sender this before sharing.
+- Store only a SHA-256 token digest, sender/letter binding, expiry, and claim state. Return the raw token only at issue time, put it in the URL fragment, and require an explicit authenticated claim action. GET/page load must not consume it.
+- Require an authenticated Drop profile before claim. Never expose letter, event, reaction, or Storage content to anon or an unclaimed account.
+- Claim atomically binds the letter to the authenticated profile and releases it through existing participant RLS. Same-account retry is idempotent; other accounts, expired/revoked links, and replay after another account claimed fail closed.
+- Show a clear “Waiting for them to claim” state in Sent. Never infer this state from a null recipient ID.
+
+### Success criteria
+1. A sender can create and share a generic link for a text draft addressed to a not-found handle; cancellation and clipboard fallback preserve a recoverable draft/link state.
+2. Share title/text and the public page reveal no draft content, subject, handle, or media metadata.
+3. The recipient can authenticate, create a Drop profile, return to the invite without placing the token in query parameters, and explicitly claim.
+4. Before claim, anon and unrelated authenticated accounts cannot read the letter or its dependent data. After claim, the recipient can read it through existing RLS.
+5. Concurrent or repeated claims cannot bind the letter to two users; same-user retries return the same result.
+6. Expired/revoked tokens fail closed, and sender-owned pending state is distinct from drafts and delivered drops.
+7. Unit and disposable-local-PostgreSQL checks cover token URL handling, privacy, valid claim, expiry, wrong account, replay, and retry behavior.
+
+### Build order
+1. Define and test safe fragment handling, generic share copy, and claim URL parsing.
+2. Add the claim table and narrowly scoped issue/reissue/claim RPCs; verify RLS and transition behavior in disposable local PostgreSQL.
+3. Add sender claim-pending state and composer action for text-only, instant drops.
+4. Add the claim landing, auth/profile continuation, and explicit claim action.
+5. Run regression, lint, typecheck, build, local database smoke, and phone-width browser checks; update README and HANDOFF, then commit/push this verified slice.
+
+### Remaining follow-ups
+- Verify the rendered sender reissue and recipient claim flows at phone and desktop widths, including profile setup, link cancellation/copy fallback, and accessibility.
+- Extend the verified claim path to private photo/GIF storage and then relay.
+- Configure and verify the explicitly approved Free hosted Supabase organization/project when secure management access is available. No hosted resources are created by this local slice.

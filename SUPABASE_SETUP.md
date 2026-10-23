@@ -43,6 +43,20 @@ dropdb drop-relay-handoff-smoke
 
 The transaction checks sender-only relay starts, short-lived passes, one-time text and GIF handoff acceptance, exact retry recovery, pass rotation, coordinate-free and coordinate-bearing handoffs, participant-only route visibility, and private token-table access. It also confirms the carrier handoff result omits message text and media fields. It rolls back all schema and data changes. This is local PostgreSQL coverage; it does not verify RPC behavior against a hosted Supabase project.
 
+## Accountless private claim links
+
+Apply `20261023120000_drop_claim_invites.sql` in filename order with the other migrations. It adds a private token-digest table and authenticated-only issue, reissue, and claim RPCs. The recipient must have a Drop profile and explicitly claim the text note; page load alone does not consume the link. Reissuing from the sender detail page rotates the capability, including after expiry, while claimed or revoked links cannot be reissued.
+
+Run the privacy and transition fixture against a separate disposable PostgreSQL database:
+
+```bash
+createdb drop-claim-smoke
+psql -X -v ON_ERROR_STOP=1 -d drop-claim-smoke -f tests/db/drop_claim_invites.sql
+dropdb drop-claim-smoke
+```
+
+The fixture covers authenticated RPC grants, pending-note privacy, digest-only storage, token rotation, whitespace-preserving reissue, claim expiry, sender/outsider denial, and same-account retries after expiry. It rolls back its schema and data. This is local PostgreSQL coverage; hosted Supabase settings and browser-to-browser authentication still need separate verification.
+
 ## Relay handoffs
 
 Apply `20261018000100_relay_handoff_tokens.sql` and `20261022000000_restrict_relay_handoff_column_select.sql` after the existing letter and media migrations. The later migration grants authenticated participants only the route columns and keeps the bearer token and retry key private. Relay invites are bearer links: the first invite expires after 10 minutes, and accepting it issues a carrier capability that lasts 30 days. A carrier capability can mint a fresh 10-minute handoff pass when its holder is ready to pass the drop on. Share each invite only with the intended next carrier. Carriers can add route events but cannot read the drop's text or media. Sender route views refresh immediately, every 15 seconds while visible, and when the tab returns; a manual refresh is also available.
