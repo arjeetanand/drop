@@ -341,3 +341,13 @@ Commit each completed code change separately with a descriptive message and push
 - [x] Add an explicit profile invite “Copy handle + link” button. Clipboard denial or absence displays selectable fallback text containing only the public handle and profile URL; a cancelled native share still copies nothing.
 - [x] Commits `6f618ed` and `41c409e` are pushed to `origin/feat/invite-first-drop-resilience`. `npm test` passed 129/129, lint, TypeScript, Webpack production build, and diff checks passed. `/profile?invite=1` returned HTTP 200 on port 4004.
 - [ ] Verify invite sharing, clipboard-denied manual selection, and cancellation in a rendered browser at 360px and 390px, with screen reader and real-device checks. Hosted account-to-account invite/send checks remain open until the Free Drop Supabase project is available.
+
+## Current follow-up — 2026-10-23 (mailbox history and sender reaction reliability)
+
+- [x] Page mailbox letters beyond the 1,000-row API limit with deterministic ordering, and read reactions in bounded batches; keep letters visible if a reaction batch fails.
+- [x] Distinguish an empty reaction from a failed reaction read, discard stale point reads, and retain a pending baseline until a complete or signal-backed read.
+- [x] Capture a pre-channel reaction baseline, then start the private sender listener for sent/unknown routes; incoming and signed-out routes skip waiting for the sender-only baseline. Bound route reads and compare reaction values to recover startup changes without relying on cross-device clocks.
+- [x] `npm test` passes 144/144, `npm run lint`, `npx tsc --noEmit --incremental false`, `npm run build -- --webpack`, and `git diff --check` pass. The production build reports only the existing Browserslist and Tailwind easing warnings.
+- [x] Code commit `8493097` is pushed to `origin/feat/invite-first-drop-resilience`; documentation is committed and pushed separately.
+- [ ] Verify reaction updates in a rendered browser and across two hosted accounts after the Free Supabase project is provisioned. The local detail-route state and Realtime helpers are covered by unit tests; no hosted or browser interaction was run in this slice.
+- [ ] Complete the private photo/GIF relay journey recommended in `plan.md` after local or hosted two-account verification is available.

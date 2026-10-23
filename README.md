@@ -30,6 +30,8 @@ Signed-in Home and Mailbox listen for private recipient-scoped Realtime Broadcas
 
 Senders also get private reaction-change signals containing only the drop ID. Home, Mailbox, and an open sent-drop page reload the reaction through participant RLS, with a visible-tab recovery refresh. Apply `20261022110000_drop_reaction_broadcast.sql` after the inbox broadcast migration before expecting hosted reaction updates.
 
+Mailbox history is paged beyond the API's 1,000-row limit, and reaction reads run in bounded batches. If reaction data is incomplete, drops remain visible while reaction cues wait for a complete read or a matching realtime signal. A sent-drop detail route captures its reaction baseline before opening the private listener, then bounds the direction, baseline, channel setup, and mailbox waits so slow requests cannot keep the screen loading indefinitely.
+
 ## Relay retry recovery
 
 Carrier invite accepts keep the exact attempt details in the current browser tab for up to 24 hours. If the response is interrupted, refresh the same invite in that tab and choose “Retry same handoff”; Drop clears the record after the carrier pass is saved.

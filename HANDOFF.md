@@ -4,17 +4,18 @@ Updated: 2026-10-23
 
 ## Latest verified checkpoint
 
-- Active branch `feat/invite-first-drop-resilience` is pushed to `origin`; code commits `6f618ed` and `41c409e` are separate and no pull request or merge was created.
-- Composer invites now require the exact active draft to read back from local storage before opening a share flow. Profile invite step 3 has an explicit “Copy handle + link” action; when clipboard writes are blocked, it exposes selectable text containing only the public handle and profile URL. Cancelling native share still copies nothing.
-- Verification: `npm test` passed 129/129, lint, `npx tsc --noEmit --incremental false`, Webpack production build, and `git diff --check` passed. `/profile?invite=1` returned HTTP 200 on the local app at port 4004. The browser UI interaction, screen reader, and real-device checks were not exercised.
-- The local clone at `/Users/arjeetanand/projects/drop` is authoritative. `.env.local` is already present, mode 600, ignored by Git, and not committed. The connected OneDrive `projects` listing has no `drop` folder; `letter` remains untouched.
-- Next: verify invite sharing, clipboard-denied manual selection, and share cancellation in a rendered browser at narrow phone widths. Hosted two-account delivery remains open because no hosted Supabase project is configured.
+- Code commit `8493097` (`fix: make sender reaction updates race-safe`) is pushed to `origin/feat/invite-first-drop-resilience`; this documentation checkpoint is committed and pushed separately below. No pull request or merge was created.
+- Mailbox history now pages beyond 1,000 rows with stable ordering and bounded reaction reads. Sender detail routes capture a pre-channel reaction baseline, discard stale results, distinguish an empty reaction from an unavailable read, and compare reaction values to recover a startup change without cross-device clock assumptions. Incoming and signed-out routes do not wait for sender-only baseline data.
+- Verification: `npm test` passed 144/144, lint, `npx tsc --noEmit --incremental false`, `npm run build -- --webpack`, and `git diff --check` passed. The build emitted the existing Browserslist freshness and Tailwind easing warnings. `run.sh` is active on port 4004; the server log records successful home and compose responses, but a direct mailbox HTTP check could not connect from this session. No rendered browser/device or hosted cross-account check was run for this slice.
+- The authoritative checkout is `/Users/arjeetanand/projects/drop`. `.env.local` is present, mode 600, ignored, and untracked. The former OneDrive Drop directory is absent, so no file was moved or deleted; `letter` remains untouched.
+- No hosted Supabase project was created. The user approved a distinct Free organization and one Free project; the local Supabase CLI reports that no access token is configured, and no hosted resources were changed. The app's local environment remains loopback-only.
+- Next: rotate the PAT that was pasted into chat, authenticate the CLI locally, then finish the approved Free Supabase setup with no paid add-ons. Apply migrations and verify private photo/GIF relay plus sender/recipient reactions across disposable accounts. Rendered browser, screen-reader, and real-device checks remain open.
 
 ## Active checkout and Git
 
 - Active code checkout: /Users/arjeetanand/projects/drop
 - GitHub remote: private repository arjeetanand/drop
-- Current branch: `feat/invite-first-drop-resilience`, based on `c61fb3b`; invite storage guard `6f618ed` and profile copy fallback `41c409e` are pushed to origin. No pull request has been created.
+- Current branch: `feat/invite-first-drop-resilience`, based on checkpoint `292d423`; code commit `8493097` is pushed to origin. Invite storage guard `6f618ed` and profile copy fallback `41c409e` are earlier pushed commits. No pull request has been created.
 - Previous mailbox search-focus branch: `fix/mailbox-search-focus`, code commit `bbf9df8` pushed to origin; no pull request has been created.
 - Mailbox empty-state feature commit: `10efead` (`feat: tailor mailbox empty states to filters`), pushed to `origin/feat/mailbox-filter-empty-states`; the docs update is committed separately.
 - Recipient-first composer commit: `a9049cf` (`feat: put recipient first in drop composer`), pushed to `origin/feat/recipient-first-compose`.
