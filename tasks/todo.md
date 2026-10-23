@@ -2,6 +2,17 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
+## Checkpoint — mobile claim-first return (2026-10-23)
+
+- [x] Return from profile setup to the sanitized claim handoff only after the remote profile sync succeeds; local-only saves and other profile returns stay on the profile page.
+- [x] Compact the claim header, progress indicator, and privacy/expiry summary while keeping the explicit claim action and 7-day link/30-day unclaimed-media facts.
+- [x] Focus the claim action after account readiness and retryable claim failures. Keep the claim page in place when browser storage cannot preserve the invite through sign-in.
+- [x] `npm test` passes 220/220; `npm run lint`, `npx tsc --noEmit --incremental false`, and `git diff --check` pass. `/`, `/claim`, claim-aware `/profile`, and `/auth/callback` return HTTP 200 on port 4004.
+- [x] Code commits `23240ea` and `9f188ee` are pushed to `origin/feat/claim-first-mobile-flow`.
+- [ ] Verify the rendered sign-in/claim sequence at mobile and desktop sizes, including focus, scrolling, keyboard, screen-reader, and storage-blocked messaging. Browser automation is unavailable in this session.
+- [ ] Verify email/Google sign-in, cross-tab handoff, and two-account claim against disposable accounts after the approved Free Supabase project is configured. No hosted or database resources changed in this slice.
+- [ ] A production build was not run for this slice; prior project builds were blocked while fetching the existing Google Fonts host. Retry where that host resolves.
+
 ## Checkpoint — relay draft private-claim fallback (2026-10-23)
 
 - [x] When a connected sender selects a checked, unknown handle in Relay mode, offer an explicit switch to Instant so they can use the existing private claim-link flow.

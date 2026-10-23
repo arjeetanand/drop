@@ -2,6 +2,15 @@
 
 Updated: 2026-10-23
 
+## Latest checkpoint — mobile claim-first return (2026-10-23)
+
+- Profile saves return to the claim handoff only after successful remote sync. The sync-gated return path is sanitized, and the recipient still must press **Claim this drop**; the app does not auto-claim.
+- Reworked the claim screen for a shorter mobile flow with a compact semantic progress bar, preserved privacy and expiry details, and focus on the claim action after account readiness or a retryable claim failure. If the browser cannot persist the invite, the page blocks profile navigation and explains recovery without putting the bearer token in a route.
+- Verification: `npm test` passed 220/220; `npm run lint`, `npx tsc --noEmit --incremental false`, and `git diff --check` passed. `/`, `/claim`, claim-aware `/profile`, and `/auth/callback` returned HTTP 200 on local port 4004. Independent source review found no blocker.
+- Branch `feat/claim-first-mobile-flow`; code commits `23240ea` (`fix: return to claim after profile sync`) and `9f188ee` (`feat: streamline private claim return flow`) are pushed. No PR or merge was created. `.env.local`, `/letter`, and hosted resources were not changed.
+- Browser-rendered mobile/desktop flow, keyboard and screen-reader focus, storage-blocked UI, hosted OAuth/email return, cross-tab behavior, and two-account claim remain unverified. Local Supabase was not started because an SSH process owns port 54321. A production build was not run for this slice; previous builds were blocked by DNS resolution of the existing Google Fonts host.
+- Next: run rendered browser and two-account tests when browser tooling and the approved Free Supabase runtime are available; use another approved local port mapping only after confirming the SSH listener's purpose.
+
 ## Latest checkpoint — relay draft private-claim fallback (2026-10-23)
 
 - Relay mode now offers an explicit switch to Instant for a connected sender whose current recipient lookup confirmed an unknown handle. This opens access to the existing private photo/GIF/text claim path, which still requires a separate user action to create/share the link.

@@ -8,6 +8,14 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 
 ## Implementation Status — 2026-10-23
 
+### Latest checkpoint — mobile claim-first return (2026-10-23)
+
+- Profile setup returns to the sanitized invite handoff only after the remote account profile sync succeeds. Device-only saves and failed/conflicted syncs remain on the profile screen.
+- The claim page is shorter on mobile: a compact semantic progress bar and concise privacy/expiry disclosures leave the explicit **Claim this drop** action earlier in the flow. The action receives focus when the account is ready and after a retryable claim failure; it is never activated automatically.
+- When neither browser storage mechanism can preserve the invite, the page blocks profile navigation and gives recovery guidance. Bearer tokens remain in fragments, session storage, or opaque local handoffs; no token is added to a route.
+- `npm test` passed 220/220; lint, no-incremental TypeScript, diff check, and local HTTP checks for `/`, `/claim`, claim-aware `/profile`, and `/auth/callback` passed. Commits `23240ea` and `9f188ee` are pushed on `feat/claim-first-mobile-flow`.
+- Rendered browser, screen-reader, storage-blocked interaction, hosted auth, and two-account claim checks remain open. The local Supabase API port 54321 is occupied by an SSH listener; no local stack was started. A production build was not run for this slice.
+
 ### Latest checkpoint — relay draft private-claim fallback (2026-10-23)
 
 - Relay mode now offers a clear switch to Instant for a checked unknown recipient, enabling the existing private claim-link path without weakening its instant-only authorization boundary.

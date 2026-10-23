@@ -527,3 +527,36 @@ When a user needs to change a mode to reach a supported action, make the transit
 ### Git and remaining gaps
 
 Code commit `56dc3f2` (`feat: offer instant claims for relay drafts`) is pushed to `origin/feat/relay-claim-fallback`; this entry and checklist/plan/README/handoff updates are being committed separately on the same branch. No PR or merge was created. `/letter`, `.env.local`, and hosted resources were not changed. Next, verify rendered interaction and the unknown-handle photo/GIF claim flow with two disposable accounts against local or approved Free Supabase.
+
+## 2026-10-23 — Return recipients directly to their private claim
+
+### Issue
+
+After setting up a Drop handle for a private invite, recipients landed on an extra profile confirmation screen before returning to the claim. The claim page also placed a large hero and separate privacy/expiry cards before the primary action, which increased mobile scrolling.
+
+### Cause
+
+Profile setup exposed a manual continue link even after successful remote sync. The claim screen repeated its progress, privacy, expiry, and deletion information across tall stacked cards, rather than keeping the essential facts beside a compact progress cue.
+
+### Resolution
+
+- Return to the sanitized claim handoff only after the remote account profile sync succeeds. Device-only saves, conflicts, and sync failures remain on profile; the claim action is still a deliberate user click.
+- Condense the claim header and privacy/expiry summary, preserve the 7-day link and 30-day unclaimed-media cutoff, and retain physical-deletion caveat details in a disclosure.
+- Use a compact semantic progress indicator and focus the claim button when the verified account is ready or a failed claim can be retried.
+- If both browser storage paths fail, keep the invite on the claim page and tell the recipient to enable storage or reopen the original link; never move the bearer token into a query parameter.
+- Add regression coverage for safe claim-return routing after sync succeeds and for failure, unrelated routes, and unsafe paths.
+
+### Learning
+
+An authentication return and a sensitive action are separate states: return only after durable account setup succeeds, then keep the final claim explicit. When a required bearer token cannot survive navigation, block that navigation and explain recovery rather than silently discarding the in-memory invite.
+
+### Verification
+
+- `npm test`: 220/220 passed.
+- `npm run lint`, `npx tsc --noEmit --incremental false`, and `git diff --check`: passed.
+- `/`, `/claim`, claim-aware `/profile`, and `/auth/callback` returned HTTP 200 on local port 4004. These are route checks only; no authenticated rendered interaction was verified.
+- A production build was not run for this slice. Prior project attempts could not resolve the existing Google Fonts host.
+
+### Git and remaining gaps
+
+Code commits `23240ea` (`fix: return to claim after profile sync`) and `9f188ee` (`feat: streamline private claim return flow`) are pushed to `origin/feat/claim-first-mobile-flow`. This learning entry, README, plan, checklist, and handoff are committed separately. No PR or merge was created. `/letter`, `.env.local`, and hosted resources were not changed. Rendered mobile/desktop focus and scroll, screen-reader behavior, storage-blocked interaction, OAuth/email sign-in, cross-tab transfer, and two-account claim remain unverified; browser automation is unavailable and local Supabase port 54321 is occupied by an SSH listener.
