@@ -84,4 +84,4 @@ Updated: 2026-10-23
 
 ## Run locally
 
-From /Users/arjeetanand/projects/drop, run npm ci, then ./run.sh. Drop uses http://localhost:4004; ./run.sh stop stops the project-owned process. The local Supabase smoke environment uses port 5004 and browser QA is reserved port 6004. Code commit `c1d57e0` is pushed to `origin/feat/draft-invite-progress`; the branch is not merged and has no pull request. The handoff and checklist updates will be committed separately.
+From /Users/arjeetanand/projects/drop, run npm ci, then ./run.sh. Drop uses http://localhost:4004; ./run.sh stop stops the project-owned process. The local Supabase smoke environment uses port 5004 and browser QA is reserved port 6004. Code commit `c1d57e0` and its separate documentation commit are pushed to `origin/feat/draft-invite-progress`; the branch is not merged and has no pull request.
