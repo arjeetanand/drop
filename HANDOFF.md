@@ -2,6 +2,15 @@
 
 Updated: 2026-10-24
 
+## Latest checkpoint — private claim send receipt (2026-10-24)
+
+- The Sent claim receipt distinguishes a completed share sheet from a copied link, uses neutral wording for missing/invalid legacy outcome flags, and does not say the recipient received or opened it. Waiting comes from an owner-filtered pending row; claimed requires the sender-scoped claim-status RPC. Status refreshes on focus/visibility/auth changes, is keyed to drop and account, suppresses stale responses, and is announced politely to assistive technology.
+- A requested Sent drop ID is authoritative. If it is missing locally, the page does not substitute the current draft. Receipt query parameters contain only the drop ID and typed display flags; bearer token and message content are absent.
+- The user reconfirmed automatic deletion of valid abandoned staging uploads after 30 days. The existing policy and cleanup migration already match this; no cleanup code or hosted resource changed in this slice.
+- Verification: `npm test` passed 237/237; lint, no-incremental TypeScript, and `git diff --check` passed. Home and `/sent?letter=missing&claim=1&share=copied` returned HTTP 200 on port 4004. The production build stopped with `EPERM` opening `/Users/arjeetanand/projects/drop/.next/trace`. Rendered browser behavior, hosted two-account status, and actual media deletion were not verified.
+- Branch `fix/private-claim-receipt-outcome`; code commit `ac0396f` (`fix: clarify private claim receipts`) is pushed to `origin`. The README, plan, checklist, handoff, and learning entry are being committed separately. Reviewers found and verified fixes for cross-receipt/account status carryover and missing live announcements. No PR or merge was created. `.env.local`, `/letter`, and hosted resources were not changed.
+- Drop is running at `http://localhost:4004`. Next: test rendered share/copy and claim status with browser tooling; then verify unknown-handle photo/GIF claims and actual Storage cleanup against isolated local or approved Free Supabase services.
+
 ## Latest checkpoint — PKCE callback effect replay (2026-10-24)
 
 - Reuse one pending exchange for a one-time Supabase PKCE code when React replays the auth callback effect. Cleanup now prevents disposed effect runs from changing callback state or navigating after a newer run takes over.

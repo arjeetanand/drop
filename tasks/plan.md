@@ -8,6 +8,15 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 
 ## Implementation Status — 2026-10-24
 
+### Latest checkpoint — private claim send receipt (2026-10-24)
+
+- Private claim receipts now distinguish a finished share sheet from a clipboard copy. Legacy or invalid outcome query values get neutral copy, while the receipt avoids claiming the recipient received or opened the link.
+- The waiting state comes from the sender-owned pending drop row; “Claimed” requires the sender-only claimed-ID RPC. Status refreshes on focus, visibility, and account changes, is scoped to both drop and account, and is announced to screen readers. A missing explicit receipt ID cannot substitute another local draft.
+- The user reconfirmed automatic deletion of valid abandoned staging uploads after 30 days. Existing cleanup policy already matches; no cleanup code or hosted resource changed in this slice.
+- `npm test` passed 237/237; lint, no-incremental TypeScript, and `git diff --check` passed. Home and Sent returned HTTP 200 on local port 4004. The production build stopped with `EPERM` opening `.next/trace`; no browser-rendered or hosted two-account check ran.
+- Code commit `ac0396f` is pushed on `fix/private-claim-receipt-outcome`; no PR or merge was created.
+- Next: run rendered share/copy and claim-status checks with browser tooling, then verify the unknown-handle photo/GIF claim journey and actual cleanup against an isolated local or approved Free Supabase runtime.
+
 ### Latest checkpoint — PKCE callback effect replay (2026-10-24)
 
 - The auth callback now shares one pending Supabase PKCE code exchange across React effect replay. Disposed effect runs cannot update callback state or navigate after a newer run starts.

@@ -619,3 +619,34 @@ For one-time asynchronous operations, deduplicate the operation itself and gate 
 ### Git and remaining gaps
 
 Code commit `7afdf3b` (`fix: guard auth callback effect replay`) is pushed to `origin/fix/auth-callback-effect-replay`. This learning entry, README, plan, checklist, and handoff are in a separate documentation commit. No PR or merge was created. `/letter`, `.env.local`, and hosted resources were not changed. Next: verify sign-in callback rendering and account-to-account private claims when isolated browser and Supabase runtimes are available.
+
+## 2026-10-24 — Make private-claim receipts accurate
+
+### Issue
+
+The private claim flow sent both native share-sheet completion and clipboard copy to the same receipt. The page said the link was sent and showed “Waiting to be claimed” without checking durable sender state. A stale explicit drop ID could also fall back to the current local draft.
+
+### Cause
+
+The receipt treated a client-side sharing action as delivery evidence and used the URL's `claim=1` flag as claim status. Its status state was not keyed to the drop or signed-in account, so a claimed badge could carry over after route or account changes.
+
+### Resolution
+
+- Use a typed receipt-path builder to preserve `shared` and `copied` outcomes; older, missing, invalid, or duplicate outcome flags receive neutral copy. Keep the bearer token and message content out of the receipt URL, and avoid claiming the recipient received or opened the link.
+- Read “Waiting” from an owner-filtered pending drop row and “Claimed” only from the sender-scoped claimed-ID RPC. Refresh on focus, visibility, and auth changes; discard stale reads, key state by drop and account, and announce updates to assistive technology.
+- Honor an explicit receipt ID even when its local draft is missing. Do not display a different active draft as a substitute.
+- The user confirmed automatic deletion of valid abandoned staging uploads after 30 days. The existing policy already matches; this slice did not change cleanup code or hosted resources.
+
+### Learning
+
+Keep the outcome of a client action separate from durable server state. Scope asynchronous UI state by both the object and the account, and treat unknown results as unknown rather than success or delivery.
+
+### Verification
+
+- `npm test` passed 237/237; `npm run lint`, `npx tsc --noEmit --incremental false`, and `git diff --check` passed. The focused receipt suite passed 13/13.
+- Home and `/sent?letter=missing&claim=1&share=copied` returned HTTP 200 on local port 4004. No rendered browser interaction was available.
+- `npm run build -- --webpack` stopped with `EPERM` opening `/Users/arjeetanand/projects/drop/.next/trace`. No hosted two-account claim or actual Storage deletion was verified.
+
+### Git and remaining gaps
+
+Code commit `ac0396f` (`fix: clarify private claim receipts`) is pushed to `origin/fix/private-claim-receipt-outcome`. This learning entry, README, plan, checklist, and handoff are in a separate documentation commit. No PR or merge was created. `/letter`, `.env.local`, and hosted resources were not changed. Next: verify rendered share/copy and status behavior with browser tooling, then validate unknown-handle photo/GIF claims and 30-day cleanup in an isolated local or approved Free Supabase runtime.

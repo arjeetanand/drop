@@ -2,6 +2,15 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
+## Checkpoint — private claim send receipt (2026-10-24)
+
+- [x] Keep share-sheet completion distinct from copied links; use neutral copy for legacy/invalid outcomes and keep bearer invite tokens out of receipt query parameters.
+- [x] Read waiting state only from the sender-owned pending drop row and claimed state only from the sender-scoped status RPC. Key and refresh status by receipt/account, suppress stale reads, and announce changes to assistive technology.
+- [x] Keep explicit missing receipt IDs authoritative so they cannot display another local draft. Cover route construction, status transitions, scope changes, and stale IDs with unit regressions.
+- [x] The user confirmed valid abandoned staging uploads should be deleted after 30 days; the existing cleanup policy matches, and no cleanup resource was changed here.
+- [x] `npm test` passes 237/237; lint, no-incremental TypeScript, `git diff --check`, and local Home/Sent HTTP checks pass. Code commit `ac0396f` is pushed to `origin/fix/private-claim-receipt-outcome`.
+- [ ] Retry the production build when `.next/trace` is writable; the current attempt ended with `EPERM`. Rendered browser, hosted two-account, unknown-handle photo/GIF, and actual Storage deletion checks remain open.
+
 ## Checkpoint — PKCE callback effect replay (2026-10-24)
 
 - [x] Deduplicate the pending one-time PKCE code exchange across auth callback effect replay and suppress state/navigation work from disposed effect runs.
