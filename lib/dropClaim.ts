@@ -10,6 +10,40 @@ export function isDropClaimToken(value: unknown): value is string {
   return typeof value === 'string' && DROP_CLAIM_TOKEN_PATTERN.test(value);
 }
 
+export function resolveDropClaimInviteResult(response: {
+  data: unknown;
+  error?: unknown;
+}): { ok: true; letterId: string } | { ok: false; error: string } {
+  if (response.error) {
+    const errorCode = typeof response.error === 'object'
+      && response.error !== null
+      && 'code' in response.error
+      ? response.error.code
+      : undefined;
+
+    if (errorCode === '42501') {
+      return {
+        ok: false,
+        error: 'This invite is expired, already claimed, or no longer available. Ask the sender to share a fresh link.',
+      };
+    }
+
+    return {
+      ok: false,
+      error: 'We couldn’t verify this invite right now. Your invite link is still here—try again.',
+    };
+  }
+
+  if (typeof response.data !== 'string' || !response.data.trim()) {
+    return {
+      ok: false,
+      error: 'This invite is expired, already claimed, or no longer available. Ask the sender to share a fresh link.',
+    };
+  }
+
+  return { ok: true, letterId: response.data };
+}
+
 export function buildDropClaimUrl(origin: string, token: string): string | null {
   if (!isDropClaimToken(token)) return null;
   try {

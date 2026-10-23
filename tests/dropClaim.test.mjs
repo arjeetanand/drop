@@ -6,6 +6,7 @@ import {
   createDropClaimToken,
   isDropClaimToken,
   readDropClaimTokenFromFragment,
+  resolveDropClaimInviteResult,
 } from '../lib/dropClaim.ts';
 
 const token = 'a'.repeat(64);
@@ -44,4 +45,58 @@ test('uses generic share copy with no message or recipient details', () => {
     url: `https://drop.example/claim#token=${token}`,
   });
   assert.doesNotMatch(JSON.stringify(payload), /secret subject|private message|@recipient|caption|photo|gif/i);
+});
+
+test('maps SQLSTATE 42501 to generic unavailable copy without exposing error details or token', () => {
+  const rawMessage = `permission denied for invite token ${token}`;
+  const result = resolveDropClaimInviteResult({
+    data: null,
+    error: { code: '42501', message: rawMessage },
+  });
+
+  assert.deepEqual(result, {
+    ok: false,
+    error: 'This invite is expired, already claimed, or no longer available. Ask the sender to share a fresh link.',
+  });
+  assert.equal(JSON.stringify(result).includes(rawMessage), false);
+  assert.equal(JSON.stringify(result).includes(token), false);
+});
+
+test('keeps other RPC errors, unknown errors, and caught exceptions retryable', () => {
+  const retryable = {
+    ok: false,
+    error: 'We couldn’t verify this invite right now. Your invite link is still here—try again.',
+  };
+  const errors = [
+    { code: '08006', message: `service unavailable for ${token}` },
+    { message: `unexpected failure for ${token}` },
+    true,
+  ];
+
+  for (const error of errors) {
+    const result = resolveDropClaimInviteResult({ data: null, error });
+    assert.deepEqual(result, retryable);
+    assert.equal(JSON.stringify(result).includes(token), false);
+    if (typeof error === 'object' && error !== null && 'message' in error) {
+      assert.equal(JSON.stringify(result).includes(error.message), false);
+    }
+  }
+});
+
+test('keeps empty or invalid successful claim results generic', () => {
+  const genericUnavailable = {
+    ok: false,
+    error: 'This invite is expired, already claimed, or no longer available. Ask the sender to share a fresh link.',
+  };
+
+  for (const data of [null, undefined, '', '   ', 42, {}]) {
+    assert.deepEqual(resolveDropClaimInviteResult({ data, error: null }), genericUnavailable);
+  }
+});
+
+test('returns the letter ID for a successful claim result', () => {
+  assert.deepEqual(resolveDropClaimInviteResult({ data: 'drop-123', error: null }), {
+    ok: true,
+    letterId: 'drop-123',
+  });
 });

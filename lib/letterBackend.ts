@@ -13,7 +13,7 @@ import { fetchAllPages, fetchPagedMailbox } from '@/lib/fetchAllPages';
 import { uniqueRecentDropRecipients, type RecentDropRecipient, type RecentDropRecipientRow } from '@/lib/recentDropRecipients';
 import { subscribeToDropInbox } from '@/lib/dropInboxRealtime';
 import { subscribeToDropReactions } from '@/lib/dropReactionRealtime';
-import { isDropClaimToken } from '@/lib/dropClaim';
+import { isDropClaimToken, resolveDropClaimInviteResult } from '@/lib/dropClaim';
 import { markSenderClaimedDrops } from '@/lib/claimInviteStatus';
 import { withFallbackTimeout } from '@/lib/withFallbackTimeout';
 
@@ -1043,16 +1043,13 @@ export async function reissueDropMediaClaimInvite(
 
 export async function claimDropInvite(token: string): Promise<{ ok: boolean; error?: string; letterId?: string }> {
   if (!isDropClaimToken(token)) return { ok: false, error: 'This invite link is incomplete. Open the original link again.' };
-  const context = await getAuthenticatedClient();
-  if (!context) return { ok: false, error: 'Sign in and set up a Drop profile before claiming this note.' };
   try {
+    const context = await getAuthenticatedClient();
+    if (!context) return { ok: false, error: 'Sign in and set up a Drop profile before claiming this note.' };
     const { data, error } = await context.supabase.rpc('claim_drop_invite', { p_token: token });
-    if (error || typeof data !== 'string' || !data) {
-      return { ok: false, error: 'This invite is expired, already claimed, or no longer available. Ask the sender for a fresh link.' };
-    }
-    return { ok: true, letterId: data };
+    return resolveDropClaimInviteResult({ data, error });
   } catch {
-    return { ok: false, error: 'The invite could not be claimed right now. Your link is still here—try again.' };
+    return resolveDropClaimInviteResult({ data: null, error: true });
   }
 }
 
