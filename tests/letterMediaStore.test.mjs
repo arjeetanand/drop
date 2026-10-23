@@ -3,13 +3,16 @@ import test from 'node:test';
 import { copyGuestDraftAttachmentToAccount, deleteDraftAttachment, getDraftAttachment, saveDraftAttachment } from '../lib/letterMediaStore.ts';
 import { setLocalAccountId } from '../lib/localAccountScope.ts';
 
-function memoryIndexedDb(records) {
+function memoryIndexedDb(records, beforeTransactionComplete = () => {}) {
   const database = {
     transaction() {
       let pending = 0;
       const transaction = {};
       const completeIfIdle = () => {
-        if (pending === 0) queueMicrotask(() => transaction.oncomplete?.());
+        if (pending === 0) queueMicrotask(() => {
+          beforeTransactionComplete();
+          transaction.oncomplete?.();
+        });
       };
       const store = {
         get(key) {
@@ -27,6 +30,14 @@ function memoryIndexedDb(records) {
           pending += 1;
           queueMicrotask(() => {
             records.set(key, value);
+            pending -= 1;
+            completeIfIdle();
+          });
+        },
+        delete(key) {
+          pending += 1;
+          queueMicrotask(() => {
+            records.delete(key);
             pending -= 1;
             completeIfIdle();
           });
@@ -180,6 +191,35 @@ test('does not save an attachment into the newly active account after the sample
       slice: () => new Blob(['x'], { type: 'image/gif' }),
     }, 'account-one'), /active account changed/);
     assert.equal(records.size, 0);
+  } finally {
+    setLocalAccountId(null);
+    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
+    else delete globalThis.window;
+  }
+});
+
+test('rolls back a committed attachment only from its original account after a switch', async () => {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const records = new Map();
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { indexedDB: memoryIndexedDb(records, () => setLocalAccountId('account-two')) },
+  });
+  try {
+    setLocalAccountId('account-one');
+    await assert.rejects(saveDraftAttachment('draft-local-demo-committed', {
+      size: 1,
+      type: 'image/gif',
+      name: 'demo.gif',
+      lastModified: 1,
+      slice: () => new Blob(['x'], { type: 'image/gif' }),
+    }, 'account-one'), /active account changed/);
+
+    const originalAccountRecord = 'account:account-one:draft-local-demo-committed';
+    assert.equal(records.has(originalAccountRecord), true);
+    assert.equal(records.has('account:account-two:draft-local-demo-committed'), false);
+    await deleteDraftAttachment('draft-local-demo-committed', 'account-one');
+    assert.equal(records.has(originalAccountRecord), false);
   } finally {
     setLocalAccountId(null);
     if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
