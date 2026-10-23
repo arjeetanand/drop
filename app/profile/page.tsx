@@ -362,6 +362,9 @@ function ProfileContent() {
       saveNotice = 'Saved on this device only. Account sync did not finish; your profile link is not live yet.';
     }
     setNotice(saveNotice);
+    if (syncResult.ok && claimReturn && nextPath) {
+      router.replace(nextPath, { scroll: false });
+    }
   };
 
   const connectGoogle = async () => {
