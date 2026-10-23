@@ -9,7 +9,7 @@ import { normalizeDropRecipient } from '@/lib/dropValidation';
 import { getSupabaseBrowserClient, isSupabaseAuthConfigured } from '@/lib/supabaseBrowser';
 import { getLocalAccountId } from '@/lib/localAccountScope';
 import { safeInternalPath } from '@/lib/safeInternalPath';
-import { authCallbackRoute, canEditInviteProfile, isClaimReturnPath, profileRoute } from '@/lib/inviteOnboarding';
+import { authCallbackRoute, canEditInviteProfile, claimReturnAfterProfileSync, isClaimReturnPath, profileRoute } from '@/lib/inviteOnboarding';
 import { emailLinkErrorMessage } from '@/lib/emailLinkErrorMessage';
 import { copyProfileSharePayload, createProfileSharePayload } from '@/lib/profileInviteShare';
 import { shareInviteLink } from '@/lib/shareInvite';
@@ -362,9 +362,8 @@ function ProfileContent() {
       saveNotice = 'Saved on this device only. Account sync did not finish; your profile link is not live yet.';
     }
     setNotice(saveNotice);
-    if (syncResult.ok && claimReturn && nextPath) {
-      router.replace(nextPath, { scroll: false });
-    }
+    const syncedClaimReturn = claimReturnAfterProfileSync(syncResult.ok, nextPath);
+    if (syncedClaimReturn) router.replace(syncedClaimReturn);
   };
 
   const connectGoogle = async () => {

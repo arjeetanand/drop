@@ -21,6 +21,12 @@ export function isClaimReturnPath(path: string | null): boolean {
   return path?.split(/[?#]/, 1)[0] === '/claim';
 }
 
+export function claimReturnAfterProfileSync(syncSucceeded: boolean, nextPath: string | null): string | null {
+  if (!syncSucceeded) return null;
+  const safePath = safeInternalPath(nextPath, 'https://drop.invalid');
+  return isClaimReturnPath(safePath) ? safePath : null;
+}
+
 export function resolveAuthReturnPath(callbackPath: string | null, tabPath: string | null, origin: string): string | null {
   return safeInternalPath(callbackPath, origin) || safeInternalPath(tabPath, origin);
 }

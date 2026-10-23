@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowRight, CheckCircle2, Link2, LockKeyhole, MailCheck, ShieldCheck } from 'lucide-react';
 import { claimDropInvite } from '@/lib/letterBackend';
@@ -27,10 +27,12 @@ export default function ClaimPage() {
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
   const [handoffId, setHandoffId] = useState<string | null>(null);
+  const [canContinueToProfile, setCanContinueToProfile] = useState(false);
   const [tokenChecked, setTokenChecked] = useState(false);
   const [accountState, setAccountState] = useState<ClaimJourneyAccountState>('checking');
   const [claiming, setClaiming] = useState(false);
   const [notice, setNotice] = useState('');
+  const claimActionRef = useRef<HTMLButtonElement>(null);
 
   const refreshAccount = async () => {
     setAccountState('checking');
@@ -75,13 +77,17 @@ export default function ClaimPage() {
     const requestedHandoffId = url.searchParams.get('handoff');
     const handoffParameterPresent = url.searchParams.has('handoff');
     let activeHandoffId: string | null = null;
+    let sessionTokenPersisted = false;
 
     if (fragmentToken) {
       try {
         window.sessionStorage.setItem(CLAIM_TOKEN_KEY, fragmentToken);
         window.sessionStorage.removeItem(CLAIM_HANDOFF_SESSION_KEY);
+        sessionTokenPersisted = true;
       } catch {
-        // Keep the current invite usable in memory when browser storage is disabled.
+        try { window.sessionStorage.removeItem(CLAIM_TOKEN_KEY); } catch {
+          // A same-tab invite still works in memory; profile setup must stay on this page.
+        }
       }
       try { activeHandoffId = storeDropClaimHandoff(fragmentToken, window.localStorage); } catch {
         // A same-tab invite still works when cross-tab storage is unavailable.
@@ -125,6 +131,7 @@ export default function ClaimPage() {
         handoffParameterPresent,
       )) {
         restoredToken = savedToken;
+        sessionTokenPersisted = true;
         if (isDropClaimHandoffId(requestedHandoffId)) activeHandoffId = requestedHandoffId;
       }
     } catch {
@@ -139,6 +146,7 @@ export default function ClaimPage() {
     }
     setToken(restoredToken);
     setHandoffId(activeHandoffId);
+    setCanContinueToProfile(Boolean(restoredToken && (sessionTokenPersisted || activeHandoffId)));
     setTokenChecked(true);
     void refreshAccount();
     // The invite token is captured once per page visit; auth can be refreshed with the visible button.
@@ -164,6 +172,12 @@ export default function ClaimPage() {
   const claimReturnPath = dropClaimReturnPath(handoffId);
   const profileHref = `${profileRoute(true, claimReturnPath)}#account`;
   const claimSteps = getClaimJourneySteps(accountState);
+  const currentClaimStepIndex = claimSteps?.findIndex((step) => step.status === 'current') ?? -1;
+  const currentClaimStep = currentClaimStepIndex >= 0 ? claimSteps?.[currentClaimStepIndex] : null;
+
+  useEffect(() => {
+    if (token && accountState === 'ready' && !claiming) claimActionRef.current?.focus();
+  }, [accountState, claiming, token]);
 
   return (
     <main className="page-shell page-enter">
@@ -173,67 +187,58 @@ export default function ClaimPage() {
           <span className="font-headline-md text-lg">Drop</span>
         </Link>
 
-        <section className="mt-8 overflow-hidden rounded-[1.75rem] border border-[rgba(16,42,67,.12)] bg-[#fffdf9] shadow-[0_16px_48px_rgba(16,42,67,.08)] sm:mt-14">
-          <div className="bg-[#e9edff] px-6 py-9 sm:px-12 sm:py-12">
-            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-[#2b45f7] shadow-sm"><LockKeyhole className="h-5 w-5" aria-hidden="true" /></span>
-            <p className="eyebrow mt-6">Private claim invite</p>
-            <h1 className="mt-3 font-headline-md text-4xl font-semibold leading-[1.02] tracking-[-0.045em] text-ink-navy sm:text-6xl">A private drop is waiting.</h1>
-            <p className="mt-5 max-w-xl text-sm leading-relaxed text-on-surface-variant sm:text-base">A friend left something private on Drop. Sign in or create an account, choose a handle, then claim it when you’re ready. Its contents stay sealed until you claim it.</p>
+        <section className="mt-3 overflow-hidden rounded-[1.5rem] border border-[rgba(16,42,67,.12)] bg-[#fffdf9] shadow-[0_16px_48px_rgba(16,42,67,.08)] sm:mt-14 sm:rounded-[1.75rem]">
+          <div className="bg-[#e9edff] px-5 py-5 sm:px-12 sm:py-12">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-[#2b45f7] shadow-sm"><LockKeyhole className="h-4 w-4" aria-hidden="true" /></span>
+            <p className="eyebrow mt-3">Private claim invite</p>
+            <h1 className="mt-2 font-headline-md text-3xl font-semibold leading-[1.02] tracking-[-0.045em] text-ink-navy sm:text-6xl">A private drop is waiting.</h1>
+            <p className="mt-3 max-w-xl text-sm leading-relaxed text-on-surface-variant sm:mt-5 sm:text-base">Sign in or create an account, choose a handle, then claim it when you’re ready. Its contents stay sealed until you claim it.</p>
           </div>
 
-          <div className="px-6 py-6 sm:px-12 sm:py-8">
-            <div className="rounded-xl border border-[rgba(16,42,67,.12)] bg-white/75 p-4">
-              <div className="flex gap-3">
-                <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[#26734f]" aria-hidden="true" />
-                <div>
-                  <p className="text-sm font-semibold text-ink-navy">Private until you claim it</p>
-                  <p className="mt-1 text-sm leading-relaxed text-on-surface-variant">The link does not reveal what was sent. Anyone holding it can claim the drop once, so share it with the person you trust.</p>
-                </div>
+          <div className="px-4 py-4 sm:px-12 sm:py-8">
+            {tokenChecked && token && claimSteps && currentClaimStep && <div className="mt-1">
+              <ol aria-label="Claim progress" className="flex gap-1.5">
+                {claimSteps.map((step, index) => (
+                  <li key={step.id} aria-current={step.status === 'current' ? 'step' : undefined} className="min-w-0 flex-1">
+                    <span aria-hidden="true" className={`block h-1 rounded-full ${step.status === 'completed' ? 'bg-[#4f9d7a]' : step.status === 'current' ? 'bg-[#2b45f7]' : 'bg-[rgba(16,42,67,.14)]'}`} />
+                    <span className="sr-only">Step {index + 1} of {claimSteps.length}: {step.label}, {step.status === 'completed' ? 'completed' : step.status === 'current' ? 'current' : 'up next'}</span>
+                  </li>
+                ))}
+              </ol>
+              <p aria-hidden="true" className="mt-1 font-mono text-xs font-semibold text-ink-navy">Step {currentClaimStepIndex + 1} of {claimSteps.length}<span className="px-1 text-on-surface-variant">·</span>{currentClaimStep.label}</p>
+            </div>}
+
+            <div className="mt-3 rounded-xl border border-[rgba(16,42,67,.12)] bg-white/75 p-3">
+              <div className="flex gap-2.5">
+                <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#26734f]" aria-hidden="true" />
+                <p className="text-xs leading-relaxed text-on-surface-variant">The link never reveals what was sent. Anyone holding it can claim the drop once, so share it only with someone you trust.</p>
               </div>
-              <div role="group" aria-label="Claim link expiry" className="mt-4 grid gap-2 sm:grid-cols-2">
-                <p className="rounded-lg bg-[#f5f1e9] px-3 py-2.5 text-sm leading-relaxed text-ink-navy"><span className="block font-semibold">Text link</span>Expires after 7 days.</p>
-                <p className="rounded-lg bg-[#f5f1e9] px-3 py-2.5 text-sm leading-relaxed text-ink-navy"><span className="block font-semibold">Photo/GIF</span>Links last up to 7 days. If unclaimed, media access ends 30 days after it was sent.</p>
-              </div>
-              <details className="mt-3 rounded-lg border border-[rgba(16,42,67,.1)] bg-white/70 px-3 py-2.5">
+              <p className="mt-2 border-t border-[rgba(16,42,67,.1)] pt-2 text-xs leading-relaxed text-ink-navy">Text links expire after 7 days. Photo/GIF links last up to 7 days; if unclaimed, media access ends 30 days after it was sent.</p>
+              <details className="mt-1 rounded-lg border border-[rgba(16,42,67,.1)] bg-white/70 px-2.5 py-1.5">
                 <summary className="min-h-11 cursor-pointer text-sm font-semibold text-ink-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2b45f7]">About media deletion</summary>
                 <p className="pb-1 text-xs leading-relaxed text-on-surface-variant">After the 30-day cutoff, Drop queues unclaimed media for deletion. Physical deletion can be delayed if the Free project is paused or unavailable.</p>
               </details>
             </div>
 
-            {tokenChecked && token && claimSteps && <ol aria-label="Claim progress" className="mt-5 grid grid-cols-3 gap-2">
-              {claimSteps.map((step, index) => (
-                <li
-                  key={step.id}
-                  aria-current={step.status === 'current' ? 'step' : undefined}
-                  data-status={step.status}
-                  className={`min-w-0 rounded-xl border px-3 py-2.5 ${step.status === 'completed' ? 'border-[#cae6d5] bg-[#f0f9f3]' : step.status === 'current' ? 'border-[#2b45f7] bg-[#eef1ff]' : 'border-[rgba(16,42,67,.12)] bg-white/60'}`}
-                >
-                  <span className="flex items-center justify-between gap-1">
-                    <span className="font-mono text-[0.58rem] font-bold uppercase tracking-[0.08em] text-on-surface-variant">Step {index + 1}</span>
-                    <span className={`font-mono text-[0.55rem] font-bold uppercase tracking-[0.06em] ${step.status === 'completed' ? 'text-[#26734f]' : step.status === 'current' ? 'text-[#2b45f7]' : 'text-on-surface-variant'}`}>
-                      {step.status === 'completed' ? 'Done' : step.status === 'current' ? 'Current' : 'Up next'}
-                    </span>
-                  </span>
-                  <span className="mt-1 block break-words text-xs font-semibold leading-snug text-ink-navy sm:text-sm">{step.label}</span>
-                </li>
-              ))}
-            </ol>}
-
             {!tokenChecked ? <p className="mt-5 text-sm text-on-surface-variant" role="status">Checking this invite…</p> : !token ? (
-              <div className="mt-5 rounded-xl bg-[#f5f1e9] p-4">
+              <div className="mt-3 rounded-xl bg-[#f5f1e9] p-3">
                 <p className="text-sm leading-relaxed text-ink-navy">This browser does not have the invite code. If your email opened in another tab, switch back to the original invite tab and refresh. If you signed in on a different browser or device, open the original link there again. The code stays out of the page address after you arrive.</p>
               </div>
             ) : (
-              <div className="mt-5">
+              <div className="mt-3">
                 {accountState === 'checking' && <p className="text-sm text-on-surface-variant" role="status" aria-live="polite">Checking your Drop account…</p>}
-                {accountState === 'signed-out' && <Link href={profileHref} className="button-primary !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white">Sign in or create your account <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>}
+                {accountState === 'signed-out' && (canContinueToProfile
+                  ? <Link href={profileHref} className="button-primary !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white">Sign in or create your account <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
+                  : <p className="rounded-xl border border-[#e9d6c7] bg-[#fff6ec] p-3 text-sm leading-relaxed text-ink-navy" role="status" aria-live="polite">This browser is blocking the storage needed to keep your invite open during sign-in. Enable site storage, then open the original invite link again, or open that link in a browser that allows storage.</p>)}
                 {accountState === 'needs-profile' && <div>
                   <p className="text-sm leading-relaxed text-on-surface-variant">You’re signed in. Choose a Drop handle first, then come back here to claim the drop.</p>
-                  <Link href={profileHref} className="button-primary mt-4 !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white">Choose a Drop handle <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
+                  {canContinueToProfile
+                    ? <Link href={profileHref} className="button-primary mt-4 !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white">Choose a Drop handle <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
+                    : <p className="mt-3 rounded-xl border border-[#e9d6c7] bg-[#fff6ec] p-3 text-sm leading-relaxed text-ink-navy" role="status" aria-live="polite">This browser is blocking the storage needed to keep your invite open during handle setup. Enable site storage, then open the original invite link again, or open that link in a browser that allows storage.</p>}
                 </div>}
                 {accountState === 'ready' && <div>
                   <p className="text-sm leading-relaxed text-on-surface-variant">Your Drop profile is ready. Claiming attaches this drop to your account so you can open it privately.</p>
-                  <button type="button" onClick={() => void claim()} disabled={claiming} className="button-primary mt-4 !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white disabled:opacity-50"><CheckCircle2 className="h-4 w-4" aria-hidden="true" />{claiming ? 'Claiming drop…' : 'Claim this drop'}</button>
+                  <button ref={claimActionRef} type="button" onClick={() => void claim()} disabled={claiming} className="button-primary mt-3 !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white disabled:opacity-50"><CheckCircle2 className="h-4 w-4" aria-hidden="true" />{claiming ? 'Claiming drop…' : 'Claim this drop'}</button>
                 </div>}
                 {(accountState === 'unavailable' || accountState === 'error') && <div>
                   <p className="text-sm leading-relaxed text-on-surface-variant">Drop could not check your account right now. Your invite is still here; try again in a moment.</p>
@@ -242,8 +247,8 @@ export default function ClaimPage() {
               </div>
             )}
 
-            {notice && <p className="notice error-notice mt-4" role="alert" aria-live="assertive">{notice}</p>}
-            <p className="mt-6 border-t border-[rgba(16,42,67,.12)] pt-4 text-xs leading-relaxed text-on-surface-variant">The contents and any attachment stay private until you claim this link. {handoffId ? 'This browser can carry the invite across tabs for up to 10 minutes after opening it. If you switch browsers or devices, reopen the original link there.' : 'If email opens in another tab, return to the original invite tab and refresh after signing in.'}</p>
+            {notice && <p className="notice error-notice mt-3" role="alert" aria-live="assertive">{notice}</p>}
+            <p className="mt-4 border-t border-[rgba(16,42,67,.12)] pt-3 text-xs leading-relaxed text-on-surface-variant">The contents and any attachment stay private until you claim this link. {handoffId ? 'This browser can carry the invite across tabs for up to 10 minutes after opening it. If you switch browsers or devices, reopen the original link there.' : 'If email opens in another tab, return to the original invite tab and refresh after signing in.'}</p>
           </div>
         </section>
       </div>

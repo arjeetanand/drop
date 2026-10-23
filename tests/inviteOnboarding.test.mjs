@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { authCallbackRoute, canEditInviteProfile, isClaimReturnPath, profileRoute, resolveAuthReturnPath } from '../lib/inviteOnboarding.ts';
+import { authCallbackRoute, canEditInviteProfile, claimReturnAfterProfileSync, isClaimReturnPath, profileRoute, resolveAuthReturnPath } from '../lib/inviteOnboarding.ts';
 import { copyProfileSharePayload, createProfileSharePayload } from '../lib/profileInviteShare.ts';
 import { shareInviteLink } from '../lib/shareInvite.ts';
 
@@ -31,6 +31,16 @@ test('recognizes a claim return without matching unrelated routes or nested quer
   assert.equal(isClaimReturnPath('/claim-back'), false);
   assert.equal(isClaimReturnPath('/profile?next=/claim'), false);
   assert.equal(isClaimReturnPath(null), false);
+});
+
+test('returns to a safe claim handoff only after the profile has synced', () => {
+  const claimPath = '/claim?handoff=123e4567-e89b-42d3-a456-426614174000';
+
+  assert.equal(claimReturnAfterProfileSync(true, claimPath), claimPath);
+  assert.equal(claimReturnAfterProfileSync(false, claimPath), null);
+  assert.equal(claimReturnAfterProfileSync(true, '/compose?letter=draft-1'), null);
+  assert.equal(claimReturnAfterProfileSync(true, '//outside.test/claim'), null);
+  assert.equal(claimReturnAfterProfileSync(true, null), null);
 });
 
 test('requires a verified signed-in account before editing an invite profile', () => {
