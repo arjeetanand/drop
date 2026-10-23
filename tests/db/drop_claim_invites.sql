@@ -1571,6 +1571,29 @@ reset role;
 
 -- New uploads carry a stable final-media ID and a fresh attempt ID. The
 -- retention scan must still recognize the five-segment pending path.
+set local role authenticated;
+select set_config('request.jwt.claim.sub', current_setting('test.sender'), true);
+do $$
+declare
+  v_path constant text := '11111111-1111-4111-8111-111111111111/pending/new-draft/550e8400-e29b-41d4-a716-446655440016/550e8400-e29b-41d4-a716-446655440017';
+begin
+  if not private.drop_pending_media_path_is_uploadable(v_path) then
+    raise exception 'a valid five-segment upload path was not available to its authenticated owner';
+  end if;
+  insert into storage.objects (bucket_id, name, metadata)
+  values ('drop-media', v_path, '{"mimetype":"image/png","size":"123"}'::jsonb);
+end $$;
+reset role;
+do $$ begin
+  if not exists (
+    select 1 from storage.objects
+    where bucket_id = 'drop-media'
+      and name = '11111111-1111-4111-8111-111111111111/pending/new-draft/550e8400-e29b-41d4-a716-446655440016/550e8400-e29b-41d4-a716-446655440017'
+  ) then
+    raise exception 'the authenticated sender could not create a five-segment staging object';
+  end if;
+end $$;
+
 insert into storage.objects (bucket_id, name, metadata, created_at) values
   ('drop-media', '11111111-1111-4111-8111-111111111111/pending/new-draft/550e8400-e29b-41d4-a716-446655440014/550e8400-e29b-41d4-a716-446655440015',
     '{"mimetype":"image/png","size":"123"}'::jsonb,
