@@ -2,12 +2,14 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
-## Checkpoint — sender claim completion feedback (2026-10-23)
+## Checkpoint — persistent sender claim status (2026-10-23)
 
-- [x] Open sender detail pages now refresh after an explicit private text claim, announce the recipient, and update the current status. A forward-only migration sends only the drop ID to the sender's private inbox topic.
-- [x] npm test passes 153/153; lint, no-incremental TypeScript, the isolated PostgreSQL claim/broadcast fixture, git diff checks, and bash -n run.sh pass.
-- [x] Code commit 68daec5 is pushed to origin/feat/claim-completion-feedback; documentation follows as a separate commit.
-- [ ] Keep the claimed result visible after reopening and add a Mailbox claim cue; verify the sender flow in a rendered browser and with two accounts when available.
+- [x] Sent cards and sender detail retain “Claimed by [name]” after reload; ordinary delivered notes remain “Delivered,” and the live announcement remains one-time.
+- [x] The authenticated RPC returns only the current sender's completed text-claim IDs. Mailbox/detail status reads are bounded to five seconds; cold detail retries failed hydration without re-announcing an existing claim.
+- [x] `npm test` passes 158/158; lint, no-incremental TypeScript, the isolated PostgreSQL claim/broadcast/status fixture, and `git diff --check` pass. The isolated Webpack production build passes with existing Browserslist and Tailwind easing warnings.
+- [x] `/`, `/mailbox`, `/letter/incoming-1?view=sender`, and `/claim` return HTTP 200 on local port 4004.
+- [x] Code commit `84e5ba2` is pushed to `origin/feat/persistent-claim-status`; documentation is committed separately.
+- [ ] Verify the sender flow in a rendered browser with a screen reader and across two accounts after the three claim migrations are applied to the approved Free project.
 
 ## Checkpoint notes through — 2026-10-19
 
@@ -382,3 +384,15 @@ Commit each completed code change separately with a descriptive message and push
 - [ ] Rendered browser, screen-reader, and real-device claim/reissue checks remain open; browser automation is unavailable in this environment.
 - [ ] Verify auth/profile return and two-account claiming against the approved Free hosted Supabase project after it is available. No hosted resources were created by this slice.
 - [ ] Next: finish rendered text-claim acceptance, then extend verified claims to private photo/GIF and relay drops.
+
+## Current follow-up — persistent sender claim status
+
+- [x] Add an authenticated sender-only RPC that returns IDs for completed private text claims without exposing tokens or recipient account IDs.
+- [x] Show “Claimed by [name]” in Sent and sender detail, preserve ordinary “Delivered” labels, and keep the live claim announcement limited to the pending-to-claimed transition.
+- [x] Bound the optional status read to five seconds and retry failed cold-detail hydration after a short delay, then while the page is visible; successful negative reads stop retries.
+- [x] Move pending/revoked SQL exclusions after fixture setup so the assertions exercise real pending and revoked rows.
+- [x] `npm test` passes 158/158; lint, `npx tsc --noEmit --incremental false`, isolated PostgreSQL claim fixture, Webpack production build, and `git diff --check` pass. The build reports the existing Browserslist and Tailwind easing warnings.
+- [x] Local app remains available on port 4004; `/`, `/mailbox`, `/claim`, and `/letter/incoming-1?view=sender` return HTTP 200.
+- [x] Code commit `84e5ba2` is pushed to `origin/feat/persistent-claim-status`; the documentation update is being committed separately.
+- [ ] Verify sender status in a rendered browser with a screen reader and across two accounts after the approved Free Supabase project is provisioned and the three claim migrations are applied.
+- [ ] Continue the planned photo/GIF and relay claim journeys after the text path has been accepted.

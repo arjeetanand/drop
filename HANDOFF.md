@@ -2,14 +2,16 @@
 
 Updated: 2026-10-23
 
-## Latest verified checkpoint — sender claim completion feedback
+## Latest verified checkpoint — persistent sender claim status
 
-- Added a forward-only migration that preserves recipient insert and relay collection broadcasts, and sends only the drop ID to the sender's private inbox topic after an explicit claim_pending to delivered instant-text claim. The open sender detail page reloads through RLS, announces the recipient, and changes its status label.
-- Code commit 68daec5 (feat: show senders when private notes are claimed) is pushed to origin/feat/claim-completion-feedback. No PR or merge was created.
-- Verification: npm test passed 153/153; npm run lint, npx tsc --noEmit --incremental false, the isolated PostgreSQL claim/broadcast fixture, git diff checks, and bash -n run.sh passed. The SQL fixture stubs the Realtime sender and checks trigger payload/topic/duplicate behavior; it does not test actual channel authorization or call the collection RPC.
-- A browser two-account check and screen-reader/device validation were not run. The claimed status currently lasts only for the open detail session; reopening the drop shows generic Sent, and Mailbox has no dedicated claim cue.
-- Production build was not run. Started the local app with ./run.sh on port 4004; /, /mailbox, /letter/incoming-1?view=sender, and /claim returned HTTP 200. Browser interaction was not checked.
-- Next: render the sender claim flow, persist the claimed result and add a Mailbox cue, then verify hosted two-account behavior after the approved Free Supabase project is set up.
+- Added a forward-only sender-status RPC over the private invite table. It returns only claimed drop IDs for the authenticated sender and verifies the matching row is a delivered instant text note; invite tokens and recipient account IDs remain private. The UI maps that status to “Claimed by [name]” in Sent and sender detail, including after a reload. Ordinary delivered notes stay “Delivered,” and the live one-time announcement remains.
+- Bounded the optional claim-status read to five seconds so it cannot hold Mailbox or detail indefinitely. A cold sender detail retries a failed status read after ten seconds, then every 60 seconds while visible; a successful negative ends retries, and a positive only updates the badge without announcing an old claim.
+- Code commit `84e5ba2` (`feat: persist sender claim status`) is pushed to `origin/feat/persistent-claim-status`; documentation is committed separately. No PR or merge was created.
+- Verification: `npm test` passed 158/158; `npm run lint`, `npx tsc --noEmit --incremental false`, the isolated PostgreSQL claim/broadcast/status fixture, and `git diff --check` passed. The fixture confirms sender-only status after token expiry and excludes ordinary deliveries, pending/revoked invites, anon, and another account.
+- `npm run build -- --webpack` passed from a disposable source copy. It reported the existing Browserslist freshness and Tailwind easing warnings. The local server on port 4004 returned HTTP 200 for `/`, `/mailbox`, `/letter/incoming-1?view=sender`, and `/claim`.
+- Rendered browser, screen-reader, and two-account behavior were not checked. The migrations are not applied to hosted Supabase; hosted status reads remain unavailable until the approved Free project is configured and all three claim migrations are applied.
+- The active checkout is `/Users/arjeetanand/projects/drop`; `.env.local` is already there, mode 600 and ignored by Git. The former OneDrive Drop path is absent, so no file remained to delete; `/letter` is unchanged. No hosted Supabase resources were created.
+- Next: verify the rendered sender flow and account-to-account claim against local or hosted Supabase when available.
 
 ## Previous verified checkpoint — accountless private text claim
 
@@ -36,7 +38,7 @@ Updated: 2026-10-23
 
 - Active code checkout: /Users/arjeetanand/projects/drop
 - GitHub remote: private repository arjeetanand/drop
-- Current branch: `feat/claim-completion-feedback` tracks origin; latest code commit `68daec5` is pushed. Its parent is `e6be604` on `feat/invite-first-drop-resilience`, whose latest feature commit is `e3d5c5b`. Earlier commits include `75f8a89` (relay recipient collection), `8493097` (sender reaction race safety), `6f618ed` (invite storage guard), and `41c409e` (profile copy fallback). No pull request has been created.
+- Current branch: `feat/persistent-claim-status` tracks origin; code commit `84e5ba2` is pushed. It starts from `8a474ca` (`docs: record sender claim feedback checkpoint`). The preceding accountless-claim feature commit `68daec5` is on `feat/claim-completion-feedback`, based on `e6be604` on `feat/invite-first-drop-resilience`, whose latest feature commit is `e3d5c5b`. Earlier commits include `75f8a89` (relay recipient collection), `8493097` (sender reaction race safety), `6f618ed` (invite storage guard), and `41c409e` (profile copy fallback). No pull request has been created.
 - Previous mailbox search-focus branch: `fix/mailbox-search-focus`, code commit `bbf9df8` pushed to origin; no pull request has been created.
 - Mailbox empty-state feature commit: `10efead` (`feat: tailor mailbox empty states to filters`), pushed to `origin/feat/mailbox-filter-empty-states`; the docs update is committed separately.
 - Recipient-first composer commit: `a9049cf` (`feat: put recipient first in drop composer`), pushed to `origin/feat/recipient-first-compose`.
