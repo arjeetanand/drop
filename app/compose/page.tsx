@@ -16,7 +16,7 @@ import { ReducedMotionGif } from '@/components/ReducedMotionGif';
 import { cn } from '@/lib/utils';
 import { shareInviteLink } from '@/lib/shareInvite';
 import { buildDropClaimUrl, createDropClaimSharePayload, createDropClaimToken } from '@/lib/dropClaim';
-import { buildSentReceiptPath } from '@/lib/claimReceipt';
+import { buildPrivateClaimDetailsPath, buildSentReceiptPath, getComposerClaimPendingCopy } from '@/lib/claimReceipt';
 import type { RecentDropRecipient } from '@/lib/recentDropRecipients';
 
 type RecipientCheck =
@@ -670,6 +670,8 @@ function Composer() {
 
   const isText = payloadKind === 'text';
   const privateClaimPayloadLabel = isText ? 'note' : payloadKind === 'gif' ? 'GIF' : 'photo';
+  const privateClaimPendingCopy = getComposerClaimPendingCopy(Boolean(privateClaimUrl));
+  const privateClaimDetailsHref = draft ? buildPrivateClaimDetailsPath(draft.id) : '/sent';
   const pendingInvite = draft?.recipientInviteProgress?.username === recipientUsername ? draft.recipientInviteProgress : null;
   const alignClass = alignment === 'center' ? 'text-center' : alignment === 'right' ? 'text-right' : 'text-left';
   const saveLabel = saved ? 'Saved' : 'Save draft';
@@ -694,9 +696,9 @@ function Composer() {
         </div>
 
         {draft?.status === 'claim_pending' ? <section className="mt-6 rounded-2xl border border-[rgba(16,42,67,.12)] bg-[#fffdf9] p-5 shadow-[0_8px_24px_rgba(16,42,67,.04)] sm:mt-8 sm:p-7" aria-labelledby="claim-pending-title">
-          <p className="eyebrow">Private drop sent</p>
-          <h2 id="claim-pending-title" className="mt-2 font-headline-md text-3xl font-semibold leading-tight text-ink-navy">Waiting for them to claim.</h2>
-          <p className="mt-3 text-sm leading-relaxed text-on-surface-variant">The drop is saved in your account. They’ll need to sign in, set up a Drop handle, and claim the link before they can open it.</p>
+          <p className="eyebrow">{privateClaimPendingCopy.eyebrow}</p>
+          <h2 id="claim-pending-title" className="mt-2 font-headline-md text-3xl font-semibold leading-tight text-ink-navy">{privateClaimPendingCopy.heading}</h2>
+          <p className="mt-3 text-sm leading-relaxed text-on-surface-variant">{privateClaimPendingCopy.body}</p>
           <p className="mt-3 rounded-xl border border-[rgba(16,42,67,.12)] bg-white/75 p-3 text-xs leading-relaxed text-on-surface-variant">This link {getClaimInviteExpiryDuration(payloadKind)}. Anyone holding it can claim the drop.</p>
           {payloadKind !== 'text' && <p className="mt-3 rounded-xl border border-[rgba(16,42,67,.12)] bg-white/75 p-3 text-xs leading-relaxed text-on-surface-variant">If the {payloadKind === 'gif' ? 'GIF' : 'photo'} drop is still unclaimed after 30 days{mediaExpiryLabel ? ` (on ${mediaExpiryLabel})` : ''}, its claim and media access end. Drop queues the attachment for deletion then; cleanup can be delayed if the free project is paused or unavailable. A fresh link won’t extend the cutoff.</p>}
           {privateClaimUrl && <div className="mt-5 rounded-xl border border-[#e9d6c7] bg-[#fff6ec] p-4">
@@ -706,7 +708,7 @@ function Composer() {
             <button type="button" onClick={() => void copyPrivateClaimInvite()} className="button-primary mt-3 !min-h-12 w-full !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white">Copy private link</button>
           </div>}
           {inviteNotice && <p className="field-help mt-3" role="status" aria-live="polite">{inviteNotice}</p>}
-          <Link href="/mailbox" className="button-secondary mt-5 !min-h-12 !rounded-xl">Open your mailbox <ArrowRightIcon /></Link>
+          <Link href={privateClaimDetailsHref} className="button-secondary mt-5 !min-h-12 !rounded-xl">Open saved drop <ArrowRightIcon /></Link>
         </section> : <form onSubmit={handleSend} aria-busy={deleting} className="mt-6 sm:mt-8">
           <fieldset disabled={deleting || sending} aria-label="Compose drop" className="m-0 min-w-0 space-y-4 border-0 p-0 sm:space-y-5">
           <section className="rounded-2xl border border-[rgba(16,42,67,.12)] bg-white/55 p-4 sm:p-6">

@@ -19,6 +19,24 @@ export type ClaimReceiptCopy = {
   body: string;
 };
 
+export function getComposerClaimPendingCopy(hasUnsharedLink: boolean): ClaimReceiptCopy {
+  return hasUnsharedLink
+    ? {
+      eyebrow: 'Private link ready · not shared yet',
+      heading: 'Ready when you are.',
+      body: 'Your drop is saved. Copy the link below and send it directly to your friend.',
+    }
+    : {
+      eyebrow: 'Private claim drop',
+      heading: 'Your drop is saved.',
+      body: 'Open the saved drop below to check its claim status or prepare a fresh private link.',
+    };
+}
+
+export function buildPrivateClaimDetailsPath(letterId: string): string {
+  return `/letter/${encodeURIComponent(letterId)}`;
+}
+
 export type SenderClaimReceiptRow = {
   id: string;
   status: string;

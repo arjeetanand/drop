@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  buildPrivateClaimDetailsPath,
   buildSentReceiptPath,
+  getComposerClaimPendingCopy,
   getClaimReceiptCopy,
   getClaimReceiptStatusLabel,
   mergeClaimReceiptStatus,
@@ -86,6 +88,27 @@ test('uses careful outcome copy for native sharing, clipboard copy, and unknown 
   const unknown = getClaimReceiptCopy('unknown');
   assert.match(unknown.body, /couldn’t confirm|could not confirm|can’t confirm|can't confirm/i);
   assert.doesNotMatch(unknown.body, /shared successfully|copied successfully/i);
+});
+
+test('keeps the composer neutral until a private link is actually shared', () => {
+  const readyToShare = getComposerClaimPendingCopy(true);
+  assert.equal(readyToShare.eyebrow, 'Private link ready · not shared yet');
+  assert.match(readyToShare.heading, /ready when you are/i);
+  assert.match(readyToShare.body, /copy the link/i);
+  assert.doesNotMatch(`${readyToShare.eyebrow} ${readyToShare.heading} ${readyToShare.body}`, /waiting for them|drop sent/i);
+
+  const recovered = getComposerClaimPendingCopy(false);
+  assert.equal(recovered.heading, 'Your drop is saved.');
+  assert.match(recovered.body, /open the saved drop below/i);
+  assert.match(recovered.body, /claim status/i);
+  assert.match(recovered.body, /fresh private link/i);
+  assert.doesNotMatch(recovered.body, /open sent/i);
+  assert.doesNotMatch(`${recovered.eyebrow} ${recovered.heading} ${recovered.body}`, /waiting for them|drop sent/i);
+});
+
+test('opens the saved claim drop using one encoded path segment', () => {
+  assert.equal(buildPrivateClaimDetailsPath('drop-123'), '/letter/drop-123');
+  assert.equal(buildPrivateClaimDetailsPath('drop/123?#'), '/letter/drop%2F123%3F%23');
 });
 
 test('merges remote claim status without regressing a known claim', () => {
