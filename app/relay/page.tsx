@@ -284,7 +284,7 @@ function RelayContent() {
           <>
             <section className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
               <div className="min-w-0 rounded-3xl bg-[#2b45f7] p-5 text-white shadow-[0_20px_50px_rgba(43,69,247,.18)] sm:p-8">
-                <p className="font-mono text-[0.66rem] font-bold uppercase tracking-[0.18em] text-white/75">{isCollected ? 'Human relay · collected' : hasCarrier ? 'Human relay · in progress' : 'Human relay · waiting for its first carrier'}</p>
+                <p className="font-mono text-[0.66rem] font-bold uppercase tracking-[0.18em] text-white/80">{isCollected ? 'Human relay · collected' : hasCarrier ? 'Human relay · in progress' : 'Human relay · waiting for its first carrier'}</p>
                 <h1 className="mt-4 max-w-3xl font-headline-md text-4xl font-semibold leading-[1.02] tracking-[-0.045em] sm:text-5xl">
                   {isCollected ? 'Your drop reached its recipient.' : hasCarrier ? 'Your drop is on a journey.' : 'Your drop is ready to travel.'}
                 </h1>
@@ -299,15 +299,15 @@ function RelayContent() {
                 <div className="mt-7 grid grid-cols-3 border-y border-white/20 py-4">
                   <div>
                     <p className="font-headline-md text-2xl sm:text-3xl">{stats.carriers}</p>
-                    <p className="mt-1 text-[0.65rem] text-white/70 sm:text-xs">People</p>
+                    <p className="mt-1 text-[0.65rem] text-white/80 sm:text-xs">People</p>
                   </div>
                   <div className="border-l border-white/20 pl-3 sm:pl-5">
                     <p className="font-headline-md text-2xl sm:text-3xl">{stats.cities}</p>
-                    <p className="mt-1 text-[0.65rem] text-white/70 sm:text-xs">Stops</p>
+                    <p className="mt-1 text-[0.65rem] text-white/80 sm:text-xs">Stops</p>
                   </div>
                   <div className="border-l border-white/20 pl-3 sm:pl-5">
                     <p className="font-headline-md text-2xl sm:text-3xl">{stats.hours}h</p>
-                    <p className="mt-1 text-[0.65rem] text-white/70 sm:text-xs">Journey time</p>
+                    <p className="mt-1 text-[0.65rem] text-white/80 sm:text-xs">Journey time</p>
                   </div>
                 </div>
 

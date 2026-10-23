@@ -52,13 +52,13 @@ export default function HomeDesk() {
 
         <section className="mt-7 grid gap-4 md:mt-12 md:grid-cols-[minmax(0,1fr)_minmax(250px,.72fr)] md:gap-5">
           <div className="overflow-hidden rounded-[1.5rem] bg-[#2b45f7] p-6 text-white shadow-[0_16px_36px_rgba(43,69,247,.15)] sm:p-9">
-            <p className="font-mono text-[0.68rem] font-bold uppercase tracking-[0.16em] text-white/70">Your little corner of the internet</p>
+            <p className="font-mono text-[0.68rem] font-bold uppercase tracking-[0.16em] text-white/80">Your little corner of the internet</p>
             <h1 className="mt-4 max-w-[12ch] font-headline-md text-4xl font-semibold leading-[1.02] tracking-[-0.045em] sm:text-5xl">Drop a little something.</h1>
             <p className="mt-4 max-w-md text-sm leading-relaxed text-white/80 sm:text-base">A photo, a note, the meme that explains everything. Pick one person and make their day.</p>
             <Link href="/compose?new=1" className="mt-7 inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[#fffaf2] px-5 text-sm font-bold text-[#223bdc] shadow-sm transition-transform hover:-translate-y-0.5 focus-visible:outline-white">
               <Sparkles className="h-4 w-4" aria-hidden="true" /> Make a drop <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </Link>
-            <p className="mt-6 flex items-center gap-2 text-xs text-white/70"><Zap className="h-3.5 w-3.5" aria-hidden="true" /> Instant by default · private between you two</p>
+            <p className="mt-6 flex items-center gap-2 text-xs text-white/80"><Zap className="h-3.5 w-3.5" aria-hidden="true" /> Instant by default · private between you two</p>
           </div>
 
           {featured ? (

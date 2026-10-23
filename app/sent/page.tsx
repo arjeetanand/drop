@@ -36,7 +36,7 @@ function SentContent() {
             <span className="status-mark"><Check className="h-3.5 w-3.5" aria-hidden="true" /> Waiting to be claimed</span>
           </header>
           <section className="mt-12 rounded-[1.5rem] bg-[#2b45f7] p-6 text-white sm:p-10">
-            <p className="font-mono text-[0.68rem] font-bold uppercase tracking-[0.16em] text-white/70">Private link sent ✨</p>
+            <p className="font-mono text-[0.68rem] font-bold uppercase tracking-[0.16em] text-white/80">Private link sent ✨</p>
             <h1 className="mt-3 font-headline-md text-4xl font-semibold leading-tight tracking-[-0.04em] sm:text-5xl">A drop is waiting for them.</h1>
             <p className="mt-4 max-w-lg text-sm leading-relaxed text-white/80 sm:text-base">Your note is in Sent. They’ll need to sign in, choose a Drop handle, and claim the link before it opens. Anyone holding the link can claim it.</p>
             <div className="mt-7 flex flex-col gap-2 sm:flex-row">
@@ -57,7 +57,7 @@ function SentContent() {
             <span className="status-mark success"><Check className="h-3.5 w-3.5" aria-hidden="true" /> Delivered</span>
           </header>
           <section className="mt-12 rounded-[1.5rem] bg-[#2b45f7] p-6 text-white sm:p-10">
-            <p className="font-mono text-[0.68rem] font-bold uppercase tracking-[0.16em] text-white/70">It landed ✨</p>
+            <p className="font-mono text-[0.68rem] font-bold uppercase tracking-[0.16em] text-white/80">It landed ✨</p>
             <h1 className="mt-3 font-headline-md text-4xl font-semibold leading-tight tracking-[-0.04em] sm:text-5xl">Your drop made it.</h1>
             <p className="mt-4 max-w-lg text-sm leading-relaxed text-white/80 sm:text-base">“{draft?.subject || 'A little moment'}” just landed for {draft?.recipient || 'your person'}. Good timing, probably.</p>
             <div className="mt-7 flex flex-col gap-2 sm:flex-row">
