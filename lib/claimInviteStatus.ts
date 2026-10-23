@@ -16,7 +16,7 @@ export function getConfirmedMediaRetryUploadId(
     : null;
 }
 
-export function canOfferPrivateClaimInvite(input: {
+type PrivateClaimInviteEligibility = {
   accountConnected: boolean;
   recipientStatus: string;
   recipientUsername: string | null;
@@ -27,18 +27,27 @@ export function canOfferPrivateClaimInvite(input: {
   hasMedia: boolean;
   attachmentSaved: boolean;
   attachmentBusy: boolean;
-}): boolean {
+};
+
+function hasEligiblePrivateClaimRecipientAndPayload(input: PrivateClaimInviteEligibility): boolean {
   if (!input.accountConnected
     || input.recipientStatus !== 'not-found'
     || !input.recipientUsername
     || input.checkedUsername !== input.recipientUsername
-    || input.deliveryMode !== 'instant'
     || input.attachmentBusy) return false;
 
   const payloadKind = input.payloadKind || 'text';
   return payloadKind === 'text'
     ? input.hasText && !input.hasMedia
     : input.hasMedia && input.attachmentSaved;
+}
+
+export function canOfferPrivateClaimInvite(input: PrivateClaimInviteEligibility): boolean {
+  return input.deliveryMode === 'instant' && hasEligiblePrivateClaimRecipientAndPayload(input);
+}
+
+export function canOfferInstantClaimSwitch(input: PrivateClaimInviteEligibility): boolean {
+  return input.deliveryMode === 'relay' && hasEligiblePrivateClaimRecipientAndPayload(input);
 }
 
 export function isEligibleSenderClaim(letter: MockLetter): boolean {

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { canOfferPrivateClaimInvite, getClaimInviteExpiryDuration, getClaimedDropLabel, getConfirmedMediaRetryUploadId, isEligiblePendingSenderClaim, isEligibleSenderClaim, markSenderClaimedDrops, needsSenderClaimStatusRetry, retainKnownClaimStatus } from '../lib/claimInviteStatus.ts';
+import { canOfferInstantClaimSwitch, canOfferPrivateClaimInvite, getClaimInviteExpiryDuration, getClaimedDropLabel, getConfirmedMediaRetryUploadId, isEligiblePendingSenderClaim, isEligibleSenderClaim, markSenderClaimedDrops, needsSenderClaimStatusRetry, retainKnownClaimStatus } from '../lib/claimInviteStatus.ts';
 
 function letter(id, extra = {}) {
   return {
@@ -129,4 +129,31 @@ test('offers a private claim send only for the current missing handle and a read
     attachmentSaved: false,
   }), true, 'the existing text claim path remains available');
   assert.equal(canOfferPrivateClaimInvite({ ...base, payloadKind: 'text', hasText: false, hasMedia: false }), false);
+});
+
+test('offers an explicit switch from relay to instant only for a current missing handle and ready payload', () => {
+  const base = {
+    accountConnected: true,
+    recipientStatus: 'not-found',
+    recipientUsername: 'new.friend',
+    checkedUsername: 'new.friend',
+    deliveryMode: 'relay',
+    payloadKind: 'image',
+    hasText: false,
+    hasMedia: true,
+    attachmentSaved: true,
+    attachmentBusy: false,
+  };
+
+  assert.equal(canOfferInstantClaimSwitch(base), true, 'a saved photo can switch from relay to the existing claim flow');
+  assert.equal(canOfferInstantClaimSwitch({ ...base, payloadKind: 'gif' }), true);
+  assert.equal(canOfferInstantClaimSwitch({ ...base, payloadKind: 'text', hasText: true, hasMedia: false }), true);
+  assert.equal(canOfferInstantClaimSwitch({ ...base, deliveryMode: 'instant' }), false, 'the fallback is only for relay mode');
+  assert.equal(canOfferInstantClaimSwitch({ ...base, attachmentSaved: false }), false);
+  assert.equal(canOfferInstantClaimSwitch({ ...base, attachmentBusy: true }), false);
+  assert.equal(canOfferInstantClaimSwitch({ ...base, checkedUsername: 'someone.else' }), false);
+  assert.equal(canOfferInstantClaimSwitch({ ...base, recipientStatus: 'found' }), false);
+  assert.equal(canOfferInstantClaimSwitch({ ...base, recipientStatus: 'error' }), false);
+  assert.equal(canOfferInstantClaimSwitch({ ...base, accountConnected: false }), false);
+  assert.equal(canOfferInstantClaimSwitch({ ...base, payloadKind: 'text', hasText: false, hasMedia: false }), false);
 });

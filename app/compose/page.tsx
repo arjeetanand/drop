@@ -11,7 +11,7 @@ import { getSupabaseBrowserClient } from '@/lib/supabaseBrowser';
 import { isDropPayloadKindCompatibleWithMedia, isDropRecipientConfirmed, normalizeDropRecipient, validateDropMedia } from '@/lib/dropValidation';
 import { deleteDraftAttachment, getDraftAttachment, saveDraftAttachment } from '@/lib/letterMediaStore';
 import { getLocalAccountId, isCurrentLocalAccount } from '@/lib/localAccountScope';
-import { canOfferPrivateClaimInvite, getClaimInviteExpiryDuration, getConfirmedMediaRetryUploadId } from '@/lib/claimInviteStatus';
+import { canOfferInstantClaimSwitch, canOfferPrivateClaimInvite, getClaimInviteExpiryDuration, getConfirmedMediaRetryUploadId } from '@/lib/claimInviteStatus';
 import { ReducedMotionGif } from '@/components/ReducedMotionGif';
 import { cn } from '@/lib/utils';
 import { shareInviteLink } from '@/lib/shareInvite';
@@ -62,6 +62,8 @@ function Composer() {
   const [recipientCheck, setRecipientCheck] = useState<RecipientCheck>({ status: 'idle', username: null });
   const [recentRecipients, setRecentRecipients] = useState<RecentDropRecipient[]>([]);
   const recipientCheckRequest = useRef(0);
+  const privateClaimButtonRef = useRef<HTMLButtonElement>(null);
+  const focusPrivateClaimButtonAfterModeSwitch = useRef(false);
   const [subject, setSubject] = useState('');
   const [fontSize, setFontSize] = useState(18);
   const [alignment, setAlignment] = useState<LetterAlignment>('left');
@@ -195,7 +197,7 @@ function Composer() {
   const complete = Boolean(confirmedRecipient && recipientUsername && (payloadKind === 'text' ? content.trim() : file));
   const currentSeal = getSealInfo(sealId, sealMonogram, sealColor);
   const profileHref = draft ? `/profile?next=${encodeURIComponent(`/compose?letter=${encodeURIComponent(draft.id)}`)}#account` : '/profile#account';
-  const canSendPrivateClaim = canOfferPrivateClaimInvite({
+  const privateClaimEligibility = {
     accountConnected: accountState === 'connected',
     recipientStatus: recipientCheck.status,
     recipientUsername,
@@ -206,7 +208,15 @@ function Composer() {
     hasMedia: Boolean(file),
     attachmentSaved,
     attachmentBusy: attachmentLoading || attachmentSaving,
-  });
+  };
+  const canSendPrivateClaim = canOfferPrivateClaimInvite(privateClaimEligibility);
+  const canSwitchToInstantClaim = canOfferInstantClaimSwitch(privateClaimEligibility);
+
+  useEffect(() => {
+    if (!canSendPrivateClaim || !focusPrivateClaimButtonAfterModeSwitch.current) return;
+    focusPrivateClaimButtonAfterModeSwitch.current = false;
+    privateClaimButtonRef.current?.focus();
+  }, [canSendPrivateClaim]);
 
   const updateKind = (kind: DropPayloadKind) => {
     setError('');
@@ -255,7 +265,7 @@ function Composer() {
     }
   };
 
-  const makeDraft = () => {
+  const makeDraft = (nextDeliveryMode = deliveryMode) => {
     if (!draft) return null;
     return saveLetterDraft({
       content,
@@ -264,13 +274,23 @@ function Composer() {
       fontSize,
       alignment,
       payloadKind,
-      deliveryMode,
+      deliveryMode: nextDeliveryMode,
       mediaUploadId: draft.mediaUploadId,
       sealId,
       sealColor,
       sealMonogram,
       address: { ...draft.address, name: recipient.trim() },
     });
+  };
+
+  const switchToInstantForPrivateClaim = () => {
+    if (!canSwitchToInstantClaim || sharingInvite || sending || deleting || deletingRef.current) return;
+    const updatedDraft = makeDraft('instant');
+    if (!updatedDraft) return;
+    focusPrivateClaimButtonAfterModeSwitch.current = true;
+    setDraft(updatedDraft);
+    setDeliveryMode('instant');
+    setSaved(false);
   };
 
   const clearRecipientInviteProgressForRecipient = (nextRecipient: string) => {
@@ -724,14 +744,21 @@ function Composer() {
             {recipientCheck.status === 'not-found' && recipientCheck.username === recipientUsername && <>
               <p className="error-notice mt-2" role="status" aria-live="polite">No Drop account found for @{recipientUsername}.</p>
               <div className="mt-3 rounded-xl border border-[rgba(16,42,67,.12)] bg-white/75 p-3">
-                {!pendingInvite && <p className="text-xs leading-relaxed text-on-surface-variant">{canSendPrivateClaim ? `Send this instant ${privateClaimPayloadLabel} with a private link, or invite them to Drop and check their handle again.` : 'Your draft stays here. Invite them to Drop, then check their handle again. Private claim links are for instant notes or attached photos and GIFs.'}</p>}
+                {!pendingInvite && <p className="text-xs leading-relaxed text-on-surface-variant">{canSendPrivateClaim ? `Send this instant ${privateClaimPayloadLabel} with a private link, or invite them to Drop and check their handle again.` : canSwitchToInstantClaim ? 'Relay needs an existing Drop account. Switch to Instant for a private claim link, or invite them to join and check their handle again.' : 'Your draft stays here. Invite them to Drop, then check their handle again. Private claim links are for instant notes or attached photos and GIFs.'}</p>}
+                {canSwitchToInstantClaim && <div className="mt-3 rounded-lg border border-[rgba(16,42,67,.12)] bg-[#eef1ff] p-3">
+                  <p className="text-sm font-semibold text-ink-navy">Want to share a private link instead?</p>
+                  <p className="mt-1 text-xs leading-relaxed text-on-surface-variant">Your draft and any saved attachment stay in place. This only changes delivery mode; nothing is shared until you choose the separate private-link action.</p>
+                  <button type="button" onClick={switchToInstantForPrivateClaim} disabled={sharingInvite || sending || deleting} className="button-secondary mt-3 !min-h-12 w-full !rounded-xl disabled:opacity-50">
+                    Switch to Instant for a private link
+                  </button>
+                </div>}
                 {canSendPrivateClaim && <div className="rounded-lg bg-[#eef1ff] p-3">
                   <p className="text-sm font-semibold text-ink-navy">Send this {privateClaimPayloadLabel} with a private link</p>
                   <p className="mt-1 text-xs leading-relaxed text-on-surface-variant">The drop stays sealed until they sign in, set up a Drop handle, and claim it. Anyone holding the link can claim it.</p>
                   {payloadKind === 'text'
                     ? <p className="mt-2 text-xs leading-relaxed text-on-surface-variant">The link lasts 7 days.</p>
                     : <p className="mt-2 text-xs leading-relaxed text-on-surface-variant">The link {getClaimInviteExpiryDuration(payloadKind)}. If unclaimed after 30 days, the claim and media access end and Drop queues the attachment for deletion. Cleanup can be delayed if the free project is paused or unavailable. A fresh link won’t extend the cutoff.</p>}
-                  <button type="button" onClick={() => void sharePrivateClaimInvite()} disabled={sharingInvite || sending || deleting} className="button-primary mt-3 !min-h-12 w-full !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white disabled:opacity-50">
+                  <button ref={privateClaimButtonRef} type="button" onClick={() => void sharePrivateClaimInvite()} disabled={sharingInvite || sending || deleting} className="button-primary mt-3 !min-h-12 w-full !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white disabled:opacity-50">
                     <Share2 className="h-4 w-4" aria-hidden="true" />{sharingInvite ? 'Preparing private link…' : `Send a private ${privateClaimPayloadLabel} link`}
                   </button>
                 </div>}
