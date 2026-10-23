@@ -328,3 +328,13 @@ Commit each completed code change separately with a descriptive message and push
 - [x] Confirm `/` and `/mailbox` return HTTP 200 on the local app at port 4004.
 - [x] Confirm the OneDrive Drop directory is absent and `.env.local` already exists in the local clone with mode 600 and Git ignore coverage; preserve `/letter`.
 - [ ] Capture a final browser screenshot after the native clear-control rule; the isolated Chrome launch exited with code 134. Screen-reader and real-device checks remain open.
+
+## Current follow-up — 2026-10-23 (recipient invite recovery and send receipt)
+
+- [x] Persist shared, copied, cancelled, and unavailable invite outcomes with the account's draft; migrate the older local invite reminder shape.
+- [x] Keep a manual invite link available after an unavailable retry is cancelled, including when the draft is reopened; announce the retry in progress and show the next action on the mailbox card.
+- [x] Scope asynchronous invite results to the account, draft, and current handle. A successful send only marks the exact submitted composition sent; newer same-draft edits remain drafts.
+- [x] Add store regressions for every invite outcome, restored manual-link availability, account and recipient scoping, sent-copy persistence, and concurrent draft edits.
+- [x] `npm test` passes 126/126; lint, TypeScript, Webpack production build, `bash -n run.sh`, and diff checks pass. `/compose?new=1` returns HTTP 200 on port 4004.
+- [x] Code commit `c1d57e0` is pushed to `origin/feat/draft-invite-progress`. The active clone is `/Users/arjeetanand/projects/drop`; `.env.local` was already present, mode 600, ignored, and untracked. The former OneDrive Drop directory is absent, so no file was moved or deleted; `/letter` was not changed.
+- [ ] Verify share/cancel/reopen behavior in a rendered browser, screen reader, and real device. Hosted account-to-account invite/send checks remain open until the Free Drop Supabase project is available.

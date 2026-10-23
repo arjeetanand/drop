@@ -6,7 +6,8 @@ Updated: 2026-10-23
 
 - Active code checkout: /Users/arjeetanand/projects/drop
 - GitHub remote: private repository arjeetanand/drop
-- Current branch: `fix/mailbox-search-focus`, based on `3472bd0`; code commit `bbf9df8` is pushed to origin. No pull request has been created.
+- Current branch: `feat/draft-invite-progress`, based on `83e21e7`; invite recovery code commit `c1d57e0` is pushed to origin. No pull request has been created.
+- Previous mailbox search-focus branch: `fix/mailbox-search-focus`, code commit `bbf9df8` pushed to origin; no pull request has been created.
 - Mailbox empty-state feature commit: `10efead` (`feat: tailor mailbox empty states to filters`), pushed to `origin/feat/mailbox-filter-empty-states`; the docs update is committed separately.
 - Recipient-first composer commit: `a9049cf` (`feat: put recipient first in drop composer`), pushed to `origin/feat/recipient-first-compose`.
 - Relay token URL commit: `fd5a327` (`fix: keep relay bearer tokens out of request URLs`), pushed to `origin/feat/relay-token-fragment`; no pull request has been created.
@@ -41,6 +42,8 @@ Updated: 2026-10-23
 - Reordered the composer so account readiness and recipient confirmation appear before note, photo, GIF, and styling controls. Existing recipient checks, draft persistence, invite flow, and send handling are reused.
 - Added filter-specific mailbox empty states for All, Samples, On a journey, Received, Sent, and Drafts. Received points to handle setup; in-transit drops point to the relay composer. Empty-search feedback is announced accessibly, and clearing it preserves the selected filter.
 - Mailbox search clear actions now return focus to the search input and preserve the selected filter. The native WebKit search cancel control is hidden so the accessible custom clear button is the only visible clear affordance.
+- Invite outcomes (shared, copied, cancelled, unavailable) persist with the owning draft, including whether a manual invite link remains available after a cancelled retry. Older local invite reminders are migrated, async results are scoped to their account/draft/handle, and the mailbox card offers a matching next step.
+- Send receipts now apply to the exact submitted composition. A different active draft is preserved, and edits made to the submitted draft in another tab are not marked sent.
 
 ## Verification
 
@@ -60,6 +63,7 @@ Updated: 2026-10-23
 - The prior production build completed. Next emitted non-fatal Browserslist freshness and ambiguous Tailwind class warnings.
 - The mailbox empty-state update was rendered in isolated headless Chrome at 360px, 390px, and 430px with no horizontal overflow. The Received search-empty state retained an H2 with polite live announcement, clearing search retained the filter, and the transit action opened the relay composer. Real screen-reader and device checks remain open.
 - Search-focus refinement `bbf9df8`: 118/118 unit tests, lint, TypeScript, and `git diff --check` passed. A Webpack production build passed in an isolated copy with Google Fonts responses mocked; live font downloads were unavailable because DNS could not resolve `fonts.googleapis.com`. The built CSS contains the native search-cancel suppression rule. Local `/` and `/mailbox` return HTTP 200. The interaction was previously verified in Chrome, but a fresh screenshot after the CSS fix remains pending because the isolated Chrome launch exited with code 134.
+- Invite recovery `c1d57e0`: `npm test` passed 126/126; lint, `npx tsc --noEmit --incremental false`, `npm run build -- --webpack`, `bash -n run.sh`, and diff checks passed. The build reports only the existing Browserslist freshness and ambiguous Tailwind easing warnings. `/compose?new=1` returned HTTP 200 on port 4004. The local dev-server start required the approved loopback permission; it is left running. No rendered browser interaction, screen-reader, real-device, or hosted two-account send was verified.
 - `./run.sh` serves the local clone at `http://localhost:4004`; the app is left running. `/relay/scan` returned HTTP 200 after the relay URL change.
 - `.env.local` is present in the active checkout, mode 600, ignored by Git, and untracked. Its values were not displayed or staged.
 - The earlier route-security work remains on `feat/relay-route-live-refresh`, is not merged, and has no pull request.
@@ -75,8 +79,9 @@ Updated: 2026-10-23
 - Restart local Supabase after its runtime is available, then verify email-link return to port 4004.
 - Verify Home/Mailbox arrival rendering at phone and desktop sizes, keyboard behavior, and screen-reader status announcements when browser automation is available; check real-device keyboard/safe-area behavior.
 - Verify the recipient-first composer in a rendered browser at 360px, 390px, and 430px, including the account-ready and signed-out states, invite return, keyboard, and safe-area behavior.
+- Verify invite sharing, cancel-and-reopen recovery, and concurrent send edits in a rendered browser and with a screen reader/real device; hosted two-account delivery remains open until the Free Drop Supabase project is available.
 - Continue to keep /letter read-only and do all new Drop work in /Users/arjeetanand/projects/drop.
 
 ## Run locally
 
-From /Users/arjeetanand/projects/drop, run npm ci, then ./run.sh. Drop uses http://localhost:4004; ./run.sh stop stops the project-owned process. The local Supabase smoke environment uses port 5004 and browser QA is reserved port 6004. Code commit `bbf9df8` is pushed to `origin/fix/mailbox-search-focus`; the branch is not merged and has no pull request. The handoff and checklist updates are committed separately.
+From /Users/arjeetanand/projects/drop, run npm ci, then ./run.sh. Drop uses http://localhost:4004; ./run.sh stop stops the project-owned process. The local Supabase smoke environment uses port 5004 and browser QA is reserved port 6004. Code commit `c1d57e0` is pushed to `origin/feat/draft-invite-progress`; the branch is not merged and has no pull request. The handoff and checklist updates will be committed separately.

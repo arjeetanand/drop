@@ -11,7 +11,7 @@ npm ci
 
 Open `http://localhost:4004`. Run `./run.sh` again to restart Drop, or `./run.sh stop` to stop it. Without Supabase credentials, the app runs with local demo data. Real account-to-account media delivery needs the Supabase migrations and private storage setup in [SUPABASE_SETUP.md](./SUPABASE_SETUP.md).
 
-The composer shows account readiness and recipient selection before the note, photo, or GIF controls. Recipient lookup and invite detours preserve the existing local draft.
+The composer shows account readiness and recipient selection before the note, photo, or GIF controls. Recipient lookup and invite detours preserve the existing local draft. Each invite outcome (shared, copied, cancelled, or unavailable) is saved with that account’s draft so the composer and mailbox can offer the right next step; a manual-copy link remains available after an unsuccessful retry. Progress clears when the handle resolves or changes, or when the drop is sent. Send receipts are tied to the submitted draft content, so edits made in another tab stay drafts.
 
 Mailbox empty states now respond to the selected filter and offer a matching next step; clearing a search keeps the selected filter and returns focus to the search field.
 
