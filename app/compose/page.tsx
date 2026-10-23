@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AlignCenter, AlignLeft, AlignRight, ArrowLeft, Check, Eye, FileImage, ImagePlus, Minus, Plus, Send, Share2, Trash2, Type, X } from 'lucide-react';
 import { getSealInfo, mockSeals, waxColors, writingPrompts, type DropDeliveryMode, type DropPayloadKind } from '@/data/mockData';
-import { canDeleteLocalDraft, clearRecipientInviteProgressForDraft, completeSuccessfulSend, deleteLocalDraft, getLetterDraft, getLetterDraftById, isLetterDraftPersisted, recordRecipientInviteProgress, restoreDeletedDraft, saveLetterDraft, setActiveLetterDraft, startNewLetter, type LetterDraftState, type LetterAlignment } from '@/lib/letterStore';
+import { canDeleteLocalDraft, clearRecipientInviteProgressForDraft, completeSuccessfulSend, deleteLocalDraft, ensureLetterDraftMediaUploadId, getLetterDraft, getLetterDraftById, isLetterDraftPersisted, recordRecipientInviteProgress, restoreDeletedDraft, saveLetterDraft, setActiveLetterDraft, startNewLetter, type LetterDraftState, type LetterAlignment } from '@/lib/letterStore';
 import { getRemoteRecentDropRecipients, issueDropClaimInvite, issueDropMediaClaimInvite, lookupDropRecipient, syncDropToBackend } from '@/lib/letterBackend';
 import { getSupabaseBrowserClient } from '@/lib/supabaseBrowser';
 import { isDropPayloadKindCompatibleWithMedia, isDropRecipientConfirmed, normalizeDropRecipient, validateDropMedia } from '@/lib/dropValidation';
@@ -363,9 +363,19 @@ function Composer() {
   const sharePrivateClaimInvite = async () => {
     if (!draft || !canSendPrivateClaim || sharingInvite || sending || deletingRef.current) return;
     const request = recipientCheckRequest.current;
-    const next = makeDraft();
+    let next = makeDraft();
     if (!next) return;
     const accountId = getLocalAccountId();
+    if (file && !next.mediaUploadId) {
+      const stableDraft = ensureLetterDraftMediaUploadId(next, accountId);
+      if (!stableDraft) {
+        setSaved(false);
+        setInviteNotice('Your drop could not be saved on this device. Check browser storage before sharing a private link.');
+        return;
+      }
+      next = stableDraft;
+      setDraft(next);
+    }
     if (!isLetterDraftPersisted(next, accountId)) {
       setSaved(false);
       setInviteNotice('Your drop could not be saved on this device. Check browser storage before sharing a private link.');

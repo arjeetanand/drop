@@ -381,6 +381,24 @@ export function isLetterDraftPersisted(
   return Boolean(stored && JSON.stringify(stored) === JSON.stringify(hydrateDraft(draft)));
 }
 
+/** Persist a stable finalized-media ID for a restored media draft before retryable upload flows. */
+export function ensureLetterDraftMediaUploadId(
+  draft: LetterDraftState,
+  accountId = getLocalAccountId(),
+): LetterDraftState | null {
+  if (getLocalAccountId() !== accountId
+    || (draft.payloadKind !== 'image' && draft.payloadKind !== 'gif')
+    || !isLetterDraftPersisted(draft, accountId)) return null;
+  if (draft.mediaUploadId) return draft;
+
+  const next = setActiveLetterDraft({
+    ...draft,
+    mediaUploadId: crypto.randomUUID(),
+    updatedAt: new Date().toISOString(),
+  });
+  return isLetterDraftPersisted(next, accountId) ? next : null;
+}
+
 function updateDraftById(
   draftId: string,
   accountId: string | null,

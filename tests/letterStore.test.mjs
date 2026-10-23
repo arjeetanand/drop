@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { clearRecipientInviteProgressForDraft, completeSuccessfulSend, copyGuestDraftToAccount, dispatchLetter, getGuestDraftById, getJourneyNotes, getLetterDraft, getLetterDraftById, getLettersWithDraft, isLetterDraftPersisted, recordRecipientInviteProgress, saveJourneyNotes, saveLetterDraft, setActiveLetterDraft, startNewLetter } from '../lib/letterStore.ts';
+import { clearRecipientInviteProgressForDraft, completeSuccessfulSend, copyGuestDraftToAccount, dispatchLetter, ensureLetterDraftMediaUploadId, getGuestDraftById, getJourneyNotes, getLetterDraft, getLetterDraftById, getLettersWithDraft, isLetterDraftPersisted, recordRecipientInviteProgress, saveJourneyNotes, saveLetterDraft, setActiveLetterDraft, startNewLetter } from '../lib/letterStore.ts';
 import { setLocalAccountId } from '../lib/localAccountScope.ts';
 
 test('transfers the starter draft and refreshes the preserved account draft snapshot', async () => {
@@ -89,6 +89,32 @@ test('retains a media upload ID when a draft is saved and resumed', () => {
     setActiveLetterDraft(resumedDraft);
     assert.equal(getLetterDraft().mediaUploadId, mediaUploadId);
     assert.equal(saveLetterDraft({ content: 'Retrying the same photo.' }).mediaUploadId, mediaUploadId);
+  } finally {
+    setLocalAccountId(null);
+    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
+    else delete globalThis.window;
+  }
+});
+
+test('backfills and persists one media upload ID for a restored draft before private invite retries', () => {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const values = new Map();
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { localStorage: { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) } },
+  });
+  try {
+    setLocalAccountId('legacy-media-invite-account');
+    const restored = saveLetterDraft({ id: 'draft-legacy-media-invite', payloadKind: 'image' });
+    assert.equal(restored.mediaUploadId, undefined);
+
+    const prepared = ensureLetterDraftMediaUploadId(restored, 'legacy-media-invite-account');
+    assert.ok(prepared?.mediaUploadId);
+    assert.equal(isLetterDraftPersisted(prepared, 'legacy-media-invite-account'), true);
+    assert.equal(
+      ensureLetterDraftMediaUploadId(prepared, 'legacy-media-invite-account')?.mediaUploadId,
+      prepared?.mediaUploadId,
+    );
   } finally {
     setLocalAccountId(null);
     if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
