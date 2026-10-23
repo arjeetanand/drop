@@ -39,9 +39,9 @@ test('rejects malformed fragments, duplicate values, and tokens placed in the qu
 test('uses generic share copy with no message or recipient details', () => {
   const payload = createDropClaimSharePayload(`https://drop.example/claim#token=${token}`);
   assert.deepEqual(payload, {
-    title: 'A note is waiting on Drop',
-    text: 'A friend left you a private note on Drop. Open the link to claim it.',
+    title: 'A private drop is waiting on Drop',
+    text: 'A friend left you a private drop on Drop. Open the link to claim it.',
     url: `https://drop.example/claim#token=${token}`,
   });
-  assert.doesNotMatch(JSON.stringify(payload), /secret subject|private message|@recipient|caption/i);
+  assert.doesNotMatch(JSON.stringify(payload), /secret subject|private message|@recipient|caption|photo|gif/i);
 });

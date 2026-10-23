@@ -104,14 +104,14 @@ export default function ClaimPage() {
           <div className="bg-[#e9edff] px-6 py-9 sm:px-12 sm:py-12">
             <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-[#2b45f7] shadow-sm"><LockKeyhole className="h-5 w-5" aria-hidden="true" /></span>
             <p className="eyebrow mt-6">Private claim invite</p>
-            <h1 className="mt-3 font-headline-md text-4xl font-semibold leading-[1.02] tracking-[-0.045em] text-ink-navy sm:text-6xl">A drop is waiting.</h1>
-            <p className="mt-5 max-w-xl text-sm leading-relaxed text-on-surface-variant sm:text-base">A friend left a private note on Drop. Sign in or create an account, choose a handle, then claim it when you’re ready. The note stays sealed until you claim it.</p>
+            <h1 className="mt-3 font-headline-md text-4xl font-semibold leading-[1.02] tracking-[-0.045em] text-ink-navy sm:text-6xl">A private drop is waiting.</h1>
+            <p className="mt-5 max-w-xl text-sm leading-relaxed text-on-surface-variant sm:text-base">A friend left something private on Drop. Sign in or create an account, choose a handle, then claim it when you’re ready. Its contents stay sealed until you claim it.</p>
           </div>
 
           <div className="px-6 py-6 sm:px-12 sm:py-8">
             <div className="flex gap-3 rounded-xl border border-[rgba(16,42,67,.12)] bg-white/75 p-4">
               <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[#26734f]" aria-hidden="true" />
-              <p className="text-sm leading-relaxed text-ink-navy">Anyone holding this link can claim the note, and only one Drop account can claim it. The link does not show the note itself.</p>
+              <p className="text-sm leading-relaxed text-ink-navy">Anyone holding this link can claim the drop, and only one Drop account can claim it. The link does not reveal what was sent. Text claim links last 7 days. Media claim links last up to 7 days, with a 30-day claim and access cutoff. After that, Drop queues unclaimed media for deletion; cleanup can be delayed if the free project is paused or unavailable.</p>
             </div>
 
             {!tokenChecked ? <p className="mt-5 text-sm text-on-surface-variant" role="status">Checking this invite…</p> : !token ? (
@@ -123,12 +123,12 @@ export default function ClaimPage() {
                 {accountState === 'checking' && <p className="text-sm text-on-surface-variant" role="status" aria-live="polite">Checking your Drop account…</p>}
                 {accountState === 'signed-out' && <Link href={profileHref} className="button-primary !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white">Sign in or create your account <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>}
                 {accountState === 'needs-profile' && <div>
-                  <p className="text-sm leading-relaxed text-on-surface-variant">You’re signed in. Choose a Drop handle first, then come back here to claim the note.</p>
+                  <p className="text-sm leading-relaxed text-on-surface-variant">You’re signed in. Choose a Drop handle first, then come back here to claim the drop.</p>
                   <Link href={profileHref} className="button-primary mt-4 !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white">Choose a Drop handle <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
                 </div>}
                 {accountState === 'ready' && <div>
-                  <p className="text-sm leading-relaxed text-on-surface-variant">Your Drop profile is ready. Claiming attaches this note to your account so you can open it privately.</p>
-                  <button type="button" onClick={() => void claim()} disabled={claiming} className="button-primary mt-4 !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white disabled:opacity-50"><CheckCircle2 className="h-4 w-4" aria-hidden="true" />{claiming ? 'Claiming note…' : 'Claim this drop'}</button>
+                  <p className="text-sm leading-relaxed text-on-surface-variant">Your Drop profile is ready. Claiming attaches this drop to your account so you can open it privately.</p>
+                  <button type="button" onClick={() => void claim()} disabled={claiming} className="button-primary mt-4 !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white disabled:opacity-50"><CheckCircle2 className="h-4 w-4" aria-hidden="true" />{claiming ? 'Claiming drop…' : 'Claim this drop'}</button>
                 </div>}
                 {(accountState === 'unavailable' || accountState === 'error') && <div>
                   <p className="text-sm leading-relaxed text-on-surface-variant">Drop could not check your account right now. Your invite is still here; try again in a moment.</p>
@@ -138,7 +138,7 @@ export default function ClaimPage() {
             )}
 
             {notice && <p className="notice error-notice mt-4" role="alert" aria-live="assertive">{notice}</p>}
-            <p className="mt-6 border-t border-[rgba(16,42,67,.12)] pt-4 text-xs leading-relaxed text-on-surface-variant">Your note and its attachments stay private until you claim this link. If you opened the invite on another device, use the original link there after signing in.</p>
+            <p className="mt-6 border-t border-[rgba(16,42,67,.12)] pt-4 text-xs leading-relaxed text-on-surface-variant">The contents and any attachment stay private until you claim this link. If you opened the invite on another device, use the original link there after signing in.</p>
           </div>
         </section>
       </div>

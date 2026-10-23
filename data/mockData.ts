@@ -37,6 +37,8 @@ export interface MockLetter {
   mediaPath?: string;
   mediaMimeType?: string;
   mediaSizeBytes?: number;
+  /** Immutable 30-day retention deadline for unclaimed media claim drops. */
+  mediaExpiresAt?: string;
   mediaUrl?: string;
   recipientInviteProgress?: RecipientInviteProgress;
   relayProgress?: RelayRecipientProgress;

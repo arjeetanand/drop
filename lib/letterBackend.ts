@@ -40,6 +40,7 @@ type LetterRow = {
   media_path: string | null;
   media_mime_type: string | null;
   media_size_bytes: number | null;
+  media_claim_expires_at?: string | null;
 };
 
 type RecipientRelayDropRow = {
@@ -313,6 +314,7 @@ function rowToLetter(row: LetterRow, userId: string, revealContent = false): Moc
     mediaPath: row.media_path || undefined,
     mediaMimeType: row.media_mime_type || undefined,
     mediaSizeBytes: row.media_size_bytes || undefined,
+    mediaExpiresAt: row.media_claim_expires_at || undefined,
   };
 }
 
@@ -340,7 +342,7 @@ function rowToRecipientRelayDrop(row: RecipientRelayDropRow): MockLetter {
 }
 
 const MAILBOX_SELECT = 'id, sender_id, sender_profile:public_profiles!letters_sender_id_fkey(username), recipient_id, sender_display_name, recipient_username, recipient_name, subject, teaser, status, seal_id, dispatched_at, delivered_at, created_at, payload_kind, delivery_mode, media_path, media_mime_type, media_size_bytes';
-const LETTER_SELECT = `${MAILBOX_SELECT}, content`;
+const LETTER_SELECT = `${MAILBOX_SELECT}, content, media_claim_expires_at`;
 
 export interface RemoteMailboxSnapshot {
   letters: MockLetter[];
@@ -656,6 +658,295 @@ export async function issueDropClaimInvite(draft: Pick<LetterDraftState, 'id' | 
   }
 }
 
+type DropMediaClaimReceipt = {
+  ok: boolean;
+  error?: string;
+  letterId?: string;
+  dispatchedAt?: string;
+  mediaPath?: string;
+  mediaMimeType?: string;
+  mediaSizeBytes?: number;
+  mediaExpiresAt?: string;
+  cleanupQueued?: boolean;
+  retryUploadId?: string;
+};
+
+type DropMediaClaimRow = {
+  id: string;
+  sender_id: string;
+  recipient_id: string | null;
+  status: MockLetter['status'];
+  delivery_mode: DropDeliveryMode | null;
+  payload_kind: DropPayloadKind | null;
+  media_path: string | null;
+  media_mime_type: string | null;
+  media_size_bytes: number | null;
+  media_claim_expires_at: string | null;
+  dispatched_at: string | null;
+};
+
+const DROP_MEDIA_ISSUE_ERROR = 'The photo/GIF drop could not be saved. Your draft is still here—try again.';
+
+async function removeStagedDropMedia(context: AuthenticatedContext, path: string) {
+  try {
+    await context.supabase.storage.from('drop-media').remove([path]);
+  } catch {
+    // A failed cleanup leaves only an inaccessible staging object.
+  }
+}
+
+type UnlinkedDropMediaCleanupStatus = 'linked' | 'queued' | 'cleaning';
+
+async function queueUnlinkedDropMediaCleanup(
+  context: AuthenticatedContext,
+  letterId: string,
+  payloadKind: 'image' | 'gif',
+  mediaPath: string,
+): Promise<UnlinkedDropMediaCleanupStatus | null> {
+  const rpcArgs = {
+    p_letter_id: letterId,
+    p_payload_kind: payloadKind,
+    p_media_path: mediaPath,
+  };
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const { data, error } = await context.supabase.rpc('queue_unlinked_drop_media_cleanup_job', rpcArgs);
+      if (!error && (data === 'linked' || data === 'queued' || data === 'cleaning')) return data;
+    } catch {
+      // The cleanup RPC is idempotent, so retry once after an ambiguous response.
+    }
+  }
+  return null;
+}
+
+async function readIssuedDropMediaReceipt(
+  context: AuthenticatedContext,
+  letterId: string,
+  payloadKind: 'image' | 'gif',
+  mediaPath: string,
+  expectedMimeType?: string,
+  expectedSizeBytes?: number,
+): Promise<DropMediaClaimReceipt | null> {
+  try {
+    const { data: row, error } = await context.supabase.from('letters')
+      .select('id, sender_id, recipient_id, status, delivery_mode, payload_kind, media_path, media_mime_type, media_size_bytes, media_claim_expires_at, dispatched_at')
+      .eq('id', letterId)
+      .eq('sender_id', context.user.id)
+      .maybeSingle<DropMediaClaimRow>();
+    if (error || !row
+      || row.sender_id !== context.user.id
+      || row.recipient_id !== null
+      || row.status !== 'claim_pending'
+      || row.delivery_mode !== 'instant'
+      || row.payload_kind !== payloadKind
+      || row.media_path !== mediaPath
+      || !row.media_mime_type
+      || !row.media_size_bytes
+      || !row.media_claim_expires_at
+      || !Number.isFinite(Date.parse(row.media_claim_expires_at))
+      || Date.parse(row.media_claim_expires_at) <= Date.now()
+      || (expectedMimeType !== undefined && row.media_mime_type !== expectedMimeType)
+      || (expectedSizeBytes !== undefined && row.media_size_bytes !== expectedSizeBytes)) return null;
+    return {
+      ok: true,
+      letterId,
+      dispatchedAt: row.dispatched_at || undefined,
+      mediaPath,
+      mediaMimeType: row.media_mime_type,
+      mediaSizeBytes: row.media_size_bytes,
+      mediaExpiresAt: row.media_claim_expires_at,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function recoverOrQueueFailedDropMedia(
+  context: AuthenticatedContext,
+  letterId: string,
+  payloadKind: 'image' | 'gif',
+  mediaPath: string,
+  expectedAccountId: string,
+  failureMessage = DROP_MEDIA_ISSUE_ERROR,
+): Promise<DropMediaClaimReceipt> {
+  const status = await queueUnlinkedDropMediaCleanup(context, letterId, payloadKind, mediaPath);
+  if (status === 'linked') {
+    const receipt = await readIssuedDropMediaReceipt(context, letterId, payloadKind, mediaPath);
+    if (receipt) {
+      return isCurrentLocalAccount(expectedAccountId)
+        ? receipt
+        : { ...receipt, ok: false, error: 'Your account changed while the drop was being saved. Check Sent before retrying.' };
+    }
+  }
+  if (status === 'queued' || status === 'cleaning') {
+    return {
+      ok: false,
+      error: failureMessage,
+      cleanupQueued: true,
+      retryUploadId: crypto.randomUUID(),
+    };
+  }
+  return { ok: false, error: failureMessage };
+}
+
+function validFinalizedDropMedia(kind: 'image' | 'gif', mimeType: string, sizeBytes: number) {
+  const validMime = kind === 'gif'
+    ? mimeType === 'image/gif'
+    : ['image/jpeg', 'image/png', 'image/webp'].includes(mimeType);
+  return validMime && Number.isInteger(sizeBytes) && sizeBytes > 0 && sizeBytes <= 8_388_608;
+}
+
+export async function issueDropMediaClaimInvite(
+  draft: Pick<LetterDraftState, 'id' | 'subject' | 'content' | 'payloadKind' | 'deliveryMode' | 'mediaUploadId'>,
+  mediaFile: File,
+  expectedAccountId: string | null,
+  token: string,
+): Promise<DropMediaClaimReceipt> {
+  if (!expectedAccountId) return { ok: false, error: 'Connect a Drop account before sending a private photo/GIF invite.' };
+  if ((draft.payloadKind !== 'image' && draft.payloadKind !== 'gif') || draft.deliveryMode !== 'instant') {
+    return { ok: false, error: 'Private claim links are available for instant photo and GIF drops.' };
+  }
+  if (!isDropClaimToken(token)) return { ok: false, error: 'This private invite could not be prepared. Try again.' };
+  const validationError = validateDropMedia(mediaFile);
+  if (validationError) return { ok: false, error: validationError };
+  if ((mediaFile.type === 'image/gif' ? 'gif' : 'image') !== draft.payloadKind) {
+    return { ok: false, error: 'The selected file does not match this drop type.' };
+  }
+
+  const context = await getAuthenticatedClient();
+  if (!context) return { ok: false, error: 'Connect a Drop account before sending a private photo/GIF invite.' };
+  if (context.user.id !== expectedAccountId || !isCurrentLocalAccount(expectedAccountId)) {
+    return { ok: false, error: 'Your account changed while you were preparing this drop. Review it and try again.' };
+  }
+
+  const stagedPath = createStagedDropMediaPath(context.user.id, draft.id, draft.mediaUploadId || crypto.randomUUID());
+  if (!stagedPath) return { ok: false, error: 'This draft cannot accept an image attachment. Start a new draft and try again.' };
+  const paths = resolveDropMediaPaths(stagedPath, context.user.id);
+  if (!paths) return { ok: false, error: 'This draft cannot accept an image attachment. Start a new draft and try again.' };
+
+  let finalizeStarted = false;
+  let issueCommitted = false;
+  let committedReceipt: Pick<DropMediaClaimReceipt, 'letterId' | 'mediaPath' | 'mediaMimeType' | 'mediaSizeBytes'> | null = null;
+  try {
+    const { error: stagedUploadError } = await context.supabase.storage.from('drop-media').upload(stagedPath, mediaFile, {
+      contentType: mediaFile.type,
+      upsert: false,
+    });
+    if (stagedUploadError) {
+      const uploadErrorDetails = stagedUploadError as typeof stagedUploadError & {
+        status?: number;
+        statusCode?: string;
+      };
+      const duplicateStage = uploadErrorDetails.status === 409
+        || uploadErrorDetails.statusCode === 'Duplicate'
+        || /already exists|duplicate/i.test(stagedUploadError.message);
+      if (!duplicateStage) {
+        return { ok: false, error: 'The photo/GIF could not be uploaded. Your draft is still here—retry the upload.' };
+      }
+      // A duplicate is expected after a retry with this draft's stable upload
+      // ID. The finalizer verifies the stored object before returning its path.
+    }
+    const { data: { session } } = await context.supabase.auth.getSession();
+    if (!session?.access_token) {
+      await removeStagedDropMedia(context, stagedPath);
+      return { ok: false, error: 'Sign in again before sending this photo/GIF drop.' };
+    }
+
+    finalizeStarted = true;
+    const response = await fetch('/api/drop-media/finalize', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stagedPath, payloadKind: draft.payloadKind }),
+    });
+    const finalized = await response.json().catch(() => null) as {
+      error?: string;
+      mediaPath?: string;
+      mediaMimeType?: string;
+      mediaSizeBytes?: number;
+    } | null;
+    if (!response.ok
+      || !finalized
+      || finalized.mediaPath !== paths.finalPath
+      || typeof finalized.mediaMimeType !== 'string'
+      || typeof finalized.mediaSizeBytes !== 'number'
+      || !validFinalizedDropMedia(draft.payloadKind, finalized.mediaMimeType, finalized.mediaSizeBytes)) {
+      await removeStagedDropMedia(context, stagedPath);
+      return recoverOrQueueFailedDropMedia(
+        context,
+        draft.id,
+        draft.payloadKind,
+        paths.finalPath,
+        expectedAccountId,
+        finalized?.error || 'The photo/GIF could not be validated. Your draft is still here—try again.',
+      );
+    }
+
+    const mediaPath = finalized.mediaPath;
+    const mediaMimeType = finalized.mediaMimeType;
+    const mediaSizeBytes = finalized.mediaSizeBytes;
+    const rpcArgs = {
+      p_letter_id: draft.id,
+      p_subject: draft.subject.trim() || (draft.payloadKind === 'gif' ? 'A GIF for you' : 'A photo for you'),
+      p_content: draft.content,
+      p_payload_kind: draft.payloadKind,
+      p_media_path: mediaPath,
+      p_media_mime_type: mediaMimeType,
+      p_media_size_bytes: mediaSizeBytes,
+      p_token: token,
+    };
+    committedReceipt = { letterId: draft.id, mediaPath, mediaMimeType, mediaSizeBytes };
+
+    // Retrying the exact capability and payload is safe: the RPC is idempotent
+    // for the same letter and does not extend the original media deadline.
+    let issued: { data: unknown; error: unknown } | null = null;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        issued = await context.supabase.rpc('issue_drop_media_claim_invite', rpcArgs);
+        if (!issued.error) break;
+      } catch {
+        // The server may have committed before the connection failed. Retry
+        // with the same token and payload so RPC idempotency can resolve it.
+      }
+    }
+    if (!issued || issued.error || issued.data !== draft.id) {
+      await removeStagedDropMedia(context, stagedPath);
+      return recoverOrQueueFailedDropMedia(
+        context, draft.id, draft.payloadKind, mediaPath, expectedAccountId,
+      );
+    }
+    issueCommitted = true;
+    await removeStagedDropMedia(context, stagedPath);
+
+    const receipt = await readIssuedDropMediaReceipt(
+      context, draft.id, draft.payloadKind, mediaPath, mediaMimeType, mediaSizeBytes,
+    );
+    if (receipt) {
+      if (!isCurrentLocalAccount(expectedAccountId)) {
+        return { ...receipt, ok: false, error: 'Your account changed while the drop was being saved. Check Sent before retrying.' };
+      }
+      return receipt;
+    }
+    if (!isCurrentLocalAccount(expectedAccountId)) {
+      return { ok: false, error: 'Your account changed while the drop was being saved. Check Sent before retrying.', letterId: draft.id, mediaPath, mediaMimeType, mediaSizeBytes };
+    }
+    // The RPC succeeded, so retain the object even if this receipt read timed out.
+    return { ok: true, letterId: draft.id, mediaPath, mediaMimeType, mediaSizeBytes };
+  } catch {
+    await removeStagedDropMedia(context, stagedPath);
+    if (issueCommitted && committedReceipt) {
+      return isCurrentLocalAccount(expectedAccountId)
+        ? { ok: true, ...committedReceipt }
+        : { ok: false, error: 'Your account changed while the drop was being saved. Check Sent before retrying.', ...committedReceipt };
+    }
+    if (finalizeStarted) {
+      return recoverOrQueueFailedDropMedia(
+        context, draft.id, draft.payloadKind, paths.finalPath, expectedAccountId,
+      );
+    }
+    return { ok: false, error: DROP_MEDIA_ISSUE_ERROR };
+  }
+}
+
 export async function reissueDropClaimInvite(letterId: string, expectedAccountId: string | null, token: string): Promise<{ ok: boolean; error?: string; letterId?: string }> {
   if (!expectedAccountId) return { ok: false, error: 'Connect a Drop account before sharing a fresh private note link.' };
   if (!isDropClaimToken(token)) return { ok: false, error: 'This private invite could not be prepared. Try again.' };
@@ -679,6 +970,74 @@ export async function reissueDropClaimInvite(letterId: string, expectedAccountId
     return { ok: true, letterId: data };
   } catch {
     return { ok: false, error: 'A fresh private link could not be saved. Try again.' };
+  }
+}
+
+export async function reissueDropMediaClaimInvite(
+  letterId: string,
+  expectedAccountId: string | null,
+  token: string,
+): Promise<DropMediaClaimReceipt> {
+  if (!expectedAccountId) return { ok: false, error: 'Connect a Drop account before sharing a fresh private photo/GIF link.' };
+  if (!isDropClaimToken(token)) return { ok: false, error: 'This private invite could not be prepared. Try again.' };
+  const context = await getAuthenticatedClient();
+  if (!context) return { ok: false, error: 'Connect a Drop account before sharing a fresh private photo/GIF link.' };
+  if (context.user.id !== expectedAccountId || !isCurrentLocalAccount(expectedAccountId)) {
+    return { ok: false, error: 'Your account changed while you were preparing this link. Try again.' };
+  }
+
+  try {
+    const { data: row, error: readError } = await context.supabase.from('letters')
+      .select('id, sender_id, recipient_id, status, delivery_mode, payload_kind, media_path, media_mime_type, media_size_bytes, media_claim_expires_at, dispatched_at')
+      .eq('id', letterId)
+      .eq('sender_id', context.user.id)
+      .maybeSingle<DropMediaClaimRow>();
+    if (readError || !row
+      || row.sender_id !== context.user.id
+      || row.recipient_id !== null
+      || row.status !== 'claim_pending'
+      || row.delivery_mode !== 'instant'
+      || (row.payload_kind !== 'image' && row.payload_kind !== 'gif')
+      || !row.media_path
+      || !row.media_mime_type
+      || !row.media_size_bytes
+      || !row.media_claim_expires_at
+      || !isDropMediaFinalPath(row.media_path, context.user.id, row.id)) {
+      return { ok: false, error: 'This photo/GIF invite is no longer available.' };
+    }
+    if (!validFinalizedDropMedia(row.payload_kind, row.media_mime_type, row.media_size_bytes)) {
+      return { ok: false, error: 'This photo/GIF invite is no longer available.' };
+    }
+
+    let reissued: { data: unknown; error: unknown } | null = null;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        reissued = await context.supabase.rpc('reissue_drop_claim_invite', {
+          p_letter_id: letterId,
+          p_token: token,
+        });
+        if (!reissued.error) break;
+      } catch {
+        // The same invite token makes a retry safe after an ambiguous response.
+      }
+    }
+    if (!reissued || reissued.error || reissued.data !== letterId) {
+      return { ok: false, error: 'A fresh private photo/GIF link could not be saved. Try again.' };
+    }
+    if (!isCurrentLocalAccount(expectedAccountId)) {
+      return { ok: false, error: 'Your account changed while the link was being saved. Try again.' };
+    }
+    return {
+      ok: true,
+      letterId,
+      dispatchedAt: row.dispatched_at || undefined,
+      mediaPath: row.media_path,
+      mediaMimeType: row.media_mime_type,
+      mediaSizeBytes: row.media_size_bytes,
+      mediaExpiresAt: row.media_claim_expires_at,
+    };
+  } catch {
+    return { ok: false, error: 'A fresh private photo/GIF link could not be saved. Try again.' };
   }
 }
 

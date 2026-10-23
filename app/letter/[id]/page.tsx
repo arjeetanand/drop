@@ -5,10 +5,10 @@ import Link from 'next/link';
 import { ArrowLeft, ArrowRight, Check, LockKeyhole, MailOpen, Share2, Sparkles } from 'lucide-react';
 import { useParams, useSearchParams } from 'next/navigation';
 import type { MockLetter } from '@/data/mockData';
-import { getRemoteDropDirection, getRemoteLetterById, getRemoteLetters, getRemoteReactionSnapshot, getRemoteSenderClaimStatusForDrop, reissueDropClaimInvite, saveRemoteReaction, subscribeToIncomingDropInbox, subscribeToSenderDropReactions } from '@/lib/letterBackend';
+import { getRemoteDropDirection, getRemoteLetterById, getRemoteLetters, getRemoteReactionSnapshot, getRemoteSenderClaimStatusForDrop, reissueDropClaimInvite, reissueDropMediaClaimInvite, saveRemoteReaction, subscribeToIncomingDropInbox, subscribeToSenderDropReactions } from '@/lib/letterBackend';
 import { getLetterById } from '@/lib/letterStore';
 import { getLiveClaimCompletionUpdate } from '@/lib/liveClaimStatus';
-import { getClaimedDropLabel, isEligibleSenderClaim, needsSenderClaimStatusRetry, retainKnownClaimStatus } from '@/lib/claimInviteStatus';
+import { getClaimInviteExpiryDuration, getClaimedDropLabel, isEligiblePendingSenderClaim, isEligibleSenderClaim, needsSenderClaimStatusRetry, retainKnownClaimStatus } from '@/lib/claimInviteStatus';
 import { getInitialSenderReactionBaseline, getSenderReactionReadUpdate } from '@/lib/liveReactionState';
 import { DEMO_REACTION_EMOJIS, saveDemoReaction } from '@/lib/demoReactionStore';
 import { getDraftAttachment } from '@/lib/letterMediaStore';
@@ -22,6 +22,14 @@ import { getLocalAccountId, isCurrentLocalAccount } from '@/lib/localAccountScop
 import { shareInviteLink } from '@/lib/shareInvite';
 
 const inFlightClaimReissues = new Set<string>();
+
+function formatMediaExpiryDate(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? null
+    : new Intl.DateTimeFormat(undefined, { dateStyle: 'long' }).format(date);
+}
 
 function LoadingLetter() {
   return (
@@ -256,12 +264,7 @@ export default function LetterArrivalPage() {
   const senderDropId = letter && letter.direction === 'sent' && !letter.sample && !letter.localDemo ? letter.id : null;
   const claimedLabel = letter ? getClaimedDropLabel(letter) : null;
   const pendingClaimDropId = letter
-    && letter.direction === 'sent'
-    && letter.status === 'claim_pending'
-    && letter.payloadKind === 'text'
-    && letter.deliveryMode === 'instant'
-    && !letter.sample
-    && !letter.localDemo
+    && isEligiblePendingSenderClaim(letter)
     ? letter.id
     : null;
   const shouldRetryClaimStatus = claimStatusNeedsRetry
@@ -427,7 +430,7 @@ export default function LetterArrivalPage() {
   };
 
   const shareFreshClaimLink = async () => {
-    if (!letter || letter.status !== 'claim_pending' || letter.direction !== 'sent'
+    if (!letter || !isEligiblePendingSenderClaim(letter)
       || sharingClaimLink || inFlightClaimReissues.has(letter.id)) return;
     inFlightClaimReissues.add(letter.id);
     const accountId = getLocalAccountId();
@@ -438,9 +441,9 @@ export default function LetterArrivalPage() {
       const performReissue = async () => {
         const detail = await getRemoteLetterById(letter.id);
         if (!isCurrentLocalAccount(accountId)) return;
-        if (!detail || detail.direction !== 'sent' || detail.status !== 'claim_pending'
-          || (detail.payloadKind || 'text') !== 'text' || (detail.deliveryMode || 'instant') !== 'instant'
-          || !detail.excerpt.trim()) {
+        if (!detail || !isEligiblePendingSenderClaim(detail)
+          || ((detail.payloadKind || 'text') === 'text' && !detail.excerpt.trim())
+          || ((detail.payloadKind || 'text') !== 'text' && !detail.mediaPath)) {
           setClaimLinkNotice('A fresh link could not be prepared. Check your connection and try again.');
           return;
         }
@@ -450,11 +453,21 @@ export default function LetterArrivalPage() {
           setClaimLinkNotice('This browser could not prepare a private link. Try again from the original device.');
           return;
         }
-        const issued = await reissueDropClaimInvite(detail.id, accountId, token);
+        let issued: { ok: boolean; error?: string; mediaExpiresAt?: string };
+        if ((detail.payloadKind || 'text') === 'text') {
+          issued = await reissueDropClaimInvite(detail.id, accountId, token);
+        } else {
+          issued = await reissueDropMediaClaimInvite(detail.id, accountId, token);
+        }
         if (!isCurrentLocalAccount(accountId)) return;
         if (!issued.ok) {
           setClaimLinkNotice(issued.error || 'A fresh link could not be saved. Try again.');
           return;
+        }
+        if (issued.mediaExpiresAt) {
+          setLetter((current) => current?.id === detail.id
+            ? { ...current, mediaExpiresAt: issued.mediaExpiresAt }
+            : current);
         }
         const payload = createDropClaimSharePayload(url);
         const result = await shareInviteLink(
@@ -468,7 +481,9 @@ export default function LetterArrivalPage() {
         );
         if (!isCurrentLocalAccount(accountId)) return;
         if (result === 'shared' || result === 'copied') {
-          setClaimLinkNotice('Fresh private link sent. The older link has been replaced.');
+          setClaimLinkNotice((detail.payloadKind || 'text') === 'text'
+            ? 'Fresh private link sent. The older link has been replaced.'
+            : `Fresh private link sent. It ${getClaimInviteExpiryDuration(detail.payloadKind)}; the original media deletion date is unchanged.`);
         } else {
           setClaimLinkUrl(url);
           setClaimLinkNotice(result === 'cancelled'
@@ -566,6 +581,7 @@ export default function LetterArrivalPage() {
     && !letter.localDemo
     && letter.status === 'dispatched';
   const encodedLetterId = encodeURIComponent(letter.id);
+  const mediaExpiryLabel = formatMediaExpiryDate(letter.mediaExpiresAt);
   const dropBackHref = isReceived && !letter.sample && letter.senderUsername
     ? `/compose?new=1&recipient=${encodeURIComponent(`@${letter.senderUsername}`)}`
     : null;
@@ -618,16 +634,17 @@ export default function LetterArrivalPage() {
 
         {letter.sample && <p className="notice mt-5" role="status">{letter.direction === 'received' ? 'Sample drop · this is an example, not a message you received. Reactions stay on this device.' : 'Sample drop · an example only. Nothing was sent or delivered.'}</p>}
         {letter.localDemo && <p className="notice mt-5" role="status">Same-device demo · nothing was sent or shared.</p>}
-        {letter.direction === 'sent' && letter.status === 'claim_pending' && <section className="mt-6 max-w-[760px] rounded-2xl border border-[#e9d6c7] bg-[#fff6ec] p-4 sm:p-5" aria-labelledby="claim-link-heading">
+        {isEligiblePendingSenderClaim(letter) && <section className="mt-6 max-w-[760px] rounded-2xl border border-[#e9d6c7] bg-[#fff6ec] p-4 sm:p-5" aria-labelledby="claim-link-heading">
           <p className="eyebrow">Private claim link</p>
           <h2 id="claim-link-heading" className="mt-2 font-headline-md text-2xl text-ink-navy">Waiting for them to claim.</h2>
-          <p className="mt-2 text-sm leading-relaxed text-on-surface-variant">If their link expired or got lost, share a fresh one. Anyone holding the current link can claim the note; making a fresh link replaces the old one.</p>
+          <p className="mt-2 text-sm leading-relaxed text-on-surface-variant">If their link expired or got lost, share a fresh one. Each link {getClaimInviteExpiryDuration(letter.payloadKind)}. Anyone holding the current link can claim this drop; making a fresh link replaces the old one.</p>
+          {letter.payloadKind !== 'text' && <p className="mt-3 rounded-xl border border-[rgba(16,42,67,.12)] bg-white/75 p-3 text-xs leading-relaxed text-on-surface-variant">If unclaimed after 30 days{mediaExpiryLabel ? ` (on ${mediaExpiryLabel})` : ''}, this drop’s claim and media access end. Drop queues the attachment for deletion; cleanup can be delayed if the free project is paused or unavailable. Reissuing a link does not extend the cutoff.</p>}
           <button type="button" onClick={() => void shareFreshClaimLink()} disabled={sharingClaimLink} className="button-primary mt-4 !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white disabled:opacity-50">
             <Share2 className="h-4 w-4" aria-hidden="true" />{sharingClaimLink ? 'Preparing fresh link…' : 'Share a fresh private link'}
           </button>
           {claimLinkNotice && <p className="field-help mt-3 break-words" role="status" aria-live="polite">{claimLinkNotice}</p>}
           {claimLinkUrl && <>
-            <code tabIndex={0} aria-label="Select and copy the fresh private note link" className="mt-3 block select-all break-all rounded-lg bg-white/80 px-2 py-2 font-mono text-[0.68rem] text-ink-navy">{claimLinkUrl}</code>
+            <code tabIndex={0} aria-label="Select and copy the fresh private claim link" className="mt-3 block select-all break-all rounded-lg bg-white/80 px-2 py-2 font-mono text-[0.68rem] text-ink-navy">{claimLinkUrl}</code>
             <button type="button" onClick={() => void copyFreshClaimLink()} className="button-secondary mt-2 !min-h-11 !rounded-xl">Copy fresh private link</button>
           </>}
         </section>}

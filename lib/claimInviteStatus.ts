@@ -1,10 +1,60 @@
 import type { MockLetter } from '@/data/mockData';
 
+export function getClaimInviteExpiryDuration(payloadKind?: MockLetter['payloadKind']): string {
+  return payloadKind === 'image' || payloadKind === 'gif'
+    ? 'lasts up to 7 days, with a 30-day claim cutoff'
+    : 'lasts 7 days';
+}
+
+export function getConfirmedMediaRetryUploadId(
+  receipt: { cleanupQueued?: boolean; retryUploadId?: string },
+  currentUploadId?: string,
+): string | null {
+  const retryUploadId = receipt.retryUploadId?.trim();
+  return receipt.cleanupQueued === true && retryUploadId && retryUploadId !== currentUploadId
+    ? retryUploadId
+    : null;
+}
+
+export function canOfferPrivateClaimInvite(input: {
+  accountConnected: boolean;
+  recipientStatus: string;
+  recipientUsername: string | null;
+  checkedUsername: string | null;
+  deliveryMode?: MockLetter['deliveryMode'];
+  payloadKind?: MockLetter['payloadKind'];
+  hasText: boolean;
+  hasMedia: boolean;
+  attachmentSaved: boolean;
+  attachmentBusy: boolean;
+}): boolean {
+  if (!input.accountConnected
+    || input.recipientStatus !== 'not-found'
+    || !input.recipientUsername
+    || input.checkedUsername !== input.recipientUsername
+    || input.deliveryMode !== 'instant'
+    || input.attachmentBusy) return false;
+
+  const payloadKind = input.payloadKind || 'text';
+  return payloadKind === 'text'
+    ? input.hasText && !input.hasMedia
+    : input.hasMedia && input.attachmentSaved;
+}
+
 export function isEligibleSenderClaim(letter: MockLetter): boolean {
   return letter.direction === 'sent'
     && letter.status === 'delivered'
     && letter.deliveryMode === 'instant'
-    && letter.payloadKind === 'text'
+    && ['text', 'image', 'gif'].includes(letter.payloadKind || 'text')
+    && !letter.sample
+    && !letter.localDemo;
+}
+
+export function isEligiblePendingSenderClaim(letter: MockLetter): boolean {
+  return letter.direction === 'sent'
+    && letter.status === 'claim_pending'
+    && letter.deliveryMode === 'instant'
+    && ['text', 'image', 'gif'].includes(letter.payloadKind || 'text')
     && !letter.sample
     && !letter.localDemo;
 }

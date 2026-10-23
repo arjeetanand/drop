@@ -33,8 +33,8 @@ export function readDropClaimTokenFromFragment(fragment: string): string | null 
 
 export function createDropClaimSharePayload(url: string) {
   return {
-    title: 'A note is waiting on Drop',
-    text: 'A friend left you a private note on Drop. Open the link to claim it.',
+    title: 'A private drop is waiting on Drop',
+    text: 'A friend left you a private drop on Drop. Open the link to claim it.',
     url,
   };
 }
