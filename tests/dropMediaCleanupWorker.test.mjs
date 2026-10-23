@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   isValidCleanupJob,
+  isValidPendingDropMediaCleanupCandidate,
   reconcileAndLeaseCleanupJobs,
   removeOrConfirmAbsent,
   validJobPath,
@@ -28,6 +29,27 @@ test('validates cleanup RPC job and path fields before path processing', () => {
   assert.equal(isValidCleanupJob({ ...validJob, job_id: Number.MAX_SAFE_INTEGER + 1 }), false);
   assert.equal(isValidCleanupJob({ ...validJob, lease_token: 'bad' }), false);
   assert.equal(isValidCleanupJob(null), false);
+});
+
+test('accepts only exact, owner-scoped pending media cleanup candidates', () => {
+  const candidate = {
+    sender_id: senderId,
+    draft_id: 'draft-1',
+    media_path: `${senderId}/pending/draft-1/${objectId}`,
+  };
+  assert.equal(isValidPendingDropMediaCleanupCandidate(candidate), true);
+  assert.equal(isValidPendingDropMediaCleanupCandidate({
+    ...candidate,
+    media_path: `${senderId}/pending/draft-1/${objectId}/${objectId}`,
+  }), true);
+  assert.equal(isValidPendingDropMediaCleanupCandidate({ ...candidate, sender_id: 'not-a-uuid' }), false);
+  assert.equal(isValidPendingDropMediaCleanupCandidate({ ...candidate, draft_id: '../draft' }), false);
+  assert.equal(isValidPendingDropMediaCleanupCandidate({ ...candidate, media_path: `${senderId}/draft-1/${objectId}` }), false);
+  assert.equal(isValidPendingDropMediaCleanupCandidate({ ...candidate, media_path: `${senderId}/pending/other/${objectId}` }), false);
+  assert.equal(isValidPendingDropMediaCleanupCandidate({ ...candidate, media_path: `${senderId}/pending/draft-1/not-a-uuid` }), false);
+  assert.equal(isValidPendingDropMediaCleanupCandidate({ ...candidate, media_path: `${senderId}/pending/draft-1/${objectId}/extra` }), false);
+  assert.equal(isValidPendingDropMediaCleanupCandidate({ ...candidate, media_path: `${senderId}/pending/draft-1/${objectId}/not-a-uuid` }), false);
+  assert.equal(isValidPendingDropMediaCleanupCandidate(null), false);
 });
 
 test('reconciles orphan objects before leasing the cleanup queue', async () => {

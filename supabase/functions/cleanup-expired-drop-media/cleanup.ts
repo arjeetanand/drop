@@ -11,6 +11,12 @@ export type ValidCleanupJobPath = CleanupJob & {
   media_path: string;
 };
 
+export type PendingDropMediaCleanupCandidate = {
+  sender_id: string;
+  draft_id: string;
+  media_path: string;
+};
+
 export type CleanupStorageBucket = {
   exists(path: string): Promise<{ data: boolean | null; error: unknown }>;
   remove(paths: string[]): Promise<{ error: unknown }>;
@@ -47,6 +53,26 @@ export function validJobPath(job: CleanupJob): job is ValidCleanupJobPath {
     && segments[0] === job.sender_id
     && segments[1] === job.letter_id
     && UUID.test(segments[2]);
+}
+
+export function isValidPendingDropMediaCleanupCandidate(
+  candidate: unknown,
+): candidate is PendingDropMediaCleanupCandidate {
+  if (!candidate || typeof candidate !== 'object') return false;
+  const item = candidate as Partial<PendingDropMediaCleanupCandidate>;
+  if (typeof item.sender_id !== 'string'
+    || typeof item.draft_id !== 'string'
+    || typeof item.media_path !== 'string'
+    || !UUID.test(item.sender_id)
+    || !PATH_SEGMENT.test(item.draft_id)) return false;
+
+  const segments = item.media_path.split('/');
+  return (segments.length === 4 || segments.length === 5)
+    && segments[0] === item.sender_id
+    && segments[1] === 'pending'
+    && segments[2] === item.draft_id
+    && UUID.test(segments[3])
+    && (segments.length === 4 || UUID.test(segments[4]));
 }
 
 export async function reconcileAndLeaseCleanupJobs(

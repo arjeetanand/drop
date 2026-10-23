@@ -53,8 +53,9 @@ test('a failed existing-drop lookup returns a retryable response without creatin
   assert.equal(uploads, 0);
 });
 
-test('a retry after losing the finalize response reuses an unlinked final object', async () => {
+test('a retry after losing the finalize response reuses its stable final object with a fresh attempt path', async () => {
   const mediaBytes = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
+  const retryStagedPath = `${userId}/pending/draft-1/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb`;
   const stagedObjects = new Map([[stagedPath, mediaBytes]]);
   const finalObjects = new Map();
   let finalObjectsWritten = 0;
@@ -94,15 +95,52 @@ test('a retry after losing the finalize response reuses an unlinked final object
   }));
 
   await finalize(stagedPath); // The client loses this response before linking the letter row.
-  // The client retains the upload ID and re-stages the same image before retrying.
-  stagedObjects.set(stagedPath, mediaBytes);
-  const retryResponse = await finalize(stagedPath);
+  // A retry uses a fresh staging key but retains the draft's final-media ID.
+  stagedObjects.set(retryStagedPath, mediaBytes);
+  const retryResponse = await finalize(retryStagedPath);
   const result = await retryResponse.json();
 
   assert.equal(retryResponse.status, 200);
   assert.equal(result.mediaPath, `${userId}/draft-1/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa`);
   assert.equal(finalObjectsWritten, 1);
   assert.equal(finalObjects.size, 1);
+});
+
+test('a linked drop retry returns its saved final path even when the attempt path differs', async () => {
+  const mediaBytes = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
+  const retryStagedPath = `${userId}/pending/draft-1/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/cccccccc-cccc-4ccc-8ccc-cccccccccccc`;
+  const savedFinalPath = `${userId}/draft-1/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa`;
+  const removedPaths = [];
+  const linkedDropServiceClient = {
+    storage: {
+      from: () => ({
+        download: async (path) => path === retryStagedPath || path === savedFinalPath
+          ? { data: new Blob([mediaBytes]), error: null }
+          : { data: null, error: new Error('Object not found') },
+        upload: async () => { throw new Error('An already-linked media path must not be rewritten'); },
+        remove: async (paths) => { removedPaths.push(...paths); return { error: null }; },
+      }),
+    },
+    from: () => ({
+      select() { return this; },
+      eq() { return this; },
+      maybeSingle: async () => ({
+        data: { media_path: savedFinalPath, media_mime_type: 'image/gif', media_size_bytes: mediaBytes.length },
+        error: null,
+      }),
+    }),
+  };
+  globalThis.__dropFinalizeSupabaseFactory = (_url, key) => key === 'local-anon' ? authClient : linkedDropServiceClient;
+
+  const response = await POST(new Request('http://localhost/api/drop-media/finalize', {
+    method: 'POST',
+    headers: { authorization: 'Bearer local-test', 'content-type': 'application/json' },
+    body: JSON.stringify({ stagedPath: retryStagedPath, payloadKind: 'gif' }),
+  }));
+
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).mediaPath, savedFinalPath);
+  assert.deepEqual(removedPaths, [retryStagedPath]);
 });
 
 test('a linked drop conflict removes the newly staged attachment', async () => {

@@ -6,7 +6,7 @@ import { getPendingRemoteProfileSnapshot, suggestedDropUsername, withPendingRemo
 import { getSupabaseBrowserClient } from '@/lib/supabaseBrowser';
 import { isCurrentLocalAccount } from '@/lib/localAccountScope';
 import { normalizeDropRecipient, validateDropMedia } from '@/lib/dropValidation';
-import { createStagedDropMediaPath, isDropMediaFinalPath, resolveDropMediaPaths } from '@/lib/dropMediaStorage';
+import { createStagedDropMediaAttemptPath, isDropMediaFinalPath, resolveDropMediaPaths } from '@/lib/dropMediaStorage';
 import { mergeDropReactions, type DropReactionRow } from '@/lib/mergeDropReactions';
 import { matchesStoredDropMetadata, type DropSendIntent, type StoredDropSend } from '@/lib/dropSendRecovery';
 import { fetchAllPages, fetchPagedMailbox } from '@/lib/fetchAllPages';
@@ -766,18 +766,9 @@ async function recoverOrQueueFailedDropMedia(
   letterId: string,
   payloadKind: 'image' | 'gif',
   mediaPath: string,
-  expectedAccountId: string,
   failureMessage = DROP_MEDIA_ISSUE_ERROR,
 ): Promise<DropMediaClaimReceipt> {
   const status = await queueUnlinkedDropMediaCleanup(context, letterId, payloadKind, mediaPath);
-  if (status === 'linked') {
-    const receipt = await readIssuedDropMediaReceipt(context, letterId, payloadKind, mediaPath);
-    if (receipt) {
-      return isCurrentLocalAccount(expectedAccountId)
-        ? receipt
-        : { ...receipt, ok: false, error: 'Your account changed while the drop was being saved. Check Sent before retrying.' };
-    }
-  }
   if (status === 'queued' || status === 'cleaning') {
     return {
       ok: false,
@@ -819,7 +810,7 @@ export async function issueDropMediaClaimInvite(
     return { ok: false, error: 'Your account changed while you were preparing this drop. Review it and try again.' };
   }
 
-  const stagedPath = createStagedDropMediaPath(context.user.id, draft.id, draft.mediaUploadId || crypto.randomUUID());
+  const stagedPath = createStagedDropMediaAttemptPath(context.user.id, draft.id, draft.mediaUploadId || crypto.randomUUID());
   if (!stagedPath) return { ok: false, error: 'This draft cannot accept an image attachment. Start a new draft and try again.' };
   const paths = resolveDropMediaPaths(stagedPath, context.user.id);
   if (!paths) return { ok: false, error: 'This draft cannot accept an image attachment. Start a new draft and try again.' };
@@ -843,8 +834,8 @@ export async function issueDropMediaClaimInvite(
       if (!duplicateStage) {
         return { ok: false, error: 'The photo/GIF could not be uploaded. Your draft is still here—retry the upload.' };
       }
-      // A duplicate is expected after a retry with this draft's stable upload
-      // ID. The finalizer verifies the stored object before returning its path.
+      // A collision is safe to continue only because the finalizer validates
+      // the staged bytes before it returns a finalized media path.
     }
     const { data: { session } } = await context.supabase.auth.getSession();
     if (!session?.access_token) {
@@ -866,7 +857,8 @@ export async function issueDropMediaClaimInvite(
     } | null;
     if (!response.ok
       || !finalized
-      || finalized.mediaPath !== paths.finalPath
+      || typeof finalized.mediaPath !== 'string'
+      || !isDropMediaFinalPath(finalized.mediaPath, context.user.id, draft.id)
       || typeof finalized.mediaMimeType !== 'string'
       || typeof finalized.mediaSizeBytes !== 'number'
       || !validFinalizedDropMedia(draft.payloadKind, finalized.mediaMimeType, finalized.mediaSizeBytes)) {
@@ -876,7 +868,6 @@ export async function issueDropMediaClaimInvite(
         draft.id,
         draft.payloadKind,
         paths.finalPath,
-        expectedAccountId,
         finalized?.error || 'The photo/GIF could not be validated. Your draft is still here—try again.',
       );
     }
@@ -911,7 +902,7 @@ export async function issueDropMediaClaimInvite(
     if (!issued || issued.error || issued.data !== draft.id) {
       await removeStagedDropMedia(context, stagedPath);
       return recoverOrQueueFailedDropMedia(
-        context, draft.id, draft.payloadKind, mediaPath, expectedAccountId,
+        context, draft.id, draft.payloadKind, mediaPath,
       );
     }
     issueCommitted = true;
@@ -940,7 +931,7 @@ export async function issueDropMediaClaimInvite(
     }
     if (finalizeStarted) {
       return recoverOrQueueFailedDropMedia(
-        context, draft.id, draft.payloadKind, paths.finalPath, expectedAccountId,
+        context, draft.id, draft.payloadKind, paths.finalPath,
       );
     }
     return { ok: false, error: DROP_MEDIA_ISSUE_ERROR };
@@ -1117,7 +1108,7 @@ export async function syncDropToBackend(draft: LetterDraftState, confirmedRecipi
   let mediaMimeType: string | null = mediaFile?.type || null;
   let mediaSizeBytes: number | null = mediaFile?.size || null;
   if (mediaFile) {
-    const stagedPath = createStagedDropMediaPath(context.user.id, draft.id, draft.mediaUploadId || crypto.randomUUID());
+    const stagedPath = createStagedDropMediaAttemptPath(context.user.id, draft.id, draft.mediaUploadId || crypto.randomUUID());
     if (!stagedPath) return { ok: false, error: 'This draft cannot accept an image attachment. Start a new draft and try again.' };
     stagedMediaPath = stagedPath;
     const { error } = await context.supabase.storage.from('drop-media').upload(stagedPath, mediaFile, {
@@ -1211,7 +1202,7 @@ export async function syncDropToBackend(draft: LetterDraftState, confirmedRecipi
     return { ok: true, mediaPath: existing.mediaPath || undefined, dispatchedAt: existing.dispatchedAt };
   }
   if (existing.state === 'conflict') {
-    await cleanupUploadedMedia();
+    await cleanupUploadedMedia(mediaPath !== existing.mediaPath);
     return { ok: false, error: 'This draft ID is already tied to a different drop. Check Sent before sending this edit.' };
   }
   if (existing.state === 'unavailable') {

@@ -1,5 +1,6 @@
 import {
   isValidCleanupJob,
+  isValidPendingDropMediaCleanupCandidate,
   reconcileAndLeaseCleanupJobs,
   removeOrConfirmAbsent,
   validJobPath,
@@ -74,6 +75,19 @@ export function createCleanupWorkerHandler(dependencies: CleanupWorkerDependenci
     const supabase = dependencies.createClient(url, key, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
+    let stagedCandidates: unknown[] = [];
+    let stagedScanError: unknown = null;
+    try {
+      const stagedScan = await supabase.rpc('scan_expired_drop_staged_media', { p_limit: MAX_BATCH_SIZE });
+      if (stagedScan.error || !Array.isArray(stagedScan.data) || stagedScan.data.length > MAX_BATCH_SIZE) {
+        stagedScanError = stagedScan.error || 'Invalid staged media scan result.';
+      } else {
+        stagedCandidates = stagedScan.data;
+      }
+    } catch (error) {
+      stagedScanError = error;
+    }
+
     const { data, error, reconciliationError, reconciled } = await reconcileAndLeaseCleanupJobs(
       () => supabase.rpc('reconcile_orphan_drop_media_cleanup_jobs', { p_limit: MAX_BATCH_SIZE }),
       () => supabase.rpc('lease_expired_drop_media_cleanup_jobs', { p_limit: MAX_BATCH_SIZE }),
@@ -90,6 +104,10 @@ export function createCleanupWorkerHandler(dependencies: CleanupWorkerDependenci
     let removed = 0;
     let retried = 0;
     let finishFailures = 0;
+    let stagedRemoved = 0;
+    let stagedRetried = 0;
+    let stagedInvalid = 0;
+    let stagedFinishFailures = 0;
     for (const candidate of data as unknown[]) {
       let removedFromStorage = false;
       let errorCode: 'invalid_path' | 'storage_remove_failed' | null = null;
@@ -128,7 +146,33 @@ export function createCleanupWorkerHandler(dependencies: CleanupWorkerDependenci
       else retried += 1;
     }
 
-    if (finishFailures > 0 || reconciliationError) {
+    if (stagedScanError === null) {
+      for (const candidate of stagedCandidates) {
+        if (!isValidPendingDropMediaCleanupCandidate(candidate)) {
+          stagedInvalid += 1;
+          continue;
+        }
+        const removedFromStorage = await removeOrConfirmAbsent(
+          supabase.storage.from('drop-media'),
+          candidate.media_path,
+        );
+        let finishFailed = false;
+        try {
+          const { data: finished, error: rpcError } = await supabase.rpc('finish_expired_drop_staged_media_cleanup', {
+            p_media_path: candidate.media_path,
+            p_removed: removedFromStorage,
+          });
+          finishFailed = Boolean(rpcError) || finished !== true;
+        } catch {
+          finishFailed = true;
+        }
+        if (finishFailed) stagedFinishFailures += 1;
+        if (removedFromStorage) stagedRemoved += 1;
+        else stagedRetried += 1;
+      }
+    }
+
+    if (finishFailures > 0 || stagedFinishFailures > 0 || reconciliationError || stagedScanError || stagedInvalid > 0) {
       return json(503, {
         reconciled,
         reconciliationFailed: Boolean(reconciliationError),
@@ -136,8 +180,23 @@ export function createCleanupWorkerHandler(dependencies: CleanupWorkerDependenci
         removed,
         retried,
         finishFailures,
+        stagedScanFailed: Boolean(stagedScanError),
+        stagedScanned: stagedCandidates.length,
+        stagedRemoved,
+        stagedRetried,
+        stagedInvalid,
+        stagedFinishFailures,
       });
     }
-    return json(200, { reconciled, processed: data.length, removed, retried });
+    return json(200, {
+      reconciled,
+      processed: data.length,
+      removed,
+      retried,
+      stagedScanned: stagedCandidates.length,
+      stagedRemoved,
+      stagedRetried,
+      stagedFinishFailures,
+    });
   };
 }

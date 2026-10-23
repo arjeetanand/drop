@@ -55,6 +55,7 @@ alter table storage.objects enable row level security;
 \ir ../../supabase/migrations/20261023140000_sender_claimed_drop_status.sql
 \ir ../../supabase/migrations/20261023150000_private_media_claim_invites.sql
 \ir ../../supabase/migrations/20261023160000_reconcile_orphan_drop_media.sql
+\ir ../../supabase/migrations/20261023170000_drop_pending_media_retention.sql
 
 insert into auth.users (id) values
   ('11111111-1111-4111-8111-111111111111'),
@@ -151,8 +152,20 @@ do $$ begin
     or not pg_catalog.has_function_privilege('service_role', 'public.finish_expired_drop_media_cleanup_job(bigint,uuid,boolean,text)', 'execute')
     or pg_catalog.has_function_privilege('anon', 'public.reconcile_orphan_drop_media_cleanup_jobs(integer)', 'execute')
     or pg_catalog.has_function_privilege('authenticated', 'public.reconcile_orphan_drop_media_cleanup_jobs(integer)', 'execute')
-    or not pg_catalog.has_function_privilege('service_role', 'public.reconcile_orphan_drop_media_cleanup_jobs(integer)', 'execute') then
+    or not pg_catalog.has_function_privilege('service_role', 'public.reconcile_orphan_drop_media_cleanup_jobs(integer)', 'execute')
+    or pg_catalog.has_function_privilege('anon', 'public.scan_expired_drop_staged_media(integer)', 'execute')
+    or pg_catalog.has_function_privilege('authenticated', 'public.scan_expired_drop_staged_media(integer)', 'execute')
+    or not pg_catalog.has_function_privilege('service_role', 'public.scan_expired_drop_staged_media(integer)', 'execute')
+    or pg_catalog.has_function_privilege('anon', 'public.finish_expired_drop_staged_media_cleanup(text,boolean)', 'execute')
+    or pg_catalog.has_function_privilege('authenticated', 'public.finish_expired_drop_staged_media_cleanup(text,boolean)', 'execute')
+    or not pg_catalog.has_function_privilege('service_role', 'public.finish_expired_drop_staged_media_cleanup(text,boolean)', 'execute') then
     raise exception 'Media invite and cleanup RPC grants are not restricted to their intended roles';
+  end if;
+  if not pg_catalog.has_schema_privilege('authenticated', 'private', 'usage')
+    or not pg_catalog.has_function_privilege('authenticated', 'private.drop_pending_media_path_is_uploadable(text)', 'execute')
+    or pg_catalog.has_table_privilege('authenticated', 'private.drop_pending_media_cleanup_jobs', 'select')
+    or pg_catalog.has_table_privilege('authenticated', 'private.drop_pending_media_scan_state', 'select') then
+    raise exception 'the pending upload guard is not narrowly scoped';
   end if;
 end $$;
 
@@ -1373,6 +1386,208 @@ reset role;
 do $$ begin
   if (select count(*) from private.drop_media_cleanup_jobs j where j.letter_id like 'orphan-sweep-%') <> 27 then
     raise exception 'a repeated wrapped scan created duplicate orphan jobs';
+  end if;
+end $$;
+
+-- The separate staging scan expires only old objects with the exact pending
+-- path shape. Recent uploads and malformed paths are retained; finalized
+-- orphan/linked media continues through the existing reconciliation path.
+insert into storage.objects (bucket_id, name, metadata, created_at) values
+  ('drop-media', '11111111-1111-4111-8111-111111111111/pending/recent-draft/550e8400-e29b-41d4-a716-446655440012',
+    '{"mimetype":"image/png","size":"123"}'::jsonb,
+    pg_catalog.clock_timestamp() - interval '29 days'),
+  ('drop-media', '11111111-1111-4111-8111-111111111111/pending/../550e8400-e29b-41d4-a716-446655440013',
+    '{"mimetype":"image/png","size":"123"}'::jsonb,
+    pg_catalog.clock_timestamp() - interval '40 days'),
+  ('drop-media', '11111111-1111-4111-8111-111111111111/pending/invalid-upload/not-a-uuid',
+    '{"mimetype":"image/png","size":"123"}'::jsonb,
+    pg_catalog.clock_timestamp() - interval '40 days');
+
+set local role service_role;
+create temporary table staged_media_candidates as
+select * from public.scan_expired_drop_staged_media(25);
+reset role;
+do $$ begin
+  if (select count(*) from staged_media_candidates) <> 1
+    or not exists (
+      select 1 from staged_media_candidates c
+      where c.sender_id = '11111111-1111-4111-8111-111111111111'::uuid
+        and c.draft_id = 'stale-draft'
+        and c.media_path = '11111111-1111-4111-8111-111111111111/pending/stale-draft/550e8400-e29b-41d4-a716-446655440007'
+    )
+    or exists (
+      select 1 from staged_media_candidates c
+      where c.media_path in (
+        '11111111-1111-4111-8111-111111111111/pending/recent-draft/550e8400-e29b-41d4-a716-446655440012',
+        '11111111-1111-4111-8111-111111111111/pending/../550e8400-e29b-41d4-a716-446655440013',
+        '11111111-1111-4111-8111-111111111111/pending/invalid-upload/not-a-uuid'
+      )
+    ) then
+    raise exception 'staging scan did not select only the valid, older-than-30-day pending object';
+  end if;
+  if exists (
+    select 1 from private.drop_media_cleanup_jobs j
+    where j.media_path = '11111111-1111-4111-8111-111111111111/pending/stale-draft/550e8400-e29b-41d4-a716-446655440007'
+  ) then
+    raise exception 'staging scan unexpectedly created a finalized-media tombstone';
+  end if;
+end $$;
+
+-- A queued path stays reserved while Storage deletion is pending.
+set local role authenticated;
+select set_config('request.jwt.claim.sub', current_setting('test.sender'), true);
+do $$
+declare
+  v_rejected boolean := false;
+  v_path constant text := '11111111-1111-4111-8111-111111111111/pending/stale-draft/550e8400-e29b-41d4-a716-446655440007';
+begin
+  if private.drop_pending_media_path_is_uploadable(v_path) then
+    raise exception 'a path queued for cleanup was reported uploadable';
+  end if;
+  begin
+    insert into storage.objects (bucket_id, name, metadata)
+    values ('drop-media', v_path, '{"mimetype":"image/png","size":"123"}'::jsonb);
+  exception when insufficient_privilege then
+    v_rejected := true;
+  end;
+  if not v_rejected then raise exception 'RLS allowed a queued staging path to be reused'; end if;
+  v_rejected := false;
+  begin
+    perform count(*) from private.drop_pending_media_cleanup_jobs;
+  exception when insufficient_privilege then
+    v_rejected := true;
+  end;
+  if not v_rejected then raise exception 'authenticated users can read the pending cleanup queue'; end if;
+end
+$$;
+reset role;
+
+set local role service_role;
+select public.finish_expired_drop_staged_media_cleanup(
+  '11111111-1111-4111-8111-111111111111/pending/stale-draft/550e8400-e29b-41d4-a716-446655440007', false
+);
+select set_config(
+  'test.pending_scan_retry_count',
+  (select pg_catalog.count(*)::text from public.scan_expired_drop_staged_media(25)),
+  true
+);
+reset role;
+-- A direct metadata delete here simulates the Storage API in the isolated SQL
+-- fixture; production deletion remains exclusively in the Edge Function.
+delete from storage.objects
+where bucket_id = 'drop-media'
+  and name = '11111111-1111-4111-8111-111111111111/pending/stale-draft/550e8400-e29b-41d4-a716-446655440007';
+set local role authenticated;
+select set_config('request.jwt.claim.sub', current_setting('test.sender'), true);
+do $$
+declare
+  v_rejected boolean := false;
+  v_path constant text := '11111111-1111-4111-8111-111111111111/pending/stale-draft/550e8400-e29b-41d4-a716-446655440007';
+begin
+  begin
+    insert into storage.objects (bucket_id, name, metadata)
+    values ('drop-media', v_path, '{"mimetype":"image/png","size":"123"}'::jsonb);
+  exception when insufficient_privilege then
+    v_rejected := true;
+  end;
+  if not v_rejected then raise exception 'RLS allowed a queued path to be reused after Storage removal'; end if;
+end
+$$;
+reset role;
+set local role service_role;
+select set_config(
+  'test.first_staged_finish',
+  public.finish_expired_drop_staged_media_cleanup(
+    '11111111-1111-4111-8111-111111111111/pending/stale-draft/550e8400-e29b-41d4-a716-446655440007', true
+  )::text,
+  true
+);
+select set_config(
+  'test.second_staged_finish',
+  public.finish_expired_drop_staged_media_cleanup(
+    '11111111-1111-4111-8111-111111111111/pending/stale-draft/550e8400-e29b-41d4-a716-446655440007', true
+  )::text,
+  true
+);
+reset role;
+set local role authenticated;
+do $$
+declare
+  v_rejected boolean := false;
+  v_path constant text := '11111111-1111-4111-8111-111111111111/pending/stale-draft/550e8400-e29b-41d4-a716-446655440007';
+begin
+  if private.drop_pending_media_path_is_uploadable(v_path) then
+    raise exception 'a path with a completed tombstone was reported uploadable';
+  end if;
+  begin
+    insert into storage.objects (bucket_id, name, metadata)
+    values ('drop-media', v_path, '{"mimetype":"image/png","size":"123"}'::jsonb);
+  exception when insufficient_privilege then
+    v_rejected := true;
+  end;
+  if not v_rejected then raise exception 'RLS allowed a tombstoned staging path to be reused'; end if;
+end
+$$;
+reset role;
+update private.drop_pending_media_cleanup_jobs
+set removed_at = pg_catalog.clock_timestamp() - interval '25 hours'
+where media_path = '11111111-1111-4111-8111-111111111111/pending/stale-draft/550e8400-e29b-41d4-a716-446655440007';
+set local role service_role;
+select set_config(
+  'test.pending_tombstone_expiry_count',
+  (select pg_catalog.count(*)::text from public.scan_expired_drop_staged_media(25)),
+  true
+);
+reset role;
+do $$ begin
+  if current_setting('test.pending_scan_retry_count')::integer <> 1
+    or current_setting('test.first_staged_finish') <> 'true'
+    or current_setting('test.second_staged_finish') <> 'true'
+    or current_setting('test.pending_tombstone_expiry_count')::integer <> 0
+    or exists (
+      select 1 from private.drop_pending_media_cleanup_jobs j
+      where j.media_path = '11111111-1111-4111-8111-111111111111/pending/stale-draft/550e8400-e29b-41d4-a716-446655440007'
+    ) then
+    raise exception 'staging cleanup did not retry, complete idempotently, and expire its tombstone';
+  end if;
+end $$;
+
+-- Once the tombstone expires, a fresh authenticated upload can reuse the key.
+set local role authenticated;
+do $$ begin
+  if not private.drop_pending_media_path_is_uploadable(
+    '11111111-1111-4111-8111-111111111111/pending/stale-draft/550e8400-e29b-41d4-a716-446655440007'
+  ) then
+    raise exception 'an expired tombstone still blocks a fresh upload';
+  end if;
+  insert into storage.objects (bucket_id, name, metadata)
+  values (
+    'drop-media',
+    '11111111-1111-4111-8111-111111111111/pending/stale-draft/550e8400-e29b-41d4-a716-446655440007',
+    '{"mimetype":"image/png","size":"123"}'::jsonb
+  );
+end $$;
+reset role;
+
+-- New uploads carry a stable final-media ID and a fresh attempt ID. The
+-- retention scan must still recognize the five-segment pending path.
+insert into storage.objects (bucket_id, name, metadata, created_at) values
+  ('drop-media', '11111111-1111-4111-8111-111111111111/pending/new-draft/550e8400-e29b-41d4-a716-446655440014/550e8400-e29b-41d4-a716-446655440015',
+    '{"mimetype":"image/png","size":"123"}'::jsonb,
+    pg_catalog.clock_timestamp() - interval '40 days');
+set local role service_role;
+create temporary table new_staged_media_candidates as
+select * from public.scan_expired_drop_staged_media(25);
+reset role;
+do $$ begin
+  if (select count(*) from new_staged_media_candidates) <> 1
+    or not exists (
+      select 1 from new_staged_media_candidates c
+      where c.sender_id = '11111111-1111-4111-8111-111111111111'::uuid
+        and c.draft_id = 'new-draft'
+        and c.media_path = '11111111-1111-4111-8111-111111111111/pending/new-draft/550e8400-e29b-41d4-a716-446655440014/550e8400-e29b-41d4-a716-446655440015'
+    ) then
+    raise exception 'staging scan did not recognize the stable-final, fresh-attempt path shape';
   end if;
 end $$;
 
