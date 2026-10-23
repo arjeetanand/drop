@@ -92,7 +92,11 @@ export function useLiveInbox(initialLetters: MockLetter[] = mockLetters) {
                   return knownReaction ? { ...letter, reaction: knownReaction } : letter;
                 });
             const localLetters = getLettersWithDraft(getLetterDraft());
-            setLetters(mergeInboxLetters(localLetters, displayLetters));
+            setLetters((current) => mergeInboxLetters(
+              localLetters,
+              displayLetters,
+              mailbox.claimStatusHydrated ? [] : current,
+            ));
           },
         });
         refreshControllerRef.current = refreshController;

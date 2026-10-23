@@ -1,4 +1,5 @@
 import type { MockLetter } from '@/data/mockData';
+import { retainKnownClaimStatus } from './claimInviteStatus.ts';
 
 export interface LiveInboxUpdate {
   arrival: MockLetter | null;
@@ -28,8 +29,18 @@ export function getLiveInboxUpdate(
   };
 }
 
-export function mergeInboxLetters(localLetters: MockLetter[], remoteLetters: MockLetter[]) {
+export function mergeInboxLetters(
+  localLetters: MockLetter[],
+  remoteLetters: MockLetter[],
+  previousLetters: MockLetter[] = [],
+) {
   const merged = new Map(localLetters.map((letter) => [letter.id, letter]));
-  remoteLetters.forEach((letter) => merged.set(letter.id, letter));
+  const previouslyClaimed = new Map(previousLetters
+    .filter((letter) => letter.claimedViaInvite)
+    .map((letter) => [letter.id, letter]));
+  remoteLetters.forEach((letter) => {
+    const durableStatus = retainKnownClaimStatus(previouslyClaimed.get(letter.id) || null, letter);
+    merged.set(durableStatus.id, durableStatus);
+  });
   return Array.from(merged.values());
 }

@@ -50,6 +50,7 @@ alter table storage.objects enable row level security;
 \ir ../../supabase/migrations/20261019000000_enforce_drop_payload_media_consistency.sql
 \ir ../../supabase/migrations/20261023120000_drop_claim_invites.sql
 \ir ../../supabase/migrations/20261023130000_drop_claimed_sender_broadcast.sql
+\ir ../../supabase/migrations/20261023140000_sender_claimed_drop_status.sql
 
 insert into auth.users (id) values
   ('11111111-1111-4111-8111-111111111111'),
@@ -89,6 +90,8 @@ do $$ begin
     or not pg_catalog.has_function_privilege('authenticated', 'public.issue_drop_claim_invite(text,text,text,text)', 'execute')
     or pg_catalog.has_function_privilege('anon', 'public.claim_drop_invite(text)', 'execute')
     or not pg_catalog.has_function_privilege('authenticated', 'public.claim_drop_invite(text)', 'execute')
+    or pg_catalog.has_function_privilege('anon', 'public.get_sender_claimed_drop_ids()', 'execute')
+    or not pg_catalog.has_function_privilege('authenticated', 'public.get_sender_claimed_drop_ids()', 'execute')
     or pg_catalog.has_function_privilege('anon', 'public.reissue_drop_claim_invite(text,text)', 'execute')
     or not pg_catalog.has_function_privilege('authenticated', 'public.reissue_drop_claim_invite(text,text)', 'execute') then
     raise exception 'Drop invite RPC grants are not limited to authenticated users';
@@ -187,6 +190,11 @@ do $$ begin
   begin
     perform public.reissue_drop_claim_invite(current_setting('test.main_letter'), current_setting('test.token_b'));
     raise exception 'anonymous users executed the reissue RPC';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform * from public.get_sender_claimed_drop_ids();
+    raise exception 'anonymous users executed the claimed status RPC';
   exception when insufficient_privilege then null;
   end;
 end $$;
@@ -351,6 +359,14 @@ do $$ begin
   end if;
 end $$;
 
+insert into public.letters (
+  id, sender_id, recipient_id, subject, content, status, delivery_mode, payload_kind, delivered_at
+) values (
+  'ordinary-delivered', current_setting('test.sender')::uuid,
+  current_setting('test.recipient')::uuid, 'Direct note', 'Sent directly.',
+  'delivered', 'instant', 'text', pg_catalog.now()
+);
+
 set local role authenticated;
 select set_config('request.jwt.claim.sub', current_setting('test.other'), true);
 do $$ begin
@@ -358,6 +374,9 @@ do $$ begin
     or exists (select 1 from public.letter_events where letter_id = current_setting('test.main_letter'))
     or exists (select 1 from public.letter_reactions where letter_id = current_setting('test.main_letter')) then
     raise exception 'a different authenticated account read another user’s claimed content';
+  end if;
+  if exists (select 1 from public.get_sender_claimed_drop_ids()) then
+    raise exception 'a different authenticated account read another sender’s claim status';
   end if;
   begin
     perform public.claim_drop_invite(current_setting('test.token_b'));
@@ -484,6 +503,24 @@ do $$ begin
     raise exception 'sender replaced a revoked invite';
   exception when insufficient_privilege then null;
   end;
+end $$;
+reset role;
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', current_setting('test.sender'), true);
+do $$ begin
+  if not exists (
+    select 1 from public.get_sender_claimed_drop_ids()
+    where letter_id = current_setting('test.main_letter')
+  ) then
+    raise exception 'sender could not restore the completed claim after token expiry';
+  end if;
+  if exists (
+    select 1 from public.get_sender_claimed_drop_ids()
+    where letter_id in ('ordinary-delivered', 'claim-expired', 'claim-revoked')
+  ) or (select count(*) from public.get_sender_claimed_drop_ids()) <> 1 then
+    raise exception 'claimed status included an ordinary send, pending/revoked invite, or unrelated row';
+  end if;
 end $$;
 reset role;
 

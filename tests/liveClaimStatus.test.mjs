@@ -21,9 +21,10 @@ test('a matching sender claim transition updates the open drop and announces onc
   const update = getLiveClaimCompletionUpdate(pending, delivered, 'drop-1');
 
   assert.deepEqual(update, {
-    letter: delivered,
+    letter: { ...delivered, claimedViaInvite: true },
     announcement: 'Claimed by New Friend. The private note is now addressed to them.',
   });
+  assert.equal(update.letter.claimedViaInvite, true, 'A live claim transition leaves a durable status in the current UI state.');
   assert.equal(
     getLiveClaimCompletionUpdate(update.letter, delivered, 'drop-1'),
     null,

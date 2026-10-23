@@ -27,7 +27,7 @@ export function getLiveClaimCompletionUpdate(
 
   const recipient = refreshed.recipient?.trim() || 'your recipient';
   return {
-    letter: { ...current, ...refreshed },
+    letter: { ...current, ...refreshed, claimedViaInvite: true },
     announcement: 'Claimed by ' + recipient + '. The private note is now addressed to them.',
   };
 }

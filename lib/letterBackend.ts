@@ -14,6 +14,10 @@ import { uniqueRecentDropRecipients, type RecentDropRecipient, type RecentDropRe
 import { subscribeToDropInbox } from '@/lib/dropInboxRealtime';
 import { subscribeToDropReactions } from '@/lib/dropReactionRealtime';
 import { isDropClaimToken } from '@/lib/dropClaim';
+import { markSenderClaimedDrops } from '@/lib/claimInviteStatus';
+import { withFallbackTimeout } from '@/lib/withFallbackTimeout';
+
+const SENDER_CLAIM_STATUS_TIMEOUT_MS = 5_000;
 
 type LetterRow = {
   id: string;
@@ -341,6 +345,38 @@ const LETTER_SELECT = `${MAILBOX_SELECT}, content`;
 export interface RemoteMailboxSnapshot {
   letters: MockLetter[];
   reactionsHydrated: boolean;
+  claimStatusHydrated: boolean;
+}
+
+type SenderClaimedDropRow = { letter_id: string };
+
+async function readSenderClaimedDropIds(context: AuthenticatedContext): Promise<string[] | null> {
+  try {
+    const { data, error } = await context.supabase
+      .rpc('get_sender_claimed_drop_ids')
+      .returns<SenderClaimedDropRow[]>();
+    if (error || !Array.isArray(data)) return null;
+    return data.flatMap((row) => typeof row.letter_id === 'string' ? [row.letter_id] : []);
+  } catch {
+    return null;
+  }
+}
+
+async function readSenderClaimedDropIdsWithTimeout(context: AuthenticatedContext): Promise<string[] | null> {
+  return withFallbackTimeout(readSenderClaimedDropIds(context), SENDER_CLAIM_STATUS_TIMEOUT_MS, null);
+}
+
+export async function getRemoteSenderClaimStatusForDrop(letterId: string): Promise<boolean | null> {
+  try {
+    return await withFallbackTimeout((async () => {
+      const context = await getAuthenticatedClient();
+      if (!context) return null;
+      const claimedDropIds = await readSenderClaimedDropIds(context);
+      return claimedDropIds === null ? null : claimedDropIds.includes(letterId);
+    })(), SENDER_CLAIM_STATUS_TIMEOUT_MS, null);
+  } catch {
+    return null;
+  }
 }
 
 export type RemoteDropDirection = 'sent' | 'received' | 'signed-out' | 'unavailable';
@@ -393,18 +429,22 @@ export async function getRemoteLetters(): Promise<RemoteMailboxSnapshot | null> 
 
   if (!mailbox) return null;
   const letters = mailbox.letters.map((row) => rowToLetter(row, context.user.id));
-  const { data: recipientRelayRows, error: recipientRelayError } = await context.supabase
-    .rpc('get_recipient_relay_drops')
-    .returns<RecipientRelayDropRow[]>();
+  const [claimedDropIds, recipientRelayRead] = await Promise.all([
+    readSenderClaimedDropIdsWithTimeout(context),
+    context.supabase.rpc('get_recipient_relay_drops').returns<RecipientRelayDropRow[]>(),
+  ]);
+  const claimedLetters = markSenderClaimedDrops(letters, claimedDropIds);
+  const { data: recipientRelayRows, error: recipientRelayError } = recipientRelayRead;
   const recipientRelayDrops = recipientRelayError || !Array.isArray(recipientRelayRows)
     ? []
     : recipientRelayRows.map((row) => rowToRecipientRelayDrop(row as RecipientRelayDropRow));
   const displayLetters = mailbox.reactions
-    ? mergeDropReactions(letters, mailbox.reactions)
-    : letters;
+    ? mergeDropReactions(claimedLetters, mailbox.reactions)
+    : claimedLetters;
   return {
     letters: [...displayLetters, ...recipientRelayDrops],
     reactionsHydrated: mailbox.reactions !== null,
+    claimStatusHydrated: claimedDropIds !== null,
   };
 }
 
@@ -517,7 +557,13 @@ export async function getRemoteLetterById(letterId: string): Promise<MockLetter 
     .maybeSingle<LetterRow>();
 
   if (error || !data) return null;
-  const letter = rowToLetter(data, context.user.id, true);
+  let letter = rowToLetter(data, context.user.id, true);
+  if (letter.direction === 'sent'
+    && letter.status === 'delivered'
+    && letter.deliveryMode === 'instant'
+    && letter.payloadKind === 'text') {
+    letter = markSenderClaimedDrops([letter], await readSenderClaimedDropIdsWithTimeout(context))[0];
+  }
   if (data.media_path) {
     const { data: signed } = await context.supabase.storage.from('drop-media').createSignedUrl(data.media_path, 60);
     letter.mediaUrl = signed?.signedUrl;

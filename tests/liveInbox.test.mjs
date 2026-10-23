@@ -63,6 +63,15 @@ test('mailbox merge keeps local drafts and lets remote rows replace matching sam
   assert.equal(merged[1].subject, 'Real drop');
 });
 
+test('retains a known claimed badge when a later mailbox refresh cannot hydrate claim status', () => {
+  const eligibility = { deliveryMode: 'instant', payloadKind: 'text' };
+  const previouslyClaimed = letter('claimed', 'sent', { ...eligibility, claimedViaInvite: true });
+  const refreshed = letter('claimed', 'sent', eligibility);
+  const merged = mergeInboxLetters([], [refreshed], [previouslyClaimed]);
+
+  assert.equal(merged[0].claimedViaInvite, true);
+});
+
 test('drop inbox subscription is private, user-scoped, signal-only, and removable', async () => {
   let onSignal;
   let onStatus;

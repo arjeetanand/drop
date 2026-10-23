@@ -5,9 +5,10 @@ import Link from 'next/link';
 import { ArrowLeft, ArrowRight, Check, LockKeyhole, MailOpen, Share2, Sparkles } from 'lucide-react';
 import { useParams, useSearchParams } from 'next/navigation';
 import type { MockLetter } from '@/data/mockData';
-import { getRemoteDropDirection, getRemoteLetterById, getRemoteLetters, getRemoteReactionSnapshot, reissueDropClaimInvite, saveRemoteReaction, subscribeToIncomingDropInbox, subscribeToSenderDropReactions } from '@/lib/letterBackend';
+import { getRemoteDropDirection, getRemoteLetterById, getRemoteLetters, getRemoteReactionSnapshot, getRemoteSenderClaimStatusForDrop, reissueDropClaimInvite, saveRemoteReaction, subscribeToIncomingDropInbox, subscribeToSenderDropReactions } from '@/lib/letterBackend';
 import { getLetterById } from '@/lib/letterStore';
 import { getLiveClaimCompletionUpdate } from '@/lib/liveClaimStatus';
+import { getClaimedDropLabel, isEligibleSenderClaim, needsSenderClaimStatusRetry, retainKnownClaimStatus } from '@/lib/claimInviteStatus';
 import { getInitialSenderReactionBaseline, getSenderReactionReadUpdate } from '@/lib/liveReactionState';
 import { DEMO_REACTION_EMOJIS, saveDemoReaction } from '@/lib/demoReactionStore';
 import { getDraftAttachment } from '@/lib/letterMediaStore';
@@ -103,6 +104,7 @@ export default function LetterArrivalPage() {
   const [reactionNotice, setReactionNotice] = useState('');
   const [reactionAnnouncement, setReactionAnnouncement] = useState('');
   const [claimAnnouncement, setClaimAnnouncement] = useState('');
+  const [claimStatusNeedsRetry, setClaimStatusNeedsRetry] = useState(false);
   const [savingReaction, setSavingReaction] = useState(false);
   const [sharingClaimLink, setSharingClaimLink] = useState(false);
   const [claimLinkUrl, setClaimLinkUrl] = useState('');
@@ -126,6 +128,7 @@ export default function LetterArrivalPage() {
     setReactionNotice('');
     setReactionAnnouncement('');
     setClaimAnnouncement('');
+    setClaimStatusNeedsRetry(false);
     setClaimLinkUrl('');
     setClaimLinkNotice('');
     setSharingClaimLink(false);
@@ -226,6 +229,10 @@ export default function LetterArrivalPage() {
         if (active && !mailbox && direction === 'signed-out') setSignInRequired(true);
         if (active) {
           setLetter(remoteLetter || localLetter || null);
+          setClaimStatusNeedsRetry(needsSenderClaimStatusRetry(
+            remoteLetter,
+            mailbox?.claimStatusHydrated ?? true,
+          ));
           setFullContentAvailable(false);
         }
       } catch {
@@ -247,6 +254,7 @@ export default function LetterArrivalPage() {
   }, [letterId, senderView]);
 
   const senderDropId = letter && letter.direction === 'sent' && !letter.sample && !letter.localDemo ? letter.id : null;
+  const claimedLabel = letter ? getClaimedDropLabel(letter) : null;
   const pendingClaimDropId = letter
     && letter.direction === 'sent'
     && letter.status === 'claim_pending'
@@ -256,6 +264,40 @@ export default function LetterArrivalPage() {
     && !letter.localDemo
     ? letter.id
     : null;
+  const shouldRetryClaimStatus = claimStatusNeedsRetry
+    && Boolean(letter && isEligibleSenderClaim(letter) && !letter.claimedViaInvite);
+
+  useEffect(() => {
+    if (!shouldRetryClaimStatus || !senderDropId) return;
+
+    let active = true;
+    let retryStartTimer: ReturnType<typeof setTimeout> | null = null;
+    let refresh: VisibleDataRefreshController | null = null;
+    retryStartTimer = setTimeout(() => {
+      if (!active) return;
+      refresh = startVisibleDataRefresh({
+        load: () => getRemoteSenderClaimStatusForDrop(senderDropId),
+        intervalMs: 60_000,
+        queueOneWhileInFlight: true,
+        onData: (claimed) => {
+          if (!active || claimed === null) return;
+          setClaimStatusNeedsRetry(false);
+          if (!claimed) return;
+          setLetter((current) => (
+            current?.id === senderDropId && isEligibleSenderClaim(current) && !current.claimedViaInvite
+              ? { ...current, claimedViaInvite: true }
+              : current
+          ));
+        },
+      });
+    }, 10_000);
+
+    return () => {
+      active = false;
+      if (retryStartTimer) clearTimeout(retryStartTimer);
+      refresh?.stop();
+    };
+  }, [shouldRetryClaimStatus, senderDropId]);
 
   useEffect(() => {
     currentLetterRef.current = letter;
@@ -368,7 +410,7 @@ export default function LetterArrivalPage() {
           setContentNotice('The full drop could not load. Sign in as the recipient or check your connection, then try again.');
           return;
         }
-        setLetter(remoteDetail);
+        setLetter((current) => retainKnownClaimStatus(current, remoteDetail));
         if (remoteDetail.mediaPath && !remoteDetail.mediaUrl) {
           setContentNotice('The private attachment could not load. Check your connection, then try opening again.');
           return;
@@ -614,9 +656,9 @@ export default function LetterArrivalPage() {
                 <h2 className="section-title mt-2 break-words text-3xl">{letter.subject}</h2>
                 <p className="meta mt-3">From {sender} · {letter.date}</p>
               </div>
-              <span className="status-mark success self-start">
+              <span className="status-mark success self-start max-w-full flex-wrap break-words">
                 <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
-                {letter.sample ? 'Sample · not sent' : letter.localDemo ? senderView ? 'Demo copy' : 'Demo · not sent' : letter.status === 'claim_pending' ? 'Waiting to be claimed' : letter.direction === 'sent' ? claimAnnouncement ? 'Claimed' : 'Sent' : 'Received'}
+                {letter.sample ? 'Sample · not sent' : letter.localDemo ? senderView ? 'Demo copy' : 'Demo · not sent' : letter.status === 'claim_pending' ? 'Waiting to be claimed' : claimedLabel || (letter.direction === 'sent' ? claimAnnouncement ? 'Claimed' : 'Sent' : 'Received')}
               </span>
             </div>
 

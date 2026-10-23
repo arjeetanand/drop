@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { ArrowUpRight, CheckCircle2, Clock3, Eye, FileEdit, Image as ImageIcon, Mail, PackageCheck, Sparkles, Type } from 'lucide-react';
 import type { LetterStatus, MockLetter } from '@/data/mockData';
 import { cn } from '@/lib/utils';
+import { getClaimedDropLabel } from '@/lib/claimInviteStatus';
 
 const statusConfig: Record<LetterStatus, { label: string; icon: typeof Mail; tone: string }> = {
   draft: { label: 'Draft', icon: FileEdit, tone: 'text-[#8a611b]' },
@@ -16,14 +17,17 @@ const statusConfig: Record<LetterStatus, { label: string; icon: typeof Mail; ton
 
 export function LetterCard({ letter, showExcerpt = false }: { letter: MockLetter; showExcerpt?: boolean }) {
   const isReceived = letter.direction === 'received';
+  const claimedLabel = getClaimedDropLabel(letter);
   const config = letter.sample
     ? { label: 'Sample · not sent', icon: Eye, tone: 'text-[#8a611b]' }
     : letter.localDemo
       ? { label: 'Demo · not sent', icon: Eye, tone: 'text-[#8a611b]' }
       : isReceived
         ? { label: 'Received', icon: Mail, tone: 'text-[#276a4d]' }
-        : statusConfig[letter.status] || statusConfig.draft;
-  const Icon = letter.reaction && !isReceived ? Sparkles : config.icon;
+        : claimedLabel
+          ? { ...statusConfig.delivered, label: claimedLabel }
+          : statusConfig[letter.status] || statusConfig.draft;
+  const Icon = letter.reaction && !isReceived && !claimedLabel ? Sparkles : config.icon;
   const href = letter.sample
     ? `/letter/${encodeURIComponent(letter.id)}`
     : letter.localDemo
@@ -85,8 +89,13 @@ export function LetterCard({ letter, showExcerpt = false }: { letter: MockLetter
           )}
           <span className={cn('mt-2 inline-flex items-center gap-1.5 meta font-semibold', config.tone)}>
             <Icon className="h-3.5 w-3.5" aria-hidden="true" />
-            {isReceived && letter.reaction ? `Reacted ${letter.reaction}` : letter.reaction ? `They reacted ${letter.reaction}` : config.label}
+            {isReceived && letter.reaction
+              ? `Reacted ${letter.reaction}`
+              : letter.reaction && !claimedLabel
+                ? `They reacted ${letter.reaction}`
+                : config.label}
           </span>
+          {claimedLabel && letter.reaction && <span className="mt-1 block text-xs font-medium text-on-surface-variant">They reacted {letter.reaction}</span>}
           {letter.status === 'draft' && letter.recipientInviteProgress && <span className="mt-1 block max-w-xl text-xs leading-relaxed text-on-surface-variant">{letter.recipientInviteProgress.status === 'shared'
             ? `Invite shared · check @${letter.recipientInviteProgress.username} when they join.`
             : letter.recipientInviteProgress.status === 'copied'

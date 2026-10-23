@@ -42,6 +42,7 @@ export interface MockLetter {
   relayProgress?: RelayRecipientProgress;
   reaction?: string;
   reactionUpdatedAt?: string;
+  claimedViaInvite?: boolean;
   localDemo?: boolean;
   sample?: boolean;
 }
