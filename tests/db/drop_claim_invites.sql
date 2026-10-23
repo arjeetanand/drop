@@ -916,6 +916,15 @@ end $$;
 set local role authenticated;
 select set_config('request.jwt.claim.sub', current_setting('test.sender'), true);
 select public.reissue_drop_claim_invite(current_setting('test.media_image_letter'), current_setting('test.token_l'));
+select set_config(
+  'test.media_gif_letter',
+  public.issue_drop_media_claim_invite(
+    'claim-media-gif', 'GIF for you', '', 'gif',
+    '11111111-1111-4111-8111-111111111111/claim-media-gif/550e8400-e29b-41d4-a716-446655440001',
+    'image/gif', 456, current_setting('test.token_m')
+  ),
+  true
+);
 reset role;
 do $$ begin
   if (select i.token_hash from private.drop_claim_invites i
@@ -932,6 +941,9 @@ do $$ begin
   end if;
 end $$;
 
+-- An unknown-handle account cannot read or claim either kind of private media
+-- until it creates a Drop profile. The failed attempts leave both invites
+-- available for the claimant's explicit post-profile action.
 set local role authenticated;
 select set_config('request.jwt.claim.sub', current_setting('test.recipient'), true);
 do $$ begin
@@ -944,7 +956,52 @@ do $$ begin
   exception when insufficient_privilege then null;
   end;
 end $$;
+reset role;
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', current_setting('test.unprofiled'), true);
+do $$ begin
+  if exists (select 1 from storage.objects where name in (
+      '11111111-1111-4111-8111-111111111111/claim-media-image/550e8400-e29b-41d4-a716-446655440000',
+      '11111111-1111-4111-8111-111111111111/claim-media-gif/550e8400-e29b-41d4-a716-446655440001'
+    )) then
+    raise exception 'the unprofiled claimant read private media before claiming it';
+  end if;
+  begin
+    perform public.claim_drop_invite(current_setting('test.token_l'));
+    raise exception 'an unprofiled claimant claimed a photo invite';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.claim_drop_invite(current_setting('test.token_m'));
+    raise exception 'an unprofiled claimant claimed a GIF invite';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+reset role;
+
+insert into public.profiles (id, username, display_name)
+values (current_setting('test.unprofiled')::uuid, 'newfriend', 'New Friend');
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', current_setting('test.unprofiled'), true);
+do $$ begin
+  if exists (
+    select 1 from public.letters
+    where id in (current_setting('test.media_image_letter'), current_setting('test.media_gif_letter'))
+  ) or exists (select 1 from storage.objects where name in (
+      '11111111-1111-4111-8111-111111111111/claim-media-image/550e8400-e29b-41d4-a716-446655440000',
+      '11111111-1111-4111-8111-111111111111/claim-media-gif/550e8400-e29b-41d4-a716-446655440001'
+    )) then
+    raise exception 'profile creation exposed an unclaimed photo or GIF';
+  end if;
+end $$;
+reset role;
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', current_setting('test.unprofiled'), true);
 select public.claim_drop_invite(current_setting('test.token_l'));
+select public.claim_drop_invite(current_setting('test.token_m'));
 reset role;
 
 set local role authenticated;
@@ -953,9 +1010,14 @@ do $$ begin
   if not exists (
     select 1 from public.get_sender_claimed_drop_ids()
     where letter_id = current_setting('test.media_image_letter')
-  ) then raise exception 'sender claim status omitted an explicitly claimed photo'; end if;
+  ) or not exists (
+    select 1 from public.get_sender_claimed_drop_ids()
+    where letter_id = current_setting('test.media_gif_letter')
+  ) or (select count(*) from public.get_sender_claimed_drop_ids()) <> 3 then
+    raise exception 'sender claim status omitted an explicitly claimed photo or GIF';
+  end if;
   begin
-    perform public.reissue_drop_claim_invite(current_setting('test.media_image_letter'), current_setting('test.token_m'));
+    perform public.reissue_drop_claim_invite(current_setting('test.media_image_letter'), current_setting('test.token_n'));
     raise exception 'a claimed photo accepted a fresh invite';
   exception when insufficient_privilege then null;
   end;
@@ -963,7 +1025,7 @@ end $$;
 reset role;
 
 set local role authenticated;
-select set_config('request.jwt.claim.sub', current_setting('test.recipient'), true);
+select set_config('request.jwt.claim.sub', current_setting('test.unprofiled'), true);
 do $$ begin
   if not exists (select 1 from storage.objects where name = '11111111-1111-4111-8111-111111111111/claim-media-image/550e8400-e29b-41d4-a716-446655440000') then
     raise exception 'the claimant could not read the photo after explicit claim';
@@ -971,22 +1033,16 @@ do $$ begin
   if public.claim_drop_invite(current_setting('test.token_l')) <> current_setting('test.media_image_letter') then
     raise exception 'same-account media claim retry was not idempotent';
   end if;
+  if not exists (select 1 from storage.objects where name = '11111111-1111-4111-8111-111111111111/claim-media-gif/550e8400-e29b-41d4-a716-446655440001') then
+    raise exception 'the claimant could not read the GIF after explicit claim';
+  end if;
+  if public.claim_drop_invite(current_setting('test.token_m')) <> current_setting('test.media_gif_letter') then
+    raise exception 'same-account GIF claim retry was not idempotent';
+  end if;
 end $$;
 reset role;
 
 -- GIFs use the matching image/gif object metadata and keep the same 30-day cap.
-set local role authenticated;
-select set_config('request.jwt.claim.sub', current_setting('test.sender'), true);
-select set_config(
-  'test.media_gif_letter',
-  public.issue_drop_media_claim_invite(
-    'claim-media-gif', 'GIF for you', '', 'gif',
-    '11111111-1111-4111-8111-111111111111/claim-media-gif/550e8400-e29b-41d4-a716-446655440001',
-    'image/gif', 456, current_setting('test.token_m')
-  ),
-  true
-);
-reset role;
 do $$ begin
   if (select l.media_claim_expires_at from public.letters l where l.id = current_setting('test.media_gif_letter'))
       <= pg_catalog.clock_timestamp()

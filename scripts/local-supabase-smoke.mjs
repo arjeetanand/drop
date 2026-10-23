@@ -39,6 +39,64 @@ function assertClaimDenied(result, message) {
   assert.ok(result.data == null, `${message}: a denied claim must not return a drop ID`);
 }
 
+async function issueUnknownHandleMediaClaim({ sender, appUrl, payloadKind, bytes }) {
+  const letterId = `claim-${randomUUID()}`;
+  const uploadId = randomUUID();
+  const stagedPath = `${sender.id}/pending/${letterId}/${uploadId}`;
+  const expectedMediaPath = `${sender.id}/${letterId}/${uploadId}`;
+  const mimeType = payloadKind === 'gif' ? 'image/gif' : 'image/png';
+  const content = `A private ${payloadKind} for the newly profiled claimant.`;
+  const token = randomBytes(32).toString('hex');
+  mediaPaths.add(stagedPath);
+  mediaPaths.add(expectedMediaPath);
+
+  const { error: uploadError } = await sender.client.storage.from('drop-media').upload(
+    stagedPath,
+    new Blob([bytes], { type: mimeType }),
+    { contentType: mimeType, upsert: false },
+  );
+  assert.ifError(uploadError);
+
+  const finalizeResponse = await fetch(`${appUrl}/api/drop-media/finalize`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${sender.token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ stagedPath, payloadKind }),
+  });
+  assert.equal(finalizeResponse.status, 200, `The unknown-handle ${payloadKind} should pass media finalization`);
+  const media = await finalizeResponse.json();
+  assert.equal(media.mediaPath, expectedMediaPath, 'Finalization should bind the media to its intended drop');
+  assert.equal(media.mediaMimeType, mimeType);
+  assert.ok(media.mediaSizeBytes > 0 && media.mediaSizeBytes <= 8 * 1024 * 1024);
+  mediaPaths.add(media.mediaPath);
+
+  const { data: issuedLetterId, error: issueError } = await sender.client.rpc('issue_drop_media_claim_invite', {
+    p_letter_id: letterId,
+    p_subject: `Unknown-handle ${payloadKind} smoke`,
+    p_content: content,
+    p_payload_kind: payloadKind,
+    p_media_path: media.mediaPath,
+    p_media_mime_type: media.mediaMimeType,
+    p_media_size_bytes: media.mediaSizeBytes,
+    p_token: token,
+  });
+  assert.ifError(issueError);
+  assert.equal(issuedLetterId, letterId, `The sender should create a pending ${payloadKind} invite`);
+  return { letterId, token, payloadKind, content, mediaPath: media.mediaPath, mediaSizeBytes: media.mediaSizeBytes };
+}
+
+async function assertMediaUnavailableToAccount(account, mediaDrop, phase) {
+  const { data: privateDrop, error: privateDropError } = await account.client.from('letters')
+    .select('id, content, media_path')
+    .eq('id', mediaDrop.letterId)
+    .maybeSingle();
+  assert.ifError(privateDropError);
+  assert.equal(privateDrop, null, `${phase}: the ${mediaDrop.payloadKind} drop is not readable`);
+  const { data: media, error: mediaError } = await account.client.storage.from('drop-media').download(mediaDrop.mediaPath);
+  assert.ok(mediaError && !media, `${phase}: the ${mediaDrop.payloadKind} cannot be downloaded`);
+  const { data: signedUrl, error: signedUrlError } = await account.client.storage.from('drop-media').createSignedUrl(mediaDrop.mediaPath, 60);
+  assert.ok(signedUrlError && !signedUrl, `${phase}: the ${mediaDrop.payloadKind} cannot produce a signed URL`);
+}
+
 async function assertTestPortFree(port) {
   const server = createServer();
   await new Promise((resolveListen, reject) => {
@@ -272,12 +330,39 @@ try {
   assert.ifError(issueClaimError);
   assert.equal(issuedClaimDropId, claimDropId, 'The sender should create a pending invite for the unknown handle');
 
+  const unknownHandleMedia = [];
+  for (const payloadKind of ['image', 'gif']) {
+    const bytes = await readFile(resolve(root, payloadKind === 'gif' ? 'public/demo-cat.gif' : 'public/demo-cat.png'));
+    unknownHandleMedia.push(await issueUnknownHandleMediaClaim({ sender, appUrl, payloadKind, bytes }));
+  }
+
   const { data: unclaimedDrop, error: unclaimedDropError } = await claimant.client.from('letters')
     .select('id, content')
     .eq('id', claimDropId)
     .maybeSingle();
   assert.ifError(unclaimedDropError);
   assert.equal(unclaimedDrop, null, 'The unprofiled claimant cannot read a pending drop');
+
+  for (const mediaDrop of unknownHandleMedia) {
+    await assertMediaUnavailableToAccount(claimant, mediaDrop, 'Before profile setup');
+    const { data: earlyClaim, error: earlyClaimError } = await claimant.client.rpc('claim_drop_invite', { p_token: mediaDrop.token });
+    assertClaimDenied({ data: earlyClaim, error: earlyClaimError }, `An account without a Drop profile cannot claim the ${mediaDrop.payloadKind}`);
+
+    const { data: senderPendingMediaDrop, error: senderPendingMediaDropError } = await sender.client.from('letters')
+      .select('id, content, recipient_id, status, delivery_mode, payload_kind, media_path')
+      .eq('id', mediaDrop.letterId)
+      .maybeSingle();
+    assert.ifError(senderPendingMediaDropError);
+    assert.deepEqual(senderPendingMediaDrop, {
+      id: mediaDrop.letterId,
+      content: mediaDrop.content,
+      recipient_id: null,
+      status: 'claim_pending',
+      delivery_mode: 'instant',
+      payload_kind: mediaDrop.payloadKind,
+      media_path: mediaDrop.mediaPath,
+    }, `The sender can confirm only their pending ${mediaDrop.payloadKind} drop`);
+  }
 
   const { data: unprofiledClaim, error: unprofiledClaimError } = await claimant.client.rpc('claim_drop_invite', { p_token: firstClaimToken });
   assertClaimDenied({ data: unprofiledClaim, error: unprofiledClaimError }, 'An account without a Drop profile cannot claim an invite');
@@ -302,6 +387,46 @@ try {
     username: unknownRecipientHandle,
     display_name: 'Smoke Claimant',
   }, 'The sender can confirm only the public identity needed after profile setup');
+
+  for (const mediaDrop of unknownHandleMedia) {
+    await assertMediaUnavailableToAccount(claimant, mediaDrop, 'After profile setup, before explicit claim');
+    const { data: claimedMediaDropId, error: claimMediaError } = await claimant.client.rpc('claim_drop_invite', { p_token: mediaDrop.token });
+    assert.ifError(claimMediaError);
+    assert.equal(claimedMediaDropId, mediaDrop.letterId, `The profiled claimant should explicitly claim the ${mediaDrop.payloadKind}`);
+    const { data: retriedMediaDropId, error: retryMediaClaimError } = await claimant.client.rpc('claim_drop_invite', { p_token: mediaDrop.token });
+    assert.ifError(retryMediaClaimError);
+    assert.equal(retriedMediaDropId, mediaDrop.letterId, `The claimant can safely retry the ${mediaDrop.payloadKind} claim`);
+
+    for (const account of [sender, claimant]) {
+      const { data: claimedMediaDrop, error: claimedMediaDropError } = await account.client.from('letters')
+        .select('id, content, recipient_id, status, delivery_mode, payload_kind, media_path')
+        .eq('id', mediaDrop.letterId)
+        .maybeSingle();
+      assert.ifError(claimedMediaDropError);
+      assert.deepEqual(claimedMediaDrop, {
+        id: mediaDrop.letterId,
+        content: mediaDrop.content,
+        recipient_id: claimant.id,
+        status: 'delivered',
+        delivery_mode: 'instant',
+        payload_kind: mediaDrop.payloadKind,
+        media_path: mediaDrop.mediaPath,
+      }, `The sender and claimant can read the delivered ${mediaDrop.payloadKind} drop`);
+      const { data: retrievedMedia, error: retrieveMediaError } = await account.client.storage.from('drop-media').download(mediaDrop.mediaPath);
+      assert.ifError(retrieveMediaError);
+      assert.equal(retrievedMedia?.size, mediaDrop.mediaSizeBytes, `The sender and claimant can retrieve the ${mediaDrop.payloadKind}`);
+    }
+
+    const { data: outsiderMediaDrop, error: outsiderMediaDropError } = await outsider.client.from('letters')
+      .select('id')
+      .eq('id', mediaDrop.letterId);
+    assert.ifError(outsiderMediaDropError);
+    assert.deepEqual(outsiderMediaDrop, [], `An unrelated account cannot read the claimed ${mediaDrop.payloadKind} drop`);
+    const { data: outsiderMedia, error: outsiderMediaError } = await outsider.client.storage.from('drop-media').download(mediaDrop.mediaPath);
+    assert.ok(outsiderMediaError && !outsiderMedia, `An unrelated account cannot download the ${mediaDrop.payloadKind}`);
+    const { data: outsiderSignedUrl, error: outsiderSignedUrlError } = await outsider.client.storage.from('drop-media').createSignedUrl(mediaDrop.mediaPath, 60);
+    assert.ok(outsiderSignedUrlError && !outsiderSignedUrl, `An unrelated account cannot create a URL for the ${mediaDrop.payloadKind}`);
+  }
 
   const { data: reissuedClaimDropId, error: reissueClaimError } = await sender.client.rpc('reissue_drop_claim_invite', {
     p_letter_id: claimDropId,
@@ -346,6 +471,9 @@ try {
   const { data: senderClaimedIds, error: senderClaimedIdsError } = await sender.client.rpc('get_sender_claimed_drop_ids');
   assert.ifError(senderClaimedIdsError);
   assert.ok(senderClaimedIds?.some((row) => row.letter_id === claimDropId), 'The sender can restore the durable claimed status');
+  for (const mediaDrop of unknownHandleMedia) {
+    assert.ok(senderClaimedIds?.some((row) => row.letter_id === mediaDrop.letterId), `The sender can restore the claimed ${mediaDrop.payloadKind} status`);
+  }
 
   const { error: claimantReactionError } = await claimant.client.from('letter_reactions').upsert({
     letter_id: claimDropId,
@@ -846,6 +974,7 @@ try {
 
   console.log('PASS: five disposable local accounts authenticate; the claim recipient creates a profile after the unknown-handle invite.');
   console.log('PASS: unknown-handle text invites stay unreadable until claim, invalidate reissued links, reject sender/outsider/replay claims, and restore sender status and reaction.');
+  console.log('PASS: unknown-handle image and GIF invites remain unreadable and unclaimable before profile setup, then expose media only to the sender and explicit claimant.');
   console.log('PASS: sender and recipient read the drop; an unrelated account cannot read or edit it.');
   console.log('PASS: the recipient reacts; the sender sees the reaction; unrelated reaction access is denied.');
   console.log('PASS: the local finalize route validates a GIF, safely reuses an exact retry with a fresh staging path, and keeps media limited to participants.');
