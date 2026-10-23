@@ -5,11 +5,12 @@ import Link from 'next/link';
 import { ArrowLeft, ArrowRight, Check, LockKeyhole, MailOpen, Sparkles } from 'lucide-react';
 import { useParams, useSearchParams } from 'next/navigation';
 import type { MockLetter } from '@/data/mockData';
-import { getRemoteLetterById, getRemoteLetters, getRemoteReaction, saveRemoteReaction, subscribeToSenderDropReactions } from '@/lib/letterBackend';
+import { getRemoteDropDirection, getRemoteLetterById, getRemoteLetters, getRemoteReactionSnapshot, saveRemoteReaction, subscribeToSenderDropReactions } from '@/lib/letterBackend';
 import { getLetterById } from '@/lib/letterStore';
+import { getInitialSenderReactionBaseline, getSenderReactionReadUpdate } from '@/lib/liveReactionState';
 import { DEMO_REACTION_EMOJIS, saveDemoReaction } from '@/lib/demoReactionStore';
-import { getSupabaseBrowserClient, isSupabaseAuthConfigured } from '@/lib/supabaseBrowser';
 import { getDraftAttachment } from '@/lib/letterMediaStore';
+import { withFallbackTimeout } from '@/lib/withFallbackTimeout';
 import { ReducedMotionGif } from '@/components/ReducedMotionGif';
 import { getReactionName } from '@/components/LiveReactionCue';
 import { startVisibleDataRefresh, type VisibleDataRefreshController } from '@/lib/relayRouteRefresh';
@@ -96,6 +97,11 @@ export default function LetterArrivalPage() {
   const [reactionAnnouncement, setReactionAnnouncement] = useState('');
   const [savingReaction, setSavingReaction] = useState(false);
   const currentReactionRef = useRef<string | undefined>(undefined);
+  const baselineReactionOnDirectReadRef = useRef(false);
+  const initialReactionBaselineRef = useRef<{ available: boolean; reaction: string | null } | null>(null);
+  const reactionSignalGenerationRef = useRef(0);
+  const consumedReactionSignalGenerationRef = useRef(0);
+  const reactionRefreshRef = useRef<VisibleDataRefreshController | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -107,6 +113,10 @@ export default function LetterArrivalPage() {
     setContentNotice('');
     setReactionNotice('');
     setReactionAnnouncement('');
+    baselineReactionOnDirectReadRef.current = false;
+    initialReactionBaselineRef.current = null;
+    reactionSignalGenerationRef.current = 0;
+    consumedReactionSignalGenerationRef.current = 0;
 
     if (!letterId) {
       setLoading(false);
@@ -115,6 +125,7 @@ export default function LetterArrivalPage() {
 
     let active = true;
     let mediaObjectUrl = '';
+    let stopReactionRealtime = () => {};
 
     const loadLetter = async () => {
       let localLetter = getLetterById(letterId);
@@ -146,15 +157,57 @@ export default function LetterArrivalPage() {
       }
 
       try {
-        const remoteLetters = await getRemoteLetters();
-        const remoteLetter = remoteLetters?.find((candidate) => candidate.id === letterId) || null;
-        if (!remoteLetters && isSupabaseAuthConfigured()) {
-          const supabase = getSupabaseBrowserClient();
-          if (supabase) {
-            const { data, error } = await supabase.auth.getSession();
-            if (active && !error && !data.session) setSignInRequired(true);
+        const startReactionRealtime = async () => {
+          const stopRealtime = await subscribeToSenderDropReactions((dropId) => {
+            if (!active) return;
+            if (!dropId) {
+              void reactionRefreshRef.current?.refresh();
+              return;
+            }
+            if (dropId !== letterId) return;
+            reactionSignalGenerationRef.current += 1;
+            void reactionRefreshRef.current?.refresh();
+          });
+          if (!active) {
+            stopRealtime();
+            return;
           }
+          stopReactionRealtime = stopRealtime;
+        };
+
+        // Capture the reaction state before opening the channel. Comparing the
+        // first ready read with this baseline catches changes during startup
+        // without relying on clock timestamps from two devices.
+        const directionRead = withFallbackTimeout(getRemoteDropDirection(letterId), 8_000, 'unavailable' as const);
+        const mailboxRead = withFallbackTimeout(getRemoteLetters(), 15_000, null).catch(() => null);
+        const reactionBaselineRead = withFallbackTimeout(getRemoteReactionSnapshot(letterId), 8_000, null).catch(() => null);
+        const direction = await directionRead;
+        if (!active) return;
+        const initialReactionBaseline = await getInitialSenderReactionBaseline(direction, reactionBaselineRead);
+        if (!active) return;
+        initialReactionBaselineRef.current = initialReactionBaseline;
+        baselineReactionOnDirectReadRef.current = true;
+        if (direction === 'sent' || direction === 'unavailable') {
+          await startReactionRealtime();
+          if (!active) return;
         }
+
+        // Auth and PostgREST reads above are bounded independently of channel setup.
+        const mailbox = await mailboxRead;
+        const remoteLetter = mailbox?.letters.find((candidate) => candidate.id === letterId) || null;
+        if (remoteLetter?.direction === 'sent'
+          && initialReactionBaselineRef.current?.available !== true
+          && mailbox?.reactionsHydrated) {
+          initialReactionBaselineRef.current = {
+            available: true,
+            reaction: remoteLetter.reaction ?? null,
+          };
+        }
+        if (remoteLetter?.direction !== 'sent') {
+          stopReactionRealtime();
+          stopReactionRealtime = () => {};
+        }
+        if (active && !mailbox && direction === 'signed-out') setSignInRequired(true);
         if (active) {
           setLetter(remoteLetter || localLetter || null);
           setFullContentAvailable(false);
@@ -172,6 +225,7 @@ export default function LetterArrivalPage() {
     void loadLetter();
     return () => {
       active = false;
+      stopReactionRealtime();
       if (mediaObjectUrl) URL.revokeObjectURL(mediaObjectUrl);
     };
   }, [letterId, senderView]);
@@ -186,33 +240,47 @@ export default function LetterArrivalPage() {
     if (!senderDropId) return;
 
     let active = true;
-    let stopRealtime = () => {};
-    let refresh: VisibleDataRefreshController | null = null;
-    refresh = startVisibleDataRefresh({
-      load: () => getRemoteReaction(senderDropId),
+    const refresh = startVisibleDataRefresh({
+      load: async () => {
+        const signalGeneration = reactionSignalGenerationRef.current;
+        const snapshot = await getRemoteReactionSnapshot(senderDropId);
+        return snapshot ? { snapshot, signalGeneration } : null;
+      },
       intervalMs: 60_000,
       queueOneWhileInFlight: true,
-      onData: (nextReaction) => {
-        if (!active || !nextReaction || nextReaction === currentReactionRef.current) return;
-        currentReactionRef.current = nextReaction;
-        setLetter((current) => current?.id === senderDropId ? { ...current, reaction: nextReaction } : current);
+      onData: (read) => {
+        if (!active) return;
+        const establishingBaseline = baselineReactionOnDirectReadRef.current;
+        const previousReaction = currentReactionRef.current ?? null;
+        const update = getSenderReactionReadUpdate(
+          read.snapshot,
+          read.signalGeneration,
+          reactionSignalGenerationRef.current,
+          previousReaction,
+          establishingBaseline,
+          consumedReactionSignalGenerationRef.current,
+          initialReactionBaselineRef.current,
+        );
+        if (update.outcome !== 'available') return;
+        baselineReactionOnDirectReadRef.current = update.baselinePending;
+        if (!update.baselinePending) initialReactionBaselineRef.current = null;
+        consumedReactionSignalGenerationRef.current = update.consumedSignalGeneration;
+        currentReactionRef.current = update.reaction ?? undefined;
+        if (establishingBaseline || update.reaction !== previousReaction) {
+          setLetter((current) => current?.id === senderDropId ? { ...current, reaction: update.reaction ?? undefined } : current);
+        }
+        if (!update.announce || !update.reaction) return;
         const who = letter?.recipient?.trim() || 'Your recipient';
         const subject = letter?.subject?.trim() || 'your drop';
-        setReactionAnnouncement(`${who} reacted to “${subject}” with ${getReactionName(nextReaction)}.`);
+        setReactionAnnouncement(`${who} reacted to “${subject}” with ${getReactionName(update.reaction)}.`);
       },
     });
-
-    void subscribeToSenderDropReactions((dropId) => {
-      if (!dropId || dropId === senderDropId) void refresh?.refresh();
-    }).then((stop) => {
-      if (!active) stop();
-      else stopRealtime = stop;
-    });
+    reactionRefreshRef.current = refresh;
 
     return () => {
       active = false;
-      refresh?.stop();
-      stopRealtime();
+      if (reactionRefreshRef.current === refresh) reactionRefreshRef.current = null;
+      refresh.stop();
     };
   }, [letter?.recipient, letter?.subject, senderDropId]);
 

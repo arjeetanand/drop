@@ -9,7 +9,7 @@ import { normalizeDropRecipient, validateDropMedia } from '@/lib/dropValidation'
 import { createStagedDropMediaPath, isDropMediaFinalPath, resolveDropMediaPaths } from '@/lib/dropMediaStorage';
 import { mergeDropReactions, type DropReactionRow } from '@/lib/mergeDropReactions';
 import { matchesStoredDropMetadata, type DropSendIntent, type StoredDropSend } from '@/lib/dropSendRecovery';
-import { fetchAllPages } from '@/lib/fetchAllPages';
+import { fetchAllPages, fetchPagedMailbox } from '@/lib/fetchAllPages';
 import { uniqueRecentDropRecipients, type RecentDropRecipient, type RecentDropRecipientRow } from '@/lib/recentDropRecipients';
 import { subscribeToDropInbox } from '@/lib/dropInboxRealtime';
 import { subscribeToDropReactions } from '@/lib/dropReactionRealtime';
@@ -302,30 +302,65 @@ function rowToLetter(row: LetterRow, userId: string, revealContent = false): Moc
 const MAILBOX_SELECT = 'id, sender_id, sender_profile:public_profiles!letters_sender_id_fkey(username), recipient_id, sender_display_name, recipient_username, recipient_name, subject, teaser, status, seal_id, dispatched_at, delivered_at, created_at, payload_kind, delivery_mode, media_path, media_mime_type, media_size_bytes';
 const LETTER_SELECT = `${MAILBOX_SELECT}, content`;
 
-export async function getRemoteLetters(): Promise<MockLetter[] | null> {
+export interface RemoteMailboxSnapshot {
+  letters: MockLetter[];
+  reactionsHydrated: boolean;
+}
+
+export type RemoteDropDirection = 'sent' | 'received' | 'signed-out' | 'unavailable';
+
+/** Read only enough to decide whether this detail route should monitor sender reactions. */
+export async function getRemoteDropDirection(letterId: string): Promise<RemoteDropDirection> {
+  try {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) return 'unavailable';
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError) return authError.name === 'AuthSessionMissingError' ? 'signed-out' : 'unavailable';
+    if (!authData.user) return 'signed-out';
+    const { data, error } = await supabase.from('letters')
+      .select('sender_id')
+      .eq('id', letterId)
+      .maybeSingle<{ sender_id: string }>();
+    if (error || !data) return 'unavailable';
+    return data.sender_id === authData.user.id ? 'sent' : 'received';
+  } catch {
+    return 'unavailable';
+  }
+}
+
+export async function getRemoteLetters(): Promise<RemoteMailboxSnapshot | null> {
   const context = await getAuthenticatedClient();
   if (!context) return null;
 
-  const { data, error } = await context.supabase
-    .from('letters')
-    .select(MAILBOX_SELECT)
-    .order('created_at', { ascending: false })
-    .returns<LetterRow[]>();
+  const mailbox = await fetchPagedMailbox<LetterRow, DropReactionRow>(
+    async (from, to) => {
+      const { data, error } = await context.supabase
+        .from('letters')
+        .select(MAILBOX_SELECT)
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
+        .range(from, to)
+        .returns<LetterRow[]>();
 
-  if (error || !data) return null;
-  const letters = data.map((row) => rowToLetter(row, context.user.id));
-  if (!letters.length) return letters;
+      return error || !data ? null : data;
+    },
+    async (letterIds) => {
+      const { data, error } = await context.supabase
+        .from('letter_reactions')
+        .select('letter_id, emoji, updated_at')
+        .in('letter_id', letterIds)
+        .returns<DropReactionRow[]>();
 
-  try {
-    const { data: reactions, error: reactionError } = await context.supabase
-      .from('letter_reactions')
-      .select('letter_id, emoji, updated_at')
-      .in('letter_id', letters.map((letter) => letter.id))
-      .returns<DropReactionRow[]>();
-    return reactionError || !reactions ? letters : mergeDropReactions(letters, reactions);
-  } catch {
-    return letters;
-  }
+      return error || !data ? null : data;
+    },
+  );
+
+  if (!mailbox) return null;
+  const letters = mailbox.letters.map((row) => rowToLetter(row, context.user.id));
+  return {
+    letters: mailbox.reactions ? mergeDropReactions(letters, mailbox.reactions) : letters,
+    reactionsHydrated: mailbox.reactions !== null,
+  };
 }
 
 export async function subscribeToIncomingDropInbox(onDropSignal: (dropId?: string) => void): Promise<() => void> {
@@ -338,10 +373,43 @@ export async function subscribeToIncomingDropInbox(onDropSignal: (dropId?: strin
 }
 
 export async function subscribeToSenderDropReactions(onDropSignal: (dropId?: string) => void): Promise<() => void> {
+  let active = true;
+  let timeout: ReturnType<typeof setTimeout> | null = null;
+  const setup = (async () => {
+    try {
+      const context = await getAuthenticatedClient();
+      return context
+        ? await subscribeToDropReactions(context.supabase, context.user.id, (dropId) => {
+          if (active) onDropSignal(dropId);
+        })
+        : () => {};
+    } catch {
+      return () => {};
+    }
+  })();
+  const timedOut = Symbol('reaction-subscription-timeout');
   try {
-    const context = await getAuthenticatedClient();
-    return context ? subscribeToDropReactions(context.supabase, context.user.id, onDropSignal) : () => {};
+    const result = await Promise.race([
+      setup,
+      new Promise<typeof timedOut>((resolve) => {
+        timeout = setTimeout(() => resolve(timedOut), 10_000);
+      }),
+    ]);
+    if (timeout) clearTimeout(timeout);
+    if (result === timedOut) {
+      active = false;
+      void setup.then((stop) => stop());
+      return () => { active = false; };
+    }
+    return () => {
+      if (!active) return;
+      active = false;
+      result();
+    };
   } catch {
+    if (timeout) clearTimeout(timeout);
+    active = false;
+    void setup.then((stop) => stop());
     return () => {};
   }
 }
@@ -397,23 +465,33 @@ export async function getRemoteLetterById(letterId: string): Promise<MockLetter 
     const { data: signed } = await context.supabase.storage.from('drop-media').createSignedUrl(data.media_path, 60);
     letter.mediaUrl = signed?.signedUrl;
   }
-  letter.reaction = await readRemoteReaction(context, letterId) ?? undefined;
+  const reactionSnapshot = await readRemoteReaction(context, letterId);
+  letter.reaction = reactionSnapshot.reaction ?? undefined;
   return letter;
 }
 
-async function readRemoteReaction(context: AuthenticatedContext, letterId: string): Promise<string | null> {
+export interface RemoteReactionSnapshot {
+  available: boolean;
+  reaction: string | null;
+}
+
+async function readRemoteReaction(context: AuthenticatedContext, letterId: string): Promise<RemoteReactionSnapshot> {
   try {
     const { data, error } = await context.supabase.from('letter_reactions')
       .select('emoji')
       .eq('letter_id', letterId)
       .maybeSingle<{ emoji: string }>();
-    return error || !data || typeof data.emoji !== 'string' ? null : data.emoji;
+    if (error) return { available: false, reaction: null };
+    if (!data) return { available: true, reaction: null };
+    return typeof data.emoji === 'string'
+      ? { available: true, reaction: data.emoji }
+      : { available: false, reaction: null };
   } catch {
-    return null;
+    return { available: false, reaction: null };
   }
 }
 
-export async function getRemoteReaction(letterId: string): Promise<string | null> {
+export async function getRemoteReactionSnapshot(letterId: string): Promise<RemoteReactionSnapshot | null> {
   try {
     const context = await getAuthenticatedClient();
     return context ? readRemoteReaction(context, letterId) : null;

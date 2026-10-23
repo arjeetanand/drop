@@ -47,31 +47,40 @@ export function useLiveInbox(initialLetters: MockLetter[] = mockLetters) {
           load: getRemoteLetters,
           intervalMs: LIVE_INBOX_RECOVERY_INTERVAL_MS,
           queueOneWhileInFlight: true,
-          onData: (remoteLetters) => {
+          onData: (mailbox) => {
             if (!active) return;
 
+            const remoteLetters = mailbox.letters;
             const update = getLiveInboxUpdate(remoteLetters, seenIncomingIds.current, signaledDropIds);
-            const reactionUpdate = getLiveReactionUpdate(
-              remoteLetters,
-              seenReactions.current,
-              signaledReactionDropIds,
-              initialReactionSignalWindowStart,
-            );
+            const reactionUpdate = mailbox.reactionsHydrated
+              ? getLiveReactionUpdate(
+                  remoteLetters,
+                  seenReactions.current,
+                  signaledReactionDropIds,
+                  initialReactionSignalWindowStart,
+                )
+              : null;
             seenIncomingIds.current = update.receivedIds;
-            seenReactions.current = reactionUpdate.reactionMap;
+            if (reactionUpdate) seenReactions.current = reactionUpdate.reactionMap;
             remoteLetters.forEach((letter) => signaledDropIds.delete(letter.id));
-            reactionUpdate.matchedSignalIds.forEach((dropId) => signaledReactionDropIds.delete(dropId));
+            reactionUpdate?.matchedSignalIds.forEach((dropId) => signaledReactionDropIds.delete(dropId));
             if (update.arrival) {
               setArrival(update.arrival);
               setArrivalCount((count) => count + update.newCount);
             }
-            if (reactionUpdate.reactions.length) {
+            if (reactionUpdate?.reactions.length) {
               setReaction(reactionUpdate.reactions[0]);
               setReactionCount((count) => count + reactionUpdate.reactions.length);
             }
 
+            const displayLetters = reactionUpdate
+              ? remoteLetters
+              : remoteLetters.map((letter) => {
+                  const knownReaction = seenReactions.current?.get(letter.id);
+                  return knownReaction ? { ...letter, reaction: knownReaction } : letter;
+                });
             const localLetters = getLettersWithDraft(getLetterDraft());
-            setLetters(mergeInboxLetters(localLetters, remoteLetters));
+            setLetters(mergeInboxLetters(localLetters, displayLetters));
           },
         });
       }

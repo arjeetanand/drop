@@ -2,6 +2,7 @@ import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
 
 type DropReactionRealtimeClient = Pick<SupabaseClient, 'channel' | 'removeChannel' | 'realtime'>;
 type DropReactionBroadcast = { payload?: { drop_id?: unknown } };
+const SUBSCRIPTION_READY_TIMEOUT_MS = 8_000;
 
 export function dropReactionTopic(userId: string) {
   return `user:${userId}:drop-reactions`;
@@ -17,8 +18,12 @@ export async function subscribeToDropReactions(
 
   let active = true;
   let channel: RealtimeChannel;
+  let readyTimeout: ReturnType<typeof setTimeout> | null = null;
   try {
     await client.realtime.setAuth();
+    let markReady!: () => void;
+    const ready = new Promise<void>((resolve) => { markReady = resolve; });
+    readyTimeout = setTimeout(markReady, SUBSCRIPTION_READY_TIMEOUT_MS);
     channel = client
       .channel(dropReactionTopic(userId), { config: { private: true } })
       .on('broadcast', { event: 'drop_reaction_received' }, (message: DropReactionBroadcast) => {
@@ -28,11 +33,19 @@ export async function subscribeToDropReactions(
       })
       .subscribe((status) => {
         // Refresh on initial connection and reconnection to recover any missed signals.
-        if (active && status === 'SUBSCRIBED') onDropSignal();
+        if (active && status === 'SUBSCRIBED') {
+          onDropSignal();
+          markReady();
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          markReady();
+        }
       });
+    await ready;
   } catch {
+    if (readyTimeout) clearTimeout(readyTimeout);
     return () => {};
   }
+  if (readyTimeout) clearTimeout(readyTimeout);
 
   return () => {
     if (!active) return;

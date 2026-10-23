@@ -6,6 +6,58 @@ export interface LiveReactionUpdate {
   matchedSignalIds: Set<string>;
 }
 
+export interface SenderReactionReadUpdate {
+  outcome: 'stale' | 'unavailable' | 'available';
+  reaction: string | null;
+  announce: boolean;
+  baselinePending: boolean;
+  consumedSignalGeneration: number;
+}
+
+export type InitialReactionDirection = 'sent' | 'received' | 'signed-out' | 'unavailable';
+export type InitialReactionBaseline = { available: boolean; reaction: string | null };
+
+/** Skip awaiting sender-only baseline data once a route is known not to be sent. */
+export async function getInitialSenderReactionBaseline(
+  direction: InitialReactionDirection,
+  baselineRead: Promise<InitialReactionBaseline | null>,
+): Promise<InitialReactionBaseline | null> {
+  if (direction !== 'sent' && direction !== 'unavailable') return null;
+  return baselineRead;
+}
+
+/** Discard stale reads, preserve baselines on failures, and announce only known changes. */
+export function getSenderReactionReadUpdate(
+  snapshot: { available: boolean; reaction: string | null },
+  readSignalGeneration: number,
+  currentSignalGeneration: number,
+  previousReaction: string | null,
+  baselinePending: boolean,
+  consumedSignalGeneration: number,
+  initialBaseline: { available: boolean; reaction: string | null } | null = null,
+): SenderReactionReadUpdate {
+  if (readSignalGeneration !== currentSignalGeneration) {
+    return { outcome: 'stale', reaction: null, announce: false, baselinePending, consumedSignalGeneration };
+  }
+  if (!snapshot.available) {
+    return { outcome: 'unavailable', reaction: null, announce: false, baselinePending, consumedSignalGeneration };
+  }
+
+  const signaledSinceBaseline = readSignalGeneration > consumedSignalGeneration;
+  const changedDuringStartup = initialBaseline?.available === true
+    && snapshot.reaction !== initialBaseline.reaction;
+  const announce = Boolean(snapshot.reaction) && (baselinePending
+    ? signaledSinceBaseline || changedDuringStartup
+    : snapshot.reaction !== previousReaction);
+  return {
+    outcome: 'available',
+    reaction: snapshot.reaction,
+    announce,
+    baselinePending: false,
+    consumedSignalGeneration: readSignalGeneration,
+  };
+}
+
 /** Baseline existing reactions, then report only changes; a matching signal can announce the first read. */
 export function getLiveReactionUpdate(
   remoteLetters: MockLetter[],
