@@ -590,3 +590,32 @@ For a privacy-boundary smoke, assert the precise authorization result and the ab
 ### Git and remaining gaps
 
 Code commit `e5b7b43` (`test: cover unknown-handle text claim smoke`) is pushed to `origin/test/unknown-handle-claim-smoke`. The README, Supabase setup guide, plan, checklist, handoff, and this learning entry are committed separately on the same branch. No PR or merge was created. `/letter`, `.env.local`, and hosted resources were not changed. Next: run the smoke and SQL fixture against a confirmed disposable local stack, then verify rendered claims and photo/GIF access plus scheduled Storage deletion with the approved Free project.
+
+## 2026-10-24 — Prevent duplicate PKCE callback exchanges
+
+### Issue
+
+React effect replay could exchange the same one-time Supabase PKCE code twice. A stale effect could also route to an error/profile page after a newer callback run had taken over.
+
+### Cause
+
+The callback effect started the code exchange independently on every setup. Its active flag guarded some state updates but did not guard error or success navigation, and Supabase consumes the PKCE verifier during exchange.
+
+### Resolution
+
+- Keep the in-flight exchange in a component ref keyed by the one-time code so an effect replay reuses the same promise.
+- Mark each effect run active/disposed and allow only active runs to consume the exchange result, update callback state, or navigate.
+- Add regression tests for same-code reuse, a new code, disposed callbacks, and a replay where only the active run reaches the private claim route.
+
+### Learning
+
+For one-time asynchronous operations, deduplicate the operation itself and gate every result side effect by the lifecycle that initiated it. A stale caller may share the result, but it must not own later UI or navigation changes.
+
+### Verification
+
+- `npm test` passed 224/224. `npm run lint`, `npx tsc --noEmit --incremental false`, and `git diff --check` passed. Independent frontend review found no concrete findings.
+- `npm run build` stopped with `EPERM` opening `.next/trace` in the active checkout. Browser-rendered sign-in, hosted OAuth, and two-account claim behavior were not verified.
+
+### Git and remaining gaps
+
+Code commit `7afdf3b` (`fix: guard auth callback effect replay`) is pushed to `origin/fix/auth-callback-effect-replay`. This learning entry, README, plan, checklist, and handoff are in a separate documentation commit. No PR or merge was created. `/letter`, `.env.local`, and hosted resources were not changed. Next: verify sign-in callback rendering and account-to-account private claims when isolated browser and Supabase runtimes are available.

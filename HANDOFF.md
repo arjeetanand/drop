@@ -2,6 +2,15 @@
 
 Updated: 2026-10-24
 
+## Latest checkpoint — PKCE callback effect replay (2026-10-24)
+
+- Reuse one pending exchange for a one-time Supabase PKCE code when React replays the auth callback effect. Cleanup now prevents disposed effect runs from changing callback state or navigating after a newer run takes over.
+- Added deterministic coverage for same-code exchange reuse, distinct codes, stale callbacks, and the combined replay case where only the active callback reaches the private claim route. Independent frontend review found no concrete findings.
+- Verification: `npm test` passed 224/224; `npm run lint`, `npx tsc --noEmit --incremental false`, and `git diff --check` passed. `npm run build` stopped with `EPERM` opening `.next/trace` in the active checkout. No browser-rendered sign-in, hosted OAuth, or two-account flow was verified.
+- Branch `fix/auth-callback-effect-replay`; code commit `7afdf3b` (`fix: guard auth callback effect replay`) is pushed to `origin`. The checklist, README, plan, handoff, and learning entry are being committed separately. No PR or merge was created. `.env.local`, `/letter`, and hosted resources were not changed.
+- The existing local Node listener on port 4004 was left untouched; this turn did not verify an HTTP response. Local Supabase ports remain unavailable, and no hosted project is configured.
+- Next: verify email/OAuth callback rendering and a two-account private claim in an isolated browser/Supabase runtime; continue with unknown-handle photo/GIF access and actual 30-day Storage cleanup when the Free project/runtime is available.
+
 ## Latest checkpoint — unknown-handle text claim smoke coverage (2026-10-24)
 
 - Extended `scripts/local-supabase-smoke.mjs` to use five disposable accounts and cover the unknown-handle text journey from pending invite through profile creation, reissue, explicit claim, same-account retry, outsider/replay denial, participant privacy, sender status, and reaction visibility. Denial assertions require the expected authorization SQLSTATE and no returned drop ID.

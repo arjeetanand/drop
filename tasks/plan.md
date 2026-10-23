@@ -8,6 +8,14 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 
 ## Implementation Status — 2026-10-24
 
+### Latest checkpoint — PKCE callback effect replay (2026-10-24)
+
+- The auth callback now shares one pending Supabase PKCE code exchange across React effect replay. Disposed effect runs cannot update callback state or navigate after a newer run starts.
+- Added regression coverage for same-code deduplication, distinct codes, stale callback suppression, and the combined replay-to-claim route. Independent frontend review found no concrete findings.
+- `npm test` passed 224/224; lint, no-incremental TypeScript, and `git diff --check` passed. `npm run build` stopped with `EPERM` opening `.next/trace` in the active checkout. No rendered sign-in, hosted OAuth, or two-account claim was verified.
+- Code commit `7afdf3b` is pushed on `fix/auth-callback-effect-replay`; no PR or merge was created.
+- Next: verify the rendered callback and account-to-account claim with an isolated browser and Supabase runtime, then complete the unknown-handle photo/GIF and actual Storage cleanup checks.
+
 ### Latest checkpoint — unknown-handle text claim smoke coverage (2026-10-24)
 
 - Extended the authenticated local Supabase smoke to use a fifth disposable account that is initially unprofiled. It now covers the unknown-handle text invite, unreadable/unclaimable pre-profile state, explicit profile setup and claim, link rotation, idempotent same-account retry, outsider/replay denial, participant-only reads, and sender status/reaction recovery.

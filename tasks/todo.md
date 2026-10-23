@@ -2,6 +2,14 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
+## Checkpoint — PKCE callback effect replay (2026-10-24)
+
+- [x] Deduplicate the pending one-time PKCE code exchange across auth callback effect replay and suppress state/navigation work from disposed effect runs.
+- [x] Cover same-code reuse, different-code exchange, stale activity suppression, and the combined replay case where only the active run reaches the claim route.
+- [x] `npm test` passes 224/224; `npm run lint`, `npx tsc --noEmit --incremental false`, and `git diff --check` pass. Independent frontend review found no concrete issue. Code commit `7afdf3b` is pushed to `origin/fix/auth-callback-effect-replay`.
+- [ ] Retry the production build where the checkout can write `.next/trace`; this attempt stopped with `EPERM`. No browser-rendered, email/OAuth, hosted, or account-to-account verification ran.
+- [ ] Verify the auth callback and private claim flow with disposable accounts when browser tooling and isolated local or approved Free Supabase services are available.
+
 ## Checkpoint — unknown-handle text claim smoke coverage (2026-10-24)
 
 - [x] Extend the local Supabase smoke with a fifth disposable account that receives an unknown-handle text invite, creates its profile, and explicitly claims the drop.
