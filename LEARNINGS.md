@@ -375,3 +375,33 @@ For a privileged serverless endpoint, inject configuration and the service clien
 ### Git and remaining gaps
 
 Code commit `30e3190` (`test: cover private media cleanup endpoint boundary`) is pushed to `origin/fix/cleanup-endpoint-boundary`. The checklist, README, handoff, and this learning entry are committed separately on the same branch. Unknown-handle two-account claims, sender status, replay/reissue, hosted deployment, and actual 30-day Storage deletion remain open. `/letter` and hosted resources were not changed.
+
+## 2026-10-23 — Keep temporary claim verification failures retryable
+
+### Issue
+
+A claim verification failure returned the same message as an expired or already-claimed invite. This could send a recipient looking for a fresh link during a temporary service outage.
+
+### Cause
+
+The client grouped every structured RPC error with empty successful results. The database also uses SQLSTATE `42501` for terminal or unavailable invite states, so treating every error as temporary would be misleading too.
+
+### Resolution
+
+- Classify SQLSTATE `42501` as a generic unavailable invite and keep successful empty/invalid results on that same privacy-preserving path.
+- Show retry guidance for other RPC errors and thrown service/auth failures. Do not include the backend message or bearer token in the UI.
+- Keep the invite token until a successful claim; the existing page clears the session and cross-tab handoff only on success.
+
+### Learning
+
+When a backend error can represent either a terminal business result or an infrastructure fault, classify only known terminal codes. Use generic copy to preserve privacy, and keep retryable capabilities available when the operation did not succeed.
+
+### Verification
+
+- Focused claim tests pass 8/8, including `42501`, transient and unknown errors, raw-error/token exclusion, empty results, and successful claim IDs.
+- `npm test` passes 200/200; lint, no-incremental TypeScript, and `git diff --check` pass. Home and Claim return HTTP 200 on port 4004.
+- Independent QA review identified the `42501` terminal case and approved the corrected classification. Rendered browser and screen-reader behavior were not checked.
+
+### Git and remaining gaps
+
+Code commit `e2e8db7` (`fix: keep claim service failures retryable`) is pushed to `origin/fix/claim-rpc-retry-copy`. The checklist, README, handoff, and this learning entry are committed separately on the same branch. Hosted two-account photo/GIF claim behavior, claim replay/reissue, and actual Storage deletion remain unverified. `/letter` and hosted resources were not changed.

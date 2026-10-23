@@ -2,6 +2,15 @@
 
 Updated: 2026-10-23
 
+## Latest fix — retryable claim verification (2026-10-23)
+
+- A failed claim RPC no longer automatically tells the recipient the invite expired. The claim function maps SQLSTATE `42501` to the generic unavailable/fresh-link message because the database uses it for invalid, expired, revoked, replaced, already-claimed, and other terminal outcomes. Other RPC errors and thrown failures receive calm retry copy without exposing backend text.
+- A failed attempt leaves the token in the claim page's current session; only a successful claim clears the stored handoff and opens the drop. Successful RPC responses with missing/invalid IDs retain the generic unavailable message.
+- Verification: focused claim tests passed 8/8; `npm test` passed 200/200; lint, no-incremental TypeScript, and `git diff --check` passed. Home and Claim returned HTTP 200 at `http://localhost:4004`. Independent QA approved after the SQLSTATE correction.
+- Branch `fix/claim-rpc-retry-copy`; code commit `e2e8db7` (`fix: keep claim service failures retryable`) is pushed. This handoff, checklist, README, and learning entry are committed separately on the same branch. No PR or merge was created.
+- Rendered claim interaction, screen-reader behavior, hosted two-account claims, and actual Storage deletion remain open. `/letter` and hosted resources were not changed.
+- Next: validate rendered retry/terminal states when browser automation is available, then complete the two-account photo/GIF claim and 30-day Storage cleanup journey against local or approved Free Supabase.
+
 ## Latest checkpoint — cleanup endpoint boundary tests (2026-10-23)
 
 - Extracted the cleanup Edge Function into an injectable request handler; `index.ts` now supplies the Deno environment and Supabase client adapter. The endpoint still checks POST, a configured high-entropy request secret, project URL/service key, and bounded content length before constructing a service client.

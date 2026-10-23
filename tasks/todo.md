@@ -2,6 +2,15 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
+## Checkpoint — retryable claim verification (2026-10-23)
+
+- [x] Separate claim RPC failures from successful empty results: SQLSTATE `42501` keeps generic unavailable/fresh-link guidance; transport, server, unknown RPC errors, and thrown exceptions get calm retry copy.
+- [x] Preserve the invite in the claim page after a failed attempt; keep raw backend errors and bearer tokens out of user-facing copy.
+- [x] `tests/dropClaim.test.mjs` passes 8/8; `npm test` passes 200/200; lint, `npx tsc --noEmit --incremental false`, and `git diff --check` pass. Home and Claim return HTTP 200 at `http://localhost:4004`.
+- [x] Code commit `e2e8db7` is pushed to `origin/fix/claim-rpc-retry-copy`; this checklist, README, handoff, and learning entry are in a separate documentation commit.
+- [ ] Verify the rendered retry and terminal states with keyboard and screen-reader interaction; no browser automation is available in this session.
+- [ ] Verify claim/reissue/status and pre/post-claim photo/GIF access across two disposable accounts, then verify actual Storage deletion after deployment to local or approved Free Supabase.
+
 ## Checkpoint — cleanup endpoint boundary tests (2026-10-23)
 
 - [x] Extract the cleanup Edge Function request handler behind injected environment and service-client dependencies; keep `index.ts` as the Deno adapter.
