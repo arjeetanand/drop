@@ -8,6 +8,13 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 
 ## Implementation Status — 2026-10-23
 
+### Latest checkpoint — relay draft private-claim fallback (2026-10-23)
+
+- Relay mode now offers a clear switch to Instant for a checked unknown recipient, enabling the existing private claim-link path without weakening its instant-only authorization boundary.
+- Switching preserves the draft and saved attachment, focuses the existing private-link action, and does not share until the sender explicitly selects that action. The switch is guarded during active invite, send, and delete work.
+- `npm test` passed 219/219; lint, `npx tsc --noEmit --incremental false`, and `git diff --check` passed. Code commit `56dc3f2` is pushed on `feat/relay-claim-fallback`.
+- The production build, rendered browser/keyboard checks, hosted two-account claim, and actual Storage deletion were not verified. The prior build attempt was blocked by Google Fonts DNS; no hosted Supabase project is configured.
+
 ### Latest checkpoint — local account-to-account verification and card contrast (2026-10-23)
 
 - The authenticated local Supabase smoke passed with four disposable accounts: known-recipient text access, outsider denial, recipient reaction visibility, GIF finalize and lost-response retry, relay privacy/collection, and legacy relay normalization. The process exited successfully after cleanup.

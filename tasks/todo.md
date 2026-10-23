@@ -2,6 +2,16 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
+## Checkpoint — relay draft private-claim fallback (2026-10-23)
+
+- [x] When a connected sender selects a checked, unknown handle in Relay mode, offer an explicit switch to Instant so they can use the existing private claim-link flow.
+- [x] Preserve the full draft and saved photo/GIF attachment when switching; focus the existing private-link action and require its separate click before sharing.
+- [x] Disable and guard the switch while an invite is sharing, a send is active, or the draft is being deleted.
+- [x] `npm test` passes 219/219; lint, no-incremental TypeScript, and `git diff --check` pass. Branch `feat/relay-claim-fallback`, code commit `56dc3f2` is pushed.
+- [ ] Verify the rendered mobile/desktop interaction, keyboard focus, and screen-reader announcement in a browser; browser automation is unavailable in this session.
+- [ ] Verify unknown-handle photo/GIF claims across disposable accounts and hosted Supabase after the approved Free project is configured. This slice did not change claim authorization or database policy.
+- [ ] Production build and HTTP route response remain unverified in this environment; the existing Google Fonts fetch previously failed DNS resolution, and the local server listener started but the HTTP probe returned no response.
+
 ## Checkpoint — 30-day staged-media cleanup and retry identity (2026-10-23)
 
 - [x] Add a service-role-only scan that queues only valid, unlinked `/pending/` Storage objects after 30 days; use the Storage API worker with retries, path locks, and 24-hour minimum tombstones.

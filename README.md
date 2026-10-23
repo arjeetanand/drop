@@ -46,3 +46,5 @@ Mailbox history is paged beyond the API's 1,000-row limit, and reaction reads ru
 ## Relay retry recovery
 
 Carrier invite accepts keep the exact attempt details in the current browser tab for up to 24 hours. If the response is interrupted, refresh the same invite in that tab and choose “Retry same handoff”; Drop clears the record after the carrier pass is saved.
+
+When a connected sender has confirmed that a recipient handle is not on Drop, Relay mode offers **Switch to Instant for a private link**. The switch keeps the current draft and saved media, then focuses the existing private claim-link action. It does not send or share anything until the sender explicitly chooses that action. Relay claim links remain unavailable.

@@ -2,6 +2,16 @@
 
 Updated: 2026-10-23
 
+## Latest checkpoint — relay draft private-claim fallback (2026-10-23)
+
+- Relay mode now offers an explicit switch to Instant for a connected sender whose current recipient lookup confirmed an unknown handle. This opens access to the existing private photo/GIF/text claim path, which still requires a separate user action to create/share the link.
+- The mode switch persists the current draft with its saved attachment and stable media upload ID, changes only delivery mode, then moves focus to the existing private-link action. It stays disabled and its handler rechecks eligibility while an invite, send, or delete is active.
+- Verification: focused eligibility tests and `npm test` passed 219/219; lint, `npx tsc --noEmit --incremental false`, and `git diff --check` passed. The safe claim authorization remains instant-only; no server or SQL policy changed.
+- Branch `feat/relay-claim-fallback`; code commit `56dc3f2` (`feat: offer instant claims for relay drafts`) is pushed. Documentation updates are being recorded in a separate commit on this branch. No PR or merge was created; `/letter` and hosted Supabase were not changed.
+- `./run.sh start` restarted the Drop-owned process and Next reported ready on port 4004. The HTTP probe returned HTTP 000, so route responses were not verified. No rendered browser interaction ran; the production build remains blocked by the existing `fonts.googleapis.com` DNS failure.
+- Hosted unknown-handle photo/GIF claims, hosted migrations/worker, actual Storage deletion, and keyboard/screen-reader verification remain open. No hosted project is configured.
+- Next: use the rendered mobile and desktop composer to verify the switch, saved attachment preservation, focus, and explicit claim-link action; then exercise the flow with two disposable accounts against local or approved Free Supabase.
+
 ## Latest checkpoint — 30-day staged-media cleanup and retry identity (2026-10-23)
 
 - Added `20261023170000_drop_pending_media_retention.sql` to scan valid, unlinked staging objects under `/pending/` after 30 days, in batches of up to 25. The cleanup Edge Function removes them through the Supabase Storage API and retries failures. A per-path lock prevents queued deletion from racing a same-path upload; completed paths stay tombstoned for at least 24 hours and are cleared by a later scan.

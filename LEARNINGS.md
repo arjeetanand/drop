@@ -496,3 +496,34 @@ Persist logical identity before retryable external work. A new request may use a
 ### Git and remaining gaps
 
 Code commit `41247b6` (`fix: persist media ID for legacy claim retries`) is pushed to `origin/feat/claim-invite-journey`; fixture coverage is in `5bf4df3`. This entry is committed separately with the Drop setup/checklist/handoff update. Hosted Supabase and actual cleanup remain unverified. `/letter` and hosted resources were not changed.
+
+## 2026-10-23 — Preserve relay drafts when offering private claims
+
+### Issue
+
+A sender who picked Relay for an unknown handle could not reach the private claim-link flow, even when they wanted the recipient to claim the drop directly. Switching modes must not discard the text or a saved photo/GIF, and must not accidentally share it.
+
+### Cause
+
+Private claim links are intentionally limited to Instant mode. The composer only exposed the claim action when already in Instant, leaving relay drafts without a clear route to the supported flow.
+
+### Resolution
+
+- Offer an explicit Relay-to-Instant switch only for a connected account and a current, checked, not-found recipient lookup with a valid draft or fully saved attachment.
+- Persist the current draft with Instant as its delivery mode, preserving its attachment and upload identity; then focus the existing private-link action.
+- Keep sharing as a separate explicit action and guard the switch during invite sharing, sending, and deletion. Leave the instant-only claim authorization unchanged.
+- Add regression coverage for eligible text/photo/GIF drafts and the blocked states.
+
+### Learning
+
+When a user needs to change a mode to reach a supported action, make the transition explicit, preserve the in-progress work, and move focus to the next available action. Keep irreversible or externally visible actions behind their existing confirmation step.
+
+### Verification
+
+- `npm test` passed 219/219; lint, no-incremental TypeScript, and `git diff --check` passed.
+- The eligibility helper is covered, but the rendered composer, keyboard/screen-reader behavior, and browser viewport interaction were not tested. The production build and route HTTP response were not verified; the existing Google Fonts DNS failure remains, and the local port probe returned HTTP 000.
+- No hosted or account-to-account private claim test ran because no hosted Supabase project is configured.
+
+### Git and remaining gaps
+
+Code commit `56dc3f2` (`feat: offer instant claims for relay drafts`) is pushed to `origin/feat/relay-claim-fallback`; this entry and checklist/plan/README/handoff updates are being committed separately on the same branch. No PR or merge was created. `/letter`, `.env.local`, and hosted resources were not changed. Next, verify rendered interaction and the unknown-handle photo/GIF claim flow with two disposable accounts against local or approved Free Supabase.
