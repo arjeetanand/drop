@@ -17,6 +17,8 @@ Open `http://localhost:4004`. Run `./run.sh` again to restart Drop, or `./run.sh
 
 Choose **Try a demo drop** on Home, then pick the bundled photo or GIF. The sample uses the existing recipient reveal, reaction, and sender-copy screens; it is saved in this browser only, does not upload or send anything, and leaves the active draft untouched. Demo reactions persist on this device.
 
+Reaction buttons expose text labels such as “React with heart hands” to assistive technology instead of relying on emoji pronunciation.
+
 With Drop running on port 4004, run `node scripts/browser-demo-smoke.mjs`. The smoke opens an isolated temporary Chrome/Edge/Chromium profile and checks complete GIF flows at 360×844, 390×844, 430×844, and 1440×900, plus a photo flow at 390×844. It uses touch at 360px and keyboard activation at 390px, 430px, and desktop; Home and the chooser are also checked for horizontal overflow at all four widths. The page-scoped request gate checks the local demo for cross-origin, Auth, RPC, and Storage-write requests; this does not validate hosted sends, server-side activity, screen readers, or physical devices. Chrome touch input timed out at 430px in this environment, so that viewport uses the tested keyboard path.
 
 To save optional screenshots, set `DROP_BROWSER_SCREENSHOT_DIR` to a new empty folder outside the repository before running the smoke. It captures the 390px and desktop GIF journeys without adding images to Git.

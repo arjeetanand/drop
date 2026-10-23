@@ -2,6 +2,15 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
+## Checkpoint — accessible reaction names (2026-10-24)
+
+- [x] Give all five reaction buttons natural-language accessible names and reuse the same mapping for live reaction announcements.
+- [x] Add unit regressions and assert all five rendered labels in the isolated browser smoke. `npm test` passes 245/245; lint, no-incremental TypeScript, browser-script syntax, and diff checks pass.
+- [x] Isolated Chrome passed photo and GIF reaction flows at mobile and desktop sizes, including keyboard navigation, reload persistence, and no cross-origin/Auth/RPC/Storage writes. Main checkout `/` returns HTTP 200 on port 4004.
+- [ ] Verify with an actual screen reader and physical device; automated DOM/browser checks do not prove spoken output or device behavior.
+- [ ] Finish the first-friend private photo/GIF journey with two disposable accounts and verify physical Storage deletion. The PostgreSQL rollback fixture could not start because `initdb` failed to allocate shared memory (`shmget`, `No space left on device`); no SQL assertions ran.
+- [x] Code commits `7823b41` and `783bc52` are pushed to `origin/fix-private-claim-share-cancel-copy`; this checkpoint is in a separate documentation commit.
+
 ## Checkpoint — private claim share recovery (2026-10-24)
 
 - [x] Keep the composer truthful after the share sheet is cancelled: the private link is saved but not shared, and the sender can copy it from the current screen.

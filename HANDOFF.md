@@ -2,6 +2,14 @@
 
 Updated: 2026-10-24
 
+## Latest checkpoint — accessible reaction names (2026-10-24)
+
+- Reaction buttons now have natural-language names (“React with a purple heart”, “React with a face holding back tears”, “React with heart hands”, and similar) using the same shared mapping as live reaction announcements. Unit tests cover all supported reactions and an unknown-reaction fallback; the rendered browser smoke checks all five button names.
+- Verification: `npm test` passed 245/245; lint, `npx tsc --noEmit --incremental false`, `node --check scripts/browser-demo-smoke.mjs`, and `git diff --check` passed. Isolated Chrome, running from a temporary copy without `.env.local`, passed GIF flows at 360×844 (touch), 390×844, 430×844, and 1440×900 (keyboard), and a photo flow at 390×844 (keyboard). Home/chooser had no horizontal overflow; the request gate observed no cross-origin, Auth, RPC, or Storage-write requests. The main checkout returned HTTP 200 for `/` on port 4004 and was left running.
+- The smoke proves rendered labels and browser keyboard/touch simulation, not spoken output from a real screen reader or behavior on a physical device. No hosted two-account claim or real Storage deletion ran. The PostgreSQL rollback fixture also remains unrun: Homebrew PostgreSQL 16.15 `initdb` failed with `shmget` “No space left on device,” including with mmap options; no SQL assertions executed and all temporary directories were removed.
+- Active checkout: `/Users/arjeetanand/projects/drop`; branch `fix-private-claim-share-cancel-copy`. Code commits `7823b41` (`fix: give reaction controls spoken names`) and `783bc52` (`fix: make reaction labels read naturally`) are pushed; this handoff, plan, checklist, README, and learning entry are recorded in a separate documentation commit on the same branch. No PR or merge was created. `/letter`, `.env.local`, and hosted resources were not changed.
+- Next: verify the first-friend photo/GIF claim journey across two disposable accounts and the actual 30-day Storage cleanup against an isolated local or approved Free Supabase backend. Then complete screen-reader and physical-device checks.
+
 ## Latest checkpoint — private claim share recovery (2026-10-24)
 
 - The composer now says when a private claim link is ready but has not been shared, and keeps the copy action available after a cancelled share sheet. On reload, the copy stays neutral about whether it was shared; **Open saved drop** opens the corresponding encoded detail route for claim status and the existing fresh-link action.

@@ -2,6 +2,36 @@
 
 Append one dated entry for every completed code-change or issue-resolution slice. Keep the record evidence-based: issue, cause, resolution, a reusable learning, verification, Git checkpoint, and remaining gaps. Tie statements to the actual diff, commit history, and test output. Do not store credentials or private content here.
 
+## 2026-10-24 — Give reaction controls natural-language names
+
+### Issue
+
+The five emoji-only reaction buttons used labels such as `React 🔥`. Assistive technology therefore had to infer the emoji’s meaning, which can vary by screen reader and voice.
+
+### Cause
+
+The UI already had readable reaction names for live announcements, but that mapping lived in a presentation component and the buttons supplied raw emoji instead.
+
+### Resolution
+
+- Extract the reaction-name mapping into a shared helper used by both the reaction buttons and live announcements.
+- Label each button as “React with [reaction name]” and cover all supported reactions plus the unknown-reaction fallback in unit tests.
+- Extend the isolated Chrome smoke to assert the five rendered accessible names before activating a reaction.
+
+### Learning
+
+Do not rely on emoji pronunciation for an icon-only control. Reuse a stable natural-language name in the control and any related announcement so the same reaction has one spoken meaning across the app.
+
+### Verification
+
+- `npm test`: 245/245 passed. `npm run lint`, `npx tsc --noEmit --incremental false`, `node --check scripts/browser-demo-smoke.mjs`, and `git diff --check` passed.
+- Isolated Chrome passed GIF reaction flows at 360×844, 390×844, 430×844, and 1440×900, and a photo flow at 390×844. The smoke checked touch at 360px, keyboard activation at the other sizes, all five accessible names, saved reaction after reload, sender copy, no horizontal overflow, and no cross-origin/Auth/RPC/Storage-write requests.
+- The smoke used a temporary source copy without `.env.local`. The main checkout returned HTTP 200 at `http://localhost:4004` and was left running.
+
+### Git and remaining gaps
+
+Code commits `7823b41` (`fix: give reaction controls spoken names`) and `783bc52` (`fix: make reaction labels read naturally`) are pushed to `origin/fix-private-claim-share-cancel-copy`; the learning entry and project notes are in a separate documentation commit on the same branch. No screen reader or physical device was tested. The real two-account photo/GIF claim journey and physical Storage deletion remain open. The rollback SQL fixture did not run because PostgreSQL 16.15 `initdb` failed to allocate SysV shared memory (`shmget`, “No space left on device”) despite mmap options; no SQL assertions ran.
+
 ## 2026-10-23 — Align the sender journey after relay collection
 
 ### Issue

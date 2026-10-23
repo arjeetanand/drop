@@ -8,6 +8,14 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 
 ## Implementation Status — 2026-10-24
 
+### Latest checkpoint — accessible reaction names (2026-10-24)
+
+- Reaction buttons expose the shared natural-language names already used by live reaction announcements, so assistive technology receives labels such as “React with heart hands.” The browser smoke asserts all five labels.
+- Verification: `npm test` passed 245/245; lint, no-incremental TypeScript, `node --check scripts/browser-demo-smoke.mjs`, and `git diff --check` passed. Isolated Chrome passed the photo and GIF demo flows at 360, 390, and 430px plus 1440px, including keyboard navigation, reaction save/reload, and sender copy. No cross-origin, Auth, RPC, or Storage-write request occurred.
+- The main checkout returned HTTP 200 on port 4004. No screen reader, physical device, hosted two-account claim, or real Storage deletion was verified. The rollback PostgreSQL fixture did not start: PostgreSQL 16.15 `initdb` failed with `shmget` “No space left on device” even when initialized with mmap options; no SQL assertions ran.
+- Code commits `7823b41` (`fix: give reaction controls spoken names`) and `783bc52` (`fix: make reaction labels read naturally`) are pushed on `fix-private-claim-share-cancel-copy`; this checkpoint is recorded in a separate documentation commit. No PR or merge was created.
+- Next: complete the first-friend photo/GIF claim journey with disposable accounts and verify the real cleanup worker when an isolated local or approved Free Supabase backend is available.
+
 ### Latest checkpoint — private claim share recovery (2026-10-24)
 
 - The composer now distinguishes a prepared-but-unshared private link from a recovered claim-pending drop, without claiming the recipient is already waiting. The in-memory link remains copyable after share cancellation; after reload, **Open saved drop** routes to the exact encoded drop ID and its existing status/fresh-link controls.
