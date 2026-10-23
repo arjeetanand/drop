@@ -5,8 +5,7 @@ import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getSupabaseBrowserClient } from '@/lib/supabaseBrowser';
-import { safeInternalPath } from '@/lib/safeInternalPath';
-import { profileRoute } from '@/lib/inviteOnboarding';
+import { isClaimReturnPath, profileRoute, resolveAuthReturnPath } from '@/lib/inviteOnboarding';
 import { copyGuestDraftAttachmentToAccount, deleteDraftAttachment } from '@/lib/letterMediaStore';
 import { copyGuestDraftToAccount, getGuestDraftById } from '@/lib/letterStore';
 
@@ -27,20 +26,28 @@ function AuthCallbackContent() {
   const searchParams = useSearchParams();
   const inviteContext = searchParams.get('invite') === '1';
   const [message, setMessage] = useState('Checking the sign-in return…');
+  const [returnPath, setReturnPath] = useState('/profile');
+  const [claimReturn, setClaimReturn] = useState(false);
 
   useEffect(() => {
     let active = true;
 
     const getReturnPath = () => {
-      const fromEmailLink = safeInternalPath(searchParams.get('next'), window.location.origin);
+      const fromEmailLink = searchParams.get('next');
       try {
-        return safeInternalPath(window.sessionStorage.getItem(AUTH_RETURN_KEY), window.location.origin) || fromEmailLink;
-      } catch { return fromEmailLink; }
+        return resolveAuthReturnPath(fromEmailLink, window.sessionStorage.getItem(AUTH_RETURN_KEY), window.location.origin);
+      } catch { return resolveAuthReturnPath(fromEmailLink, null, window.location.origin); }
     };
 
     const redirectWithError = (errorMessage: string) => {
-      if (active) setMessage('Sign-in could not finish. Returning to your profile…');
       const nextPath = getReturnPath();
+      if (active) {
+        setReturnPath(nextPath || '/profile');
+        setClaimReturn(isClaimReturnPath(nextPath));
+        setMessage(isClaimReturnPath(nextPath)
+          ? 'Sign-in could not finish. Returning to your private drop…'
+          : 'Sign-in could not finish. Returning to your profile…');
+      }
       const errorUrl = new URL(profileRoute(inviteContext, nextPath), window.location.origin);
       errorUrl.searchParams.set('authError', errorMessage);
       router.replace(`${errorUrl.pathname}${errorUrl.search}`);
@@ -78,8 +85,14 @@ function AuthCallbackContent() {
           signedInUserId = data.session.user.id;
         }
 
-        if (active) setMessage('Signed in. Opening your profile…');
         let nextPath = getReturnPath();
+        if (active) {
+          setReturnPath(nextPath || '/profile');
+          setClaimReturn(isClaimReturnPath(nextPath));
+          setMessage(isClaimReturnPath(nextPath)
+            ? 'Signed in. Opening your private drop…'
+            : 'Signed in. Opening your profile…');
+        }
         try { window.sessionStorage.removeItem(AUTH_RETURN_KEY); } catch { /* Storage may be disabled. */ }
         if (nextPath && signedInUserId) {
           const returnUrl = new URL(nextPath, window.location.origin);
@@ -118,14 +131,14 @@ function AuthCallbackContent() {
       <div className="page-container flex min-h-[70dvh] items-center justify-center">
         <section className="panel w-full max-w-[560px] p-7 sm:p-10" aria-live="polite" aria-busy={!message.startsWith('Signed in') && !message.startsWith('Sign-in could not')}>
           <p className="eyebrow">Account handoff</p>
-          <h1 className="section-title mt-3">Returning to your desk.</h1>
+          <h1 className="section-title mt-3">{claimReturn ? 'Returning to your drop.' : 'Returning to your desk.'}</h1>
           <p className="body-copy mt-4">{message}</p>
           <Link
-            href="/profile"
+            href={returnPath}
             className="button-quiet mt-6 -ml-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-white"
           >
             <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-            Back to profile
+            {claimReturn ? 'Back to this drop' : 'Back to profile'}
           </Link>
         </section>
       </div>

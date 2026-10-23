@@ -8,14 +8,26 @@ import { claimDropInvite } from '@/lib/letterBackend';
 import { profileRoute } from '@/lib/inviteOnboarding';
 import { getSupabaseBrowserClient } from '@/lib/supabaseBrowser';
 import { isDropClaimToken, readDropClaimTokenFromFragment } from '@/lib/dropClaim';
+import {
+  clearDropClaimHandoff,
+  canUseDropClaimSessionToken,
+  DROP_CLAIM_HANDOFF_TTL_MS,
+  isDropClaimHandoffId,
+  dropClaimReturnPath,
+  pruneDropClaimHandoffs,
+  takeDropClaimHandoff,
+  storeDropClaimHandoff,
+} from '@/lib/dropClaimHandoff';
 
 const CLAIM_TOKEN_KEY = 'drop:claim-token:v1';
+const CLAIM_HANDOFF_SESSION_KEY = 'drop:claim-handoff-id:v1';
 
 type AccountState = 'checking' | 'signed-out' | 'needs-profile' | 'ready' | 'unavailable' | 'error';
 
 export default function ClaimPage() {
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
+  const [handoffId, setHandoffId] = useState<string | null>(null);
   const [tokenChecked, setTokenChecked] = useState(false);
   const [accountState, setAccountState] = useState<AccountState>('checking');
   const [claiming, setClaiming] = useState(false);
@@ -55,21 +67,79 @@ export default function ClaimPage() {
   };
 
   useEffect(() => {
+    try { pruneDropClaimHandoffs(window.localStorage); } catch {
+      // Storage can be blocked; the URL fragment and current page state still work.
+    }
     const fragmentToken = readDropClaimTokenFromFragment(window.location.hash);
     let restoredToken: string | null = fragmentToken;
+    const url = new URL(window.location.href);
+    const requestedHandoffId = url.searchParams.get('handoff');
+    const handoffParameterPresent = url.searchParams.has('handoff');
+    let activeHandoffId: string | null = null;
+
+    if (fragmentToken) {
+      try {
+        window.sessionStorage.setItem(CLAIM_TOKEN_KEY, fragmentToken);
+        window.sessionStorage.removeItem(CLAIM_HANDOFF_SESSION_KEY);
+      } catch {
+        // Keep the current invite usable in memory when browser storage is disabled.
+      }
+      try { activeHandoffId = storeDropClaimHandoff(fragmentToken, window.localStorage); } catch {
+        // A same-tab invite still works when cross-tab storage is unavailable.
+      }
+      if (activeHandoffId) {
+        try { window.sessionStorage.setItem(CLAIM_HANDOFF_SESSION_KEY, activeHandoffId); } catch {
+          // The localStorage handoff remains usable in another tab.
+        }
+        url.searchParams.set('handoff', activeHandoffId);
+        const idToExpire = activeHandoffId;
+        window.setTimeout(() => {
+          try { clearDropClaimHandoff(idToExpire, window.localStorage); } catch {
+            // Expiry is checked again when another claim page reads local storage.
+          }
+        }, DROP_CLAIM_HANDOFF_TTL_MS);
+      }
+    } else if (isDropClaimHandoffId(requestedHandoffId)) {
+      restoredToken = takeDropClaimHandoff(requestedHandoffId, window.localStorage, Date.now(), (handoffToken) => {
+        try {
+          window.sessionStorage.setItem(CLAIM_TOKEN_KEY, handoffToken);
+          window.sessionStorage.setItem(CLAIM_HANDOFF_SESSION_KEY, requestedHandoffId);
+          return true;
+        } catch {
+          try {
+            window.sessionStorage.removeItem(CLAIM_TOKEN_KEY);
+            window.sessionStorage.removeItem(CLAIM_HANDOFF_SESSION_KEY);
+          } catch { /* The shared record remains available for a later retry. */ }
+          // Keep the shared handoff if the receiving tab cannot persist its session copy.
+          return false;
+        }
+      });
+      if (restoredToken) activeHandoffId = requestedHandoffId;
+    }
+
     try {
-      if (fragmentToken) window.sessionStorage.setItem(CLAIM_TOKEN_KEY, fragmentToken);
       const savedToken = window.sessionStorage.getItem(CLAIM_TOKEN_KEY);
-      if (!restoredToken && isDropClaimToken(savedToken)) restoredToken = savedToken;
+      const savedHandoffId = window.sessionStorage.getItem(CLAIM_HANDOFF_SESSION_KEY);
+      if (!restoredToken && isDropClaimToken(savedToken) && canUseDropClaimSessionToken(
+        requestedHandoffId,
+        savedHandoffId,
+        handoffParameterPresent,
+      )) {
+        restoredToken = savedToken;
+        if (isDropClaimHandoffId(requestedHandoffId)) activeHandoffId = requestedHandoffId;
+      }
     } catch {
       // The current page can still use a token held in memory if session storage is disabled.
     }
+    if (!activeHandoffId) url.searchParams.delete('handoff');
+    url.hash = '';
     try {
-      window.history.replaceState(window.history.state, '', `${window.location.pathname}${window.location.search}`);
+      window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}`);
     } catch {
       // The fragment is never sent to the server; keep the invite usable if history is unavailable.
     }
     setToken(restoredToken);
+    setHandoffId(activeHandoffId);
     setTokenChecked(true);
     void refreshAccount();
     // The invite token is captured once per page visit; auth can be refreshed with the visible button.
@@ -86,11 +156,14 @@ export default function ClaimPage() {
       return;
     }
     try { window.sessionStorage.removeItem(CLAIM_TOKEN_KEY); } catch { /* The database claim is already complete. */ }
+    try { window.sessionStorage.removeItem(CLAIM_HANDOFF_SESSION_KEY); } catch { /* The database claim is already complete. */ }
+    try { clearDropClaimHandoff(handoffId, window.localStorage); } catch { /* The database claim is already complete. */ }
     setToken(null);
     router.replace(`/letter/${encodeURIComponent(result.letterId)}`);
   };
 
-  const profileHref = `${profileRoute(true, '/claim')}#account`;
+  const claimReturnPath = dropClaimReturnPath(handoffId);
+  const profileHref = `${profileRoute(true, claimReturnPath)}#account`;
 
   return (
     <main className="page-shell page-enter">
@@ -116,7 +189,7 @@ export default function ClaimPage() {
 
             {!tokenChecked ? <p className="mt-5 text-sm text-on-surface-variant" role="status">Checking this invite…</p> : !token ? (
               <div className="mt-5 rounded-xl bg-[#f5f1e9] p-4">
-                <p className="text-sm leading-relaxed text-ink-navy">This browser does not have the invite code. Open the original link again to continue; the code is kept out of the page address after you arrive.</p>
+                <p className="text-sm leading-relaxed text-ink-navy">This browser does not have the invite code. If your email opened in another tab, switch back to the original invite tab and refresh. If you signed in on a different browser or device, open the original link there again. The code stays out of the page address after you arrive.</p>
               </div>
             ) : (
               <div className="mt-5">
@@ -138,7 +211,7 @@ export default function ClaimPage() {
             )}
 
             {notice && <p className="notice error-notice mt-4" role="alert" aria-live="assertive">{notice}</p>}
-            <p className="mt-6 border-t border-[rgba(16,42,67,.12)] pt-4 text-xs leading-relaxed text-on-surface-variant">The contents and any attachment stay private until you claim this link. If you opened the invite on another device, use the original link there after signing in.</p>
+            <p className="mt-6 border-t border-[rgba(16,42,67,.12)] pt-4 text-xs leading-relaxed text-on-surface-variant">The contents and any attachment stay private until you claim this link. {handoffId ? 'This browser can carry the invite across tabs for up to 10 minutes after opening it. If you switch browsers or devices, reopen the original link there.' : 'If email opens in another tab, return to the original invite tab and refresh after signing in.'}</p>
           </div>
         </section>
       </div>
