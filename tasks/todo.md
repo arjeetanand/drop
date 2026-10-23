@@ -467,3 +467,15 @@ Commit each completed code change separately with a descriptive message and push
 - [ ] Apply the migration and configure the Edge Function/Vault secrets on the approved Free Supabase project; verify two-account photo/GIF claim, reissue, and actual Storage deletion. No hosted project or resources were created in this slice.
 - [ ] Verify the rendered composer, claim, and sender status flows at mobile and desktop sizes; browser automation is unavailable and no browser dependency was installed.
 - [x] Add orphan reconciliation for a finalized object when both queue RPC attempts fail; concurrent claim/issue/queue/lease interleavings remain open.
+
+## Current follow-up — claim email return across tabs (2026-10-23)
+
+- [x] Keep the claim bearer in the URL fragment on entry, then remove it from the address and save a short-lived same-browser handoff so email or Google sign-in can return in another tab. Only an opaque UUID appears in the profile/auth return path.
+- [x] Move a valid handoff into the receiving tab's session before removing the shared copy; reject expired/corrupt records, schedule cleanup while the source tab remains open, and prune stale records on claim-page load.
+- [x] Bind the session token to its handoff ID so a missing, expired, or different invite cannot fall back to another invite's stale tab token.
+- [x] Prefer the current auth callback's validated `next` over stale tab state and carry that return through both email and Google OAuth.
+- [x] Make profile setup and auth callback copy specific to claiming; remove the unrelated “send your handle back” panel from this return flow and provide a clear Continue to claim action after profile sync.
+- [x] `npm test` passes 184/184; lint, no-incremental TypeScript, `git diff --check`, and the rollback-only claim/media SQL fixture in disposable PostgreSQL 16 pass.
+- [x] The guarded `./run.sh start` serves Drop on port 4004; `/`, `/claim`, the claim-aware `/profile` return, and `/auth/callback` return HTTP 200.
+- [ ] Production build is blocked by the existing `next/font` fetch: `fonts.googleapis.com` resolves as `ENOTFOUND` in this environment.
+- [ ] Verify real email-link returns in the same tab and a separate tab, first-use profile creation, and explicit claim in a rendered browser at phone/desktop sizes; browser automation is unavailable. Hosted two-account claim and real Storage checks also remain open.

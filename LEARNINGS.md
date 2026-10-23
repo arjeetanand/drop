@@ -314,3 +314,34 @@ Keep the capability lifetime shorter than the data-retention window, and enforce
 ### Git and remaining gaps
 
 This is a product-decision and documentation update, not a feature-code change. It confirms the behavior from code commit `2d578ca` (`feat: add private photo and GIF claim drops`) and the cleanup follow-up `ae33ab2` (`feat: reconcile orphaned media cleanup`). The unknown-handle cross-account claim flow, real Storage deletion, hosted schedule, and rendered sign-in/claim journey remain open.
+
+## 2026-10-23 — Preserve claim links through auth returns
+
+### Issue
+
+When a private claim link led to passwordless sign-in in another tab, the recipient could lose the invite on return. A stale tab return could override the current email link, Google OAuth omitted the claim destination, and a failed handoff lookup could reuse a different invite token already stored in that tab.
+
+### Cause
+
+The return destination depended on per-tab session storage, even though email and OAuth may finish in a new tab. The shared localStorage bearer record was reusable and not consumed when copied into the receiving tab, and the generic session token had no identity tying it to the requested handoff UUID.
+
+### Resolution
+
+- Put only a sanitized internal `next` path in email and Google auth callback URLs, and prefer that current callback value over stale tab storage.
+- Copy the bearer into the receiving tab's session storage before removing the shared record. Bind the session token to the opaque handoff UUID; reject fallback when the requested handoff is missing, malformed, or mismatched.
+- Schedule 10-minute shared-record cleanup while the source tab stays open and prune expired/corrupt records on claim-page load. Keep explicit claim as the final action and show recovery guidance for another browser/device.
+- Keep claim profile and callback copy specific to the private-drop flow, and hide the unrelated send-your-handle-back step.
+
+### Learning
+
+Treat the auth callback URL as the source of truth for the current return destination; session storage belongs to a tab and may be stale. When a bearer moves through browser storage, bind it to the intended invite and consume the shared copy after the destination tab has safely saved it.
+
+### Verification
+
+- `npm test`: 184/184 passed, including return-path precedence, safe email/OAuth callback paths, handoff consumption, expiry, session-token/handoff matching, and mismatched-invite rejection.
+- `npm run lint`, `npx tsc --noEmit --incremental false`, and `git diff --check` passed. Home, Claim, claim-aware Profile, and Auth callback returned HTTP 200 on port 4004.
+- An earlier isolated production build attempt could not fetch the existing Google Font host (`fonts.googleapis.com`, `ENOTFOUND`); a production build was not rerun after this frontend-only fix. Rendered email/OAuth and actual multi-tab behavior remain unverified because browser automation is unavailable.
+
+### Git and remaining gaps
+
+Code commit `b7483df` (`fix: preserve private claim across auth returns`) is pushed to `origin/fix/claim-email-return`. This learning entry and the checklist, README, and handoff update are included in a separate documentation commit. If the source tab/browser closes before the 10-minute timer runs, an expired localStorage entry may remain until a later Drop claim page prunes it; expiry blocks retrieval meanwhile. Hosted auth, two-account claim, and cross-device behavior remain unverified. `/letter` and hosted resources were not changed.

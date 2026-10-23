@@ -2,6 +2,14 @@
 
 Updated: 2026-10-23
 
+## Latest fix — claim email return across tabs (2026-10-23)
+
+- On claim entry, the bearer token is captured from the URL fragment and removed from the address. For email or Google sign-in that returns in another tab of the same browser, a random opaque UUID points to a browser-local record with a 10-minute expiry. The receiving tab binds the token to that handoff ID in its own session storage before the shared record is removed, so a stale token cannot resume a different invite. The raw token is never put in query/path URLs or share text. If session storage is unavailable, the shared record stays until expiry. The open tab schedules expiry cleanup, and each claim-page load prunes expired or malformed records if an earlier tab closed before its timer ran. A successful claim clears any remaining handoff. A different browser or device must reopen the original invite.
+- Claim recipients now see a claim-specific profile setup path; the generic request to send a handle back is hidden, the auth callback says it is returning to the drop, and a synced profile has a prominent Continue to claim action. The final claim remains explicit.
+- Verification: `npm test` passed 184/184; lint, no-incremental TypeScript, `git diff --check`, and `tests/db/drop_claim_invites.sql` passed in a fresh disposable PostgreSQL 16 cluster over a Unix socket. Home, Claim, claim-aware Profile return, and Auth callback routes returned HTTP 200 on port 4004.
+- The isolated Webpack production build could not fetch the existing Google Fonts (`fonts.googleapis.com`, `ENOTFOUND`). Rendered browser, separate-tab email, hosted two-account, and actual Storage deletion checks remain open; browser automation and hosted Supabase are unavailable in this environment. No hosted resources changed.
+- Branch: `fix/claim-email-return`. Code commit `b7483df` is pushed; the checklist, README, handoff, and append-only learning entry are in a separate documentation commit. The app remains available at `http://localhost:4004`.
+
 ## Latest decision — private media retention (2026-10-23)
 
 - The product decision is confirmed: automatically delete unclaimed photo/GIF drops after 30 days. Existing code already matches this: initial media invite issuance sets an immutable 30-day access cutoff, while each bearer link lasts at most 7 days and reissues do not extend the cutoff.
