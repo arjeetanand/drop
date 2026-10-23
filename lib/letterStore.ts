@@ -279,6 +279,13 @@ export function getLetterDraftById(id: string, accountId = getLocalAccountId()):
   });
 }
 
+/** Return only a draft persisted in the requested account's storage scope. */
+export function getStoredLetterDraftById(id: string, accountId = getLocalAccountId()): LetterDraftState | null {
+  const active = readStoredLetterDraft(accountId);
+  if (active?.id === id) return active;
+  return getDraftHistory(accountId).find((draft) => draft.id === id) ?? null;
+}
+
 export function getGuestDraftById(id: string): LetterDraftState | null {
   const active = readStoredLetterDraft(null);
   return active?.id === id ? active : getDraftHistory(null).find((item) => item.id === id) ?? null;
