@@ -6,7 +6,15 @@ Build Drop as a mobile-first private sharing app where a person can send a photo
 
 The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailbox, and relay foundations. Existing letters continue to work as text drops, and their routes and saved content remain readable. The build covers the end-to-end mobile flow: choose content, attach an image or GIF, choose a recipient, send, open, react, and optionally follow a relay.
 
-## Implementation Status — 2026-10-23
+## Implementation Status — 2026-10-24
+
+### Latest checkpoint — unknown-handle text claim smoke coverage (2026-10-24)
+
+- Extended the authenticated local Supabase smoke to use a fifth disposable account that is initially unprofiled. It now covers the unknown-handle text invite, unreadable/unclaimable pre-profile state, explicit profile setup and claim, link rotation, idempotent same-account retry, outsider/replay denial, participant-only reads, and sender status/reaction recovery.
+- Denial assertions require SQLSTATE `42501` and no returned drop ID, so an unrelated backend failure cannot count as a privacy pass.
+- `npm test` passed 220/220; lint, no-incremental TypeScript, smoke-script syntax, and `git diff --check` passed. The authenticated smoke and rollback-only claim SQL fixture were not run: the local Supabase API port is owned by an SSH listener, and a disposable PostgreSQL server could not start because host shared-memory allocation failed.
+- Code commit `e5b7b43` is pushed on `test/unknown-handle-claim-smoke`. No PR or merge was created. Browser-rendered and hosted behavior remain unverified.
+- Next: run the expanded smoke and SQL fixture against a confirmed disposable local stack, then verify rendered claim behavior and unknown-handle photo/GIF access and cleanup using the approved Free project when available.
 
 ### Latest checkpoint — mobile claim-first return (2026-10-23)
 

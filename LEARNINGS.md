@@ -560,3 +560,33 @@ An authentication return and a sensitive action are separate states: return only
 ### Git and remaining gaps
 
 Code commits `23240ea` (`fix: return to claim after profile sync`) and `9f188ee` (`feat: streamline private claim return flow`) are pushed to `origin/feat/claim-first-mobile-flow`. This learning entry, README, plan, checklist, and handoff are committed separately. No PR or merge was created. `/letter`, `.env.local`, and hosted resources were not changed. Rendered mobile/desktop focus and scroll, screen-reader behavior, storage-blocked interaction, OAuth/email sign-in, cross-tab transfer, and two-account claim remain unverified; browser automation is unavailable and local Supabase port 54321 is occupied by an SSH listener.
+
+## 2026-10-24 — Cover unknown-handle text claims in the local Supabase smoke
+
+### Issue
+
+The authenticated smoke covered known-recipient sends, reactions, media finalization, and relay collection, but did not exercise a recipient who started without a Drop profile and then explicitly claimed an unknown-handle text invite.
+
+### Cause
+
+The smoke created four accounts and never called the claim issue, reissue, and claim RPCs across the profile-setup boundary. Existing unit coverage could not prove the complete account-to-account database path.
+
+### Resolution
+
+- Add a fifth disposable claimant account whose handle is absent when the sender creates the invite.
+- Cover unreadable pending content, denial before profile setup, sender self-claim denial, profile creation, reissue invalidation, outsider denial, explicit claim, same-account retry, replay denial, participant-only reads, sender status restoration, and recipient reaction visibility.
+- Require denied RPC calls to return SQLSTATE `42501` and no drop ID, so an unrelated failure cannot masquerade as an authorization pass.
+
+### Learning
+
+For a privacy-boundary smoke, assert the precise authorization result and the absence of returned data. Exercise the account's state transition too: a signed-in account without a product profile is not yet the intended recipient.
+
+### Verification
+
+- `npm test` passed 220/220; `npm run lint`, `npx tsc --noEmit --incremental false`, `node --check scripts/local-supabase-smoke.mjs`, and `git diff --check` passed.
+- The expanded authenticated Supabase smoke was not run. Port 54321 is owned by an SSH listener, so the configured local endpoint was not exercised. The rollback-only claim SQL fixture was also not run because disposable PostgreSQL startup failed at shared-memory allocation (`shmget`: no space left on device).
+- No browser-rendered, hosted two-account, photo/GIF claim, or actual Storage deletion check ran. The approved retention policy for valid abandoned staging uploads remains 30 days; no cleanup resource was changed in this slice.
+
+### Git and remaining gaps
+
+Code commit `e5b7b43` (`test: cover unknown-handle text claim smoke`) is pushed to `origin/test/unknown-handle-claim-smoke`. The README, Supabase setup guide, plan, checklist, handoff, and this learning entry are committed separately on the same branch. No PR or merge was created. `/letter`, `.env.local`, and hosted resources were not changed. Next: run the smoke and SQL fixture against a confirmed disposable local stack, then verify rendered claims and photo/GIF access plus scheduled Storage deletion with the approved Free project.

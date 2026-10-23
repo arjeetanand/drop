@@ -1,6 +1,14 @@
 # Drop handoff
 
-Updated: 2026-10-23
+Updated: 2026-10-24
+
+## Latest checkpoint — unknown-handle text claim smoke coverage (2026-10-24)
+
+- Extended `scripts/local-supabase-smoke.mjs` to use five disposable accounts and cover the unknown-handle text journey from pending invite through profile creation, reissue, explicit claim, same-account retry, outsider/replay denial, participant privacy, sender status, and reaction visibility. Denial assertions require the expected authorization SQLSTATE and no returned drop ID.
+- Verification: `npm test` passed 220/220; `npm run lint`, `npx tsc --noEmit --incremental false`, `node --check scripts/local-supabase-smoke.mjs`, and `git diff --check` passed. The live local Supabase smoke and rollback-only claim SQL fixture were not run: port 54321 is owned by an SSH listener, and the disposable PostgreSQL startup failed on host shared-memory allocation. Browser rendering was not checked.
+- Branch `test/unknown-handle-claim-smoke`; code commit `e5b7b43` (`test: cover unknown-handle text claim smoke`) is pushed to `origin`. The README, Supabase setup guide, plan, checklist, handoff, and learning entry are committed separately on this branch. No PR or merge was created. `/letter`, `.env.local`, and hosted resources were not changed.
+- The approved retention rule remains 30 days for unclaimed media and valid abandoned staging uploads; physical deletion still depends on the configured cleanup worker. Hosted Free Supabase setup is not configured, so hosted migrations, two-account behavior, and actual Storage deletion remain unverified.
+- Next: rerun the local smoke and SQL fixture against a confirmed disposable runtime, then complete browser-rendered mobile/desktop claim checks and the photo/GIF claim plus cleanup journey against the approved Free project when available.
 
 ## Latest checkpoint — mobile claim-first return (2026-10-23)
 
