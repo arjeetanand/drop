@@ -2,18 +2,22 @@
 
 import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const DEFAULT_APP_URL = 'http://127.0.0.1:4004';
-const VIEWPORT_WIDTHS = [360, 390, 430];
-const FLOW_VIEWPORT_WIDTH = 390;
-const VIEWPORT = { width: FLOW_VIEWPORT_WIDTH, height: 844, deviceScaleFactor: 1, mobile: true };
+const PROJECT_ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
+const MOBILE_VIEWPORTS = [360, 390, 430].map((width) => ({ name: `mobile-${width}`, width, height: 844, deviceScaleFactor: 1, mobile: true }));
+const DESKTOP_VIEWPORT = { name: 'desktop-1440', width: 1440, height: 900, deviceScaleFactor: 1, mobile: false };
+const FLOW_VIEWPORTS = [...MOBILE_VIEWPORTS, DESKTOP_VIEWPORT];
+let activeViewport = MOBILE_VIEWPORTS[1];
 const STEP_TIMEOUT_MS = 20_000;
 const LABELS = {
   homeDemo: 'Try a demo drop',
-  chooseGif: 'Try a GIF drop',
+  choosePhoto: 'Try a photo',
+  chooseGif: 'Try a GIF',
   reveal: 'Reveal demo fragments',
   open: 'Open demo drop',
   senderCopy: 'See your sender copy',
@@ -277,79 +281,226 @@ async function waitUntil(cdp, description, predicate, timeoutMs = STEP_TIMEOUT_M
 
 async function tapControl(cdp, { text, selector }) {
   const expression = selector
-    ? `(() => { const node = document.querySelector(${JSON.stringify(selector)}); if (!node) return null; node.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'nearest' }); const rect = node.getBoundingClientRect(); return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, disabled: Boolean(node.disabled), text: (node.innerText || node.textContent || '').replace(/\\s+/g, ' ').trim() }; })()`
-    : `(() => { const normalize = value => (value || '').replace(/\\s+/g, ' ').trim().toLocaleLowerCase(); const node = [...document.querySelectorAll('a,button,[role="button"]')].find(item => normalize(item.innerText || item.textContent) === ${JSON.stringify(text.toLocaleLowerCase())}); if (!node) return null; node.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'nearest' }); const rect = node.getBoundingClientRect(); return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, disabled: Boolean(node.disabled), text: (node.innerText || node.textContent || '').replace(/\\s+/g, ' ').trim() }; })()`;
+    ? `(() => { const node = document.querySelector(${JSON.stringify(selector)}); if (!node) return null; node.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'nearest' }); const rect = node.getBoundingClientRect(); return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, viewportWidth: window.innerWidth, viewportHeight: window.innerHeight, disabled: Boolean(node.disabled), text: (node.innerText || node.textContent || node.getAttribute('aria-label') || '').replace(/\\s+/g, ' ').trim() }; })()`
+    : `(() => { const normalize = value => (value || '').replace(/\\s+/g, ' ').trim().toLocaleLowerCase(); const node = [...document.querySelectorAll('a,button,[role="button"]')].find(item => normalize(item.innerText || item.textContent).includes(${JSON.stringify(text.toLocaleLowerCase())})); if (!node) return null; node.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'nearest' }); const rect = node.getBoundingClientRect(); return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, viewportWidth: window.innerWidth, viewportHeight: window.innerHeight, disabled: Boolean(node.disabled), text: (node.innerText || node.textContent || '').replace(/\\s+/g, ' ').trim() }; })()`;
   const target = await evaluate(cdp, expression);
   assert.ok(target, `Could not find the ${text || selector} control.`);
   assert.equal(target.disabled, false, `The ${text || selector} control is disabled.`);
-  assert.ok(target.x >= 0 && target.x <= VIEWPORT.width && target.y >= 0 && target.y <= VIEWPORT.height, `The ${text || selector} control is outside the ${VIEWPORT.width}×${VIEWPORT.height} viewport at (${target.x}, ${target.y}).`);
+  assert.ok(target.x >= 0 && target.x <= target.viewportWidth && target.y >= 0 && target.y <= target.viewportHeight, `The ${text || selector} control is outside the ${target.viewportWidth}×${target.viewportHeight} viewport at (${target.x}, ${target.y}).`);
 
-  await cdp.send('Input.dispatchTouchEvent', {
-    type: 'touchStart',
-    touchPoints: [{ id: 1, x: target.x, y: target.y, radiusX: 1, radiusY: 1, force: 1 }],
-  });
-  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  try {
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [{ id: 1, x: target.x, y: target.y, radiusX: 1, radiusY: 1, force: 1 }],
+    });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  } catch (error) {
+    throw new Error(`Could not touch ${text || selector} at ${target.viewportWidth}×${target.viewportHeight}: ${error.message}`);
+  }
   return target.text;
 }
 
-async function setViewportWidth(cdp, width) {
-  await cdp.send('Emulation.setDeviceMetricsOverride', { ...VIEWPORT, width });
+async function setViewport(cdp, viewport) {
+  activeViewport = viewport;
+  const { name: _name, ...metrics } = viewport;
+  await cdp.send('Emulation.setDeviceMetricsOverride', metrics);
+  await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: viewport.mobile, maxTouchPoints: 1 });
   await sleep(150, interrupted.signal);
 }
 
-async function assertNoHorizontalOverflow(cdp, step, expectedWidth = FLOW_VIEWPORT_WIDTH) {
+async function assertNoHorizontalOverflow(cdp, step, expectedWidth = activeViewport.width) {
   const dimensions = await evaluate(cdp, `({
-    viewportWidth: document.documentElement.clientWidth,
+    viewportWidth: window.innerWidth,
+    layoutWidth: document.documentElement.clientWidth,
     documentWidth: document.documentElement.scrollWidth,
     bodyWidth: document.body ? document.body.scrollWidth : 0,
     viewportHeight: document.documentElement.clientHeight
   })`);
   assert.ok(dimensions, `${step}: page dimensions were unavailable.`);
-  assert.equal(dimensions.viewportWidth, expectedWidth, `${step}: the mobile viewport is not ${expectedWidth}px wide.`);
+  assert.equal(dimensions.viewportWidth, expectedWidth, `${step}: the browser viewport is not ${expectedWidth}px wide.`);
   assert.ok(
-    Math.max(dimensions.documentWidth, dimensions.bodyWidth) <= dimensions.viewportWidth,
-    `${step}: horizontal overflow detected (viewport ${dimensions.viewportWidth}px, document ${dimensions.documentWidth}px, body ${dimensions.bodyWidth}px).`,
+    Math.max(dimensions.documentWidth, dimensions.bodyWidth) <= dimensions.layoutWidth,
+    `${step}: horizontal overflow detected (layout ${dimensions.layoutWidth}px, document ${dimensions.documentWidth}px, body ${dimensions.bodyWidth}px).`,
   );
 }
 
-async function assertPhoneWidths(cdp, step) {
-  for (const width of VIEWPORT_WIDTHS) {
-    await setViewportWidth(cdp, width);
-    await assertNoHorizontalOverflow(cdp, `${step} at ${width}px`, width);
+async function assertResponsiveWidths(cdp, step) {
+  const previousViewport = activeViewport;
+  for (const viewport of FLOW_VIEWPORTS) {
+    await setViewport(cdp, viewport);
+    const label = viewport.mobile ? `${viewport.width}px` : `${viewport.width}×${viewport.height} desktop`;
+    await assertNoHorizontalOverflow(cdp, `${step} at ${label}`, viewport.width);
   }
-  await setViewportWidth(cdp, FLOW_VIEWPORT_WIDTH);
+  await setViewport(cdp, previousViewport);
 }
 
-async function focusControlWithKeyboard(cdp, text) {
-  for (let attempt = 0; attempt < 40; attempt += 1) {
+async function focusControlWithKeyboard(cdp, { name, selector, expectedTag, expectedHref } = {}) {
+  for (let attempt = 0; attempt < 80; attempt += 1) {
     const target = await evaluate(cdp, `(() => {
       const active = document.activeElement;
-      const name = (active?.innerText || active?.textContent || '').replace(/\\s+/g, ' ').trim().toLocaleLowerCase();
-      return name === ${JSON.stringify(text.toLocaleLowerCase())} ? {
+      const label = (active?.getAttribute('aria-label') || active?.innerText || active?.textContent || '').replace(/\\s+/g, ' ').trim().toLocaleLowerCase();
+      const matched = ${selector ? `Boolean(active?.matches(${JSON.stringify(selector)}))` : `Boolean(active?.matches('a,button,[role="button"]')) && label.includes(${JSON.stringify(name.toLocaleLowerCase())})`};
+      return matched ? {
         tag: active.tagName,
         href: active.getAttribute('href'),
+        label,
         focusVisible: active.matches(':focus-visible'),
       } : null;
     })()`);
     if (target) {
-      assert.equal(target.tag, 'A', `${text} should be a link available to keyboard users.`);
-      assert.equal(target.href, '/demo', `${text} should lead to the demo chooser.`);
-      assert.equal(target.focusVisible, true, `${text} should show its keyboard focus indicator.`);
+      if (expectedTag) assert.equal(target.tag, expectedTag, `${name || selector} should have the expected semantic element.`);
+      if (expectedHref) assert.equal(target.href, expectedHref, `${name || selector} should lead to the expected route.`);
+      assert.equal(target.focusVisible, true, `${name || selector} should show its keyboard focus indicator.`);
       return;
     }
     await cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9, nativeVirtualKeyCode: 9 });
     await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9, nativeVirtualKeyCode: 9 });
   }
-  throw new Error(`Could not reach ${text} with the keyboard.`);
+  throw new Error(`Could not reach ${name || selector} with the keyboard.`);
 }
 
 async function activateFocusedControl(cdp, key) {
-  await cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key, code: key, windowsVirtualKeyCode: key === 'Enter' ? 13 : 32, nativeVirtualKeyCode: key === 'Enter' ? 13 : 32 });
-  await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key, code: key, windowsVirtualKeyCode: key === 'Enter' ? 13 : 32, nativeVirtualKeyCode: key === 'Enter' ? 13 : 32 });
+  const code = key === ' ' ? 'Space' : key;
+  const keyCode = key === 'Enter' ? 13 : 32;
+  await cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key, code, windowsVirtualKeyCode: keyCode, nativeVirtualKeyCode: keyCode });
+  await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key, code, windowsVirtualKeyCode: keyCode, nativeVirtualKeyCode: keyCode });
 }
 
 function normalizedVisibleText(text) {
   return `document.body?.innerText.replace(/\\s+/g, ' ').toLocaleLowerCase().includes(${JSON.stringify(text.toLocaleLowerCase())}) || false`;
+}
+
+function screenshotDirectoryFromEnv() {
+  const configured = process.env.DROP_BROWSER_SCREENSHOT_DIR;
+  if (!configured) return null;
+  const directory = resolve(configured);
+  const pathFromProject = relative(PROJECT_ROOT, directory);
+  const isInsideProject = pathFromProject === '' || (pathFromProject !== '..' && !pathFromProject.startsWith(`..${sep}`) && !isAbsolute(pathFromProject));
+  assert.equal(isInsideProject, false, 'Set DROP_BROWSER_SCREENSHOT_DIR outside the repository.');
+  return directory;
+}
+
+async function captureScreenshot(cdp, directory, name) {
+  if (!directory) return;
+  const result = await cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true, captureBeyondViewport: false });
+  const path = join(directory, `${name}.png`);
+  await writeFile(path, Buffer.from(result.data, 'base64'), { flag: 'wx' });
+  console.log(`[browser-demo-smoke] Screenshot: ${path}`);
+}
+
+async function assertNoFrameworkOverlay(cdp, step) {
+  const overlayText = await evaluate(cdp, `(() => {
+    const text = document.body?.innerText || '';
+    const match = text.match(/(?:Unhandled Runtime Error|Application error: a client-side exception|Build Error|Internal Server Error)/i);
+    return match?.[0] || '';
+  })()`);
+  assert.equal(overlayText, '', `${step}: framework error overlay text was visible (${overlayText}).`);
+}
+
+async function activateFlowControl(cdp, { keyboard, name, selector, expectedTag, expectedHref }) {
+  if (keyboard) {
+    await focusControlWithKeyboard(cdp, { name, selector, expectedTag, expectedHref });
+    await activateFocusedControl(cdp, expectedTag === 'BUTTON' || selector ? ' ' : 'Enter');
+  } else {
+    await tapControl(cdp, { text: name, selector });
+  }
+}
+
+async function runDemoFlow(cdp, {
+  appUrl,
+  viewport,
+  payload,
+  keyboard,
+  screenshotDir,
+  screenshotSteps = new Set(),
+  checkResponsive = false,
+  getPageLoadEvents,
+}) {
+  const prefix = viewport.name;
+  const capture = async (step) => {
+    if (screenshotSteps.has(step)) await captureScreenshot(cdp, screenshotDir, `${prefix}-${step}`);
+  };
+  const checkWidth = async (step) => {
+    if (checkResponsive && ['Home', 'Demo chooser'].includes(step)) await assertResponsiveWidths(cdp, step);
+    else await assertNoHorizontalOverflow(cdp, step, viewport.width);
+  };
+
+  await setViewport(cdp, viewport);
+  await cdp.send('Page.navigate', { url: appUrl.href });
+  await waitUntil(cdp, `Home with “${LABELS.homeDemo}”`, async () => (
+    await evaluate(cdp, `${normalizedVisibleText(LABELS.homeDemo)} && location.pathname === '/'`)
+  ));
+  await assertNoFrameworkOverlay(cdp, 'Home');
+  await checkWidth('Home');
+  await capture('home');
+  await activateFlowControl(cdp, { keyboard, name: LABELS.homeDemo, expectedTag: 'A', expectedHref: '/demo' });
+
+  const optionLabel = payload === 'gif' ? LABELS.chooseGif : LABELS.choosePhoto;
+  await waitUntil(cdp, `the demo chooser with “${optionLabel}”`, async () => (
+    await evaluate(cdp, `${normalizedVisibleText(optionLabel)} && location.pathname === '/demo'`)
+  ));
+  await assertNoFrameworkOverlay(cdp, 'Demo chooser');
+  await checkWidth('Demo chooser');
+  await capture('chooser');
+  await activateFlowControl(cdp, { keyboard, name: optionLabel, expectedTag: 'BUTTON' });
+
+  await waitUntil(cdp, 'the recipient demo route', async () => (
+    await evaluate(cdp, `${normalizedVisibleText('See your drop as the recipient.')} && /^\\/letter\\/[^/]+$/.test(location.pathname)`)
+  ));
+  const recipientPath = await evaluate(cdp, 'location.pathname');
+  await assertNoFrameworkOverlay(cdp, 'Recipient preview');
+  await assertNoHorizontalOverflow(cdp, 'Recipient preview', viewport.width);
+  await capture('recipient');
+  await activateFlowControl(cdp, { keyboard, name: LABELS.reveal, expectedTag: 'BUTTON' });
+
+  await waitUntil(cdp, `“${LABELS.open}”`, async () => (
+    await evaluate(cdp, `${normalizedVisibleText(LABELS.open)} && !document.querySelector('#letter-fragments')?.innerText.includes('confidential fragment')`)
+  ));
+  await assertNoFrameworkOverlay(cdp, 'Fragments revealed');
+  await assertNoHorizontalOverflow(cdp, 'Fragments revealed', viewport.width);
+  await capture('fragments-revealed');
+  await activateFlowControl(cdp, { keyboard, name: LABELS.open, expectedTag: 'BUTTON' });
+
+  const payloadLabel = payload === 'gif' ? 'GIF' : 'Photo';
+  await waitUntil(cdp, `the opened ${payloadLabel.toLowerCase()} and reaction controls`, async () => (
+    await evaluate(cdp, `Boolean(document.querySelector('#letter-body img')?.complete && document.querySelector('#letter-body img')?.naturalWidth > 0) && document.querySelector('#letter-body')?.innerText.toLocaleLowerCase().includes(${JSON.stringify(payloadLabel.toLocaleLowerCase())}) && Boolean(document.querySelector(${JSON.stringify(`[aria-label="${LABELS.reaction}"]`)}))`)
+  ));
+  await assertNoFrameworkOverlay(cdp, `Opened ${payloadLabel} drop`);
+  await assertNoHorizontalOverflow(cdp, `Opened ${payloadLabel} drop`, viewport.width);
+  await activateFlowControl(cdp, { keyboard, selector: `[aria-label="${LABELS.reaction}"]`, expectedTag: 'BUTTON' });
+  await waitUntil(cdp, 'the saved reaction state', async () => (
+    await evaluate(cdp, `document.querySelector(${JSON.stringify(`[aria-label="${LABELS.reaction}"]`)})?.getAttribute('aria-pressed') === 'true' && ${normalizedVisibleText('Saved on this device. Open the sender view to see it.')}`)
+  ));
+  await assertNoFrameworkOverlay(cdp, 'Reaction saved');
+  await assertNoHorizontalOverflow(cdp, 'Reaction saved', viewport.width);
+  await capture('reaction-saved');
+
+  const previousLoadEvents = getPageLoadEvents();
+  await cdp.send('Page.reload', { ignoreCache: true });
+  await waitUntil(cdp, 'a fresh document load after reload', async () => getPageLoadEvents() > previousLoadEvents);
+  await waitUntil(cdp, 'the recipient demo after reload', async () => (
+    await evaluate(cdp, `${normalizedVisibleText('See your drop as the recipient.')} && location.pathname === ${JSON.stringify(recipientPath)}`)
+  ));
+  await assertNoFrameworkOverlay(cdp, 'Recipient demo after reload');
+  await assertNoHorizontalOverflow(cdp, 'Recipient demo after reload', viewport.width);
+  await activateFlowControl(cdp, { keyboard, name: LABELS.reveal, expectedTag: 'BUTTON' });
+  await waitUntil(cdp, `“${LABELS.open}” after reload`, async () => (
+    await evaluate(cdp, `${normalizedVisibleText(LABELS.open)} && !document.querySelector('#letter-fragments')?.innerText.includes('confidential fragment')`)
+  ));
+  await activateFlowControl(cdp, { keyboard, name: LABELS.open, expectedTag: 'BUTTON' });
+  await waitUntil(cdp, 'the persisted reaction after reload', async () => (
+    await evaluate(cdp, `document.querySelector(${JSON.stringify(`[aria-label="${LABELS.reaction}"]`)})?.getAttribute('aria-pressed') === 'true'`)
+  ));
+  await assertNoHorizontalOverflow(cdp, 'Reaction persisted after reload', viewport.width);
+  await activateFlowControl(cdp, { keyboard, name: 'See your sender copy', expectedTag: 'A' });
+
+  await waitUntil(cdp, 'sender copy with the saved reaction', async () => (
+    await evaluate(cdp, `${normalizedVisibleText('Your demo copy.')} && ${normalizedVisibleText('They reacted 🫶')} && new URL(location.href).searchParams.get('view') === 'sender'`)
+  ));
+  await assertNoFrameworkOverlay(cdp, 'Sender copy');
+  await assertNoHorizontalOverflow(cdp, 'Sender copy', viewport.width);
+  await capture('sender-copy');
+  assert.equal(await evaluate(cdp, 'location.pathname'), recipientPath, 'Sender copy should keep the same demo drop.');
 }
 
 async function main() {
@@ -360,6 +511,8 @@ async function main() {
 
   const appUrl = parseAppUrl(process.argv[2] || DEFAULT_APP_URL);
   if (typeof WebSocket !== 'function') throw new Error('This smoke check needs a Node runtime with the built-in WebSocket API.');
+  const screenshotDir = screenshotDirectoryFromEnv();
+  if (screenshotDir) await mkdir(screenshotDir, { recursive: true });
   const chromeExecutable = findChromeExecutable();
   const profileDir = await mkdtemp(join(tmpdir(), 'drop-browser-demo-'));
   let chrome;
@@ -369,6 +522,7 @@ async function main() {
   let firewallFailure;
   const blockedOrigins = new Set();
   const forbiddenRequests = [];
+  const pageExceptions = [];
   let blockedRequestCount = 0;
   let browserStderr = '';
   let pageTargetId;
@@ -413,6 +567,9 @@ async function main() {
     assert.equal(typeof target.webSocketDebuggerUrl, 'string', 'Chrome did not create an isolated page target.');
     pageCdp = await CdpConnection.connect(target.webSocketDebuggerUrl, interrupted.signal);
     pageCdp.on('Page.loadEventFired', () => { pageLoadEvents += 1; });
+    pageCdp.on('Runtime.exceptionThrown', ({ exceptionDetails }) => {
+      pageExceptions.push(exceptionDetails.exception?.description || exceptionDetails.text || 'Unknown browser exception');
+    });
 
     pageCdp.on('Network.requestWillBeSent', ({ request }) => {
       let requestUrl;
@@ -453,79 +610,43 @@ async function main() {
       pageCdp.send('Runtime.enable'),
       pageCdp.send('DOM.enable'),
       pageCdp.send('Network.enable'),
-      pageCdp.send('Emulation.setDeviceMetricsOverride', VIEWPORT),
-      pageCdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 1 }),
       pageCdp.send('Fetch.enable', { patterns: [{ urlPattern: '*', requestStage: 'Request' }] }),
     ]);
+    await setViewport(pageCdp, MOBILE_VIEWPORTS[1]);
 
     console.log(`[browser-demo-smoke] Chrome: ${chromeExecutable}`);
-    console.log(`[browser-demo-smoke] App: ${appUrl.origin}; phone widths: ${VIEWPORT_WIDTHS.join(', ')}×${VIEWPORT.height}`);
-    await pageCdp.send('Page.navigate', { url: appUrl.href });
+    console.log(`[browser-demo-smoke] App: ${appUrl.origin}; full-flow viewports: ${FLOW_VIEWPORTS.map(({ name }) => name).join(', ')}.`);
 
-    await waitUntil(pageCdp, `Home with “${LABELS.homeDemo}”`, async () => (
-      await evaluate(pageCdp, `${normalizedVisibleText(LABELS.homeDemo)} && location.pathname === '/'`)
-    ));
-    await assertPhoneWidths(pageCdp, 'Home');
-    await focusControlWithKeyboard(pageCdp, LABELS.homeDemo);
-    await activateFocusedControl(pageCdp, 'Enter');
+    const screenshotSteps = new Set(['home', 'chooser', 'recipient', 'fragments-revealed', 'reaction-saved', 'sender-copy']);
+    for (const viewport of FLOW_VIEWPORTS) {
+      const keyboard = viewport.width !== 360;
+      await runDemoFlow(pageCdp, {
+        appUrl,
+        viewport,
+        payload: 'gif',
+        keyboard,
+        screenshotDir: viewport.width === 390 || !viewport.mobile ? screenshotDir : null,
+        screenshotSteps: screenshotDir && (viewport.width === 390 || !viewport.mobile) ? screenshotSteps : new Set(),
+        checkResponsive: viewport.width === 360,
+        getPageLoadEvents: () => pageLoadEvents,
+      });
+      console.log(`[browser-demo-smoke] PASS ${keyboard ? 'keyboard' : 'touch'} GIF flow at ${viewport.width}×${viewport.height}${viewport.mobile ? '' : ' desktop'}.`);
+    }
 
-    await waitUntil(pageCdp, `the demo chooser with “${LABELS.chooseGif}”`, async () => (
-      await evaluate(pageCdp, `${normalizedVisibleText(LABELS.chooseGif)} && location.pathname === '/demo'`)
-    ));
-    await assertPhoneWidths(pageCdp, 'Demo chooser');
-    await tapControl(pageCdp, { text: LABELS.chooseGif });
-
-    await waitUntil(pageCdp, 'the recipient demo route', async () => (
-      await evaluate(pageCdp, `${normalizedVisibleText('See your drop as the recipient.')} && /^\\/letter\\/[^/]+$/.test(location.pathname)`)
-    ));
-    const recipientPath = await evaluate(pageCdp, 'location.pathname');
-    await assertNoHorizontalOverflow(pageCdp, 'Recipient preview');
-    await tapControl(pageCdp, { text: LABELS.reveal });
-    await waitUntil(pageCdp, `“${LABELS.open}”`, async () => (
-      await evaluate(pageCdp, `${normalizedVisibleText(LABELS.open)} && !document.querySelector('#letter-fragments')?.innerText.includes('confidential fragment')`)
-    ));
-    await assertNoHorizontalOverflow(pageCdp, 'Fragments revealed');
-    await tapControl(pageCdp, { text: LABELS.open });
-    await waitUntil(pageCdp, 'the opened GIF and reaction controls', async () => (
-      await evaluate(pageCdp, `Boolean(document.querySelector('#letter-body img')?.complete && document.querySelector('#letter-body img')?.naturalWidth > 0) && document.querySelector('#letter-body')?.innerText.includes('GIF') && Boolean(document.querySelector(${JSON.stringify(`[aria-label="${LABELS.reaction}"]`)}))`)
-    ));
-    await assertNoHorizontalOverflow(pageCdp, 'Opened GIF drop');
-
-    await tapControl(pageCdp, { selector: `[aria-label="${LABELS.reaction}"]` });
-    await waitUntil(pageCdp, 'the saved reaction state', async () => (
-      await evaluate(pageCdp, `document.querySelector(${JSON.stringify(`[aria-label="${LABELS.reaction}"]`)})?.getAttribute('aria-pressed') === 'true' && ${normalizedVisibleText('Saved on this device. Open the sender view to see it.')}`)
-    ));
-    await assertNoHorizontalOverflow(pageCdp, 'Reaction saved');
-
-    const previousLoadEvents = pageLoadEvents;
-    await pageCdp.send('Page.reload', { ignoreCache: true });
-    await waitUntil(pageCdp, 'a fresh document load after reload', async () => pageLoadEvents > previousLoadEvents);
-    await waitUntil(pageCdp, 'the recipient demo after reload', async () => (
-      await evaluate(pageCdp, `${normalizedVisibleText('See your drop as the recipient.')} && location.pathname === ${JSON.stringify(recipientPath)}`)
-    ));
-    await assertNoHorizontalOverflow(pageCdp, 'Recipient demo after reload');
-    await tapControl(pageCdp, { text: LABELS.reveal });
-    await waitUntil(pageCdp, `“${LABELS.open}” after reload`, async () => (
-      await evaluate(pageCdp, `${normalizedVisibleText(LABELS.open)} && !document.querySelector('#letter-fragments')?.innerText.includes('confidential fragment')`)
-    ));
-    await assertNoHorizontalOverflow(pageCdp, 'Fragments revealed after reload');
-    await tapControl(pageCdp, { text: LABELS.open });
-    await waitUntil(pageCdp, 'the persisted reaction after reload', async () => (
-      await evaluate(pageCdp, `document.querySelector(${JSON.stringify(`[aria-label="${LABELS.reaction}"]`)})?.getAttribute('aria-pressed') === 'true'`)
-    ));
-    await assertNoHorizontalOverflow(pageCdp, 'Reaction persisted after reload');
-    await tapControl(pageCdp, { text: LABELS.senderCopy });
-
-    await waitUntil(pageCdp, 'sender copy with the saved reaction', async () => (
-      await evaluate(pageCdp, `${normalizedVisibleText('Your demo copy.')} && ${normalizedVisibleText('They reacted 🫶')} && new URL(location.href).searchParams.get('view') === 'sender'`)
-    ));
-    await assertNoHorizontalOverflow(pageCdp, 'Sender copy');
-    assert.equal(await evaluate(pageCdp, 'location.pathname'), recipientPath, 'Sender copy should keep the same demo drop.');
+    await runDemoFlow(pageCdp, {
+      appUrl,
+      viewport: MOBILE_VIEWPORTS[1],
+      payload: 'photo',
+      keyboard: true,
+      screenshotDir: null,
+      getPageLoadEvents: () => pageLoadEvents,
+    });
     assert.deepEqual(forbiddenRequests, [], `The local demo made forbidden auth, RPC, or Storage write requests: ${JSON.stringify(forbiddenRequests)}.`);
+    assert.deepEqual(pageExceptions, [], `The browser reported JavaScript exceptions: ${JSON.stringify(pageExceptions)}.`);
     if (firewallFailure) throw new Error(`The browser network gate failed: ${firewallFailure.message}`);
 
-    console.log('[browser-demo-smoke] PASS keyboard Home → demo chooser → GIF recipient → reveal/open → reaction → reload persistence → sender copy.');
-    console.log(`[browser-demo-smoke] PASS no horizontal overflow on Home and demo chooser at ${VIEWPORT_WIDTHS.join(', ')}px; full flow at ${FLOW_VIEWPORT_WIDTH}px.`);
+    console.log('[browser-demo-smoke] PASS photo flow at 390×844, including saved reaction, reload persistence, and sender copy.');
+    console.log('[browser-demo-smoke] PASS no horizontal overflow on Home and demo chooser at 360, 390, 430px and 1440×900.');
     console.log('[browser-demo-smoke] PASS no Auth, RPC, or Storage write request during the local demo.');
     console.log(`[browser-demo-smoke] Blocked cross-origin requests: ${blockedRequestCount}${blockedOrigins.size ? ` (${[...blockedOrigins].sort().join(', ')})` : ''}.`);
   } finally {
@@ -576,6 +697,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(`[browser-demo-smoke] FAIL: ${error?.message || error}`);
+  console.error(`[browser-demo-smoke] FAIL: ${error?.stack || error?.message || error}`);
   process.exitCode = 1;
 });
