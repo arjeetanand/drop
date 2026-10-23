@@ -2,7 +2,16 @@
 
 Updated: 2026-10-23
 
-## Latest verified checkpoint — accountless private text claim
+## Latest verified checkpoint — sender claim completion feedback
+
+- Added a forward-only migration that preserves recipient insert and relay collection broadcasts, and sends only the drop ID to the sender's private inbox topic after an explicit claim_pending to delivered instant-text claim. The open sender detail page reloads through RLS, announces the recipient, and changes its status label.
+- Code commit 68daec5 (feat: show senders when private notes are claimed) is pushed to origin/feat/claim-completion-feedback. No PR or merge was created.
+- Verification: npm test passed 153/153; npm run lint, npx tsc --noEmit --incremental false, the isolated PostgreSQL claim/broadcast fixture, git diff checks, and bash -n run.sh passed. The SQL fixture stubs the Realtime sender and checks trigger payload/topic/duplicate behavior; it does not test actual channel authorization or call the collection RPC.
+- A browser two-account check and screen-reader/device validation were not run. The claimed status currently lasts only for the open detail session; reopening the drop shows generic Sent, and Mailbox has no dedicated claim cue.
+- Production build was not run. Started the local app with ./run.sh on port 4004; /, /mailbox, /letter/incoming-1?view=sender, and /claim returned HTTP 200. Browser interaction was not checked.
+- Next: render the sender claim flow, persist the claimed result and add a Mailbox cue, then verify hosted two-account behavior after the approved Free Supabase project is set up.
+
+## Previous verified checkpoint — accountless private text claim
 
 - Added a text-first claim link for instant notes sent to an unknown handle. The recipient must sign in, set up a Drop profile, and explicitly claim the note. Tokens use 256-bit secure randomness, travel in the URL fragment, and only their SHA-256 digest is stored; note text and recipient handles are absent from share copy.
 - Added sender `claim_pending` status and a detail-page reissue action. Reissue reads exact stored content inside an authenticated RPC, also works after invite expiry, and refuses claimed or revoked notes. A per-tab guard and, where supported, Web Locks keep concurrent reissue/share calls from replacing one another in the same browser; a later operation from another device can invalidate a link already shared.
@@ -27,7 +36,7 @@ Updated: 2026-10-23
 
 - Active code checkout: /Users/arjeetanand/projects/drop
 - GitHub remote: private repository arjeetanand/drop
-- Current branch: `feat/invite-first-drop-resilience` tracks origin; latest code commit `e3d5c5b` is pushed. Earlier commits include `75f8a89` (relay recipient collection), `8493097` (sender reaction race safety), `6f618ed` (invite storage guard), and `41c409e` (profile copy fallback). No pull request has been created.
+- Current branch: `feat/claim-completion-feedback` tracks origin; latest code commit `68daec5` is pushed. Its parent is `e6be604` on `feat/invite-first-drop-resilience`, whose latest feature commit is `e3d5c5b`. Earlier commits include `75f8a89` (relay recipient collection), `8493097` (sender reaction race safety), `6f618ed` (invite storage guard), and `41c409e` (profile copy fallback). No pull request has been created.
 - Previous mailbox search-focus branch: `fix/mailbox-search-focus`, code commit `bbf9df8` pushed to origin; no pull request has been created.
 - Mailbox empty-state feature commit: `10efead` (`feat: tailor mailbox empty states to filters`), pushed to `origin/feat/mailbox-filter-empty-states`; the docs update is committed separately.
 - Recipient-first composer commit: `a9049cf` (`feat: put recipient first in drop composer`), pushed to `origin/feat/recipient-first-compose`.

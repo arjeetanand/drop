@@ -2,6 +2,13 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
+## Checkpoint — sender claim completion feedback (2026-10-23)
+
+- [x] Open sender detail pages now refresh after an explicit private text claim, announce the recipient, and update the current status. A forward-only migration sends only the drop ID to the sender's private inbox topic.
+- [x] npm test passes 153/153; lint, no-incremental TypeScript, the isolated PostgreSQL claim/broadcast fixture, git diff checks, and bash -n run.sh pass.
+- [x] Code commit 68daec5 is pushed to origin/feat/claim-completion-feedback; documentation follows as a separate commit.
+- [ ] Keep the claimed result visible after reopening and add a Mailbox claim cue; verify the sender flow in a rendered browser and with two accounts when available.
+
 ## Checkpoint notes through — 2026-10-19
 
 - Added passwordless email-link sign-in alongside Google. Both disposable accounts signed in and synced profiles through local Supabase/Inbucket. `npm test` passes 70/70, lint passes, and a clean Next.js 16.3 production build passes. The two-account photo/GIF composer send-open-react flow remains unverified because the in-app browser did not open its file chooser; Edge's ChatGPT extension needs “Allow access to file URLs” enabled for this local test. No hosted Supabase project or SMTP is configured.

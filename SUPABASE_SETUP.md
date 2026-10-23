@@ -45,7 +45,7 @@ The transaction checks sender-only relay starts, short-lived passes, one-time te
 
 ## Accountless private claim links
 
-Apply `20261023120000_drop_claim_invites.sql` in filename order with the other migrations. It adds a private token-digest table and authenticated-only issue, reissue, and claim RPCs. The recipient must have a Drop profile and explicitly claim the text note; page load alone does not consume the link. Reissuing from the sender detail page rotates the capability, including after expiry, while claimed or revoked links cannot be reissued.
+Apply `20261023120000_drop_claim_invites.sql` followed by `20261023130000_drop_claimed_sender_broadcast.sql` in filename order with the other migrations. The first adds a private token-digest table and authenticated-only issue, reissue, and claim RPCs. The recipient must have a Drop profile and explicitly claim the text note; page load alone does not consume the link. Reissuing from the sender detail page rotates the capability, including after expiry, while claimed or revoked links cannot be reissued. The second migration sends only the drop ID to the sender's private inbox topic after a successful claim. An open sender detail page reloads the row through RLS and announces the claim. The claim cue is not yet retained after reload or shown as a dedicated Mailbox cue.
 
 Run the privacy and transition fixture against a separate disposable PostgreSQL database:
 
@@ -55,7 +55,7 @@ psql -X -v ON_ERROR_STOP=1 -d drop-claim-smoke -f tests/db/drop_claim_invites.sq
 dropdb drop-claim-smoke
 ```
 
-The fixture covers authenticated RPC grants, pending-note privacy, digest-only storage, token rotation, whitespace-preserving reissue, claim expiry, sender/outsider denial, and same-account retries after expiry. It rolls back its schema and data. This is local PostgreSQL coverage; hosted Supabase settings and browser-to-browser authentication still need separate verification.
+The fixture covers authenticated RPC grants, pending-note privacy, digest-only storage, token rotation, whitespace-preserving reissue, claim expiry, sender/outsider denial, same-account retries after expiry, and the private ID-only sender broadcast with duplicate suppression. Relay trigger controls check recipient/sender broadcasts and reject an unrelated-update duplicate. It rolls back its schema and data. It does not exercise live Realtime channel authorization, the collection RPC, hosted Supabase settings, or browser-to-browser authentication.
 
 ## Relay handoffs
 
