@@ -28,6 +28,37 @@ export interface RelayRecipientCollection {
   collectedAt?: string | null;
 }
 
+export interface RelayCollectionSource {
+  direction?: 'sent' | 'received' | null;
+  deliveryMode?: string | null;
+  status?: string | null;
+  activityAt?: string | null;
+}
+
+/** Only a sender's delivered relay can complete the recipient stop. */
+export function getRelayRecipientCollection(
+  letter: RelayCollectionSource | null | undefined,
+): RelayRecipientCollection | undefined {
+  if (letter?.direction !== 'sent' || letter.deliveryMode !== 'relay' || letter.status !== 'delivered') return undefined;
+
+  return { isCollected: true, collectedAt: letter.activityAt };
+}
+
+export interface RelayRecipientCollectionState {
+  letterId: string;
+  collection: RelayRecipientCollection | undefined;
+}
+
+/** Keep a known terminal state when a refresh cannot read the sender's letter. */
+export function mergeRelayRecipientCollectionState(
+  previous: RelayRecipientCollectionState | null,
+  letterId: string,
+  letter: RelayCollectionSource | null | undefined,
+): RelayRecipientCollectionState | null {
+  if (!letter) return previous?.letterId === letterId ? previous : null;
+  return { letterId, collection: getRelayRecipientCollection(letter) };
+}
+
 export interface RelayHandoffPresentation {
   isNext: boolean;
   isCollected: boolean;
@@ -396,7 +427,7 @@ export function relayToTrackingEvents(
       date: formatEventDate(collectedAt),
       time: formatEventTime(collectedAt),
       done: presentation.isComplete,
-      current: presentation.isNext || isLast,
+      current: recipientCollection?.isCollected ? false : presentation.isNext || isLast,
     };
   });
 }

@@ -5,7 +5,7 @@ import { getJourneyLetters } from '../lib/journeyView.ts';
 
 register(new URL('./dropMediaFinalizeLoader.mjs', import.meta.url));
 
-const { getRelayHandoffPresentation, relayToTrackingEvents } = await import('../lib/relayStore.ts');
+const { getRelayHandoffPresentation, getRelayRecipientCollection, mergeRelayRecipientCollectionState, relayToTrackingEvents } = await import('../lib/relayStore.ts');
 
 function relay(id, activityAt, overrides = {}) {
   return {
@@ -53,6 +53,36 @@ test('lists only real sent relays, merges remote copies, and sorts by activity t
 
 test('keeps local sent relays when remote data is unavailable', () => {
   assert.deepEqual(getJourneyLetters([relay('local', '2026-10-19T00:00:00.000Z')], null).map((letter) => letter.id), ['local']);
+});
+
+test('projects collection only for a delivered relay and preserves its durable activity time', () => {
+  const activityAt = '2026-10-23T08:42:00.000Z';
+
+  assert.deepEqual(getRelayRecipientCollection({
+    direction: 'sent',
+    deliveryMode: 'relay',
+    status: 'delivered',
+    activityAt,
+  }), {
+    isCollected: true,
+    collectedAt: activityAt,
+  });
+  assert.equal(getRelayRecipientCollection({ direction: 'sent', deliveryMode: 'relay', status: 'dispatched', activityAt }), undefined);
+  assert.equal(getRelayRecipientCollection({ direction: 'sent', deliveryMode: 'instant', status: 'delivered', activityAt }), undefined);
+  assert.equal(getRelayRecipientCollection({ deliveryMode: 'relay', status: 'delivered', activityAt }), undefined);
+  assert.equal(getRelayRecipientCollection({ direction: 'received', deliveryMode: 'relay', status: 'delivered', activityAt }), undefined);
+  assert.equal(getRelayRecipientCollection(undefined), undefined);
+});
+
+test('preserves last-known collection when a sender status refresh is unavailable', () => {
+  const previous = {
+    letterId: 'drop-1',
+    collection: { isCollected: true, collectedAt: '2026-10-23T08:42:00.000Z' },
+  };
+
+  assert.deepEqual(mergeRelayRecipientCollectionState(previous, 'drop-1', null), previous);
+  assert.equal(mergeRelayRecipientCollectionState(null, 'drop-1', null), null);
+  assert.equal(mergeRelayRecipientCollectionState(previous, 'drop-2', null), null);
 });
 
 test('a collected recipient is complete in both the relay chain and custody timeline', () => {
@@ -106,7 +136,7 @@ test('a collected recipient is complete in both the relay chain and custody time
   assert.equal(collectedEvents[1].note, 'Mina collected this drop.');
   assert.equal(collectedEvents[1].date, 'Oct 23');
   assert.equal(collectedEvents[1].done, true);
-  assert.equal(collectedEvents[1].current, true);
+  assert.equal(collectedEvents[1].current, false);
   assert.deepEqual(relayToTrackingEvents(relayState, collection), collectedEvents);
   assert.equal(relayState.handoffs[1].next, true);
 });

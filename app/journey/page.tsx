@@ -13,7 +13,7 @@ import { currentFocusDraft, type MockLetter } from '@/data/mockData';
 import { getRemoteJourney, getRemoteJourneyLetter, getRemoteJourneyLetters, saveRemoteJourneyNote } from '@/lib/letterBackend';
 import { getJourneyLetters } from '@/lib/journeyView';
 import { getJourneyNotes, getLetterDraft, getLettersWithDraft, saveJourneyNotes, type JourneyNote } from '@/lib/letterStore';
-import { getInitialRelayState, getRelayState, getRelayStats, getRemoteRelayHandoffs, issueRelayHandoffToken, relayToTrackingEvents, type RelayRecipientCollection, type RelayState } from '@/lib/relayStore';
+import { getInitialRelayState, getRelayRecipientCollection, getRelayState, getRelayStats, getRemoteRelayHandoffs, issueRelayHandoffToken, relayToTrackingEvents, type RelayState } from '@/lib/relayStore';
 import { mergeRemoteRelayHandoffs } from '@/components/relayPresentation';
 import { startRelayRouteRefresh, startVisibleDataRefresh, type RelayRouteRefreshController } from '@/lib/relayRouteRefresh';
 import { buildRelayScanUrl } from '@/lib/relayInviteUrl';
@@ -95,12 +95,14 @@ function JourneyDetail({ requestedLetterId }: { requestedLetterId: string }) {
   const [routeRefreshing, setRouteRefreshing] = useState(false);
   const [routeAnnouncement, setRouteAnnouncement] = useState('');
   const relayRef = useRef(relay);
+  const recipientCollectionRef = useRef(false);
   const routeHasLoadedRef = useRef(false);
   const routeRefreshRef = useRef<RelayRouteRefreshController | null>(null);
 
   useEffect(() => {
     let active = true;
     const loadJourney = async () => {
+      recipientCollectionRef.current = false;
       const draft = getLetterDraft();
       const localLetters = getLettersWithDraft(draft);
       const remoteLetter = await getRemoteJourneyLetter(requestedLetterId).catch(() => null);
@@ -118,6 +120,7 @@ function JourneyDetail({ requestedLetterId }: { requestedLetterId: string }) {
         recipient: selectedLetter?.recipient || draft.address.name || draft.recipient || 'Recipient',
       });
       setJourneyLetter(selectedLetter);
+      recipientCollectionRef.current = getRelayRecipientCollection(selectedLetter)?.isCollected === true;
       setLetterId(requestedLetterId);
       setRelay(initial);
       relayRef.current = initial;
@@ -132,8 +135,9 @@ function JourneyDetail({ requestedLetterId }: { requestedLetterId: string }) {
     const controller = startVisibleDataRefresh({
       load: () => getRemoteJourneyLetter(letterId),
       onData: (latest) => {
+        if (getRelayRecipientCollection(latest)?.isCollected) recipientCollectionRef.current = true;
         setJourneyLetter((current) => current && current.id === latest.id
-          ? { ...current, status: latest.status, activityAt: latest.activityAt }
+          ? { ...current, status: latest.status, deliveryMode: latest.deliveryMode, activityAt: latest.activityAt }
           : current);
       },
     });
@@ -205,9 +209,8 @@ function JourneyDetail({ requestedLetterId }: { requestedLetterId: string }) {
 
   const stats = getRelayStats(relay);
   const hasCarrier = relay.handoffs.some((handoff) => handoff.role === 'carrier');
-  const recipientCollection: RelayRecipientCollection | undefined = journeyLetter?.status === 'delivered'
-    ? { isCollected: true, collectedAt: journeyLetter.activityAt }
-    : undefined;
+  const recipientCollection = getRelayRecipientCollection(journeyLetter);
+  const isCollected = recipientCollection?.isCollected === true;
   const lastRouteCheckTime = routeCheckedAt
     ? new Date(routeCheckedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' })
     : '';
@@ -237,10 +240,12 @@ function JourneyDetail({ requestedLetterId }: { requestedLetterId: string }) {
   };
 
   const handleInviteCarrier = async () => {
+    if (recipientCollectionRef.current || isCollected) return;
     setIssuingInvite(true);
     setError('');
     try {
       const issued = await issueRelayHandoffToken(letterId);
+      if (recipientCollectionRef.current || isCollected) return;
       const url = buildRelayScanUrl(window.location.origin, {
         token: issued.token,
         letterId,
@@ -296,10 +301,10 @@ function JourneyDetail({ requestedLetterId }: { requestedLetterId: string }) {
           <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
             <div className="max-w-2xl">
               <span className="inline-flex items-center gap-2 rounded-full bg-[#2b45f7]/[0.08] px-3 py-1.5 font-mono text-[0.62rem] font-bold uppercase tracking-[0.12em] text-[#2b45f7]"><span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />Journey tracker</span>
-              <h1 className="mt-4 font-headline-md text-3xl font-semibold leading-tight tracking-[-0.035em] text-ink-navy sm:text-4xl">{hasCarrier ? 'A sealed drop, in motion.' : 'A sealed drop, ready to travel.'}</h1>
-              <p className="mt-3 text-sm leading-relaxed text-on-surface-variant sm:text-base">{hasCarrier ? `Follow the route of “${relay.subject}” toward ${relay.recipient}. Carriers can update the route without opening the drop.` : `“${relay.subject}” is waiting for its first carrier. Invite someone you trust; the drop stays sealed.`}</p>
+              <h1 className="mt-4 font-headline-md text-3xl font-semibold leading-tight tracking-[-0.035em] text-ink-navy sm:text-4xl">{isCollected ? 'Your drop reached its recipient.' : hasCarrier ? 'A sealed drop, in motion.' : 'A sealed drop, ready to travel.'}</h1>
+              <p className="mt-3 text-sm leading-relaxed text-on-surface-variant sm:text-base">{isCollected ? `“${relay.subject}” reached ${relay.recipient}, who confirmed collection. The drop stays sealed until they open it.` : hasCarrier ? `Follow the route of “${relay.subject}” toward ${relay.recipient}. Carriers can update the route without opening the drop.` : `“${relay.subject}” is waiting for its first carrier. Invite someone you trust; the drop stays sealed.`}</p>
             </div>
-            {journeyLetter.status === 'delivered' ? (
+            {isCollected ? (
               <span className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#e9f4ed] px-4 text-sm font-bold text-[#276a4d]" role="status">
                 <Check className="h-4 w-4" aria-hidden="true" /> Drop collected
               </span>
@@ -309,7 +314,7 @@ function JourneyDetail({ requestedLetterId }: { requestedLetterId: string }) {
               </button>
             )}
           </div>
-          {journeyLetter.status === 'delivered' && <p className="mt-5 rounded-xl bg-[#e9f4ed] px-4 py-3 text-sm leading-relaxed text-[#276a4d]" role="status">Your recipient confirmed it arrived. The sealed drop is now ready for them to open.</p>}
+          {isCollected && <p className="mt-5 rounded-xl bg-[#e9f4ed] px-4 py-3 text-sm leading-relaxed text-[#276a4d]">Your recipient confirmed collection. The drop remains sealed until they open it.</p>}
           {error && <p className="notice error-notice mt-5" role="alert" aria-live="assertive">{error}</p>}
           {notice && <p className="notice mt-5" role="status" aria-live="polite">{notice}</p>}
         </section>
@@ -320,7 +325,7 @@ function JourneyDetail({ requestedLetterId }: { requestedLetterId: string }) {
           <div className="rounded-2xl border border-[rgba(16,42,67,.1)] bg-white/75 p-3 sm:p-5"><p className="font-headline-md text-2xl text-ink-navy sm:text-3xl">{stats.hours}h</p><p className="mt-1 text-[0.68rem] leading-tight text-on-surface-variant sm:text-xs">Journey age</p></div>
         </section>
 
-        {invite && (
+        {invite && !isCollected && (
           <section className="mt-4 rounded-3xl border border-[rgba(16,42,67,.12)] bg-white p-5 shadow-[0_12px_36px_rgba(16,42,67,.06)] sm:mt-5 sm:p-7">
             <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{inviteExpired ? 'Carrier invite expired. Make a new invite to continue.' : ''}</p>
             <div className="grid gap-5 sm:grid-cols-[1fr_auto] sm:items-center">
@@ -370,7 +375,7 @@ function JourneyDetail({ requestedLetterId }: { requestedLetterId: string }) {
           <div className="min-w-0 space-y-5">
             <section className="overflow-hidden rounded-3xl border border-[rgba(16,42,67,.12)] bg-white p-4 shadow-[0_12px_36px_rgba(16,42,67,.05)] sm:p-6">
               <div className="flex flex-wrap items-end justify-between gap-3"><div><p className="eyebrow">Route map</p><h2 className="mt-1 font-headline-md text-2xl text-ink-navy">Every hand leaves a stop.</h2></div><span className="font-mono text-[0.62rem] text-on-surface-variant">{relay.gpsWaypoints?.length || 0} stops</span></div>
-              <div className="mt-4 overflow-hidden rounded-2xl bg-[#f5f3ed] p-2 sm:p-4"><RouteMap waypoints={relay.gpsWaypoints ?? []} destinationNeighborhood={relay.destinationNeighborhood || relay.recipient} currentCarrierName={relay.currentCarrierName} /></div>
+              <div className="mt-4 overflow-hidden rounded-2xl bg-[#f5f3ed] p-2 sm:p-4"><RouteMap waypoints={relay.gpsWaypoints ?? []} destinationNeighborhood={relay.destinationNeighborhood || relay.recipient} currentCarrierName={relay.currentCarrierName} destinationReached={isCollected} /></div>
               <div className="mt-5 border-t border-[rgba(16,42,67,.1)] pt-5"><RelayChain relay={relay} recipientCollection={recipientCollection} /></div>
             </section>
 

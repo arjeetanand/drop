@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { currentFocusDraft } from '@/data/mockData';
+import { getRemoteJourneyLetter } from '@/lib/letterBackend';
 import { RouteMap } from '@/components/RouteMap';
 import { TrackingTimeline } from '@/components/TrackingTimeline';
 import { mergeRemoteRelayHandoffs } from '@/components/relayPresentation';
@@ -28,7 +29,9 @@ import {
   getRelayState,
   getRelayStats,
   issueRelayHandoffToken,
+  mergeRelayRecipientCollectionState,
   relayToTrackingEvents,
+  type RelayRecipientCollectionState,
   type RelayState,
 } from '@/lib/relayStore';
 import { getLetterDraft, getLetterDraftById } from '@/lib/letterStore';
@@ -56,7 +59,9 @@ function RelayContent() {
   const [routeRefreshError, setRouteRefreshError] = useState(false);
   const [routeRefreshing, setRouteRefreshing] = useState(false);
   const [routeAnnouncement, setRouteAnnouncement] = useState('');
+  const [senderCollectionState, setSenderCollectionState] = useState<RelayRecipientCollectionState | null>(null);
   const relayRef = useRef(relay);
+  const senderCollectionRef = useRef<RelayRecipientCollectionState | null>(null);
   const routeHasLoadedRef = useRef(false);
   const routeRefreshRef = useRef<RelayRouteRefreshController | null>(null);
 
@@ -68,6 +73,11 @@ function RelayContent() {
     });
     setRelay(localRelay);
     relayRef.current = localRelay;
+    senderCollectionRef.current = null;
+    setSenderCollectionState(null);
+    setInviteUrl('');
+    setInviteExpiresAt('');
+    setCopied(false);
     setDestination(
       localRelay.destinationNeighborhood
       || draft?.address.city
@@ -93,11 +103,33 @@ function RelayContent() {
 
     const controller = startRelayRouteRefresh({
       load: async () => {
-        const handoffs = await getRemoteRelayHandoffs(letterId);
-        if (handoffs === null) throw new Error('Relay route updates are unavailable.');
-        return handoffs;
+        const [routeResult, letterResult] = await Promise.allSettled([
+          getRemoteRelayHandoffs(letterId),
+          getRemoteJourneyLetter(letterId),
+        ]);
+        return {
+          handoffs: routeResult.status === 'fulfilled' ? routeResult.value : null,
+          letter: letterResult.status === 'fulfilled' ? letterResult.value : null,
+        };
       },
-      onData: (remote) => {
+      onData: ({ handoffs: remote, letter }) => {
+        const nextState = mergeRelayRecipientCollectionState(senderCollectionRef.current, letterId, letter);
+        senderCollectionRef.current = nextState;
+        setSenderCollectionState(nextState);
+        if (nextState?.collection?.isCollected) {
+          setInviteUrl('');
+          setInviteExpiresAt('');
+          setCopied(false);
+          setNotice('');
+          setError('');
+        }
+
+        if (remote === null) {
+          setRouteRefreshError(true);
+          setRouteAnnouncement('');
+          return;
+        }
+
         const previousIds = new Set(relayRef.current.handoffs.map((handoff) => handoff.id));
         const newHandoff = routeHasLoadedRef.current
           ? remote.find((handoff) => !previousIds.has(handoff.id))
@@ -141,19 +173,27 @@ function RelayContent() {
 
   const stats = getRelayStats(relay);
   const hasCarrier = relay.handoffs.some((handoff) => handoff.role === 'carrier');
+  const collectionStatusKnown = senderCollectionState?.letterId === letterId;
+  const isCheckingCollection = viewMode === 'sender' && !collectionStatusKnown;
+  const recipientCollection = viewMode === 'sender' && collectionStatusKnown
+    ? senderCollectionState?.collection
+    : undefined;
+  const isCollected = recipientCollection?.isCollected === true;
   const lastRouteCheckTime = routeCheckedAt
     ? new Date(routeCheckedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' })
     : '';
   const waypoints = relay.gpsWaypoints ?? [];
-  const completedHandoffs = relay.handoffs.filter((handoff) => !handoff.next);
+  const completedHandoffs = relay.handoffs.filter((handoff) => !handoff.next || (isCollected && handoff.role === 'recipient'));
 
   const createInvite = async () => {
+    if (isCollected || isCheckingCollection) return;
     setCreatingInvite(true);
     setError('');
     setNotice('');
     setInviteUrl('');
     try {
       const issued = await issueRelayHandoffToken(letterId);
+      if (senderCollectionRef.current?.letterId !== letterId || senderCollectionRef.current.collection?.isCollected) return;
       const url = buildRelayScanUrl(window.location.origin, {
         token: issued.token,
         letterId,
@@ -170,7 +210,7 @@ function RelayContent() {
   };
 
   const shareInvite = async () => {
-    if (!inviteUrl) return;
+    if (!inviteUrl || isCollected) return;
 
     const result = await shareInviteLink(
       inviteUrl,
@@ -244,12 +284,14 @@ function RelayContent() {
           <>
             <section className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
               <div className="min-w-0 rounded-3xl bg-[#2b45f7] p-5 text-white shadow-[0_20px_50px_rgba(43,69,247,.18)] sm:p-8">
-                <p className="font-mono text-[0.66rem] font-bold uppercase tracking-[0.18em] text-white/75">{hasCarrier ? 'Human relay · in progress' : 'Human relay · waiting for its first carrier'}</p>
+                <p className="font-mono text-[0.66rem] font-bold uppercase tracking-[0.18em] text-white/75">{isCollected ? 'Human relay · collected' : hasCarrier ? 'Human relay · in progress' : 'Human relay · waiting for its first carrier'}</p>
                 <h1 className="mt-4 max-w-3xl font-headline-md text-4xl font-semibold leading-[1.02] tracking-[-0.045em] sm:text-5xl">
-                  {hasCarrier ? 'Your drop is on a journey.' : 'Your drop is ready to travel.'}
+                  {isCollected ? 'Your drop reached its recipient.' : hasCarrier ? 'Your drop is on a journey.' : 'Your drop is ready to travel.'}
                 </h1>
                 <p className="mt-4 max-w-2xl text-base leading-relaxed text-white/85 sm:text-lg">
-                  {hasCarrier
+                  {isCollected
+                    ? `“${relay.subject}” reached ${relay.recipient}, who confirmed collection. The drop stays sealed until they open it.`
+                    : hasCarrier
                     ? `“${relay.subject}” is traveling toward ${relay.recipient}. Carriers can see the route and handoff details; the drop stays sealed.`
                     : `“${relay.subject}” is ready to travel toward ${relay.recipient}. Invite someone you trust to carry it; the drop stays sealed.`}
                 </p>
@@ -270,15 +312,19 @@ function RelayContent() {
                 </div>
 
                 <div className="mt-6 flex flex-col gap-2 sm:flex-row">
-                  <button
-                    type="button"
-                    onClick={() => void createInvite()}
-                    disabled={creatingInvite}
-                    className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-bold text-[#2b45f7] disabled:opacity-60"
-                  >
-                    <Share2 className="h-4 w-4" aria-hidden="true" />
-                    {creatingInvite ? 'Creating invite…' : inviteUrl ? 'Create a fresh invite' : 'Invite a carrier'}
-                  </button>
+                  {isCollected
+                    ? <span className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-white/15 px-4 py-3 text-sm font-bold" role="status"><Check className="h-4 w-4" aria-hidden="true" /> Drop collected</span>
+                    : isCheckingCollection
+                      ? <span className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-white/15 px-4 py-3 text-sm font-semibold" role="status">Checking collection status…</span>
+                      : <button
+                        type="button"
+                        onClick={() => void createInvite()}
+                        disabled={creatingInvite}
+                        className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-bold text-[#2b45f7] disabled:opacity-60"
+                      >
+                        <Share2 className="h-4 w-4" aria-hidden="true" />
+                        {creatingInvite ? 'Creating invite…' : inviteUrl ? 'Create a fresh invite' : 'Invite a carrier'}
+                      </button>}
                   <Link href={`/journey?letter=${encodeURIComponent(letterId)}`} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-white/35 bg-white/10 px-4 py-3 text-sm font-bold text-white hover:bg-white/15">
                     <Route className="h-4 w-4" aria-hidden="true" />
                     Open journey <ArrowRight className="h-4 w-4" aria-hidden="true" />
@@ -286,7 +332,17 @@ function RelayContent() {
                 </div>
               </div>
 
-              <aside className="rounded-3xl border border-[rgba(16,42,67,.12)] bg-white p-5 shadow-[0_12px_36px_rgba(16,42,67,.06)] sm:p-6">
+              {isCollected ? (
+                <aside className="rounded-3xl border border-[rgba(16,42,67,.12)] bg-white p-5 shadow-[0_12px_36px_rgba(16,42,67,.06)] sm:p-6">
+                  <p className="eyebrow text-[#2b45f7]">Recipient collection</p>
+                  <p className="mt-3 text-sm leading-relaxed text-on-surface-variant">{relay.recipient} collected the drop. No more carrier invites are needed.</p>
+                </aside>
+              ) : isCheckingCollection ? (
+                <aside className="rounded-3xl border border-[rgba(16,42,67,.12)] bg-white p-5 shadow-[0_12px_36px_rgba(16,42,67,.06)] sm:p-6">
+                  <p className="eyebrow text-[#2b45f7]">Recipient collection</p>
+                  <p className="mt-3 text-sm leading-relaxed text-on-surface-variant">Checking whether the recipient has collected this drop…</p>
+                </aside>
+              ) : <aside className="rounded-3xl border border-[rgba(16,42,67,.12)] bg-white p-5 shadow-[0_12px_36px_rgba(16,42,67,.06)] sm:p-6">
                 <div className="flex items-center gap-3">
                   <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#2b45f7]/10 text-[#2b45f7]" aria-hidden="true"><QrCode className="h-5 w-5" /></span>
                   <div>
@@ -312,7 +368,7 @@ function RelayContent() {
                     <p className="mt-3 inline-flex items-center gap-2 text-xs font-semibold text-ink-navy"><ShieldCheck className="h-4 w-4 text-[#2b45f7]" aria-hidden="true" /> Text and media stay private.</p>
                   </div>
                 )}
-              </aside>
+              </aside>}
             </section>
 
             <section className="mt-10 grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(280px,.65fr)] lg:items-start">
@@ -344,13 +400,13 @@ function RelayContent() {
                   <span className="meta">{waypoints.length} mapped stops</span>
                 </div>
                 <div className="mt-4 overflow-hidden rounded-3xl border border-[rgba(16,42,67,.1)] bg-white shadow-[0_12px_36px_rgba(16,42,67,.05)]">
-                  <RouteMap waypoints={waypoints} destinationNeighborhood={relay.destinationNeighborhood || destination} currentCarrierName={relay.currentCarrierName} />
+                  <RouteMap waypoints={waypoints} destinationNeighborhood={relay.destinationNeighborhood || destination} currentCarrierName={relay.currentCarrierName} destinationReached={isCollected} />
                 </div>
                 <div className="mt-9">
                   <p className="eyebrow text-[#2b45f7]">Handoff history</p>
                   <h2 className="section-title mt-2">A record of the route.</h2>
                   <div className="mt-4 rounded-3xl border border-[rgba(16,42,67,.1)] bg-white p-5 sm:p-7">
-                    <TrackingTimeline events={relayToTrackingEvents(relay)} />
+                    <TrackingTimeline events={relayToTrackingEvents(relay, recipientCollection)} />
                   </div>
                 </div>
               </div>
@@ -368,8 +424,8 @@ function RelayContent() {
                   <div className="mt-4 space-y-4">
                     {completedHandoffs.slice().reverse().map((handoff) => (
                       <div key={handoff.id} className="border-b border-[rgba(16,42,67,.1)] pb-4 last:border-0 last:pb-0">
-                        <div className="flex flex-wrap items-center gap-2"><p className="font-semibold text-ink-navy">{handoff.name}</p><span className="rounded-full bg-white px-2 py-1 font-mono text-[0.58rem] font-bold uppercase tracking-[.08em] text-on-surface-variant">{handoff.role === 'sender' ? 'Origin' : 'Carrier'}</span></div>
-                        <p className="mt-1 text-sm leading-relaxed text-on-surface-variant">{handoff.note}</p>
+                        <div className="flex flex-wrap items-center gap-2"><p className="font-semibold text-ink-navy">{handoff.name}</p><span className="rounded-full bg-white px-2 py-1 font-mono text-[0.58rem] font-bold uppercase tracking-[.08em] text-on-surface-variant">{handoff.role === 'sender' ? 'Origin' : handoff.role === 'recipient' ? 'Recipient' : 'Carrier'}</span></div>
+                        <p className="mt-1 text-sm leading-relaxed text-on-surface-variant">{handoff.role === 'recipient' && isCollected ? `${handoff.name} collected this drop.` : handoff.note}</p>
                         <p className="meta mt-2 inline-flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5" aria-hidden="true" />{handoff.neighborhood || handoff.location}</p>
                       </div>
                     ))}
