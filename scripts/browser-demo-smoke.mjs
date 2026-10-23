@@ -24,10 +24,10 @@ const LABELS = {
   reaction: 'React with heart hands',
 };
 const REACTION_BUTTON_LABELS = [
-  'React with purple heart',
+  'React with a purple heart',
   'React with fire',
-  'React with face with tears of joy',
-  'React with face holding back tears',
+  'React with a face with tears of joy',
+  'React with a face holding back tears',
   'React with heart hands',
 ];
 

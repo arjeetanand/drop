@@ -10,10 +10,10 @@ test('gives each reaction a stable spoken name for assistive technology', () => 
     getReactionName('🥹'),
     getReactionName('🫶'),
   ], [
-    'purple heart',
+    'a purple heart',
     'fire',
-    'face with tears of joy',
-    'face holding back tears',
+    'a face with tears of joy',
+    'a face holding back tears',
     'heart hands',
   ]);
 });
