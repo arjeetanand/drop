@@ -6,7 +6,14 @@ Build Drop as a mobile-first private sharing app where a person can send a photo
 
 The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailbox, and relay foundations. Existing letters continue to work as text drops, and their routes and saved content remain readable. The build covers the end-to-end mobile flow: choose content, attach an image or GIF, choose a recipient, send, open, react, and optionally follow a relay.
 
-## Implementation Status — 2026-10-22
+## Implementation Status — 2026-10-23
+
+### Latest checkpoint — local account-to-account verification and card contrast (2026-10-23)
+
+- The authenticated local Supabase smoke passed with four disposable accounts: known-recipient text access, outsider denial, recipient reaction visibility, GIF finalize and lost-response retry, relay privacy/collection, and legacy relay normalization. The process exited successfully after cleanup.
+- Updated small white text on the home, sent, and relay cobalt cards. Against `#2b45f7`, white at 70% and 75% opacity measures 3.88:1 and 4.26:1; the new 80% text measures 4.63:1.
+- `npm test` passed 175/175; lint, no-incremental TypeScript, production build, and `git diff --check` passed. These checks ran locally; browser rendering and hosted behavior remain open.
+- This smoke uses a known recipient. It does not verify the unknown-handle photo/GIF claim journey, claim replay UI, or hosted cleanup worker.
 
 ### 2026-10-23 relay recipient collection
 
@@ -19,8 +26,8 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 - The composer can send an instant photo or GIF claim link to an unknown handle after the attachment is saved locally. The recipient must authenticate and explicitly claim before reading the media. Relay claim links remain out of scope.
 - Claim links last up to 7 days. An unclaimed media claim and its access expire 30 days after the first send; rotating the link does not extend the cutoff. An hourly worker revokes expired claims and retries object deletion through the Supabase Storage API. Physical deletion can be delayed when the Free project is paused or the worker/Storage service is unavailable.
 - Ambiguous finalization and issue responses use a delayed cleanup queue, same-path locks, and revalidation before deletion. The composer keeps the attachment for retry and only rotates its upload path after cleanup is confirmed.
-- Verification: unit tests, the disposable PostgreSQL policy/transition fixture, lint, TypeScript, production build, and local route smoke checks pass. No hosted migration, scheduled worker, cross-account send, or rendered browser interaction was run.
-- Remaining reliability gap: if both attempts to enqueue an orphaned finalized object fail during an outage, it has no scheduled cleanup job until the sender retries. The SQL fixture also covers lock behavior sequentially, not as concurrent database sessions.
+- Verification: unit tests, the disposable PostgreSQL policy/transition fixture, lint, TypeScript, production build, and local route smoke checks pass. A real local account-to-account smoke passed for known-recipient text/GIF and relay flows; the unknown-handle private claim journey, hosted migration/worker, and rendered browser flow remain unverified.
+- Orphan reconciliation now covers finalized unlinked media when both enqueue attempts fail. Hosted compatibility/query-plan checks for its `storage.objects` index and concurrent database interleavings remain open.
 
 ### Reliability follow-up — orphan media reconciliation (2026-10-23)
 
@@ -136,7 +143,7 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 Let a sender share a private text drop with a person who does not yet have a Drop account. The recipient signs in or creates an account, sets up a Drop profile, and explicitly claims the drop. Until that claim succeeds, only the sender can read the letter; the claim URL contains no content or recipient details.
 
 ### Scope and boundaries
-- First release supports instant text drops only. Photo/GIF and relay claim links follow after the text path passes privacy and retry checks.
+- First release supports instant text, photo, and GIF claim drops. Human relay remains an explicit delivery choice; relay claim links follow only after the instant claim path passes hosted privacy and retry checks.
 - The link is a high-entropy bearer capability: anyone who receives the forwarded link can claim it. Tell the sender this before sharing.
 - Store only a SHA-256 token digest, sender/letter binding, expiry, and claim state. Return the raw token only at issue time, put it in the URL fragment, and require an explicit authenticated claim action. GET/page load must not consume it.
 - Require an authenticated Drop profile before claim. Never expose letter, event, reaction, or Storage content to anon or an unclaimed account.
@@ -144,7 +151,7 @@ Let a sender share a private text drop with a person who does not yet have a Dro
 - Show a clear “Waiting for them to claim” state in Sent. Never infer this state from a null recipient ID.
 
 ### Success criteria
-1. A sender can create and share a generic link for a text draft addressed to a not-found handle; cancellation and clipboard fallback preserve a recoverable draft/link state.
+1. A sender can create and share a generic link for a text, photo, or GIF draft addressed to a not-found handle; cancellation and clipboard fallback preserve a recoverable draft/link state.
 2. Share title/text and the public page reveal no draft content, subject, handle, or media metadata.
 3. The recipient can authenticate, create a Drop profile, return to the invite without placing the token in query parameters, and explicitly claim.
 4. Before claim, anon and unrelated authenticated accounts cannot read the letter or its dependent data. After claim, the recipient can read it through existing RLS.
@@ -153,11 +160,11 @@ Let a sender share a private text drop with a person who does not yet have a Dro
 7. Unit and disposable-local-PostgreSQL checks cover token URL handling, privacy, valid claim, expiry, wrong account, replay, and retry behavior.
 
 ### Build order
-1. Define and test safe fragment handling, generic share copy, and claim URL parsing.
-2. Add the claim table and narrowly scoped issue/reissue/claim RPCs; verify RLS and transition behavior in disposable local PostgreSQL.
-3. Add sender claim-pending state and composer action for text-only, instant drops.
-4. Add the claim landing, auth/profile continuation, and explicit claim action.
-5. Run regression, lint, typecheck, build, local database smoke, and phone-width browser checks; update README and HANDOFF, then commit/push this verified slice.
+1. [x] Define and test safe fragment handling, generic share copy, and claim URL parsing.
+2. [x] Add the claim table and narrowly scoped issue/reissue/claim RPCs; verify RLS and transition behavior in disposable local PostgreSQL.
+3. [x] Add sender claim-pending state and composer action for instant text, photo, and GIF drops.
+4. [x] Add the claim landing, auth/profile continuation, and explicit claim action.
+5. [x] Run regression, lint, typecheck, build, and local database smoke; [ ] complete rendered browser and hosted claim acceptance before release.
 
 ### Remaining follow-ups
 - Verify the rendered sender reissue and recipient claim flows at phone and desktop widths, including profile setup, link cancellation/copy fallback, and accessibility.

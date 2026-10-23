@@ -252,3 +252,36 @@ The upload and cleanup queue are separate services. A Storage upload can succeed
 Code commit `ae33ab2` (`feat: reconcile orphaned media cleanup`) is pushed to `origin/feat/media-orphan-reconciliation`. The handoff, checklist, plan, README/setup notes, and this entry are committed separately. No PR or merge was created. The existing local app remains available at `http://localhost:4004`.
 
 No hosted migration, Edge Function runtime, two-account claim, or actual Storage removal was verified; Deno is unavailable and the hosted Free project is not provisioned. The migration adds a custom partial index on the managed `storage.objects` table. Validate compatibility and its query plan against the approved project before rollout; Supabase recommends treating the Storage schema as read-only and documents custom indexes for RLS policy performance ([Storage schema guidance](https://supabase.com/docs/guides/storage/schema/design)). Concurrent database interleavings also remain untested.
+
+## 2026-10-23 — Verify local account privacy and improve cobalt card contrast
+
+### Issue
+
+A UI review found small secondary text on Drop’s cobalt cards below the normal-text contrast target. The local account-to-account foundation also needed a real integration run beyond unit and SQL policy tests.
+
+### Cause
+
+The cards use `#2b45f7` with white text at 70% or 75% opacity. After compositing, these pairs measure 3.88:1 and 4.26:1, below 4.5:1. Source and unit checks alone did not prove the current local Supabase configuration would support separate signed-in accounts and private reads.
+
+### Resolution
+
+- Raised the low-opacity labels on Home, Sent, and Relay cards to `text-white/80`, which measures 4.63:1 against the cobalt surface.
+- Ran the existing local Supabase smoke harness with four uniquely named disposable accounts. It checks sender/recipient access, outsider denial, reaction visibility, GIF finalization after a lost response, relay privacy/collection, and legacy relay normalization. The script's `finally` cleanup completed successfully.
+
+### Learning
+
+- Calculate contrast from the composited foreground color against the actual rendered surface; opacity percentages can miss the threshold even when the text looks bright.
+- A local multi-account smoke run proves behavior against the current local migrations and services, not the hosted project or a rendered browser flow. Keep those acceptance states separate in the plan.
+
+### Verification
+
+- `npm run test:local-supabase`: six PASS checks; four disposable accounts and their test media were cleaned successfully.
+- `npm test`: 175/175 passed. `npm run lint`, `npx tsc --noEmit --incremental false`, `npm run build -- --webpack`, and `git diff --check` passed.
+- Contrast calculation against `#2b45f7`: white/70 = 3.88:1; white/75 = 4.26:1; white/80 = 4.63:1.
+- `./run.sh start` served the app on port 4004; `/`, `/sent`, `/relay`, `/claim`, and `/compose` returned HTTP 200. No rendered browser/device or screen-reader check was available.
+
+### Git and remaining gaps
+
+Code commit `d842811` (`fix: improve contrast on Drop blue cards`) is pushed to `origin/fix/drop-card-contrast`. The checklist, product plan, README, handoff, and learning entry are included in a separate documentation commit on the same branch. `/letter` and hosted resources were not changed.
+
+The local smoke covers known-recipient flows, not the unknown-handle photo/GIF claim journey. Hosted migrations, the cleanup schedule and actual Storage deletion, the managed Storage index/query plan, concurrent database interleavings, rendered browser/device behavior, and screen-reader acceptance remain open.

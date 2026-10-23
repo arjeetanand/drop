@@ -2,6 +2,17 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
+## Checkpoint — local account-to-account smoke and blue-card contrast (2026-10-23)
+
+- [x] `npm run test:local-supabase` passed with four disposable local accounts: authenticated profiles, sender/recipient access, outsider denial, reactions, GIF finalize/lost-response retry, relay privacy/collection, and legacy relay normalization. The test process exited successfully after cleanup.
+- [x] Raise small white text opacity on the home, sent, and relay cobalt cards from 70%/75% to 80%; contrast on `#2b45f7` improves from 3.88:1/4.26:1 to 4.63:1.
+- [x] `npm test` passes 175/175; lint, `npx tsc --noEmit --incremental false`, `npm run build -- --webpack`, and `git diff --check` pass.
+- [x] `./run.sh start` keeps Drop available at `http://localhost:4004`; `/`, `/sent`, `/relay`, `/claim`, and `/compose` returned HTTP 200.
+- [x] Code commit `d842811` is pushed to `origin/fix/drop-card-contrast`; plan, README, handoff, checklist, and learning log are included in a separate documentation commit.
+- [ ] Verify the unknown-handle photo/GIF claim path, including pre-claim isolation, explicit claim, sender status, replay behavior, and real Storage cleanup.
+- [ ] Verify rendered mobile/desktop behavior, keyboard and screen-reader access when browser automation is available; no browser renderer was exposed in this session.
+- [ ] Apply the approved Free-project migrations/worker and verify hosted claim access, deletion, index compatibility, and concurrent DB behavior.
+
 ## Checkpoint — media orphan reconciliation (2026-10-23)
 
 - [x] Add a service-role-only 30-day scan that pages finalized, unlinked, validated private media into the existing Storage API cleanup queue.
@@ -9,7 +20,7 @@ Tasks are ordered by dependency. Progress is recorded at each tested and pushed 
 - [x] Extend worker and disposable PostgreSQL coverage for scan errors, 25+1 paging, cursor reset/wrap, an old object behind the cursor, near-cutoff objects, invalid limits, exclusions, grants, and idempotency.
 - [x] `npm test` passes 175/175; lint, no-incremental TypeScript, `git diff --check`, and `tests/db/drop_claim_invites.sql` pass.
 - [x] Code commit and separate documentation commit are pushed to `origin/feat/media-orphan-reconciliation`.
-- [ ] Apply migrations `20261023150000` and `20261023160000` before deploying the updated worker to the approved Free project; verify two-account claims and actual Storage deletion.
+- [ ] Apply migrations `20261023150000` and `20261023160000` before deploying the updated worker to the approved Free project; verify unknown-handle photo/GIF claims and actual Storage deletion.
 - [ ] Check the custom `storage.objects` index against hosted Supabase compatibility and a representative query plan; test concurrent database interleavings before production.
 
 ## Checkpoint — Realtime fixture topic scoping (2026-10-23)

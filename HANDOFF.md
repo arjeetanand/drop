@@ -2,7 +2,17 @@
 
 Updated: 2026-10-23
 
-## Latest checkpoint — media orphan reconciliation
+## Latest checkpoint — local verification and card contrast (2026-10-23)
+
+- Improved small text contrast on the home, sent, and relay cobalt cards in `app/page.tsx`, `app/sent/page.tsx`, and `app/relay/page.tsx`. White at 70%/75% opacity on `#2b45f7` measured 3.88:1/4.26:1; the new 80% value measures 4.63:1.
+- `npm run test:local-supabase` passed with four disposable accounts. It verified known-recipient sender/recipient access, outsider denial, reactions, GIF finalization after a simulated lost response, relay privacy/collection, and legacy relay normalization; the process exited cleanly after removing test users and media.
+- `npm test` passed 175/175; `npm run lint`, `npx tsc --noEmit --incremental false`, `npm run build -- --webpack`, and `git diff --check` passed. The production build emitted only the existing Browserslist freshness and Tailwind easing warnings.
+- Local HTTP checks returned 200 for `/`, `/sent`, `/relay`, `/claim`, and `/compose` at `http://localhost:4004`. `./run.sh` leaves Drop running on the main port; local Supabase verification uses 5004 and browser QA reserves 6004.
+- Code commit `d842811` (`fix: improve contrast on Drop blue cards`) is pushed to `origin/fix/drop-card-contrast`. Plan, README, checklist, and learning entry are included in a separate documentation commit on the same branch. No PR or merge was created.
+- This was local verification for known-recipient flows. Unknown-handle photo/GIF claims, rendered browser/device/accessibility behavior, hosted migrations/scheduling, actual hosted Storage deletion, managed `storage.objects` index compatibility, and concurrent DB interleavings remain unverified. No hosted resources were changed.
+- Next: use secure local Supabase CLI authentication for the approved Free setup, then verify the unknown-handle two-account claim journey and cleanup behavior in the hosted project; finish rendered mobile/desktop browser checks when a browser runtime is available.
+
+## Previous checkpoint — media orphan reconciliation
 
 - Added migration `20261023160000_reconcile_orphan_drop_media.sql`: a service-role-only keyset scan examines up to 25 old `drop-media` objects per call, validates finalized path and image/GIF metadata, skips linked or already queued paths, and queues qualifying unlinked objects after 30 days for deletion through the existing Storage API worker.
 - The worker now runs orphan discovery before leasing. Discovery is best-effort: if it fails, existing cleanup jobs still lease and process, then the worker reports a partial failure for the next scheduled run.
