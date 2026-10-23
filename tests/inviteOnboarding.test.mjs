@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { authCallbackRoute, canEditInviteProfile, profileRoute } from '../lib/inviteOnboarding.ts';
-import { createProfileSharePayload } from '../lib/profileInviteShare.ts';
+import { copyProfileSharePayload, createProfileSharePayload } from '../lib/profileInviteShare.ts';
 import { shareInviteLink } from '../lib/shareInvite.ts';
 
 test('keeps invite context on profile and through auth callback routes', () => {
@@ -42,6 +42,21 @@ test('builds a share payload from only the public handle and canonical profile U
   assert.deepEqual(shared, { title: 'My Drop handle', text: '@ada.9', url: 'https://drop.test/u/ada.9' });
   assert.equal(copied, undefined);
   assert.equal(payload.copyText, '@ada.9\nhttps://drop.test/u/ada.9');
+});
+
+test('copies only the public handle and profile URL when explicitly requested', async () => {
+  const payload = createProfileSharePayload('@Ada.9', 'https://drop.test');
+  let copiedText = '';
+
+  assert.equal(await copyProfileSharePayload(payload, async (text) => { copiedText = text; }), 'copied');
+  assert.equal(copiedText, '@ada.9\nhttps://drop.test/u/ada.9');
+});
+
+test('exposes the manual-copy fallback when clipboard is missing or denied', async () => {
+  const payload = createProfileSharePayload('@Ada.9', 'https://drop.test');
+
+  assert.equal(await copyProfileSharePayload(payload), 'unavailable');
+  assert.equal(await copyProfileSharePayload(payload, async () => { throw new Error('NotAllowedError'); }), 'unavailable');
 });
 
 test('rejects invalid handles before building an invite share payload', () => {

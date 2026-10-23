@@ -11,7 +11,7 @@ import { getLocalAccountId } from '@/lib/localAccountScope';
 import { safeInternalPath } from '@/lib/safeInternalPath';
 import { authCallbackRoute, canEditInviteProfile, profileRoute } from '@/lib/inviteOnboarding';
 import { emailLinkErrorMessage } from '@/lib/emailLinkErrorMessage';
-import { createProfileSharePayload } from '@/lib/profileInviteShare';
+import { copyProfileSharePayload, createProfileSharePayload } from '@/lib/profileInviteShare';
 import { shareInviteLink } from '@/lib/shareInvite';
 import { clearPendingRemoteProfile, defaultUserProfile, getFirstUseProfile, getPendingRemoteProfileSnapshot, getUserProfile, getUserProfileForAccount, getUserProfileOwnerId, hasCustomizedUserIdentity, hasUnmatchedLocalProfile, markPendingRemoteProfileSynced, preserveUserProfileForAccount, profileUrl, savePendingRemoteProfile, saveUserProfile, type UserProfile } from '@/lib/userStore';
 
@@ -38,6 +38,8 @@ function ProfileContent() {
   const [accountNoticeIsError, setAccountNoticeIsError] = useState(false);
   const [copied, setCopied] = useState(false);
   const [inviteShareNotice, setInviteShareNotice] = useState('');
+  const [manualInviteCopy, setManualInviteCopy] = useState('');
+  const [copyingInvite, setCopyingInvite] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [emailAddress, setEmailAddress] = useState('');
   const [emailLoading, setEmailLoading] = useState(false);
@@ -263,6 +265,7 @@ function ProfileContent() {
     setNotice('');
     setProfileError('');
     setInviteShareNotice('');
+    setManualInviteCopy('');
   };
 
   const save = async () => {
@@ -482,13 +485,33 @@ function ProfileContent() {
       },
       { title: payload.title, text: payload.text },
     );
+    setManualInviteCopy(result === 'unavailable' ? payload.copyText : '');
     setInviteShareNotice(result === 'shared'
       ? `Shared @${normalizeDropRecipient(profile.username)} and your public profile link.`
       : result === 'copied'
         ? `Copied @${normalizeDropRecipient(profile.username)} and your public profile link.`
         : result === 'cancelled'
           ? 'Share cancelled. Nothing was copied.'
-        : 'Sharing and copying are unavailable here. Select the public profile link in the Public profile panel to copy it manually.');
+          : 'Sharing and copying are unavailable. Select the handle and profile link below to copy them manually.');
+  };
+
+  const copyProfileInvite = async () => {
+    const payload = createProfileSharePayload(profile.username, window.location.origin);
+    if (!payload) {
+      setProfileError('Choose a valid Drop handle before copying your invite details.');
+      return;
+    }
+
+    setCopyingInvite(true);
+    const result = await copyProfileSharePayload(payload, (text) => {
+      if (!navigator.clipboard) throw new Error('Clipboard unavailable');
+      return navigator.clipboard.writeText(text);
+    });
+    setManualInviteCopy(result === 'unavailable' ? payload.copyText : '');
+    setInviteShareNotice(result === 'copied'
+      ? `Copied @${normalizeDropRecipient(profile.username)} and your public profile link.`
+      : 'Copy is unavailable. Select the handle and profile link below to copy them manually.');
+    setCopyingInvite(false);
   };
 
   const username = normalizeDropRecipient(profile.username);
@@ -734,15 +757,40 @@ function ProfileContent() {
                 <p className="eyebrow">Your invite · step 3</p>
                 <h2 id="invite-share-title" className="section-title mt-3 text-2xl">Send your handle back.</h2>
                 <p className="body-copy mt-3 text-sm">Share only your public @handle and profile link so your friend can send your Drop.</p>
-                <button
-                  type="button"
-                  onClick={() => void shareProfileBack()}
-                  className="button-primary mt-5 min-h-12 w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-white"
-                >
-                  <Share2 className="h-4 w-4" aria-hidden="true" />
-                  Share @{username}
-                </button>
+                <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => void shareProfileBack()}
+                    className="button-primary min-h-12 w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+                  >
+                    <Share2 className="h-4 w-4" aria-hidden="true" />
+                    Share @{username}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void copyProfileInvite()}
+                    disabled={copyingInvite}
+                    className="button-secondary min-h-12 w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:opacity-60"
+                  >
+                    <Copy className="h-4 w-4" aria-hidden="true" />
+                    {copyingInvite ? 'Copying…' : 'Copy handle + link'}
+                  </button>
+                </div>
                 {inviteShareNotice && <p className="notice mt-4" role="status" aria-live="polite">{inviteShareNotice}</p>}
+                {manualInviteCopy && (
+                  <div className="mt-3">
+                    <label htmlFor="manual-invite-copy" className="sr-only">Your public handle and profile link</label>
+                    <textarea
+                      id="manual-invite-copy"
+                      readOnly
+                      rows={2}
+                      value={manualInviteCopy}
+                      onFocus={(event) => event.currentTarget.select()}
+                      className="mt-2 block min-h-20 w-full resize-none rounded-xl border border-[rgba(16,42,67,0.16)] bg-white px-3 py-3 text-sm leading-relaxed text-ink-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a]"
+                    />
+                    <p className="mt-2 text-xs leading-relaxed text-on-surface-variant">Tap the text to select it, then choose Copy.</p>
+                  </div>
+                )}
               </section>
             )}
           </article>
