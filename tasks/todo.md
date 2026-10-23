@@ -2,6 +2,17 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
+## Checkpoint — 30-day staged-media cleanup and retry identity (2026-10-23)
+
+- [x] Add a service-role-only scan that queues only valid, unlinked `/pending/` Storage objects after 30 days; use the Storage API worker with retries, path locks, and 24-hour minimum tombstones.
+- [x] Preserve one finalized-media ID across upload attempts and backfill/persist it for restored legacy media drafts before issuing a private claim invite.
+- [x] Extend the rollback-only PostgreSQL fixture to prove authenticated owners can insert the current five-segment staging path and that the scan recognizes it.
+- [x] `npm test` passes 218/218; lint, `npx tsc --noEmit --incremental false`, and `git diff --check` pass. `tests/db/drop_claim_invites.sql` passes against isolated PostgreSQL 16.
+- [x] Code commits `d71c4e3`, `41247b6`, and `5bf4df3` are pushed to `origin/feat/claim-invite-journey`.
+- [ ] Apply migrations `20261023150000`, `20261023160000`, and `20261023170000` in order, then deploy the updated cleanup worker to the approved Free project; hosted Supabase is not configured yet.
+- [ ] Verify a real two-account photo/GIF claim and actual Storage deletion; run a Deno Edge bundle check and concurrent database interleaving checks when the local/hosted runtime is available.
+- [ ] Render the mobile claim/retry states with keyboard and screen-reader behavior. The production build remains blocked in this environment by DNS resolution of the existing Google Fonts host (`fonts.googleapis.com`).
+
 ## Checkpoint — guest draft auth recovery (2026-10-23)
 
 - [x] Keep a guest draft auth return on the profile recovery screen when copying fails or neither guest nor account storage can verify the requested draft; provide retry/check-again guidance.

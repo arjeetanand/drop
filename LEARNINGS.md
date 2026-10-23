@@ -436,3 +436,63 @@ An authenticated redirect is a data boundary. Treat its path as a request, confi
 ### Git and remaining gaps
 
 Code commit `67095bc` (`fix: preserve safe guest draft auth recovery`) is pushed to `origin/fix/guest-draft-return-recovery`. The README, checklist, handoff, and this entry are recorded in a separate documentation commit on the same branch. No PR or merge was created. `/letter`, `.env.local`, and hosted resources were not changed. Rendered retry behavior and real cross-account photo/GIF attachment transfer remain open.
+
+## 2026-10-23 — Expire abandoned staged media after 30 days
+
+### Issue
+
+Photo/GIF uploads that were staged while composing but never linked to a sent drop could remain in private Storage indefinitely. The existing cleanup handled expired claims and finalized orphans, but did not scan abandoned `/pending/` upload paths.
+
+### Cause
+
+Staging and finalized media use different path shapes and cleanup states. A staging object can be left behind when a send or invite flow is abandoned, while deleting a queued path through Storage can race a retry that reuses the same key.
+
+### Resolution
+
+- Add a service-role-only scan for valid, unlinked pending objects whose Storage creation time is at least 30 days old; enqueue up to 25 per pass for removal through the Storage API.
+- Keep failed removals retryable, reserve queued paths against same-key uploads while cleanup is pending, and retain a successful tombstone for at least 24 hours. Support both the legacy four-segment and current five-segment staging keys.
+- Keep the finalized-media ID stable for a logical draft while each staging attempt uses a fresh ID. Backfill and verify that stable ID on restored legacy media drafts before issuing a private claim invite.
+- Extend the SQL fixture to verify authenticated acceptance of five-segment staging paths along with scan and cleanup transitions.
+
+### Learning
+
+Treat the saved media ID as the identity of the final object and the staging suffix as one upload attempt. Retention should separately cover abandoned staging and finalized unlinked objects, and a cleanup worker must coordinate deletion with writes before a path can be reused.
+
+### Verification
+
+- `npm test` passed 217/217 for the retention commit and 218/218 after the restored-draft retry fix; lint, no-incremental TypeScript, and `git diff --check` passed.
+- `tests/db/drop_claim_invites.sql` passed against isolated PostgreSQL 16, including the added authenticated five-segment insert case. The fixture rolled back; the temporary test server was stopped.
+- The production build was attempted but could not resolve the existing Google Fonts host `fonts.googleapis.com`. No Deno Edge bundle, hosted Storage deletion, or browser interaction was verified.
+
+### Git and remaining gaps
+
+Code commits `d71c4e3`, `41247b6`, and `5bf4df3` are pushed to `origin/feat/claim-invite-journey`. This entry and the setup/checklist/handoff updates will be committed separately. The approved Free Supabase project is not configured yet. Apply migrations `20261023150000`, `20261023160000`, and `20261023170000` before deploying the worker; then verify actual two-account claims and Storage deletion, inspect the custom Storage index, and test concurrent database interleavings. `/letter` and hosted resources were not changed.
+
+## 2026-10-23 — Persist media identity before private-claim retries
+
+### Issue
+
+A restored legacy draft could have a saved photo or GIF attachment but no `mediaUploadId`. The regular send path backfilled that ID, while the private claim-invite path did not; a retry after a cleanup failure could therefore finalize to a different object path.
+
+### Cause
+
+`mediaUploadId` is optional for older saved drafts. Hydration preserves the missing field, and the claim handler passed the draft to the backend without first persisting the stable finalized-media ID.
+
+### Resolution
+
+- Add an account-scoped helper that assigns a media ID only to the persisted active image/GIF draft, writes it, and verifies the saved copy.
+- Call it before private claim invite issuance for a restored attachment. If the ID cannot be persisted and read back, keep the draft and stop before sharing the link.
+- Add a regression test proving the ID persists and remains the same across retry preparation.
+
+### Learning
+
+Persist logical identity before retryable external work. A new request may use a fresh staging path, but it should keep the finalized object identity stable so retries can reconcile the same media.
+
+### Verification
+
+- The new regression failed before the helper existed and passed after implementation. `npm test` passed 218/218; lint, no-incremental TypeScript, and `git diff --check` passed.
+- No browser or hosted two-account claim was run for this fix. The production build was not rerun after the change because the prior build attempt was blocked by Google Fonts DNS resolution.
+
+### Git and remaining gaps
+
+Code commit `41247b6` (`fix: persist media ID for legacy claim retries`) is pushed to `origin/feat/claim-invite-journey`; fixture coverage is in `5bf4df3`. This entry is committed separately with the Drop setup/checklist/handoff update. Hosted Supabase and actual cleanup remain unverified. `/letter` and hosted resources were not changed.

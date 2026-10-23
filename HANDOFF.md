@@ -2,6 +2,16 @@
 
 Updated: 2026-10-23
 
+## Latest checkpoint — 30-day staged-media cleanup and retry identity (2026-10-23)
+
+- Added `20261023170000_drop_pending_media_retention.sql` to scan valid, unlinked staging objects under `/pending/` after 30 days, in batches of up to 25. The cleanup Edge Function removes them through the Supabase Storage API and retries failures. A per-path lock prevents queued deletion from racing a same-path upload; completed paths stay tombstoned for at least 24 hours and are cleared by a later scan.
+- New uploads preserve one finalized-media ID for the logical draft and use a fresh ID for each staging attempt. The composer now backfills and reads back the stable ID for a restored legacy attachment before issuing a private media-claim invite; it stops if local persistence fails.
+- Expanded the rollback-only PostgreSQL fixture to prove authenticated acceptance of five-segment staging paths and scan recognition. The fixture also covers old/new path formats, the 30-day cutoff, queued-path reservation, retry, idempotent finish, and tombstone expiry.
+- Verification: `npm test` passed 218/218; lint, no-incremental TypeScript, and `git diff --check` passed. `tests/db/drop_claim_invites.sql` passed against an isolated PostgreSQL 16 cluster. The SQL fixture transaction rolled back and the temporary server stopped cleanly.
+- Branch `feat/claim-invite-journey`; code commits `d71c4e3` (`feat: expire abandoned staged media after 30 days`), `41247b6` (`fix: persist media ID for legacy claim retries`), and `5bf4df3` (`test: cover authenticated five-part staging paths`) are pushed. The documentation/checklist/learning update is a separate commit. `/letter` and hosted Supabase resources were not changed.
+- Production build did not complete because this environment could not resolve `fonts.googleapis.com` for existing Google Fonts; it was not rerun after the small retry-ID fix. Deno Edge bundling, hosted migration/worker configuration, real Storage deletion, two-account claims, and concurrent DB behavior remain unverified. Rendered claim/retry, accessibility, and device checks remain open.
+- Next: provision/configure only the approved Free Supabase project, apply the migrations in order through `20261023170000`, deploy the updated worker, then verify two disposable accounts and actual Storage cleanup. Before hosted reliance, check the managed `storage.objects` index and concurrent DB interleavings.
+
 ## Latest fix — safe guest draft auth recovery (2026-10-23)
 
 - A sign-in return to a guest draft now stays on the profile recovery screen if copying fails, the requested draft cannot be verified, or the signed-in account changes during transfer. Recovery offers an explicit retry or a safe profile route.
