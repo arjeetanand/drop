@@ -2,6 +2,13 @@
 
 Updated: 2026-10-23
 
+## Latest checkpoint — Realtime fixture topic scoping
+
+- The reaction broadcast fixture now filters direct SQL reads to the simulated channel topic. The prior assertion scanned rows from every topic and treated an authorized `drop-inbox` subscription as if it received `drop-reactions` messages; the production authorization policies were unchanged.
+- Verification: `tests/db/drop_reaction_broadcast.sql` passed on disposable PostgreSQL 16, and `git diff --check` passed.
+- Code commit `88f9b11` (`test: scope Realtime fixture reads by channel topic`) is pushed to `origin/feat/media-orphan-reconciliation`.
+- Hosted Realtime delivery and rendered two-account behavior remain unverified. Next: add bounded discovery for old finalized media objects that missed both sender cleanup queue attempts.
+
 ## Latest checkpoint — private photo/GIF claim links and cleanup
 
 - The composer can send an instant photo/GIF claim link to an unknown handle. The recipient must authenticate and explicitly claim before media opens; senders retain a durable claimed status after reload. Relay claim links remain out of scope.
@@ -157,4 +164,4 @@ Updated: 2026-10-23
 
 ## Run locally
 
-From /Users/arjeetanand/projects/drop, run npm ci, then ./run.sh. Drop uses http://localhost:4004; ./run.sh stop stops the project-owned process. The local Supabase smoke environment uses port 5004 and browser QA is reserved port 6004. Current code commit `2d578ca` is pushed to `origin/feat/private-media-claims`; the documentation and learning-log update is the next commit. The branch is not merged and has no pull request.
+From /Users/arjeetanand/projects/drop, run npm ci, then ./run.sh. Drop uses http://localhost:4004; ./run.sh stop stops the project-owned process. The local Supabase smoke environment uses port 5004 and browser QA is reserved port 6004. Code commit `88f9b11` is pushed to `origin/feat/media-orphan-reconciliation`; this handoff and learning update are committed separately on that branch. The branch is not merged and has no pull request.

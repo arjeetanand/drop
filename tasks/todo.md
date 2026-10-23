@@ -2,6 +2,13 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
+## Checkpoint — Realtime fixture topic scoping (2026-10-23)
+
+- [x] Correct the SQL fixture to inspect messages on the simulated Realtime channel topic; keep production authorization policies unchanged.
+- [x] `tests/db/drop_reaction_broadcast.sql` passes against a disposable PostgreSQL 16 cluster; `git diff --check` passes.
+- [x] Code commit `88f9b11` is pushed to `origin/feat/media-orphan-reconciliation`.
+- [ ] Verify private Realtime channel delivery against the hosted Free project and a rendered two-account browser flow.
+
 ## Checkpoint — relay collection terminal views (2026-10-23)
 
 - [x] Derive sender collection only from a delivered relay owned by the sender and use the persisted activity time across Journey and Relay.

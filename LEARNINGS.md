@@ -188,3 +188,32 @@ The claim database transaction and Storage object operations are separate servic
 Code commit `2d578ca` (`feat: add private photo and GIF claim drops`) is pushed to `origin/feat/private-media-claims`. The README/setup notes, plan, checklist, handoff, and this entry are in the separate documentation commit. `.env.local` remained ignored and unstaged; no hosted resources were changed.
 
 If both attempts to enqueue a finalized orphan fail during an outage, that object can remain until the sender retries. The SQL fixture exercises lock behavior sequentially, not with concurrent sessions. Apply the migration and configure the Edge Function/Vault secrets on the approved Free project, then verify two-account claiming and actual Storage deletion before production.
+
+## 2026-10-23 — Scope Realtime fixture reads to the subscribed topic
+
+### Issue
+
+The disposable reaction-broadcast fixture failed while checking that a sender could not read a reaction signal on a different topic.
+
+### Cause
+
+The fixture granted direct `SELECT` on its in-memory `realtime.messages` table and queried all rows after setting a mock channel topic. Supabase checks authorization for the requested channel topic, and channel broadcasts are delivered only to subscribers on that topic; the global fixture query incorrectly combined rows from separate channels.
+
+### Resolution
+
+- Filtered every simulated Realtime message read by the currently requested channel topic.
+- Left the production inbox and reaction authorization policies unchanged.
+- Confirmed the interpretation against the [Supabase Realtime Authorization docs](https://supabase.com/docs/guides/realtime/authorization).
+
+### Learning
+
+When a test fixture models a channel subscription with a table of recorded events, filter the returned events to the subscribed topic. A channel-join policy and a global SQL table scan answer different questions.
+
+### Verification
+
+- `tests/db/drop_reaction_broadcast.sql`: passed against a disposable PostgreSQL 16 cluster.
+- `git diff --check`: passed before the code commit.
+
+### Git and remaining gaps
+
+Code commit `88f9b11` (`test: scope Realtime fixture reads by channel topic`) is pushed to `origin/feat/media-orphan-reconciliation`. Hosted Realtime delivery and the rendered two-account flow remain unverified.
