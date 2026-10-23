@@ -45,7 +45,28 @@ The transaction checks sender-only relay starts, short-lived passes, one-time te
 
 ## Accountless private claim links
 
-Apply `20261023120000_drop_claim_invites.sql`, `20261023130000_drop_claimed_sender_broadcast.sql`, and `20261023140000_sender_claimed_drop_status.sql` in filename order with the other migrations. The first adds a private token-digest table and authenticated-only issue, reissue, and claim RPCs. The recipient must have a Drop profile and explicitly claim the text note; page load alone does not consume the link. Reissuing from the sender detail page rotates the capability, including after expiry, while claimed or revoked links cannot be reissued. The second migration sends only the drop ID to the sender's private inbox topic after a successful claim. The third exposes only the authenticated sender's own claimed drop IDs; it does not return token or recipient-account data. Sent cards and sender detail show “Claimed by [name]” after reload, while regular delivered notes remain “Delivered.”
+Apply `20261023120000_drop_claim_invites.sql`, `20261023130000_drop_claimed_sender_broadcast.sql`, `20261023140000_sender_claimed_drop_status.sql`, and `20261023150000_private_media_claim_invites.sql` in filename order with the other Supabase migrations. The first adds a private token-digest table and authenticated-only issue, reissue, and claim RPCs. The recipient must have a Drop profile and explicitly claim the text, photo, or GIF drop; page load alone does not consume the link. Reissuing rotates the capability, while a media drop's immutable 30-day claim/access deadline is measured from its first send. The second migration sends only the drop ID to the sender's private inbox topic after a successful claim. The third exposes only the authenticated sender's own claimed drop IDs; it does not return token or recipient-account data. The fourth adds sender-owned private media claim support, checks media remains inaccessible until claim, caps media links at 7 days and claims at 30 days, and queues expired unclaimed media for cleanup. Relay claim links are not included. Sent cards and sender detail show “Claimed by [name]” after reload, while regular delivered drops remain “Delivered.”
+
+### Scheduled cleanup for unclaimed photo/GIF drops
+
+Before relying on photo/GIF claim links, deploy the `cleanup-expired-drop-media` Edge Function and configure its private request secret. Supabase injects the project URL and secret API-key set into the Edge runtime; add `DROP_MEDIA_CLEANUP_SECRET` in the project's Edge Function Secrets settings. Keep its value private and out of Git.
+
+In the project database, enable `pg_cron` and `pg_net` and create these three Vault secrets. Use the project URL, its anon/publishable API key, and the same high-entropy cleanup secret configured for the Edge Function:
+
+```sql
+select vault.create_secret('<project-url>', 'drop_media_cleanup_project_url');
+select vault.create_secret('<anon-or-publishable-api-key>', 'drop_media_cleanup_anon_key');
+select vault.create_secret('<same-cleanup-secret-as-the-function>', 'drop_media_cleanup_secret');
+```
+
+Apply the `20261023150000_private_media_claim_invites.sql` migration after those values exist. If the migration ran before the extension or Vault setup, run the scheduler as the database owner and confirm the job is present:
+
+```sql
+select private.schedule_drop_media_cleanup() as scheduled;
+select jobname, schedule from cron.job where jobname = 'drop-expired-drop-media-hourly';
+```
+
+The first query must return `true`; the second should show the hourly `drop-expired-drop-media-hourly` job. The media-issue RPC fails closed while that schedule or any required Vault value is missing. At the 30-day cutoff, SQL denies new claims and media reads, then the hourly worker retries object removal through the Supabase Storage API. Free-plan projects may pause after low activity, and worker or Storage outages can delay physical deletion; access still ends at the database cutoff while the project is active. Never delete rows directly from `storage.objects` to remove files.
 
 Run the privacy and transition fixture against a separate disposable PostgreSQL database. It creates its schema and data inside a transaction and rolls them back:
 

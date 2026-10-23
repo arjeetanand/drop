@@ -424,3 +424,17 @@ Commit each completed code change separately with a descriptive message and push
 - [x] Code commit `84e5ba2` is pushed to `origin/feat/persistent-claim-status`; the documentation update is being committed separately.
 - [ ] Verify sender status in a rendered browser with a screen reader and across two accounts after the approved Free Supabase project is provisioned and the three claim migrations are applied.
 - [ ] Continue the planned photo/GIF and relay claim journeys after the text path has been accepted.
+
+## Current follow-up — private photo/GIF claim links and cleanup (2026-10-23)
+
+- [x] Add instant private photo/GIF claim links for unknown handles; require sign-in and an explicit recipient claim before releasing media.
+- [x] Keep sender claim status durable for claimed photos/GIFs and limit the status RPC to sender-owned drop IDs.
+- [x] Cap media claim/access at 30 days from first send, keep links to 7 days, and prevent reissue from extending the media cutoff.
+- [x] Add retryable hourly cleanup through the Supabase Storage API, path locking/tombstones, and a fresh draft upload path only after cleanup is confirmed.
+- [x] Extend unit and disposable PostgreSQL coverage for media privacy, claim/reissue, cleanup queue, same-path recovery, sender status, and worker request handling.
+- [x] `npm test` passes 171/171; lint, `npx tsc --noEmit --incremental false`, `git diff --check`, and `bash -n run.sh` pass. The rollback-only PostgreSQL claim/media fixture passes against a disposable local PostgreSQL 16 cluster.
+- [x] `npm run build -- --webpack` passes with the existing Browserslist freshness and Tailwind easing warnings. `/`, `/compose`, `/claim`, `/mailbox`, and `/letter/drop-fixture?view=sender` return HTTP 200 on port 4004.
+- [x] Code commit `2d578ca` is pushed to `origin/feat/private-media-claims`; this checklist, plan, handoff, and learning entry are the separate documentation commit.
+- [ ] Apply the migration and configure the Edge Function/Vault secrets on the approved Free Supabase project; verify two-account photo/GIF claim, reissue, and actual Storage deletion. No hosted project or resources were created in this slice.
+- [ ] Verify the rendered composer, claim, and sender status flows at mobile and desktop sizes; browser automation is unavailable and no browser dependency was installed.
+- [ ] Add orphan reconciliation for a finalized object when both queue RPC attempts fail, and test claim/issue/queue/lease ordering with concurrent database sessions.

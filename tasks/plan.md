@@ -14,12 +14,13 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 - Collection updates the sender Journey and Relay passport from durable sender-side `delivered` relay status and its activity time. The route map, recipient stop, and custody timeline reach a terminal state together, and carrier invites are hidden after collection. A failed first status read remains unknown so it cannot enable an invite. Legacy dispatched rows whose `delivery_mode` says `instant` remain covered by the compatibility migration.
 - Unit, local Supabase smoke, and route refresh coverage are in place, but rendered collected-state acceptance remains open: the temporary browser fixture did not hydrate a valid sender row. Hosted two-account verification also waits on the approved Free project.
 
-### Planned follow-up — private photo/GIF claim links
+### Implemented slice — private photo/GIF claim links (2026-10-23)
 
-- Extend the accepted instant text claim flow to image and GIF drops sent to an unknown handle. Keep relay claim links out of this first media slice.
-- The recipient must explicitly claim before Drop exposes the private media. Sender reissue must use the stored media row, and ambiguous upload/claim retries must preserve any object until the sender row confirms it is unlinked.
-- Acceptance requires pre-claim media denial, post-claim recipient access, outsider/anonymous denial, safe reissue and retry behavior, and persistent sender claim status after reload.
-- Decide how senders cancel or retain unclaimed media after invite expiry before shipping. Expiry currently does not remove the pending drop or its private object.
+- The composer can send an instant photo or GIF claim link to an unknown handle after the attachment is saved locally. The recipient must authenticate and explicitly claim before reading the media. Relay claim links remain out of scope.
+- Claim links last up to 7 days. An unclaimed media claim and its access expire 30 days after the first send; rotating the link does not extend the cutoff. An hourly worker revokes expired claims and retries object deletion through the Supabase Storage API. Physical deletion can be delayed when the Free project is paused or the worker/Storage service is unavailable.
+- Ambiguous finalization and issue responses use a delayed cleanup queue, same-path locks, and revalidation before deletion. The composer keeps the attachment for retry and only rotates its upload path after cleanup is confirmed.
+- Verification: unit tests, the disposable PostgreSQL policy/transition fixture, lint, TypeScript, production build, and local route smoke checks pass. No hosted migration, scheduled worker, cross-account send, or rendered browser interaction was run.
+- Remaining reliability gap: if both attempts to enqueue an orphaned finalized object fail during an outage, it has no scheduled cleanup job until the sender retries. The SQL fixture also covers lock behavior sequentially, not as concurrent database sessions.
 
 - Task 1 is complete. The mixed-payload model, default text behavior for older drafts, and compatible recipient routes are in place.
 - The core mobile sharing, receive, reaction, and optional relay flows have local implementations. Relay remains in progress until the acceptance checks in `todo.md` are verified.
@@ -153,5 +154,7 @@ Let a sender share a private text drop with a person who does not yet have a Dro
 
 ### Remaining follow-ups
 - Verify the rendered sender reissue and recipient claim flows at phone and desktop widths, including profile setup, link cancellation/copy fallback, and accessibility.
-- Extend the verified claim path to private photo/GIF storage and then relay.
+- Apply the media-claim migration and configure the cleanup worker on the approved Free Supabase project; verify two-account photo/GIF claiming, scheduled Storage deletion, and reissue after deployment.
+- Add orphan reconciliation for finalized media when both queue attempts fail, and exercise claim/issue/queue/lease ordering with concurrent database sessions before production.
+- Extend the verified claim path to relay only after hosted media-claim acceptance is complete.
 - Configure and verify the explicitly approved Free hosted Supabase organization/project when secure management access is available. No hosted resources are created by this local slice.

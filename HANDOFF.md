@@ -2,7 +2,17 @@
 
 Updated: 2026-10-23
 
-## Latest checkpoint — relay collection terminal views
+## Latest checkpoint — private photo/GIF claim links and cleanup
+
+- The composer can send an instant photo/GIF claim link to an unknown handle. The recipient must authenticate and explicitly claim before media opens; senders retain a durable claimed status after reload. Relay claim links remain out of scope.
+- Media claim links last up to 7 days, while the immutable claim/access cutoff is 30 days after first send. The hourly worker queues deletion through the Supabase Storage API and retries failures. Free-project pauses and worker/Storage outages can delay physical deletion.
+- The composer preserves its selected file and rotates the local upload path only after cleanup is confirmed. Finalized but unlinked media normally gets a delayed cleanup tombstone; same-path locks protect recovery and deletion.
+- Verification: `npm test` passed 171/171; lint, no-incremental TypeScript, `git diff --check`, `bash -n run.sh`, and the rollback-only PostgreSQL claim/media fixture passed. `npm run build -- --webpack` passed with existing Browserslist and Tailwind easing warnings. `/`, `/compose`, `/claim`, `/mailbox`, and `/letter/drop-fixture?view=sender` returned HTTP 200 at `127.0.0.1:4004`.
+- No hosted migration, Edge Function schedule, real Storage deletion, cross-account send, or rendered browser interaction was run. Browser/Playwright automation is unavailable. The SQL lock tests are sequential, not concurrent. If both orphan-queue RPC attempts fail during an outage, that finalized object can remain until the sender retries; periodic orphan reconciliation is still needed.
+- Code commit `2d578ca` (`feat: add private photo and GIF claim drops`) is pushed to `origin/feat/private-media-claims`. This handoff, checklist, plan, README/setup notes, and learning entry are being committed separately. No PR or merge was created. The local app remains available on port 4004.
+- Next: apply the migration and configure the worker/Vault secrets on the approved Free Supabase project, then verify two-account claim/reissue and actual Storage deletion. Resolve orphan reconciliation and add concurrent database interleaving coverage before production.
+
+## Previous checkpoint — relay collection terminal views
 
 - Journey and Relay now use the sender's durable delivered relay status and stored activity time to show recipient collection. The map, route chain, custody timeline, and passport complete together; carrier invites disappear after collection. A failed first status read stays unknown, preventing an invite from appearing on an unconfirmed state.
 - Verification: `npm test` passed 161/161; lint, `npx tsc --noEmit --incremental false`, and `git diff --check` passed. The guarded `./run.sh start` serves port 4004; `/`, `/journey?letter=drop-fixture`, and `/relay?letter=drop-fixture` return HTTP 200.
@@ -126,6 +136,9 @@ Updated: 2026-10-23
 
 ## Remaining work
 
+- Apply the media-claim migration and configure the cleanup Edge Function plus Vault secrets on the approved Free project; verify photo/GIF claims, sender status, reissue, and actual Storage deletion across two disposable accounts.
+- Add reconciliation for finalized orphan objects when both cleanup-queue attempts fail, then test the claim/issue/queue/lease ordering with concurrent database sessions.
+- Verify media claim, reissue, and retry behavior in a rendered mobile/desktop browser with keyboard and screen-reader checks. Browser automation is unavailable in this environment.
 - Verify recipient relay collection in a rendered browser at mobile and desktop widths, including keyboard and screen-reader behavior.
 - Apply `20261023000000_relay_recipient_collection.sql` and `20261023010000_legacy_dispatched_relay_compatibility.sql` to the approved Free Drop Supabase project after it is provisioned, then verify two-account collection and sender journey updates.
 - Re-run the production build in an environment that can write the active checkout's `.next` directory and resolve or mock Google Fonts.
@@ -144,4 +157,4 @@ Updated: 2026-10-23
 
 ## Run locally
 
-From /Users/arjeetanand/projects/drop, run npm ci, then ./run.sh. Drop uses http://localhost:4004; ./run.sh stop stops the project-owned process. The local Supabase smoke environment uses port 5004 and browser QA is reserved port 6004. Current code commit `d9eeadb` is pushed to `origin/feat/journey-collection-receipt`; the documentation and learning-log update is the next commit. The branch is not merged and has no pull request.
+From /Users/arjeetanand/projects/drop, run npm ci, then ./run.sh. Drop uses http://localhost:4004; ./run.sh stop stops the project-owned process. The local Supabase smoke environment uses port 5004 and browser QA is reserved port 6004. Current code commit `2d578ca` is pushed to `origin/feat/private-media-claims`; the documentation and learning-log update is the next commit. The branch is not merged and has no pull request.

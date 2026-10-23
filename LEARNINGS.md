@@ -149,3 +149,42 @@ The previous instruction listed the issue, cause, fix, and verification, but did
 ### Git and remaining gaps
 
 This entry is on branch `feat/private-media-claims`, based on `9dd8ccc`. No application behavior changed.
+
+## 2026-10-23 — Add private photo/GIF claim links and expiry cleanup
+
+### Issue
+
+The unknown-handle claim flow supported text only. Extending it to private photo/GIF drops also required a durable 30-day access cutoff, cleanup that does not race with a claim or resend, and a useful retry path when upload finalization or the claim RPC has an ambiguous result.
+
+### Cause
+
+The claim database transaction and Storage object operations are separate services. A successful file upload does not prove a drop row was created, a timed-out issue call may already have committed, and deleting Storage metadata rows directly would bypass the Storage API. The first local SQL run also exposed two worker details: a PL/pgSQL output named `media_path` made `ON CONFLICT (media_path)` ambiguous, and a cleanup job inserted a few microseconds after the worker's captured timestamp could miss the current lease batch.
+
+### Resolution
+
+- Added instant image/GIF claim links for unknown handles. The recipient signs in and explicitly claims before media is released; the sender's durable status includes claimed media after reload.
+- Set claim links to at most 7 days and the immutable media claim/access cutoff to 30 days after first send. Reissuing a media link does not extend the cutoff.
+- Added an hourly cleanup worker that revokes expired claims, queues deletion through the Supabase Storage API, and retries failures. Path advisory locks, tombstones, and revalidation protect same-path recovery and deletion.
+- Kept the selected file available after an ambiguous send. The composer saves a new upload ID only after the server confirms cleanup is queued or already cleaning.
+- Fixed the ambiguous SQL conflict target by naming the unique constraint. Set newly expired jobs' `available_at` to the same captured `v_now` used by the current worker batch.
+- Documented the Free-project pause and worker/Storage delay caveat in the setup notes and user-facing copy.
+
+### Learning
+
+- Link expiry, access expiry, and physical object deletion are separate lifecycle events. State the access cutoff clearly, then make physical deletion a durable, retryable job through the provider API.
+- When a worker compares queued work to one captured timestamp, insert the work using that same timestamp if it should run in the current batch; a fresh default clock value can be fractionally later and defer it to the next schedule.
+- When a cross-service result is ambiguous, keep the user's source file and retry identity until the server confirms a safe next step. Do not infer that an object is unlinked from a failed read.
+
+### Verification
+
+- `npm test`: 171/171 passed. `npm run lint`, `npx tsc --noEmit --incremental false`, `git diff --check`, and `bash -n run.sh` passed.
+- The rollback-only `tests/db/drop_claim_invites.sql` fixture passed against a disposable local PostgreSQL 16 cluster; it covers privacy, claim/reissue, media sender status, orphan queueing, same-path recovery, cleanup leasing, and retry behavior.
+- `npm run build -- --webpack` passed with the existing Browserslist freshness and Tailwind easing warnings.
+- `/`, `/compose`, `/claim`, `/mailbox`, and `/letter/drop-fixture?view=sender` returned HTTP 200 on local port 4004.
+- Rendered browser/device interactions and hosted Supabase behavior were not verified. Browser automation is unavailable; no browser dependency was installed.
+
+### Git and remaining gaps
+
+Code commit `2d578ca` (`feat: add private photo and GIF claim drops`) is pushed to `origin/feat/private-media-claims`. The README/setup notes, plan, checklist, handoff, and this entry are in the separate documentation commit. `.env.local` remained ignored and unstaged; no hosted resources were changed.
+
+If both attempts to enqueue a finalized orphan fail during an outage, that object can remain until the sender retries. The SQL fixture exercises lock behavior sequentially, not with concurrent sessions. Apply the migration and configure the Edge Function/Vault secrets on the approved Free project, then verify two-account claiming and actual Storage deletion before production.
