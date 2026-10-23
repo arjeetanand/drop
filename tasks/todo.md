@@ -329,7 +329,7 @@ Commit each completed code change separately with a descriptive message and push
 - [x] Confirm the OneDrive Drop directory is absent and `.env.local` already exists in the local clone with mode 600 and Git ignore coverage; preserve `/letter`.
 - [ ] Capture a final browser screenshot after the native clear-control rule; the isolated Chrome launch exited with code 134. Screen-reader and real-device checks remain open.
 
-## Current follow-up — 2026-10-23 (recipient invite recovery and send receipt)
+## Current follow-up — 2026-10-23 (invite recovery, share resilience, and send receipt)
 
 - [x] Persist shared, copied, cancelled, and unavailable invite outcomes with the account's draft; migrate the older local invite reminder shape.
 - [x] Keep a manual invite link available after an unavailable retry is cancelled, including when the draft is reopened; announce the retry in progress and show the next action on the mailbox card.
@@ -337,4 +337,7 @@ Commit each completed code change separately with a descriptive message and push
 - [x] Add store regressions for every invite outcome, restored manual-link availability, account and recipient scoping, sent-copy persistence, and concurrent draft edits.
 - [x] `npm test` passes 126/126; lint, TypeScript, Webpack production build, `bash -n run.sh`, and diff checks pass. `/compose?new=1` returns HTTP 200 on port 4004.
 - [x] Code commit `c1d57e0` and its separate README/checklist/handoff commit are pushed to `origin/feat/draft-invite-progress`. The active clone is `/Users/arjeetanand/projects/drop`; `.env.local` was already present, mode 600, ignored, and untracked. The former OneDrive Drop directory is absent, so no file was moved or deleted; `/letter` was not changed.
-- [ ] Verify share/cancel/reopen behavior in a rendered browser, screen reader, and real device. Hosted account-to-account invite/send checks remain open until the Free Drop Supabase project is available.
+- [x] Verify the active draft round-trips through local storage before opening the composer invite share flow; storage failures stop sharing and show a recovery message. Regression coverage includes successful read-back and rejected writes.
+- [x] Add an explicit profile invite “Copy handle + link” button. Clipboard denial or absence displays selectable fallback text containing only the public handle and profile URL; a cancelled native share still copies nothing.
+- [x] Commits `6f618ed` and `41c409e` are pushed to `origin/feat/invite-first-drop-resilience`. `npm test` passed 129/129, lint, TypeScript, Webpack production build, and diff checks passed. `/profile?invite=1` returned HTTP 200 on port 4004.
+- [ ] Verify invite sharing, clipboard-denied manual selection, and cancellation in a rendered browser at 360px and 390px, with screen reader and real-device checks. Hosted account-to-account invite/send checks remain open until the Free Drop Supabase project is available.
