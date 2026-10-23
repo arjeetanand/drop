@@ -13,7 +13,7 @@ import { currentFocusDraft, type MockLetter } from '@/data/mockData';
 import { getRemoteJourney, getRemoteJourneyLetter, getRemoteJourneyLetters, saveRemoteJourneyNote } from '@/lib/letterBackend';
 import { getJourneyLetters } from '@/lib/journeyView';
 import { getJourneyNotes, getLetterDraft, getLettersWithDraft, saveJourneyNotes, type JourneyNote } from '@/lib/letterStore';
-import { getInitialRelayState, getRelayState, getRelayStats, getRemoteRelayHandoffs, issueRelayHandoffToken, relayToTrackingEvents, type RelayState } from '@/lib/relayStore';
+import { getInitialRelayState, getRelayState, getRelayStats, getRemoteRelayHandoffs, issueRelayHandoffToken, relayToTrackingEvents, type RelayRecipientCollection, type RelayState } from '@/lib/relayStore';
 import { mergeRemoteRelayHandoffs } from '@/components/relayPresentation';
 import { startRelayRouteRefresh, startVisibleDataRefresh, type RelayRouteRefreshController } from '@/lib/relayRouteRefresh';
 import { buildRelayScanUrl } from '@/lib/relayInviteUrl';
@@ -205,10 +205,13 @@ function JourneyDetail({ requestedLetterId }: { requestedLetterId: string }) {
 
   const stats = getRelayStats(relay);
   const hasCarrier = relay.handoffs.some((handoff) => handoff.role === 'carrier');
+  const recipientCollection: RelayRecipientCollection | undefined = journeyLetter?.status === 'delivered'
+    ? { isCollected: true, collectedAt: journeyLetter.activityAt }
+    : undefined;
   const lastRouteCheckTime = routeCheckedAt
     ? new Date(routeCheckedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' })
     : '';
-  const events = relayToTrackingEvents(relay);
+  const events = relayToTrackingEvents(relay, recipientCollection);
   const destination = relay.destinationNeighborhood || relay.recipient || 'Recipient area';
   const inviteRemainingMs = invite ? Math.max(0, Date.parse(invite.expiresAt) - now) : 0;
   const inviteExpired = Boolean(invite && inviteRemainingMs <= 0);
@@ -368,7 +371,7 @@ function JourneyDetail({ requestedLetterId }: { requestedLetterId: string }) {
             <section className="overflow-hidden rounded-3xl border border-[rgba(16,42,67,.12)] bg-white p-4 shadow-[0_12px_36px_rgba(16,42,67,.05)] sm:p-6">
               <div className="flex flex-wrap items-end justify-between gap-3"><div><p className="eyebrow">Route map</p><h2 className="mt-1 font-headline-md text-2xl text-ink-navy">Every hand leaves a stop.</h2></div><span className="font-mono text-[0.62rem] text-on-surface-variant">{relay.gpsWaypoints?.length || 0} stops</span></div>
               <div className="mt-4 overflow-hidden rounded-2xl bg-[#f5f3ed] p-2 sm:p-4"><RouteMap waypoints={relay.gpsWaypoints ?? []} destinationNeighborhood={relay.destinationNeighborhood || relay.recipient} currentCarrierName={relay.currentCarrierName} /></div>
-              <div className="mt-5 border-t border-[rgba(16,42,67,.1)] pt-5"><RelayChain relay={relay} /></div>
+              <div className="mt-5 border-t border-[rgba(16,42,67,.1)] pt-5"><RelayChain relay={relay} recipientCollection={recipientCollection} /></div>
             </section>
 
             <section className="rounded-3xl border border-[rgba(16,42,67,.12)] bg-white p-5 shadow-[0_12px_36px_rgba(16,42,67,.05)] sm:p-6">
