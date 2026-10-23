@@ -166,6 +166,27 @@ test('does not save an attachment under a different account after database open 
   }
 });
 
+test('does not save an attachment into the newly active account after the sample fetch switches accounts', async () => {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const records = new Map();
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: { indexedDB: memoryIndexedDb(records) } });
+  try {
+    setLocalAccountId('account-two');
+    await assert.rejects(saveDraftAttachment('draft-local-demo-race', {
+      size: 1,
+      type: 'image/gif',
+      name: 'demo.gif',
+      lastModified: 1,
+      slice: () => new Blob(['x'], { type: 'image/gif' }),
+    }, 'account-one'), /active account changed/);
+    assert.equal(records.size, 0);
+  } finally {
+    setLocalAccountId(null);
+    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
+    else delete globalThis.window;
+  }
+});
+
 test('does not read or delete another account attachment after a switch during database open', async () => {
   const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
   const indexedDb = deferredIndexedDb();

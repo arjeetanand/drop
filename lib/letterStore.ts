@@ -2,7 +2,7 @@ import { currentFocusDraft, mockAddress, mockFieldNotes, mockLetters } from '../
 import type { DropDeliveryMode, DropPayloadKind, LetterStatus, MockLetter, RecipientInviteProgress, RecipientInviteProgressStatus } from '../data/mockData.ts';
 import { getDemoReactions } from './demoReactionStore.ts';
 import { normalizeDropRecipient } from './dropValidation.ts';
-import { getLocalAccountId, localAccountStorageKey } from './localAccountScope.ts';
+import { getLocalAccountId, isCurrentLocalAccount, localAccountStorageKey } from './localAccountScope.ts';
 
 const STORAGE_KEY = 'dear-exe:active-letter:v1';
 const NOTES_STORAGE_KEY = 'dear-exe:journey-notes:v1';
@@ -647,6 +647,49 @@ export function saveLocalDemoDrop(letterId: string): LetterDraftState | null {
   if (!canUseStorage() || !source || source.status !== 'draft' || source.deliveryMode !== 'instant' || !normalizeDropRecipient(source.recipient) || (source.payloadKind === 'text' && !source.content.trim())) return null;
   setActiveLetterDraft({ ...source, localDemo: true });
   return dispatchLetter(source.id, 'delivered');
+}
+
+/** Save a bundled-media demo in local history and mark it complete without replacing the active draft. */
+export function createLocalDemoDrop(
+  draft: LetterDraftState,
+  expectedAccountId = getLocalAccountId(),
+): LetterDraftState | null {
+  if (!isCurrentLocalAccount(expectedAccountId)) return null;
+  const accountId = expectedAccountId;
+  const active = readStoredLetterDraft(accountId);
+  const history = getDraftHistory(accountId);
+  const next = hydrateDraft(draft);
+  const allowedMimeTypes = next.payloadKind === 'gif'
+    ? new Set(['image/gif'])
+    : new Set(['image/jpeg', 'image/png', 'image/webp']);
+
+  if (!canUseStorage()
+    || !next.id.startsWith('draft-local-demo-')
+    || !next.localDemo
+    || next.status !== 'draft'
+    || next.deliveryMode !== 'instant'
+    || (next.payloadKind !== 'image' && next.payloadKind !== 'gif')
+    || !normalizeDropRecipient(next.recipient)
+    || !next.mediaMimeType
+    || !allowedMimeTypes.has(next.mediaMimeType)
+    || !Number.isSafeInteger(next.mediaSizeBytes)
+    || (next.mediaSizeBytes ?? 0) < 1
+    || (next.mediaSizeBytes ?? 0) > 8 * 1024 * 1024
+    || active?.id === next.id
+    || history.some((item) => item.id === next.id)) return null;
+
+  const nextHistory = [...history, next];
+  if (!saveDraftHistory(nextHistory, accountId)) return null;
+
+  const completed = completeSuccessfulSend(next, accountId, 'delivered', new Date().toISOString(), {
+    mediaPath: next.mediaPath,
+    mediaMimeType: next.mediaMimeType,
+    mediaSizeBytes: next.mediaSizeBytes,
+  });
+  if (completed) return completed;
+
+  saveDraftHistory(history, accountId);
+  return null;
 }
 
 function formatDate(isoDate: string) {

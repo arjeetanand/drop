@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ArrowRight, ArrowUpRight, Camera, Mail, RefreshCw, Sparkles, Zap } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, Camera, Eye, Mail, RefreshCw, Sparkles, Zap } from 'lucide-react';
 import { LiveDropStatus } from '@/components/LiveDropCue';
 import { LiveReactionCue } from '@/components/LiveReactionCue';
 import { LetterCard } from '@/components/LetterCard';
@@ -58,6 +58,10 @@ export default function HomeDesk() {
             <Link href="/compose?new=1" className="mt-7 inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[#fffaf2] px-5 text-sm font-bold text-[#223bdc] shadow-sm transition-transform hover:-translate-y-0.5 focus-visible:outline-white">
               <Sparkles className="h-4 w-4" aria-hidden="true" /> Make a drop <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </Link>
+            <Link href="/demo" className="mt-2 inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-white/40 px-4 text-sm font-semibold text-white transition-colors hover:bg-white/10 focus-visible:outline-white">
+              <Eye className="h-4 w-4" aria-hidden="true" /> Try a demo drop
+            </Link>
+            <p className="mt-2 text-xs text-white/75">No sign-in · stays on this device</p>
             <p className="mt-6 flex items-center gap-2 text-xs text-white/80"><Zap className="h-3.5 w-3.5" aria-hidden="true" /> Instant by default · private between you two</p>
           </div>
 

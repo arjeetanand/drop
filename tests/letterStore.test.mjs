@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { clearRecipientInviteProgressForDraft, completeSuccessfulSend, copyGuestDraftToAccount, dispatchLetter, ensureLetterDraftMediaUploadId, getGuestDraftById, getJourneyNotes, getLetterDraft, getLetterDraftById, getLettersWithDraft, isLetterDraftPersisted, recordRecipientInviteProgress, saveJourneyNotes, saveLetterDraft, setActiveLetterDraft, startNewLetter } from '../lib/letterStore.ts';
+import { clearRecipientInviteProgressForDraft, completeSuccessfulSend, copyGuestDraftToAccount, createLocalDemoDrop, dispatchLetter, ensureLetterDraftMediaUploadId, getGuestDraftById, getJourneyNotes, getLetterDraft, getLetterDraftById, getLettersWithDraft, isLetterDraftPersisted, recordRecipientInviteProgress, saveJourneyNotes, saveLetterDraft, setActiveLetterDraft, startNewLetter } from '../lib/letterStore.ts';
 import { setLocalAccountId } from '../lib/localAccountScope.ts';
 
 test('transfers the starter draft and refreshes the preserved account draft snapshot', async () => {
@@ -57,6 +57,107 @@ test('verifies the active draft can be read back before it is shared', () => {
     const unsavedDraft = saveLetterDraft({ id: 'draft-rejected-before-invite', content: 'Keep this private.' });
     assert.equal(isLetterDraftPersisted(unsavedDraft), false);
     assert.equal(getLetterDraft().id, persistedDraft.id);
+  } finally {
+    setLocalAccountId(null);
+    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
+    else delete globalThis.window;
+  }
+});
+
+test('creates the home demo without replacing or sending the active user draft', () => {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const values = new Map();
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { localStorage: { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) } },
+  });
+  try {
+    setLocalAccountId(null);
+    const active = saveLetterDraft({
+      id: 'draft-unfinished-user-note',
+      recipient: '@close.friend',
+      subject: 'Keep this thought',
+      content: 'This unfinished note must remain a draft.',
+    });
+    const activeBefore = values.get('dear-exe:active-letter:v1');
+    const demoDraft = {
+      id: 'draft-local-demo-preserve-active',
+      recipient: 'demo.friend',
+      subject: 'The world doing its thing',
+      content: 'A little loop from the walk home. This made me think of you.',
+      fontSize: 18,
+      alignment: 'left',
+      address: { name: 'Your person', street: '', city: '', postcode: '', country: '' },
+      sealId: 'celestial',
+      sealColor: '#102a43',
+      sealMonogram: '',
+      payloadKind: 'gif',
+      deliveryMode: 'instant',
+      mediaMimeType: 'image/gif',
+      mediaSizeBytes: 64,
+      status: 'draft',
+      updatedAt: new Date().toISOString(),
+      localDemo: true,
+    };
+
+    const completed = createLocalDemoDrop(demoDraft);
+
+    assert.equal(completed?.status, 'delivered');
+    assert.equal(completed?.localDemo, true);
+    assert.equal(getLetterDraft().id, active.id);
+    assert.equal(getLetterDraft().content, active.content);
+    assert.equal(values.get('dear-exe:active-letter:v1'), activeBefore);
+    assert.equal(getLetterDraftById(demoDraft.id)?.localDemo, true);
+    assert.equal(getLetterDraftById(demoDraft.id)?.status, 'delivered');
+    assert.equal(getLettersWithDraft().find((letter) => letter.id === demoDraft.id)?.localDemo, true);
+    assert.equal(getLettersWithDraft().find((letter) => letter.id === demoDraft.id)?.status, 'delivered');
+  } finally {
+    setLocalAccountId(null);
+    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
+    else delete globalThis.window;
+  }
+});
+
+test('keeps account-scoped demos out of other accounts and rejects an account switch', () => {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const values = new Map();
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { localStorage: { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) } },
+  });
+  try {
+    setLocalAccountId('demo-account-one');
+    const active = saveLetterDraft({ id: 'draft-account-one-work', content: 'Keep this account draft.' });
+    const demoDraft = {
+      id: 'draft-local-demo-account-scoped',
+      recipient: 'demo.friend',
+      subject: 'The blue hour',
+      content: 'A little moment to open.',
+      fontSize: 18,
+      alignment: 'left',
+      address: { name: 'Your person', street: '', city: '', postcode: '', country: '' },
+      sealId: 'celestial',
+      sealColor: '#102a43',
+      sealMonogram: '',
+      payloadKind: 'image',
+      deliveryMode: 'instant',
+      mediaMimeType: 'image/png',
+      mediaSizeBytes: 64,
+      status: 'draft',
+      updatedAt: new Date().toISOString(),
+      localDemo: true,
+    };
+
+    assert.equal(createLocalDemoDrop(demoDraft, 'demo-account-two'), null);
+    assert.equal(getLetterDraftById(demoDraft.id), null);
+    assert.equal(createLocalDemoDrop(demoDraft, 'demo-account-one')?.status, 'delivered');
+    assert.equal(getLetterDraft().id, active.id);
+    assert.equal(getLetterDraftById(demoDraft.id)?.localDemo, true);
+
+    setLocalAccountId('demo-account-two');
+    assert.equal(getLetterDraftById(demoDraft.id), null);
+    setLocalAccountId('demo-account-one');
+    assert.equal(getLetterDraftById(demoDraft.id)?.status, 'delivered');
   } finally {
     setLocalAccountId(null);
     if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
