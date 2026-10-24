@@ -1328,3 +1328,34 @@ When localhost is unavailable, first check whether the app process is running. A
 ### Git and remaining gaps
 
 No application code or environment file changed. This issue-resolution record is on `chore/docker-runtime-recovery`; see the branch's latest Git commit for the exact SHA and the final task report for push status. Hosted Supabase behavior, real aged-object deletion, screen-reader use, and physical-device checks remain open.
+
+## 2026-10-25 — Add QR sharing for private claim links
+
+### Issue
+
+A sender could create a private claim link, but could not show it as a scan code for an in-person handoff.
+
+### Cause
+
+Compose only exposed the share-sheet and copy paths, and did not clear an already-issued scan code when the active account or draft changed.
+
+### Resolution
+
+- Added an explicit QR action to both entry points and a show/hide control in the ready-link view. The QR uses the issued URL; copy and share reuse that same invite.
+- Kept the bearer-link warning and expiry visible, focused the labelled QR region after issuance, and cleared QR state when the account, draft, or recipient context changes.
+- Guarded async share completion so an old account/draft result cannot navigate or overwrite the current composer state.
+
+### Learning
+
+For an in-person QR handoff, encode only the existing bearer URL and make its claim authority clear. Reuse the same issuance across QR, copy, and share so one visual handoff does not silently create competing claim links.
+
+### Verification
+
+- `npm test`: 274/274 passed. `npm run lint`, `npx tsc --noEmit --incremental false`, `git diff --check`, and `npm run build -- --webpack` passed. The build showed the existing Browserslist freshness and ambiguous Tailwind easing-class warnings.
+- Before the final account/draft reset follow-up, isolated Chrome `--claim-recovery-only` passed at 360×844, 390×844, 430×844, and 1440×900 for adjacent account-gate, disclosure, and saved-claim-recovery behavior; it did not execute authenticated QR issuance.
+- Three reruns after that follow-up (two on port 4004 and one env-free QA copy on 6004) timed out in Chrome DevTools `Runtime.evaluate` while `/compose` still showed “Checking your account…”. The local app and Supabase Auth health checks both returned HTTP 200; this does not establish a product failure, and the cause is not confirmed.
+- The app root returned HTTP 200 on port 4004 and remains available. A signed-in QR interaction, camera scan, real screen reader, and physical phone were not verified.
+
+### Git and remaining gaps
+
+Code commits `1975212` (`feat: add QR sharing for private claim links`) and `23f51b1` (`fix: clear claim QR on account or draft change`) are pushed to `origin/feat/private-claim-qr` and tracked by open [PR #7](https://github.com/arjeetanand/drop/pull/7). This learning, checklist, README, and handoff update is a separate documentation commit. PR #7 is not merged. Authenticated QR browser/camera verification remains next; hosted Supabase and `/letter` were not changed.

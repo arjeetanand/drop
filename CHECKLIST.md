@@ -1,6 +1,6 @@
 # Drop integration checklist
 
-Updated: 2026-10-24
+Updated: 2026-10-25
 
 ## Candidate and PR
 
@@ -35,6 +35,17 @@ Updated: 2026-10-24
 - [x] Restart Drop with `./run.sh start` and verify HTTP 200 on port 4004; verify local Auth and Mailpit return HTTP 200.
 - [x] Pass `npm run test:local-supabase` across eight groups; the test script removes its five disposable accounts and temporary media.
 - [x] Leave Drop running on port 4004 for local use.
+
+## Private claim scan code (2026-10-25)
+
+- [x] Add **Show scan code** to both private claim entry paths; use the same issued bearer URL for the QR and subsequent copy/share actions.
+- [x] Disclose that anyone scanning can claim the drop; clear the QR when its account/draft/recipient context changes and focus the scan-code region after issuance.
+- [x] Pass `npm test` (274/274), lint, no-incremental TypeScript, production build, and `git diff --check`.
+- [x] Before the final context-reset follow-up, isolated Chrome `--claim-recovery-only` passed at 360×844, 390×844, 430×844, and 1440×900; this covered adjacent claim disclosure/recovery, not authenticated QR issuance.
+- [ ] Re-run the smoke on the current branch. Three attempts (two on 4004 and one env-free QA copy on 6004) timed out in Chrome DevTools `Runtime.evaluate` while `/compose` still showed “Checking your account…”. Local Drop and Supabase Auth health both returned HTTP 200; the timeout cause is not established.
+- [x] Push code commits `1975212` and `23f51b1` on `feat/private-claim-qr` and open [PR #7](https://github.com/arjeetanand/drop/pull/7).
+- [ ] Exercise the authenticated QR issuance/show/hide action and scan it with a camera; verify screen-reader output and a physical device.
+- [ ] Merge PR #7 after review and explicit approval.
 
 ## Product checks still open
 

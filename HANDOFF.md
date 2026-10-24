@@ -1,6 +1,16 @@
 # Drop handoff
 
-Updated: 2026-10-24
+Updated: 2026-10-25
+
+## Latest checkpoint — private claim QR (2026-10-25)
+
+- Compose now offers **Show scan code** for the handleless and confirmed-missing-handle private claim flows. The QR encodes the same issued bearer URL; copy/share from the ready-link panel reuse it. Anyone with the code can claim, so the screen states that consequence and the link expiry.
+- Clearing or switching the account, draft, or recipient clears the QR/link state. Async share completion is scoped to its original account and draft; successful issuance focuses the labelled scan-code region.
+- Verification: `npm test` passed 274/274; lint, `npx tsc --noEmit --incremental false`, `git diff --check`, and `npm run build -- --webpack` passed. The build emitted existing Browserslist freshness and ambiguous Tailwind easing-class warnings. An earlier isolated Chrome `--claim-recovery-only` run passed at 360×844, 390×844, 430×844, and 1440×900 before the final context-reset follow-up. Three reruns after that follow-up (two on port 4004 and one env-free QA copy on 6004) timed out in Chrome DevTools `Runtime.evaluate` with `/compose` still showing “Checking your account…”. The local app and Supabase Auth both returned HTTP 200; the timeout cause is not established. The authenticated QR action remains unverified. `/` returned HTTP 200; Drop remains running at `http://localhost:4004`.
+- Active checkout: `/Users/arjeetanand/projects/drop`; branch `feat/private-claim-qr`, based on `main` at `5138f88`. Code commits `1975212` (`feat: add QR sharing for private claim links`) and `23f51b1` (`fix: clear claim QR on account or draft change`) are pushed to origin. [PR #7](https://github.com/arjeetanand/drop/pull/7) is open and unmerged.
+- The claim-recovery smoke did not execute the authenticated QR issuance/show/hide action. Camera scan, real screen-reader output, physical-device behavior, hosted account-to-account delivery, and real Storage cleanup remain open. No `.env.local`, hosted resource, or `/letter` file changed.
+
+**Next:** review PR #7, run the authenticated local QR UI and camera check when an account flow is available, and merge only after PR review and explicit approval.
 
 ## Latest checkpoint — PR #5 merged into main (2026-10-24)
 
