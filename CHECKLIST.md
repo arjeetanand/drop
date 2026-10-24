@@ -16,6 +16,7 @@ Updated: 2026-10-24
 
 ## Product checks still open
 
+- [x] On pushed branch `feat/pwa-share-acceptance` (not merged), headless Chrome verified the PWA import route at 360/390/430/1440 px, one image draft save, and reload recovery. The synthetic request went through the service worker; no send was made.
 - [ ] Verify the installed PWA share target and OS share sheet in a compatible browser/device.
 - [ ] Check screen-reader announcements and physical-device keyboard/safe-area behavior.
 - [ ] Recheck rendered Relay recipient-collection and private-claim recovery flows on mobile and desktop.

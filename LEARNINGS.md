@@ -2,6 +2,32 @@
 
 Append one dated entry for every completed code-change or issue-resolution slice. Keep the record evidence-based: issue, cause, resolution, a reusable learning, verification, Git checkpoint, and remaining gaps. Tie statements to the actual diff, commit history, and test output. Do not store credentials or private content here.
 
+## 2026-10-24 — Fix ESM Tailwind config runtime failure
+
+### Issue
+
+The local home route failed to render in the current Node 24 ESM environment with `ReferenceError: require is not defined` from `tailwind.config.ts`.
+
+### Cause
+
+The config used CommonJS `require('tailwindcss-animate')` while exporting the Tailwind config as an ES module.
+
+### Resolution
+
+- Replaced `require` with a default ESM import and added `tests/tailwindConfig.test.mjs` to load the config and verify the animation plugin handler is present.
+- Pushed the fix on `feat/pwa-share-acceptance` at `222bb7294d870a0eebdd06bc2798c5546d9f7065`; it is a candidate branch and has not been merged.
+
+### Learning
+
+When config files use ESM exports, avoid CommonJS globals and add a runtime import check; a lint or TypeScript pass alone does not prove the framework can load the config.
+
+### Verification
+
+- Full suite: 273/273; lint, no-incremental TypeScript, and `git diff --check` passed.
+- Isolated Chrome 153 verified 360/390/430/1440 px home layouts and a service-worker intercepted image share that saved one local draft, replaced the one-time import URL, and reloaded with the same draft ID.
+- A separate production build attempt stopped at `getaddrinfo ENOTFOUND fonts.googleapis.com`; no font download or production build result was obtained in that attempt.
+- OS share-sheet selection and physical-device testing remain open; preview sign-in was unavailable, so no real send was attempted.
+
 ## 2026-10-24 — Reconcile current project status after main merge
 
 ### Issue
