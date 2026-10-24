@@ -1,11 +1,17 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, MapPin, Navigation, ShieldCheck } from 'lucide-react';
 import { acceptRelayHandoffToken } from '@/lib/relayStore';
-import { getCurrentPosition, reverseGeocode, saveActiveCarry } from '@/lib/gpsUtils';
+import { getActiveCarry, saveActiveCarry } from '@/lib/gpsUtils';
 import { getLocalAccountId, isCurrentLocalAccount } from '@/lib/localAccountScope';
+import {
+  clearRelayAcceptanceAttempt,
+  getRelayAcceptanceRecoveryKey,
+  readRelayAcceptanceAttempt,
+  saveRelayAcceptanceAttempt,
+} from '@/lib/relayAcceptanceRecovery';
 import { isRelayToken } from '@/lib/relayValidation';
 
 interface RelayTokenHandoffProps {
@@ -22,55 +28,110 @@ function newRequestId() {
   throw new Error('This browser cannot create a secure handoff request. Open the invite in a current browser.');
 }
 
+function getSessionStorage(): Storage | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
 export function RelayTokenHandoff({ token, destination, backHref, method }: RelayTokenHandoffProps) {
   const requestIdRef = useRef('');
+  const recoveryStorageKeyRef = useRef<string | null>(null);
+  const recoveryAccountIdRef = useRef<string | null>(null);
   const [name, setName] = useState('');
   const [neighborhood, setNeighborhood] = useState('');
   const [note, setNote] = useState('');
   const [error, setError] = useState('');
-  const [locationNotice, setLocationNotice] = useState('');
-  const [savingLocation, setSavingLocation] = useState(false);
   const [accepting, setAccepting] = useState(false);
   const [accepted, setAccepted] = useState(false);
+  const [recoveryReady, setRecoveryReady] = useState(false);
+  const [retryLocked, setRetryLocked] = useState(false);
+  const [recoveryNotice, setRecoveryNotice] = useState('');
 
-  const suggestNeighborhood = async () => {
-    setSavingLocation(true);
-    setLocationNotice('');
-    try {
-      const position = await getCurrentPosition();
-      const area = await reverseGeocode(position);
-      setNeighborhood(area);
-      setLocationNotice('Added the neighborhood name. Exact coordinates stay on your device.');
-    } catch (locationError) {
-      setLocationNotice(locationError instanceof Error
-        ? `${locationError.message} You can still continue without location.`
-        : 'Location is unavailable. You can still continue without it.');
-    } finally {
-      setSavingLocation(false);
-    }
-  };
+  useEffect(() => {
+    let active = true;
+    const accountId = getLocalAccountId();
+
+    requestIdRef.current = '';
+    recoveryStorageKeyRef.current = null;
+    recoveryAccountIdRef.current = accountId;
+    setName('');
+    setNeighborhood('');
+    setNote('');
+    setError('');
+    setRetryLocked(false);
+    setRecoveryNotice('');
+    setRecoveryReady(false);
+
+    void getRelayAcceptanceRecoveryKey(token, accountId).then((key) => {
+      if (!active) return;
+
+      recoveryStorageKeyRef.current = key;
+      const storage = key ? getSessionStorage() : null;
+      const attempt = storage && key ? readRelayAcceptanceAttempt(storage, key) : null;
+      if (attempt) {
+        requestIdRef.current = attempt.requestId;
+        setName(attempt.name);
+        setNeighborhood(attempt.neighborhood);
+        setNote(attempt.note);
+        setRetryLocked(true);
+        setRecoveryNotice('We saved your last handoff attempt in this tab for up to 24 hours. Retry with the same details to continue it safely.');
+      }
+      setRecoveryReady(true);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [token]);
 
   const handleAccept = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError('');
 
+    if (!recoveryReady) {
+      setError('Preparing a safe retry. Please try again in a moment.');
+      return;
+    }
     if (!isRelayToken(token)) {
       setError('This carrier invite is incomplete. Ask the sender to create a fresh link.');
       return;
     }
 
     const accountId = getLocalAccountId();
+    if (accountId !== recoveryAccountIdRef.current) {
+      setError('Your Drop account changed while this invite was open. Reload the invite to continue.');
+      return;
+    }
+
     setAccepting(true);
     try {
-      // Keep this ID for retries so a lost response cannot create a duplicate handoff.
-      requestIdRef.current ||= newRequestId();
-      const area = neighborhood.trim() || 'Nearby area';
+      const attempt = {
+        requestId: requestIdRef.current || newRequestId(),
+        name: name.trim(),
+        neighborhood: neighborhood.trim(),
+        note: note.trim(),
+        savedAt: Date.now(),
+      };
+      requestIdRef.current = attempt.requestId;
+
+      const key = recoveryStorageKeyRef.current;
+      const storage = key ? getSessionStorage() : null;
+      const savedForRetry = Boolean(key && storage && saveRelayAcceptanceAttempt(storage, key, attempt));
+      setRetryLocked(true);
+      setRecoveryNotice(savedForRetry
+        ? 'If the response is interrupted, your retry details are saved in this tab.'
+        : 'This browser could not save retry details. Keep this tab open until the handoff is confirmed.');
+
       const result = await acceptRelayHandoffToken({
         token,
-        requestId: requestIdRef.current,
-        name: name.trim(),
-        neighborhood: area,
-        note: note.trim() || undefined,
+        requestId: attempt.requestId,
+        name: attempt.name,
+        neighborhood: attempt.neighborhood || 'Nearby area',
+        note: attempt.note || undefined,
       });
 
       saveActiveCarry({
@@ -84,6 +145,15 @@ export function RelayTokenHandoff({ token, destination, backHref, method }: Rela
         successorExpiresAt: result.successorExpiresAt,
       }, accountId);
       if (!isCurrentLocalAccount(accountId)) return;
+
+      const savedCarry = getActiveCarry(accountId);
+      if (savedCarry?.letterId !== result.letterId || savedCarry.successorToken !== result.successorToken) {
+        throw new Error('The handoff was accepted, but this device could not save your carrier pass. Retry in this tab.');
+      }
+
+      if (key && storage) clearRelayAcceptanceAttempt(storage, key);
+      requestIdRef.current = '';
+      setRecoveryNotice('');
       setAccepted(true);
     } catch (acceptError) {
       if (isCurrentLocalAccount(accountId)) {
@@ -129,7 +199,7 @@ export function RelayTokenHandoff({ token, destination, backHref, method }: Rela
           <p className="eyebrow text-[#2b45f7]">{method} handoff</p>
           <h2 className="mt-2 font-headline-md text-2xl text-ink-navy">Add your hand to the route.</h2>
           <p className="mt-2 text-sm leading-relaxed text-on-surface-variant">
-            You’ll carry a sealed drop toward {destination || 'the recipient area'}. Add a neighborhood if you like; precise location is optional.
+            You’ll carry a sealed drop toward {destination || 'the recipient area'}. Type a neighborhood if you like; this invite does not access your device location.
           </p>
         </div>
       </div>
@@ -145,6 +215,7 @@ export function RelayTokenHandoff({ token, destination, backHref, method }: Rela
               autoComplete="name"
               value={name}
               onChange={(event) => setName(event.target.value)}
+              readOnly={retryLocked}
               className="input-field mt-2 !min-h-12 !rounded-xl"
               placeholder="Your name"
             />
@@ -157,21 +228,12 @@ export function RelayTokenHandoff({ token, destination, backHref, method }: Rela
               maxLength={120}
               value={neighborhood}
               onChange={(event) => setNeighborhood(event.target.value)}
+              readOnly={retryLocked}
               className="input-field mt-2 !min-h-12 !rounded-xl"
               placeholder="Nearby area"
             />
+            <span className="field-help mt-2 block">Optional. Type a neighborhood label; no device location is requested.</span>
           </label>
-
-          <button
-            type="button"
-            onClick={() => void suggestNeighborhood()}
-            disabled={savingLocation}
-            className="button-secondary !min-h-11 !rounded-xl"
-          >
-            <MapPin className="h-4 w-4 text-[#2b45f7]" aria-hidden="true" />
-            {savingLocation ? 'Finding your area…' : 'Suggest my neighborhood'}
-          </button>
-          {locationNotice && <p className="text-xs leading-relaxed text-on-surface-variant" role="status" aria-live="polite">{locationNotice}</p>}
 
           <label htmlFor="relay-carrier-note" className="field-label block">
             Note for the next carrier <span className="font-normal text-on-surface-variant">(optional)</span>
@@ -180,6 +242,7 @@ export function RelayTokenHandoff({ token, destination, backHref, method }: Rela
               maxLength={500}
               value={note}
               onChange={(event) => setNote(event.target.value)}
+              readOnly={retryLocked}
               className="textarea-field mt-2 min-h-[5.5rem] !rounded-xl"
               placeholder="A short note about the handoff"
             />
@@ -190,11 +253,12 @@ export function RelayTokenHandoff({ token, destination, backHref, method }: Rela
           <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#2b45f7]" aria-hidden="true" />
           Your neighborhood label is optional. We never show the drop’s text or media to carriers.
         </p>
+        {recoveryNotice && <p className="mt-4 rounded-xl bg-[#2b45f7]/5 px-3 py-2 text-sm leading-relaxed text-on-surface-variant" role="status" aria-live="polite">{recoveryNotice}</p>}
         {error && <p className="notice error-notice mt-5" role="alert" aria-live="assertive">{error}</p>}
         <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
           <Link href={backHref} className="button-quiet !min-h-12 !rounded-xl">Back</Link>
-          <button type="submit" disabled={accepting || !name.trim()} className="button-primary !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white disabled:opacity-50">
-            {accepting ? 'Joining the relay…' : 'Accept sealed drop'} <ArrowRight className="h-4 w-4" aria-hidden="true" />
+          <button type="submit" disabled={accepting || !name.trim() || !recoveryReady} className="button-primary !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white disabled:opacity-50">
+            {accepting ? 'Joining the relay…' : retryLocked ? 'Retry same handoff' : 'Accept sealed drop'} <ArrowRight className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
       </form>

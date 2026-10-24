@@ -21,3 +21,8 @@ public/
 public/*
 !public/demo-cat.png
 !public/demo-cat.gif
+!public/service-worker.js
+!public/icons/
+public/icons/*
+!public/icons/drop-192.png
+!public/icons/drop-512.png

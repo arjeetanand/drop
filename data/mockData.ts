@@ -1,6 +1,21 @@
-export type LetterStatus = 'draft' | 'sealed' | 'dispatched' | 'delivered';
+export type LetterStatus = 'draft' | 'sealed' | 'dispatched' | 'delivered' | 'claim_pending';
 export type DropPayloadKind = 'text' | 'image' | 'gif';
 export type DropDeliveryMode = 'instant' | 'relay';
+export type RecipientInviteProgressStatus = 'shared' | 'copied' | 'cancelled' | 'unavailable';
+
+export interface RecipientInviteProgress {
+  username: string;
+  status: RecipientInviteProgressStatus;
+  manualLinkAvailable?: boolean;
+}
+
+export interface RelayRecipientProgress {
+  handoffCount: number;
+  latestCarrier: string | null;
+  latestNeighborhood: string | null;
+  latestNote: string | null;
+  latestHandoffAt: string | null;
+}
 
 export interface MockLetter {
   id: string;
@@ -22,8 +37,14 @@ export interface MockLetter {
   mediaPath?: string;
   mediaMimeType?: string;
   mediaSizeBytes?: number;
+  /** Immutable 30-day retention deadline for unclaimed media claim drops. */
+  mediaExpiresAt?: string;
   mediaUrl?: string;
+  recipientInviteProgress?: RecipientInviteProgress;
+  relayProgress?: RelayRecipientProgress;
   reaction?: string;
+  reactionUpdatedAt?: string;
+  claimedViaInvite?: boolean;
   localDemo?: boolean;
   sample?: boolean;
 }

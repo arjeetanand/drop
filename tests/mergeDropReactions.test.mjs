@@ -7,10 +7,10 @@ test('attaches participant-visible reactions to matching drops only', () => {
     { id: 'sent-1', subject: 'A surprise' },
     { id: 'received-1', subject: 'A note' },
   ];
-  const merged = mergeDropReactions(letters, [{ letter_id: 'sent-1', emoji: '🫶' }]);
+  const merged = mergeDropReactions(letters, [{ letter_id: 'sent-1', emoji: '🫶', updated_at: '2026-10-23T04:00:00.000Z' }]);
 
   assert.deepEqual(merged, [
-    { id: 'sent-1', subject: 'A surprise', reaction: '🫶' },
+    { id: 'sent-1', subject: 'A surprise', reaction: '🫶', reactionUpdatedAt: '2026-10-23T04:00:00.000Z' },
     { id: 'received-1', subject: 'A note' },
   ]);
   assert.equal(letters[0].reaction, undefined);

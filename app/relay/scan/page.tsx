@@ -17,13 +17,13 @@ import {
 } from 'lucide-react';
 import { RelayTokenHandoff } from '@/components/RelayTokenHandoff';
 import {
-  getOptionalCurrentPosition,
+  getConsentedCurrentPosition,
   isHandoffQRExpired,
   isWithinHandoffRange,
   parseHandoffQRPayload,
-  reverseGeocode,
 } from '@/lib/gpsUtils';
 import { confirmHandoffFromQR, getRelayState } from '@/lib/relayStore';
+import { resolveRelayToken, stripRelayTokenQuery } from '@/lib/relayInviteUrl';
 import { getLocalAccountId, isCurrentLocalAccount, localAccountStorageKey } from '@/lib/localAccountScope';
 
 type ScanPhase = 'preview' | 'locating' | 'confirmed' | 'expired' | 'invalid' | 'error';
@@ -59,15 +59,20 @@ function ScanContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const encoded = searchParams.get('d') ?? '';
-  const token = searchParams.get('token') ?? '';
+  const hasQueryToken = searchParams.has('token');
   const tokenLetterId = searchParams.get('letter') ?? '';
   const tokenDestination = searchParams.get('dest') ?? 'Recipient area';
   const payload = useMemo(() => (encoded ? parseHandoffQRPayload(encoded) : null), [encoded]);
 
+  const [token, setToken] = useState('');
+  const [tokenReady, setTokenReady] = useState(false);
+  const [rejectedQueryToken, setRejectedQueryToken] = useState(false);
   const [phase, setPhase] = useState<ScanPhase>(encoded ? 'preview' : 'invalid');
   const [name, setName] = useState('');
   const [note, setNote] = useState('');
+  const [useLocation, setUseLocation] = useState(false);
   const [r2Neighborhood, setR2Neighborhood] = useState('');
+  const [locationWasSaved, setLocationWasSaved] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [relay, setRelay] = useState<{ subject: string; recipient: string; currentCarrier: string } | null>(null);
   const errorSummaryRef = useRef<HTMLDivElement>(null);
@@ -75,9 +80,23 @@ function ScanContent() {
   const submittingRef = useRef(false);
 
   useEffect(() => {
+    const resolvedToken = resolveRelayToken(window.location.hash);
+    setToken(resolvedToken);
+    setRejectedQueryToken(hasQueryToken && !resolvedToken);
+    setTokenReady(true);
+
+    if (hasQueryToken) {
+      const safeUrl = stripRelayTokenQuery(new URL(window.location.href));
+      window.history.replaceState(window.history.state, '', safeUrl);
+    }
+  }, [hasQueryToken]);
+
+  useEffect(() => {
     setName('');
     setNote('');
+    setUseLocation(false);
     setR2Neighborhood('');
+    setLocationWasSaved(false);
     setErrorMsg('');
 
     if (!encoded || !payload || !Number.isFinite(payload.lat) || !Number.isFinite(payload.lng)) {
@@ -143,13 +162,14 @@ function ScanContent() {
     setErrorMsg('');
 
     try {
-      const position = await getOptionalCurrentPosition();
+      const position = await getConsentedCurrentPosition(useLocation);
       if (position && !isWithinHandoffRange({ lat: payload.lat, lng: payload.lng }, position)) {
         throw new Error('You are more than 50 m from the current carrier. Move closer and try again so the handoff can be verified.');
       }
-      const area = position ? await reverseGeocode(position) : 'Location not shared';
+      const area = r2Neighborhood.trim() || (position ? 'Nearby area' : 'Location not shared');
       if (!isCurrentLocalAccount(accountId)) throw new Error('Your account changed during this handoff. Start again in the active account.');
       setR2Neighborhood(area);
+      setLocationWasSaved(Boolean(position));
       if (isHandoffQRExpired(payload.createdAt)) {
         setPhase('expired');
         return;
@@ -195,6 +215,23 @@ function ScanContent() {
   const manualHref = payload
     ? `/relay/handoff?d=${encodeURIComponent(encoded)}&letter=${encodeURIComponent(payload.letterId)}&pin=${encodeURIComponent(payload.pin)}`
     : '/relay/handoff';
+
+  if (!encoded && !token && !tokenReady) {
+    return <main className="page-shell"><div className="page-container max-w-3xl"><p className="meta" role="status">Opening your secure carrier invite…</p></div></main>;
+  }
+
+  if (rejectedQueryToken && !token) {
+    return (
+      <main className="page-shell page-enter">
+        <div className="page-container max-w-3xl">
+          <p className="eyebrow">Secure carrier invite</p>
+          <h1 className="display-title mt-4">Ask for a fresh link.</h1>
+          <p className="body-copy mt-5 max-w-2xl text-lg">This invite uses an older URL format. Drop no longer accepts carrier tokens in query parameters. Ask the current carrier to send a new invite link.</p>
+          <Link href="/relay" className="button-quiet mt-8"><ArrowLeft className="h-4 w-4" aria-hidden="true" /> Relay passport</Link>
+        </div>
+      </main>
+    );
+  }
 
   if (token) {
     const backHref = tokenLetterId
@@ -315,7 +352,7 @@ function ScanContent() {
                   </div>
                 </dl>
                 <p className="body-copy mt-6 border-t border-[rgba(16,42,67,0.12)] pt-5 text-sm">
-                  Your QR verifies the handoff. If location is available, only your neighborhood is added to the route.
+                  This legacy QR link contains the previous carrier&apos;s handoff coordinates in its URL. Opening it sends that URL to the Drop server. Your own location is separate and optional; if granted, it is used for the 50 m check and saved only in this browser after a successful handoff.
                 </p>
               </section>
 
@@ -346,6 +383,27 @@ function ScanContent() {
                       placeholder="How did you meet the carrier?"
                     />
                   </label>
+                  <label htmlFor="scan-carrier-neighborhood" className="field-label">
+                    Neighborhood <span className="font-normal text-on-surface-variant">(optional)</span>
+                    <input
+                      id="scan-carrier-neighborhood"
+                      maxLength={120}
+                      value={r2Neighborhood}
+                      onChange={(event) => setR2Neighborhood(event.target.value)}
+                      className="input-field mt-2"
+                      placeholder="Nearby area"
+                    />
+                  </label>
+                  <label htmlFor="scan-use-location" className="flex min-h-12 items-start gap-3 rounded-2xl border border-[rgba(16,42,67,0.12)] bg-white/70 p-3 text-sm leading-relaxed text-on-surface-variant">
+                    <input
+                      id="scan-use-location"
+                      type="checkbox"
+                      checked={useLocation}
+                      onChange={(event) => setUseLocation(event.target.checked)}
+                      className="mt-1 h-5 w-5 shrink-0 accent-[#4f9d7a] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2b45f7]"
+                    />
+                    <span><span className="block font-semibold text-ink-navy">Use my location for this handoff (optional)</span>If granted, your current location is checked here and saved in this browser&apos;s route history after a successful handoff. It is not sent to a geocoding service or the Drop server. You can accept without it.</span>
+                  </label>
                 </div>
                 <button type="submit" disabled={!name.trim()} className="button-primary mt-6 w-full">
                   <Navigation className="h-4 w-4" aria-hidden="true" />
@@ -353,7 +411,7 @@ function ScanContent() {
                 </button>
                 <p className="field-help mt-4 inline-flex items-start gap-2">
                   <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#4f9d7a]" aria-hidden="true" />
-                  Sharing your neighborhood is optional; the QR is enough to confirm the handoff.
+                  The QR confirms the handoff. Leave this unchecked to avoid a location request.
                 </p>
                 <Link href={manualHref} className="button-quiet mt-4 w-full">
                   Enter the PIN manually instead
@@ -368,17 +426,18 @@ function ScanContent() {
           <section className="panel mt-12 p-8 text-center" aria-live="polite">
             <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-[rgba(79,157,122,0.25)] border-t-[#4f9d7a]" aria-hidden="true" />
             <p className="eyebrow mt-6 text-[#4f9d7a]">Handoff confirmation</p>
-            <h1 className="section-title mt-3">Checking for optional location.</h1>
-            <p className="body-copy mx-auto mt-3 max-w-md text-sm">Location helps confirm you are nearby. If it is denied or unavailable, the QR still completes the handoff without recording your location.</p>
+            <h1 className="section-title mt-3">{useLocation ? 'Checking optional location.' : 'Confirming the QR handoff.'}</h1>
+            <p className="body-copy mx-auto mt-3 max-w-md text-sm">{useLocation ? 'Your browser checks proximity. If the handoff succeeds, it saves the route point in this browser. If location is denied or unavailable, the QR still completes the handoff.' : 'The QR confirms the handoff. Your current device location is not requested or recorded.'}</p>
           </section>
         )}
 
         {phase === 'confirmed' && payload && (
           <section className="mt-12 max-w-3xl">
+            <p className="sr-only" role="status" aria-live="polite">Handoff confirmed. {locationWasSaved ? 'Your current device location was saved on this device.' : 'Your current device location was not recorded.'}</p>
             <p className="eyebrow text-[#4f9d7a]">Transfer recorded</p>
             <h1 className="display-title mt-4">You have the drop.</h1>
             <p className="body-copy mt-5 max-w-2xl text-lg">
-              You are now carrying “<span className="text-ink-navy">{relay?.subject ?? payload.subject}</span>”. The passport records the handoff point and adds your neighborhood only if location is available.
+              You are now carrying “<span className="text-ink-navy">{relay?.subject ?? payload.subject}</span>”. The QR confirms the transfer, and the drop stays sealed as it travels toward {payload.destination}.
             </p>
 
             <div className="panel mt-8 p-5 sm:p-7">
@@ -387,7 +446,7 @@ function ScanContent() {
                 <div>
                   <h2 className="font-headline-md text-2xl text-ink-navy">Handoff confirmed.</h2>
                   <p className="body-copy mt-3 text-sm">
-                    The route includes <span className="text-ink-navy">{payload.neighborhood}</span> and <span className="text-ink-navy">{r2Neighborhood || 'Location not shared'}</span>. The drop remains sealed while it travels toward <span className="text-ink-navy">{payload.destination}</span>.
+                    The route includes <span className="text-ink-navy">{payload.neighborhood}</span> and <span className="text-ink-navy">{r2Neighborhood || 'Location not shared'}</span>. {locationWasSaved ? 'Your current GPS point is stored only in this browser and was not sent to a geocoding service or the Drop server.' : 'Your current device location was not recorded.'} The drop remains sealed while it travels toward <span className="text-ink-navy">{payload.destination}</span>.
                   </p>
                 </div>
               </div>

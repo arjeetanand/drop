@@ -19,8 +19,9 @@ function openDatabase() {
   });
 }
 
-export async function saveDraftAttachment(draftId: string, file: File) {
-  const accountId = getLocalAccountId();
+export async function saveDraftAttachment(draftId: string, file: File, expectedAccountId = getLocalAccountId()) {
+  const accountId = expectedAccountId;
+  if (!isCurrentLocalAccount(accountId)) throw new Error('The active account changed while saving the attachment.');
   const recordId = localAccountRecordId(draftId, accountId);
   const database = await openDatabase();
   try {

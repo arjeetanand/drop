@@ -1,16 +1,35 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, ArrowRight, Check, LockKeyhole, MailOpen, Sparkles } from 'lucide-react';
-import { useParams, useSearchParams } from 'next/navigation';
+import { ArrowLeft, ArrowRight, Check, LockKeyhole, MailOpen, Share2, Sparkles } from 'lucide-react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import type { MockLetter } from '@/data/mockData';
-import { getRemoteLetterById, getRemoteLetters, saveRemoteReaction } from '@/lib/letterBackend';
-import { getLetterById } from '@/lib/letterStore';
+import { getRemoteDropDirection, getRemoteLetterById, getRemoteLetters, getRemoteReactionSnapshot, getRemoteSenderClaimStatusForDrop, reissueDropClaimInvite, reissueDropMediaClaimInvite, saveRemoteReaction, subscribeToIncomingDropInbox, subscribeToSenderDropReactions } from '@/lib/letterBackend';
+import { getLetterById, startNewLetter } from '@/lib/letterStore';
+import { getLiveClaimCompletionUpdate } from '@/lib/liveClaimStatus';
+import { getClaimInviteExpiryDuration, getClaimedDropLabel, isEligiblePendingSenderClaim, isEligibleSenderClaim, needsSenderClaimStatusRetry, retainKnownClaimStatus } from '@/lib/claimInviteStatus';
+import { getInitialSenderReactionBaseline, getSenderReactionReadUpdate } from '@/lib/liveReactionState';
 import { DEMO_REACTION_EMOJIS, saveDemoReaction } from '@/lib/demoReactionStore';
-import { getSupabaseBrowserClient, isSupabaseAuthConfigured } from '@/lib/supabaseBrowser';
 import { getDraftAttachment } from '@/lib/letterMediaStore';
+import { withFallbackTimeout } from '@/lib/withFallbackTimeout';
 import { ReducedMotionGif } from '@/components/ReducedMotionGif';
+import { getReactionName } from '@/lib/reactionNames';
+import { RelayRecipientCard } from '@/components/RelayRecipientCard';
+import { startVisibleDataRefresh, type VisibleDataRefreshController } from '@/lib/relayRouteRefresh';
+import { buildDropClaimUrl, createDropClaimSharePayload, createDropClaimToken } from '@/lib/dropClaim';
+import { getLocalAccountId, isCurrentLocalAccount } from '@/lib/localAccountScope';
+import { shareInviteLink } from '@/lib/shareInvite';
+
+const inFlightClaimReissues = new Set<string>();
+
+function formatMediaExpiryDate(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? null
+    : new Intl.DateTimeFormat(undefined, { dateStyle: 'long' }).format(date);
+}
 
 function LoadingLetter() {
   return (
@@ -78,6 +97,7 @@ function MissingLetter({ signInHref }: { signInHref?: string }) {
 }
 
 export default function LetterArrivalPage() {
+  const router = useRouter();
   const params = useParams<{ id?: string | string[] }>();
   const searchParams = useSearchParams();
   const letterId = Array.isArray(params.id) ? params.id[0] : params.id;
@@ -91,7 +111,20 @@ export default function LetterArrivalPage() {
   const [contentLoading, setContentLoading] = useState(false);
   const [contentNotice, setContentNotice] = useState('');
   const [reactionNotice, setReactionNotice] = useState('');
+  const [reactionAnnouncement, setReactionAnnouncement] = useState('');
+  const [claimAnnouncement, setClaimAnnouncement] = useState('');
+  const [claimStatusNeedsRetry, setClaimStatusNeedsRetry] = useState(false);
   const [savingReaction, setSavingReaction] = useState(false);
+  const [sharingClaimLink, setSharingClaimLink] = useState(false);
+  const [claimLinkUrl, setClaimLinkUrl] = useState('');
+  const [claimLinkNotice, setClaimLinkNotice] = useState('');
+  const currentLetterRef = useRef<MockLetter | null>(null);
+  const currentReactionRef = useRef<string | undefined>(undefined);
+  const baselineReactionOnDirectReadRef = useRef(false);
+  const initialReactionBaselineRef = useRef<{ available: boolean; reaction: string | null } | null>(null);
+  const reactionSignalGenerationRef = useRef(0);
+  const consumedReactionSignalGenerationRef = useRef(0);
+  const reactionRefreshRef = useRef<VisibleDataRefreshController | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -102,6 +135,16 @@ export default function LetterArrivalPage() {
     setOpened(false);
     setContentNotice('');
     setReactionNotice('');
+    setReactionAnnouncement('');
+    setClaimAnnouncement('');
+    setClaimStatusNeedsRetry(false);
+    setClaimLinkUrl('');
+    setClaimLinkNotice('');
+    setSharingClaimLink(false);
+    baselineReactionOnDirectReadRef.current = false;
+    initialReactionBaselineRef.current = null;
+    reactionSignalGenerationRef.current = 0;
+    consumedReactionSignalGenerationRef.current = 0;
 
     if (!letterId) {
       setLoading(false);
@@ -110,6 +153,7 @@ export default function LetterArrivalPage() {
 
     let active = true;
     let mediaObjectUrl = '';
+    let stopReactionRealtime = () => {};
 
     const loadLetter = async () => {
       let localLetter = getLetterById(letterId);
@@ -141,17 +185,63 @@ export default function LetterArrivalPage() {
       }
 
       try {
-        const remoteLetters = await getRemoteLetters();
-        const remoteLetter = remoteLetters?.find((candidate) => candidate.id === letterId) || null;
-        if (!remoteLetters && isSupabaseAuthConfigured()) {
-          const supabase = getSupabaseBrowserClient();
-          if (supabase) {
-            const { data, error } = await supabase.auth.getSession();
-            if (active && !error && !data.session) setSignInRequired(true);
+        const startReactionRealtime = async () => {
+          const stopRealtime = await subscribeToSenderDropReactions((dropId) => {
+            if (!active) return;
+            if (!dropId) {
+              void reactionRefreshRef.current?.refresh();
+              return;
+            }
+            if (dropId !== letterId) return;
+            reactionSignalGenerationRef.current += 1;
+            void reactionRefreshRef.current?.refresh();
+          });
+          if (!active) {
+            stopRealtime();
+            return;
           }
+          stopReactionRealtime = stopRealtime;
+        };
+
+        // Capture the reaction state before opening the channel. Comparing the
+        // first ready read with this baseline catches changes during startup
+        // without relying on clock timestamps from two devices.
+        const directionRead = withFallbackTimeout(getRemoteDropDirection(letterId), 8_000, 'unavailable' as const);
+        const mailboxRead = withFallbackTimeout(getRemoteLetters(), 15_000, null).catch(() => null);
+        const reactionBaselineRead = withFallbackTimeout(getRemoteReactionSnapshot(letterId), 8_000, null).catch(() => null);
+        const direction = await directionRead;
+        if (!active) return;
+        const initialReactionBaseline = await getInitialSenderReactionBaseline(direction, reactionBaselineRead);
+        if (!active) return;
+        initialReactionBaselineRef.current = initialReactionBaseline;
+        baselineReactionOnDirectReadRef.current = true;
+        if (direction === 'sent' || direction === 'unavailable') {
+          await startReactionRealtime();
+          if (!active) return;
         }
+
+        // Auth and PostgREST reads above are bounded independently of channel setup.
+        const mailbox = await mailboxRead;
+        const remoteLetter = mailbox?.letters.find((candidate) => candidate.id === letterId) || null;
+        if (remoteLetter?.direction === 'sent'
+          && initialReactionBaselineRef.current?.available !== true
+          && mailbox?.reactionsHydrated) {
+          initialReactionBaselineRef.current = {
+            available: true,
+            reaction: remoteLetter.reaction ?? null,
+          };
+        }
+        if (remoteLetter?.direction !== 'sent') {
+          stopReactionRealtime();
+          stopReactionRealtime = () => {};
+        }
+        if (active && !mailbox && direction === 'signed-out') setSignInRequired(true);
         if (active) {
           setLetter(remoteLetter || localLetter || null);
+          setClaimStatusNeedsRetry(needsSenderClaimStatusRetry(
+            remoteLetter,
+            mailbox?.claimStatusHydrated ?? true,
+          ));
           setFullContentAvailable(false);
         }
       } catch {
@@ -167,9 +257,148 @@ export default function LetterArrivalPage() {
     void loadLetter();
     return () => {
       active = false;
+      stopReactionRealtime();
       if (mediaObjectUrl) URL.revokeObjectURL(mediaObjectUrl);
     };
   }, [letterId, senderView]);
+
+  const senderDropId = letter && letter.direction === 'sent' && !letter.sample && !letter.localDemo ? letter.id : null;
+  const claimedLabel = letter ? getClaimedDropLabel(letter) : null;
+  const pendingClaimDropId = letter
+    && isEligiblePendingSenderClaim(letter)
+    ? letter.id
+    : null;
+  const shouldRetryClaimStatus = claimStatusNeedsRetry
+    && Boolean(letter && isEligibleSenderClaim(letter) && !letter.claimedViaInvite);
+
+  useEffect(() => {
+    if (!shouldRetryClaimStatus || !senderDropId) return;
+
+    let active = true;
+    let retryStartTimer: ReturnType<typeof setTimeout> | null = null;
+    let refresh: VisibleDataRefreshController | null = null;
+    retryStartTimer = setTimeout(() => {
+      if (!active) return;
+      refresh = startVisibleDataRefresh({
+        load: () => getRemoteSenderClaimStatusForDrop(senderDropId),
+        intervalMs: 60_000,
+        queueOneWhileInFlight: true,
+        onData: (claimed) => {
+          if (!active || claimed === null) return;
+          setClaimStatusNeedsRetry(false);
+          if (!claimed) return;
+          setLetter((current) => (
+            current?.id === senderDropId && isEligibleSenderClaim(current) && !current.claimedViaInvite
+              ? { ...current, claimedViaInvite: true }
+              : current
+          ));
+        },
+      });
+    }, 10_000);
+
+    return () => {
+      active = false;
+      if (retryStartTimer) clearTimeout(retryStartTimer);
+      refresh?.stop();
+    };
+  }, [shouldRetryClaimStatus, senderDropId]);
+
+  useEffect(() => {
+    currentLetterRef.current = letter;
+  }, [letter]);
+
+  useEffect(() => {
+    if (!pendingClaimDropId) return;
+
+    let active = true;
+    let stopRealtime = () => {};
+    const refresh = startVisibleDataRefresh({
+      load: () => getRemoteLetterById(pendingClaimDropId),
+      intervalMs: 60_000,
+      queueOneWhileInFlight: true,
+      onData: (refreshed) => {
+        if (!active) return;
+        const update = getLiveClaimCompletionUpdate(
+          currentLetterRef.current,
+          refreshed,
+          pendingClaimDropId,
+        );
+        if (!update) return;
+
+        currentLetterRef.current = update.letter;
+        setLetter((current) => (
+          current?.id === pendingClaimDropId && current.status === 'claim_pending'
+            ? update.letter
+            : current
+        ));
+        setClaimAnnouncement(update.announcement);
+      },
+    });
+    void subscribeToIncomingDropInbox((dropId) => {
+      if (active && (!dropId || dropId === pendingClaimDropId)) void refresh.refresh();
+    }).then((stop) => {
+      if (!active) stop();
+      else stopRealtime = stop;
+    });
+
+    return () => {
+      active = false;
+      refresh.stop();
+      stopRealtime();
+    };
+  }, [pendingClaimDropId]);
+
+  useEffect(() => {
+    currentReactionRef.current = letter?.reaction;
+  }, [letter?.id, letter?.reaction]);
+
+  useEffect(() => {
+    if (!senderDropId) return;
+
+    let active = true;
+    const refresh = startVisibleDataRefresh({
+      load: async () => {
+        const signalGeneration = reactionSignalGenerationRef.current;
+        const snapshot = await getRemoteReactionSnapshot(senderDropId);
+        return snapshot ? { snapshot, signalGeneration } : null;
+      },
+      intervalMs: 60_000,
+      queueOneWhileInFlight: true,
+      onData: (read) => {
+        if (!active) return;
+        const establishingBaseline = baselineReactionOnDirectReadRef.current;
+        const previousReaction = currentReactionRef.current ?? null;
+        const update = getSenderReactionReadUpdate(
+          read.snapshot,
+          read.signalGeneration,
+          reactionSignalGenerationRef.current,
+          previousReaction,
+          establishingBaseline,
+          consumedReactionSignalGenerationRef.current,
+          initialReactionBaselineRef.current,
+        );
+        if (update.outcome !== 'available') return;
+        baselineReactionOnDirectReadRef.current = update.baselinePending;
+        if (!update.baselinePending) initialReactionBaselineRef.current = null;
+        consumedReactionSignalGenerationRef.current = update.consumedSignalGeneration;
+        currentReactionRef.current = update.reaction ?? undefined;
+        if (establishingBaseline || update.reaction !== previousReaction) {
+          setLetter((current) => current?.id === senderDropId ? { ...current, reaction: update.reaction ?? undefined } : current);
+        }
+        if (!update.announce || !update.reaction) return;
+        const who = letter?.recipient?.trim() || 'Your recipient';
+        const subject = letter?.subject?.trim() || 'your drop';
+        setReactionAnnouncement(`${who} reacted to “${subject}” with ${getReactionName(update.reaction)}.`);
+      },
+    });
+    reactionRefreshRef.current = refresh;
+
+    return () => {
+      active = false;
+      if (reactionRefreshRef.current === refresh) reactionRefreshRef.current = null;
+      refresh.stop();
+    };
+  }, [letter?.recipient, letter?.subject, senderDropId]);
 
   const revealFragments = () => {
     setRevealed(true);
@@ -185,7 +414,7 @@ export default function LetterArrivalPage() {
           setContentNotice('The full drop could not load. Sign in as the recipient or check your connection, then try again.');
           return;
         }
-        setLetter(remoteDetail);
+        setLetter((current) => retainKnownClaimStatus(current, remoteDetail));
         if (remoteDetail.mediaPath && !remoteDetail.mediaUrl) {
           setContentNotice('The private attachment could not load. Check your connection, then try opening again.');
           return;
@@ -199,6 +428,101 @@ export default function LetterArrivalPage() {
       }
     }
     setOpened(true);
+  };
+
+  const shareFreshClaimLink = async () => {
+    if (!letter || !isEligiblePendingSenderClaim(letter)
+      || sharingClaimLink || inFlightClaimReissues.has(letter.id)) return;
+    inFlightClaimReissues.add(letter.id);
+    const accountId = getLocalAccountId();
+    setSharingClaimLink(true);
+    setClaimLinkUrl('');
+    setClaimLinkNotice('');
+    try {
+      const performReissue = async () => {
+        const detail = await getRemoteLetterById(letter.id);
+        if (!isCurrentLocalAccount(accountId)) return;
+        if (!detail || !isEligiblePendingSenderClaim(detail)
+          || ((detail.payloadKind || 'text') === 'text' && !detail.excerpt.trim())
+          || ((detail.payloadKind || 'text') !== 'text' && !detail.mediaPath)) {
+          setClaimLinkNotice('A fresh link could not be prepared. Check your connection and try again.');
+          return;
+        }
+        const token = createDropClaimToken();
+        const url = buildDropClaimUrl(window.location.origin, token);
+        if (!url) {
+          setClaimLinkNotice('This browser could not prepare a private link. Try again from the original device.');
+          return;
+        }
+        let issued: { ok: boolean; error?: string; mediaExpiresAt?: string };
+        if ((detail.payloadKind || 'text') === 'text') {
+          issued = await reissueDropClaimInvite(detail.id, accountId, token);
+        } else {
+          issued = await reissueDropMediaClaimInvite(detail.id, accountId, token);
+        }
+        if (!isCurrentLocalAccount(accountId)) return;
+        if (!issued.ok) {
+          setClaimLinkNotice(issued.error || 'A fresh link could not be saved. Try again.');
+          return;
+        }
+        if (issued.mediaExpiresAt) {
+          setLetter((current) => current?.id === detail.id
+            ? { ...current, mediaExpiresAt: issued.mediaExpiresAt }
+            : current);
+        }
+        const payload = createDropClaimSharePayload(url);
+        const result = await shareInviteLink(
+          url,
+          navigator.share ? (details) => navigator.share(details) : undefined,
+          async (shareUrl) => {
+            if (!navigator.clipboard) throw new Error('Clipboard unavailable');
+            await navigator.clipboard.writeText(shareUrl);
+          },
+          payload,
+        );
+        if (!isCurrentLocalAccount(accountId)) return;
+        if (result === 'shared' || result === 'copied') {
+          setClaimLinkNotice((detail.payloadKind || 'text') === 'text'
+            ? 'Fresh private link sent. The older link has been replaced.'
+            : `Fresh private link sent. It ${getClaimInviteExpiryDuration(detail.payloadKind)}; the original media deletion date is unchanged.`);
+        } else {
+          setClaimLinkUrl(url);
+          setClaimLinkNotice(result === 'cancelled'
+            ? 'Nothing was shared yet. Copy the fresh link when you’re ready; the older link has been replaced.'
+            : 'Sharing is unavailable. Copy the fresh link to send it yourself; the older link has been replaced.');
+        }
+      };
+
+      if (navigator.locks?.request) {
+        let acquired = false;
+        await navigator.locks.request(`drop-claim-reissue:${letter.id}`, { ifAvailable: true }, async (lock) => {
+          if (!lock) return;
+          acquired = true;
+          await performReissue();
+        });
+        if (!acquired && isCurrentLocalAccount(accountId)) {
+          setClaimLinkNotice('A fresh link is already being shared in another tab. Wait for it to finish before trying again.');
+        }
+      } else {
+        await performReissue();
+      }
+    } catch {
+      if (isCurrentLocalAccount(accountId)) setClaimLinkNotice('A fresh private link could not be prepared. Try again.');
+    } finally {
+      inFlightClaimReissues.delete(letter.id);
+      setSharingClaimLink(false);
+    }
+  };
+
+  const copyFreshClaimLink = async () => {
+    if (!claimLinkUrl) return;
+    try {
+      if (!navigator.clipboard) throw new Error('Clipboard unavailable');
+      await navigator.clipboard.writeText(claimLinkUrl);
+      setClaimLinkNotice('Fresh private link copied. The older link has been replaced.');
+    } catch {
+      setClaimLinkNotice('Copy is unavailable here. Select the fresh link above and copy it manually.');
+    }
   };
 
   const react = async (emoji: string) => {
@@ -253,10 +577,47 @@ export default function LetterArrivalPage() {
 
   const sender = letter.localDemo ? 'You' : letter.sender || 'A correspondent';
   const isReceived = letter.localDemo ? !senderView : letter.direction === 'received';
+  const relayInTransit = isReceived
+    && !letter.sample
+    && !letter.localDemo
+    && letter.status === 'dispatched';
   const encodedLetterId = encodeURIComponent(letter.id);
+  const mediaExpiryLabel = formatMediaExpiryDate(letter.mediaExpiresAt);
   const dropBackHref = isReceived && !letter.sample && letter.senderUsername
     ? `/compose?new=1&recipient=${encodeURIComponent(`@${letter.senderUsername}`)}`
     : null;
+
+  if (relayInTransit) {
+    const refreshCollectedRelay = async () => {
+      const mailbox = await getRemoteLetters();
+      const collectedLetter = mailbox?.letters.find((candidate) => candidate.id === letter.id
+        && candidate.direction === 'received'
+        && candidate.status === 'delivered');
+      if (!collectedLetter) throw new Error('The collected drop could not be reloaded yet.');
+      setLetter(collectedLetter);
+    };
+
+    return (
+      <main className="page-shell page-enter">
+        <div className="page-container max-w-[760px]">
+          <header className="page-header">
+            <Link
+              href="/mailbox"
+              className="button-quiet -ml-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f7f4ee]"
+            >
+              <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+              Back to mailbox
+            </Link>
+          </header>
+          <section className="mt-8">
+            <p className="eyebrow">On its way</p>
+            <h1 className="display-title mt-3 max-w-[12ch]">This drop is still traveling.</h1>
+            <RelayRecipientCard letter={letter} onRefresh={refreshCollectedRelay} />
+          </section>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="page-shell page-enter">
@@ -274,6 +635,22 @@ export default function LetterArrivalPage() {
 
         {letter.sample && <p className="notice mt-5" role="status">{letter.direction === 'received' ? 'Sample drop · this is an example, not a message you received. Reactions stay on this device.' : 'Sample drop · an example only. Nothing was sent or delivered.'}</p>}
         {letter.localDemo && <p className="notice mt-5" role="status">Same-device demo · nothing was sent or shared.</p>}
+        {isEligiblePendingSenderClaim(letter) && <section className="mt-6 max-w-[760px] rounded-2xl border border-[#e9d6c7] bg-[#fff6ec] p-4 sm:p-5" aria-labelledby="claim-link-heading">
+          <p className="eyebrow">Private claim link</p>
+          <h2 id="claim-link-heading" className="mt-2 font-headline-md text-2xl text-ink-navy">Waiting for them to claim.</h2>
+          <p className="mt-2 text-sm leading-relaxed text-on-surface-variant">If their link expired or got lost, share a fresh one. Each link {getClaimInviteExpiryDuration(letter.payloadKind)}. Anyone holding the current link can claim this drop; making a fresh link replaces the old one.</p>
+          {letter.payloadKind !== 'text' && <p className="mt-3 rounded-xl border border-[rgba(16,42,67,.12)] bg-white/75 p-3 text-xs leading-relaxed text-on-surface-variant">If unclaimed after 30 days{mediaExpiryLabel ? ` (on ${mediaExpiryLabel})` : ''}, this drop’s claim and media access end. Drop queues the attachment for deletion; cleanup can be delayed if the free project is paused or unavailable. Reissuing a link does not extend the cutoff.</p>}
+          <button type="button" onClick={() => void shareFreshClaimLink()} disabled={sharingClaimLink} className="button-primary mt-4 !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white disabled:opacity-50">
+            <Share2 className="h-4 w-4" aria-hidden="true" />{sharingClaimLink ? 'Preparing fresh link…' : 'Share a fresh private link'}
+          </button>
+          {claimLinkNotice && <p className="field-help mt-3 break-words" role="status" aria-live="polite">{claimLinkNotice}</p>}
+          {claimLinkUrl && <>
+            <code tabIndex={0} aria-label="Select and copy the fresh private claim link" className="mt-3 block select-all break-all rounded-lg bg-white/80 px-2 py-2 font-mono text-[0.68rem] text-ink-navy">{claimLinkUrl}</code>
+            <button type="button" onClick={() => void copyFreshClaimLink()} className="button-secondary mt-2 !min-h-11 !rounded-xl">Copy fresh private link</button>
+          </>}
+        </section>}
+        {claimAnnouncement && <p className="notice mt-5" role="status" aria-live="polite">{claimAnnouncement}</p>}
+        <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{reactionAnnouncement}</p>
 
         <section className="mt-12 max-w-[760px]">
           <p className="eyebrow">{letter.sample ? 'Sample drop' : letter.localDemo ? senderView ? 'Sender view' : 'Recipient demo' : letter.direction === 'sent' ? 'Your sent drop' : isReceived ? 'A drop for you' : 'Drop preview'}</p>
@@ -283,6 +660,8 @@ export default function LetterArrivalPage() {
               ? letter.direction === 'received' ? 'Explore this example, then try a reaction. Nothing was sent and no one will be notified.' : 'Explore this example. It is seeded content, not a drop you sent or received.'
               : letter.localDemo
               ? senderView ? 'This copy is saved on this device for you to review. Your recipient has not received it.' : 'Open it as if you were the recipient, then try a reaction. Nothing leaves this browser.'
+              : letter.status === 'claim_pending'
+              ? `“${letter.subject}” is waiting to be claimed. Open this page to check its status or make a fresh private link.`
               : letter.direction === 'sent'
               ? `You sent this drop to ${letter.recipient || 'your recipient'}. Open your copy to see the message and any reaction.`
               : `${sender} left a message in your hands. Read the fragments first, then open the full drop when you are ready.`}
@@ -297,9 +676,9 @@ export default function LetterArrivalPage() {
                 <h2 className="section-title mt-2 break-words text-3xl">{letter.subject}</h2>
                 <p className="meta mt-3">From {sender} · {letter.date}</p>
               </div>
-              <span className="status-mark success self-start">
+              <span className="status-mark success self-start max-w-full flex-wrap break-words">
                 <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
-                {letter.sample ? 'Sample · not sent' : letter.localDemo ? senderView ? 'Demo copy' : 'Demo · not sent' : letter.direction === 'sent' ? 'Sent' : 'Received'}
+                {letter.sample ? 'Sample · not sent' : letter.localDemo ? senderView ? 'Demo copy' : 'Demo · not sent' : letter.status === 'claim_pending' ? 'Waiting to be claimed' : claimedLabel || (letter.direction === 'sent' ? claimAnnouncement ? 'Claimed' : 'Sent' : 'Received')}
               </span>
             </div>
 
@@ -370,9 +749,31 @@ export default function LetterArrivalPage() {
                 </div>
                 {isReceived && <section className="mt-6 rounded-xl border border-[rgba(16,42,67,.1)] bg-white/60 p-4" aria-labelledby="drop-reaction-heading">
                   <h3 id="drop-reaction-heading" className="flex items-center gap-2 text-sm font-bold text-ink-navy"><Sparkles className="h-4 w-4 text-[#2b45f7]" aria-hidden="true" /> Send a little reaction</h3>
-                  <div className="mt-3 flex flex-wrap gap-2">{DEMO_REACTION_EMOJIS.map((emoji) => <button key={emoji} type="button" onClick={() => void react(emoji)} disabled={savingReaction} aria-label={`React ${emoji}`} aria-pressed={letter.reaction === emoji} className={`flex h-11 min-w-11 items-center justify-center rounded-xl border text-lg transition-colors ${letter.reaction === emoji ? 'border-[#2b45f7] bg-[#2b45f7]/10' : 'border-[rgba(16,42,67,.12)] bg-white hover:bg-[#f5f1e9]'}`}>{emoji}</button>)}</div>
+                  <p className="mt-2 text-xs leading-5 text-on-surface-variant">
+                    {letter.sample
+                      ? 'This sample stays on your device; no sender is notified.'
+                      : letter.localDemo
+                        ? 'This demo reaction stays on this device; no one is notified.'
+                        : 'Only you and ' + sender + ' can see this reaction.'}
+                  </p>
+                  <div className="mt-3 -mx-1 grid w-[calc(100%+0.5rem)] grid-cols-5 gap-2">{DEMO_REACTION_EMOJIS.map((emoji) => <button key={emoji} type="button" onClick={() => void react(emoji)} disabled={savingReaction} aria-label={`React with ${getReactionName(emoji)}`} aria-pressed={letter.reaction === emoji} className={`flex h-11 min-w-11 items-center justify-center rounded-xl border text-lg transition-colors ${letter.reaction === emoji ? 'border-[#2b45f7] bg-[#2b45f7]/10' : 'border-[rgba(16,42,67,.12)] bg-white hover:bg-[#f5f1e9]'}`}>{emoji}</button>)}</div>
                   {reactionNotice && <p className="mt-3 text-xs text-on-surface-variant" role="status" aria-live="polite">{reactionNotice}</p>}
                 </section>}
+                {letter.localDemo && senderView && <div className="mt-6 rounded-2xl border border-[rgba(16,42,67,.12)] bg-white/70 p-4 sm:p-5">
+                  <p className="eyebrow text-[#2b45f7]">Make it yours</p>
+                  <p className="mt-2 text-sm leading-relaxed text-on-surface-variant">Start with a blank text drop. This demo&apos;s message, reaction, and media stay here.</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const freshDraft = startNewLetter({ forceNew: true });
+                      router.push(`/compose?letter=${encodeURIComponent(freshDraft.id)}`);
+                    }}
+                    className="button-primary mt-4 w-full !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#fcfaf6]"
+                  >
+                    Make one for a friend
+                    <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                </div>}
                 {letter.localDemo && <Link href={senderView ? `/letter/${encodedLetterId}` : `/letter/${encodedLetterId}?view=sender`} className="button-secondary mt-6 w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#fcfaf6]">
                   {senderView ? 'Open recipient demo' : letter.reaction ? 'See your sender copy' : 'Skip to sender copy'}
                   <ArrowRight className="h-4 w-4" aria-hidden="true" />
@@ -418,7 +819,7 @@ export default function LetterArrivalPage() {
                 </div>
                 <div className="flex items-start justify-between gap-4 py-3">
                   <dt className="meta">Privacy</dt>
-                  <dd className="text-right text-sm font-semibold text-[#4f9d7a]">{letter.sample ? 'Example · no recipient' : letter.localDemo ? 'Only on this device' : letter.deliveryMode === 'relay' || letter.status === 'dispatched' ? 'Sealed during the journey' : 'Private to you two'}</dd>
+                  <dd className="text-right text-sm font-semibold text-[#4f9d7a]">{letter.sample ? 'Example · no recipient' : letter.localDemo ? 'Only on this device' : letter.status === 'claim_pending' ? 'Private claim link' : letter.deliveryMode === 'relay' || letter.status === 'dispatched' ? 'Sealed during the journey' : 'Private to you two'}</dd>
                 </div>
               </dl>
             </section>

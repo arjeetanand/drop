@@ -23,6 +23,68 @@ export interface RelayHandoff {
   distanceClosedKm?: number;  // how much closer this carrier got the letter
 }
 
+export interface RelayRecipientCollection {
+  isCollected: boolean;
+  collectedAt?: string | null;
+}
+
+export interface RelayCollectionSource {
+  direction?: 'sent' | 'received' | null;
+  deliveryMode?: string | null;
+  status?: string | null;
+  activityAt?: string | null;
+}
+
+/** Only a sender's delivered relay can complete the recipient stop. */
+export function getRelayRecipientCollection(
+  letter: RelayCollectionSource | null | undefined,
+): RelayRecipientCollection | undefined {
+  if (letter?.direction !== 'sent' || letter.deliveryMode !== 'relay' || letter.status !== 'delivered') return undefined;
+
+  return { isCollected: true, collectedAt: letter.activityAt };
+}
+
+export interface RelayRecipientCollectionState {
+  letterId: string;
+  collection: RelayRecipientCollection | undefined;
+}
+
+/** Keep a known terminal state when a refresh cannot read the sender's letter. */
+export function mergeRelayRecipientCollectionState(
+  previous: RelayRecipientCollectionState | null,
+  letterId: string,
+  letter: RelayCollectionSource | null | undefined,
+): RelayRecipientCollectionState | null {
+  if (!letter) return previous?.letterId === letterId ? previous : null;
+  return { letterId, collection: getRelayRecipientCollection(letter) };
+}
+
+export interface RelayHandoffPresentation {
+  isNext: boolean;
+  isCollected: boolean;
+  isComplete: boolean;
+  label: string;
+}
+
+export function getRelayHandoffPresentation(
+  handoff: Pick<RelayHandoff, 'role' | 'next'>,
+  recipientCollection?: RelayRecipientCollection,
+): RelayHandoffPresentation {
+  const isCollected = handoff.role === 'recipient' && recipientCollection?.isCollected === true;
+  const isNext = Boolean(handoff.next) && !isCollected;
+  const label = isNext
+    ? 'Next stop'
+    : isCollected
+      ? 'Collected'
+      : handoff.role === 'sender'
+        ? 'Started here'
+        : handoff.role === 'recipient'
+          ? 'Delivered'
+          : 'Carried forward';
+
+  return { isNext, isCollected, isComplete: !isNext, label };
+}
+
 export interface RelayState {
   letterId: string;
   subject: string;
@@ -311,7 +373,7 @@ export function addRelayHandoff(
 }
 
 export function getRelayStats(relay: RelayState): RelayStats {
-  const carriers = relay.handoffs.filter((handoff) => handoff.role !== 'recipient').length;
+  const carriers = relay.handoffs.filter((handoff) => handoff.role === 'carrier').length;
   const cities = new Set(
     relay.handoffs
       .map((handoff) => handoff.location.trim().toLowerCase())
@@ -333,29 +395,39 @@ function formatEventTime(isoDate: string) {
   return new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(new Date(isoDate));
 }
 
-export function relayToTrackingEvents(relay: RelayState): TrackingEvent[] {
+export function relayToTrackingEvents(
+  relay: RelayState,
+  recipientCollection?: RelayRecipientCollection,
+): TrackingEvent[] {
   return relay.handoffs.map((handoff, index, all) => {
-    const isNext = Boolean(handoff.next);
+    const presentation = getRelayHandoffPresentation(handoff, recipientCollection);
     const isLast = index === all.length - 1;
+    const collectedAt = presentation.isCollected
+      && recipientCollection?.collectedAt
+      && Number.isFinite(Date.parse(recipientCollection.collectedAt))
+      ? recipientCollection.collectedAt
+      : handoff.createdAt;
     const status = handoff.role === 'sender'
       ? 'Relay started'
       : handoff.role === 'recipient'
-        ? isNext ? `Waiting for ${handoff.name}` : 'Delivered'
+        ? presentation.isCollected ? 'Drop collected' : presentation.isNext ? `Waiting for ${handoff.name}` : 'Delivered'
         : `${handoff.name} carried it`;
     const note = handoff.role === 'sender'
       ? handoff.note
       : handoff.role === 'recipient'
-        ? isNext ? `${handoff.name} is the next person this drop is trying to reach.` : handoff.note
+        ? presentation.isCollected
+          ? `${handoff.name} collected this drop.`
+          : presentation.isNext ? `${handoff.name} is the next person this drop is trying to reach.` : handoff.note
         : `${handoff.note} Recorded in ${handoff.location}.`;
 
     return {
       id: handoff.id,
       status,
       note,
-      date: formatEventDate(handoff.createdAt),
-      time: formatEventTime(handoff.createdAt),
-      done: !isNext,
-      current: isNext || isLast,
+      date: formatEventDate(collectedAt),
+      time: formatEventTime(collectedAt),
+      done: presentation.isComplete,
+      current: recipientCollection?.isCollected ? false : presentation.isNext || isLast,
     };
   });
 }

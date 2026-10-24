@@ -9,9 +9,9 @@ import { normalizeDropRecipient } from '@/lib/dropValidation';
 import { getSupabaseBrowserClient, isSupabaseAuthConfigured } from '@/lib/supabaseBrowser';
 import { getLocalAccountId } from '@/lib/localAccountScope';
 import { safeInternalPath } from '@/lib/safeInternalPath';
-import { authCallbackRoute, canEditInviteProfile, profileRoute } from '@/lib/inviteOnboarding';
+import { authCallbackRoute, canEditInviteProfile, claimReturnAfterProfileSync, isClaimReturnPath, profileRoute } from '@/lib/inviteOnboarding';
 import { emailLinkErrorMessage } from '@/lib/emailLinkErrorMessage';
-import { createProfileSharePayload } from '@/lib/profileInviteShare';
+import { copyProfileSharePayload, createProfileSharePayload } from '@/lib/profileInviteShare';
 import { shareInviteLink } from '@/lib/shareInvite';
 import { clearPendingRemoteProfile, defaultUserProfile, getFirstUseProfile, getPendingRemoteProfileSnapshot, getUserProfile, getUserProfileForAccount, getUserProfileOwnerId, hasCustomizedUserIdentity, hasUnmatchedLocalProfile, markPendingRemoteProfileSynced, preserveUserProfileForAccount, profileUrl, savePendingRemoteProfile, saveUserProfile, type UserProfile } from '@/lib/userStore';
 
@@ -38,6 +38,8 @@ function ProfileContent() {
   const [accountNoticeIsError, setAccountNoticeIsError] = useState(false);
   const [copied, setCopied] = useState(false);
   const [inviteShareNotice, setInviteShareNotice] = useState('');
+  const [manualInviteCopy, setManualInviteCopy] = useState('');
+  const [copyingInvite, setCopyingInvite] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [emailAddress, setEmailAddress] = useState('');
   const [emailLoading, setEmailLoading] = useState(false);
@@ -60,8 +62,9 @@ function ProfileContent() {
   const searchParams = useSearchParams();
   const authError = searchParams.get('authError');
   const inviteContext = searchParams.get('invite') === '1';
-  const canEditProfile = canEditInviteProfile(inviteContext, accountStatus, profileLookupFailed, identityUnverified);
   const nextPath = safeInternalPath(searchParams.get('next'), typeof window === 'undefined' ? 'https://drop.invalid' : window.location.origin);
+  const claimReturn = isClaimReturnPath(nextPath);
+  const canEditProfile = canEditInviteProfile(inviteContext, accountStatus, profileLookupFailed, identityUnverified);
   const supabaseAuthConfigured = isSupabaseAuthConfigured();
 
   useEffect(() => {
@@ -263,6 +266,7 @@ function ProfileContent() {
     setNotice('');
     setProfileError('');
     setInviteShareNotice('');
+    setManualInviteCopy('');
   };
 
   const save = async () => {
@@ -358,6 +362,8 @@ function ProfileContent() {
       saveNotice = 'Saved on this device only. Account sync did not finish; your profile link is not live yet.';
     }
     setNotice(saveNotice);
+    const syncedClaimReturn = claimReturnAfterProfileSync(syncResult.ok, nextPath);
+    if (syncedClaimReturn) router.replace(syncedClaimReturn);
   };
 
   const connectGoogle = async () => {
@@ -377,9 +383,10 @@ function ProfileContent() {
       if (nextPath) window.sessionStorage.setItem('dear-exe:auth-return', nextPath);
     } catch { /* Sign-in can continue without a return path when storage is disabled. */ }
     try {
+      const redirectTo = new URL(authCallbackRoute(inviteContext, nextPath), window.location.origin);
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
-        options: { redirectTo: new URL(authCallbackRoute(inviteContext), window.location.origin).toString() },
+        options: { redirectTo: redirectTo.toString() },
       });
       if (error) {
         window.sessionStorage.removeItem('dear-exe:auth-return');
@@ -412,8 +419,7 @@ function ProfileContent() {
         if (nextPath) window.sessionStorage.setItem('dear-exe:auth-return', nextPath);
       } catch { /* Sign-in can continue without a return path when storage is disabled. */ }
 
-      const redirectTo = new URL(authCallbackRoute(inviteContext), window.location.origin);
-      if (nextPath) redirectTo.searchParams.set('next', nextPath);
+      const redirectTo = new URL(authCallbackRoute(inviteContext, nextPath), window.location.origin);
       const { error } = await supabase.auth.signInWithOtp({
         email,
         options: { emailRedirectTo: redirectTo.toString() },
@@ -482,13 +488,33 @@ function ProfileContent() {
       },
       { title: payload.title, text: payload.text },
     );
+    setManualInviteCopy(result === 'unavailable' ? payload.copyText : '');
     setInviteShareNotice(result === 'shared'
       ? `Shared @${normalizeDropRecipient(profile.username)} and your public profile link.`
       : result === 'copied'
         ? `Copied @${normalizeDropRecipient(profile.username)} and your public profile link.`
         : result === 'cancelled'
           ? 'Share cancelled. Nothing was copied.'
-        : 'Sharing and copying are unavailable here. Select the public profile link in the Public profile panel to copy it manually.');
+          : 'Sharing and copying are unavailable. Select the handle and profile link below to copy them manually.');
+  };
+
+  const copyProfileInvite = async () => {
+    const payload = createProfileSharePayload(profile.username, window.location.origin);
+    if (!payload) {
+      setProfileError('Choose a valid Drop handle before copying your invite details.');
+      return;
+    }
+
+    setCopyingInvite(true);
+    const result = await copyProfileSharePayload(payload, (text) => {
+      if (!navigator.clipboard) throw new Error('Clipboard unavailable');
+      return navigator.clipboard.writeText(text);
+    });
+    setManualInviteCopy(result === 'unavailable' ? payload.copyText : '');
+    setInviteShareNotice(result === 'copied'
+      ? `Copied @${normalizeDropRecipient(profile.username)} and your public profile link.`
+      : 'Copy is unavailable. Select the handle and profile link below to copy them manually.');
+    setCopyingInvite(false);
   };
 
   const username = normalizeDropRecipient(profile.username);
@@ -504,25 +530,41 @@ function ProfileContent() {
         : accountStatus === 'error'
           ? 'Account status needs attention.'
           : 'Not connected. Your profile still works on this device.';
-  const inviteProgress = accountStatus === 'checking'
-    ? 'Checking your account before we save an invite handle.'
-    : accountStatus === 'unavailable' || !supabaseAuthConfigured
-      ? 'Account sign-in is unavailable in this preview, so this invite cannot be completed yet.'
-      : accountStatus === 'error'
-        ? 'We could not verify your account. Refresh before continuing with this invite.'
-        : accountStatus === 'signed-out'
-          ? 'Step 1 of 3: connect your account. A profile saved only on this device will not reach your friend.'
-          : remoteProfileAvailable
-            ? 'Step 3 of 3: your handle is synced. Send it back to your friend below.'
-            : 'Step 2 of 3: save and sync your handle. Then you can share it back.';
+  const inviteProgress = (() => {
+    if (accountStatus === 'checking') {
+      return claimReturn ? 'Checking your account before we return you to the private drop.' : 'Checking your account before we save an invite handle.';
+    }
+    if (accountStatus === 'unavailable' || !supabaseAuthConfigured) {
+      return claimReturn ? 'Account sign-in is unavailable in this preview, so this drop cannot be claimed yet.' : 'Account sign-in is unavailable in this preview, so this invite cannot be completed yet.';
+    }
+    if (accountStatus === 'error') {
+      return claimReturn ? 'We could not verify your account. Refresh before returning to this drop.' : 'We could not verify your account. Refresh before continuing with this invite.';
+    }
+    if (accountStatus === 'signed-out') {
+      return claimReturn
+        ? 'Step 1 of 3: sign in. We’ll bring you back to this private drop after you confirm your email.'
+        : 'Step 1 of 3: connect your account. A profile saved only on this device will not reach your friend.';
+    }
+    if (remoteProfileAvailable) {
+      return claimReturn
+        ? 'Step 3 of 3: your handle is synced. Continue to your private drop to review and claim it.'
+        : 'Step 3 of 3: your handle is synced. Send it back to your friend below.';
+    }
+    return claimReturn
+      ? 'Step 2 of 3: save and sync your handle. Then return here to claim the drop.'
+      : 'Step 2 of 3: save and sync your handle. Then you can share it back.';
+  })();
   const canRefreshInviteAccount = inviteContext && accountStatus === 'error';
-  const saveButtonLabel = saving
-    ? 'Saving…'
-    : inviteContext && !canEditProfile
-      ? accountStatus === 'checking' ? 'Checking account…' : accountStatus === 'error' ? 'Refresh account status' : 'Connect account first'
-      : saved
-        ? remoteProfileAvailable ? 'Saved & synced' : inviteContext ? 'Save & sync handle' : 'Saved on this device'
-        : inviteContext ? 'Save & sync handle' : 'Save identity';
+  const saveButtonLabel = (() => {
+    if (saving) return 'Saving…';
+    if (inviteContext && !canEditProfile) {
+      if (accountStatus === 'checking') return 'Checking account…';
+      return accountStatus === 'error' ? 'Refresh account status' : 'Connect account first';
+    }
+    if (saved && remoteProfileAvailable) return claimReturn ? 'Profile ready' : 'Saved & synced';
+    if (inviteContext) return 'Save & sync handle';
+    return saved ? 'Saved on this device' : 'Save identity';
+  })();
 
   const restorePendingProfile = (source: 'current' | 'legacy' = 'current') => {
     const pendingSnapshot = remoteUserId ? getPendingRemoteProfileSnapshot(remoteUserId) : null;
@@ -595,16 +637,16 @@ function ProfileContent() {
             </div>
 
             <div className="mt-8">
-              <p className="eyebrow">Make it yours</p>
-              <h1 className="display-title mt-4 max-w-[11ch]">Pick your Drop handle.</h1>
+              <p className="eyebrow">{claimReturn ? 'One quick setup' : 'Make it yours'}</p>
+              <h1 className="display-title mt-4 max-w-[11ch]">{claimReturn ? 'Set your handle, then claim.' : 'Pick your Drop handle.'}</h1>
               <p className="body-copy mt-5 max-w-2xl text-lg">
-                Make it easy for friends to find you and send a little something your way.
+                {claimReturn ? 'Choose how you’ll show up on Drop. Your friend’s contents stay private until you claim them.' : 'Make it easy for friends to find you and send a little something your way.'}
               </p>
             </div>
 
             {inviteContext && (
               <div className="notice mt-6" role="status" aria-live="polite">
-                <p className="eyebrow">Finish your invite</p>
+                <p className="eyebrow">{claimReturn ? 'Claim your drop' : 'Finish your invite'}</p>
                 <p className="mt-2">{inviteProgress}</p>
                 {accountStatus === 'signed-out' && (
                   <a href="#account" className="mt-3 inline-flex min-h-11 items-center font-semibold underline underline-offset-4">Connect your account</a>
@@ -729,20 +771,54 @@ function ProfileContent() {
 
             {notice && <p className="notice mt-5" role="status" aria-live="polite">{notice}</p>}
 
-            {inviteContext && accountStatus === 'signed-in' && remoteProfileAvailable && publicPath && (
+            {claimReturn && nextPath && accountStatus === 'signed-in' && remoteProfileAvailable && (
+              <section className="panel mt-6 p-6" aria-labelledby="claim-return-title">
+                <p className="eyebrow">Profile ready</p>
+                <h2 id="claim-return-title" className="section-title mt-3 text-2xl">Your private drop is next.</h2>
+                <p className="body-copy mt-3 text-sm">Your profile is synced. Continue when you’re ready; the contents stay sealed until you choose to claim.</p>
+                <Link href={nextPath} className="button-primary mt-5 min-h-12 w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-white">Continue to claim this drop <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
+              </section>
+            )}
+
+            {inviteContext && !claimReturn && accountStatus === 'signed-in' && remoteProfileAvailable && publicPath && (
               <section className="panel mt-6 p-6" aria-labelledby="invite-share-title">
                 <p className="eyebrow">Your invite · step 3</p>
                 <h2 id="invite-share-title" className="section-title mt-3 text-2xl">Send your handle back.</h2>
                 <p className="body-copy mt-3 text-sm">Share only your public @handle and profile link so your friend can send your Drop.</p>
-                <button
-                  type="button"
-                  onClick={() => void shareProfileBack()}
-                  className="button-primary mt-5 min-h-12 w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-white"
-                >
-                  <Share2 className="h-4 w-4" aria-hidden="true" />
-                  Share @{username}
-                </button>
+                <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => void shareProfileBack()}
+                    className="button-primary min-h-12 w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+                  >
+                    <Share2 className="h-4 w-4" aria-hidden="true" />
+                    Share @{username}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void copyProfileInvite()}
+                    disabled={copyingInvite}
+                    className="button-secondary min-h-12 w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:opacity-60"
+                  >
+                    <Copy className="h-4 w-4" aria-hidden="true" />
+                    {copyingInvite ? 'Copying…' : 'Copy handle + link'}
+                  </button>
+                </div>
                 {inviteShareNotice && <p className="notice mt-4" role="status" aria-live="polite">{inviteShareNotice}</p>}
+                {manualInviteCopy && (
+                  <div className="mt-3">
+                    <label htmlFor="manual-invite-copy" className="sr-only">Your public handle and profile link</label>
+                    <textarea
+                      id="manual-invite-copy"
+                      readOnly
+                      rows={2}
+                      value={manualInviteCopy}
+                      onFocus={(event) => event.currentTarget.select()}
+                      className="mt-2 block min-h-20 w-full resize-none rounded-xl border border-[rgba(16,42,67,0.16)] bg-white px-3 py-3 text-sm leading-relaxed text-ink-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a]"
+                    />
+                    <p className="mt-2 text-xs leading-relaxed text-on-surface-variant">Tap the text to select it, then choose Copy.</p>
+                  </div>
+                )}
               </section>
             )}
           </article>
@@ -860,7 +936,7 @@ function ProfileContent() {
               ) : (
                 <p className="notice mt-5" role="status">Sign-in isn’t available in this preview. Drafts stay on this device.</p>
               )}
-              {nextPath && <Link href={nextPath} className="button-secondary mt-3 w-full">{nextPath.startsWith('/letter/') ? 'Back to this drop' : 'Back to your draft'}</Link>}
+              {nextPath && <Link href={nextPath} className="button-secondary mt-3 w-full">{claimReturn ? 'Continue to claim this drop' : nextPath.startsWith('/letter/') ? 'Back to this drop' : 'Back to your draft'}</Link>}
               {accountNotice && (
                 <p className={`notice mt-4 ${accountNoticeIsError ? 'error-notice' : ''}`} role={accountNoticeIsError ? 'alert' : 'status'} aria-live="polite">
                   {accountNotice}

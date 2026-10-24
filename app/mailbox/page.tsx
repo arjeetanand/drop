@@ -1,40 +1,26 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Mail, PenLine, Search, X } from 'lucide-react';
+import { LiveDropCue, LiveDropStatus } from '@/components/LiveDropCue';
+import { LiveReactionCue } from '@/components/LiveReactionCue';
 import { LetterCard } from '@/components/LetterCard';
-import { mockLetters, type MockLetter } from '@/data/mockData';
-import { getRemoteLetters } from '@/lib/letterBackend';
-import { getLetterDraft, getLettersWithDraft } from '@/lib/letterStore';
-import { filterMailboxLetters, getMailboxCounts, type MailboxFilter } from '@/lib/mailboxView';
+import { RelayRecipientCard } from '@/components/RelayRecipientCard';
+import { useLiveInbox } from '@/lib/useLiveInbox';
+import { filterMailboxLetters, getMailboxCounts, getMailboxEmptyState, type MailboxFilter } from '@/lib/mailboxView';
 import { cn } from '@/lib/utils';
 
 export default function Mailbox() {
-  const [letters, setLetters] = useState<MockLetter[]>(mockLetters);
+  const { letters, arrival, arrivalCount, dismissArrival, reaction, reactionCount, dismissReaction, refreshInbox } = useLiveInbox();
   const [activeTab, setActiveTab] = useState<MailboxFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    let active = true;
-    const loadLetters = async () => {
-      const draft = getLetterDraft();
-      const remoteLetters = await getRemoteLetters();
-      if (!active) return;
-      const localLetters = getLettersWithDraft(draft);
-      if (!remoteLetters?.length) {
-        setLetters(localLetters);
-        return;
-      }
-      const merged = new Map(localLetters.map((letter) => [letter.id, letter]));
-      remoteLetters.forEach((letter) => merged.set(letter.id, letter));
-      setLetters(Array.from(merged.values()));
-    };
-    void loadLetters();
-    return () => {
-      active = false;
-    };
-  }, []);
+  const clearSearch = () => {
+    setSearchQuery('');
+    searchInputRef.current?.focus();
+  };
 
   const counts = useMemo(() => getMailboxCounts(letters), [letters]);
 
@@ -48,6 +34,7 @@ export default function Mailbox() {
   ];
 
   const filteredLetters = useMemo(() => filterMailboxLetters(letters, activeTab, searchQuery), [activeTab, letters, searchQuery]);
+  const emptyState = getMailboxEmptyState(activeTab, searchQuery);
 
   return (
     <main className="page-shell page-enter">
@@ -63,6 +50,10 @@ export default function Mailbox() {
             Make a drop
           </Link>
         </header>
+
+        <LiveDropStatus letter={arrival} count={arrivalCount} />
+        {arrival && <div className="mt-5"><LiveDropCue letter={arrival} count={arrivalCount} onDismiss={dismissArrival} /></div>}
+        <LiveReactionCue letter={reaction} count={reactionCount} onDismiss={dismissReaction} />
 
         <section className="grid grid-cols-2 gap-0 border-b border-[rgba(16,42,67,0.13)] py-7 sm:grid-cols-4">
           {[
@@ -103,14 +94,15 @@ export default function Mailbox() {
             <label htmlFor="mailbox-search" className="sr-only">Search drops</label>
             <input
               id="mailbox-search"
+              ref={searchInputRef}
               type="search"
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
               placeholder="Find a drop"
-              className="input-field pl-10 pr-10"
+              className="input-field appearance-none pl-10 pr-10"
             />
             {searchQuery && (
-              <button type="button" onClick={() => setSearchQuery('')} aria-label="Clear search" className="absolute right-2 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center text-on-surface-variant hover:text-ink-navy">
+              <button type="button" onClick={clearSearch} aria-label="Clear search" className="absolute right-2 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center text-on-surface-variant hover:text-ink-navy">
                 <X className="h-4 w-4" aria-hidden="true" />
               </button>
             )}
@@ -118,16 +110,34 @@ export default function Mailbox() {
         </section>
 
         <section className="mt-2">
-          {filteredLetters.length ? filteredLetters.map((letter) => <LetterCard key={letter.id} letter={letter} showExcerpt />) : (
+          {filteredLetters.length ? filteredLetters.map((letter) => (
+            letter.direction === 'received'
+              && letter.status === 'dispatched'
+              && !letter.sample
+              && !letter.localDemo
+              ? <RelayRecipientCard key={letter.id} letter={letter} onRefresh={refreshInbox} />
+              : <LetterCard key={letter.id} letter={letter} showExcerpt />
+          )) : (
             <div className="panel-muted my-10 rounded-2xl p-8 text-center sm:p-10">
               <Mail className="mx-auto h-7 w-7 text-on-surface-variant" aria-hidden="true" />
-              <h2 className="mt-4 font-headline-md text-2xl text-ink-navy">No drops in this little corner yet.</h2>
+              <h2
+                className="mt-4 font-headline-md text-2xl text-ink-navy"
+                aria-live={emptyState.kind === 'search' ? 'polite' : undefined}
+                aria-atomic={emptyState.kind === 'search' ? 'true' : undefined}
+              >
+                {emptyState.title}
+              </h2>
               <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-on-surface-variant">
-                {searchQuery ? 'Try a different search or clear the filter.' : 'Send something small to get this started.'}
+                {emptyState.description}
               </p>
               <div className="mt-5 flex flex-wrap justify-center gap-3">
-                {searchQuery && <button type="button" onClick={() => setSearchQuery('')} className="button-secondary">Clear search</button>}
-                <Link href="/compose?new=1" className="button-primary !rounded-xl !bg-[#2b45f7] !text-white !border-[#2b45f7]">Make a drop <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
+                {emptyState.kind === 'search' ? (
+                  <button type="button" onClick={clearSearch} className="button-secondary">Clear search</button>
+                ) : (
+                  <Link href={emptyState.actionHref} className="button-primary !rounded-xl !bg-[#2b45f7] !text-white !border-[#2b45f7]">
+                    {emptyState.actionLabel} <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                  </Link>
+                )}
               </div>
             </div>
           )}

@@ -6,12 +6,61 @@ Build Drop as a mobile-first private sharing app where a person can send a photo
 
 The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailbox, and relay foundations. Existing letters continue to work as text drops, and their routes and saved content remain readable. The build covers the end-to-end mobile flow: choose content, attach an image or GIF, choose a recipient, send, open, react, and optionally follow a relay.
 
+## Implementation Status — 2026-10-24 (Demo to first drop)
+
+- The opened local demo’s sender copy now offers **Make one for a friend**. It opens a fresh, blank, editable text draft by ID; the demo’s sample content and reaction stay in the demo, the “nothing was sent or shared” explanation remains visible, and an unfinished image draft plus its IndexedDB bytes stay recoverable.
+- The CTA preserves the existing account and recipient gates. The new browser mode checks the sender-copy transition, the empty composer, scroll-to-top, and prior draft/attachment preservation at 390×844.
+- Verification: `npm test` passed 249/249; lint, `npx tsc --noEmit --incremental false`, browser-script syntax, `git diff --check`, and `npm run build` passed. Isolated Chrome passed on a clean retry with no cross-origin requests. A no-env browser attempt intermittently remained at the account-check placeholder; a configured `.env.local` browser session cannot pass the smoke’s cross-origin auth gate.
+- Code commit `df710fd` (`feat: start a fresh drop from the demo`) is pushed to `origin/feat/demo-to-first-drop`. No PR or merge was created; `/letter` and `.env.local` were not changed.
+- The user reports being signed in to Supabase, but the session is not exposed to this task. The read-only CLI attempt was blocked before contacting Supabase by an `EPERM` writing its telemetry file under `~/.supabase`; no project or billing changes were made. Verify the approved Free plan/project before hosted migrations or sends.
+
+## Implementation Status — 2026-10-24 (Relay count and mobile pass)
+
+- Relay statistics now count only carrier handoffs, and both Relay and Journey label the value “Carriers.” Regression coverage excludes sender and recipient roles.
+- The narrow-screen Relay controls stack, and the passport identifier and headline use mobile-safe wrapping. Exact Chrome checks measured no document overflow at 390 CSS pixels or desktop width.
+- Verification: `npm test` passed 249/249; lint, no-incremental TypeScript, `git diff --check`, and the production build passed. The full demo browser smoke timed out on initial `Page.navigate`, so no full journey claim is made for this checkpoint.
+- Code commit `4f8d512` is pushed to `origin/fix/relay-carrier-count`; hosted Supabase setup remains blocked because the local CLI has no access token. No project, billing, or `.env.local` change was made.
+- Next: connect the demo sender copy to a fresh editable draft without inheriting demo content or replacing an active draft, then complete the hosted Free project setup when authenticated access is available.
+
+## Implementation Status — 2026-10-24 (Home writing spark)
+
+- Home’s **Use this thought** action now creates a fresh text drop and seeds it with the currently displayed writing prompt. The composer remains editable and receives only the draft ID in its route.
+- Starting this draft does not replace an unfinished photo/GIF draft or its saved local attachment. The store regression test covers draft identity, prompt content, and existing attachment recovery.
+- Code commit `2a29ffa` (`fix: seed home thought into fresh drop draft`) is pushed to `origin/fix-private-claim-share-cancel-copy`. The requested learning log and product notes are appended in the docs checkpoint.
+- The user reports being signed in to Supabase, but this task exposes no authenticated dashboard control. No project or billing changes were made; the approved Free plan, hosted sends, and real 30-day Storage deletion remain unverified.
+
+## Implementation Status — 2026-10-24 (Hosted Supabase provisioning)
+
+- The approved distinct organization `Drop App Free` was created. Its plan could not be verified because the organization-details request returned 403. No paid compute or add-on was selected; do not treat the Free plan as verified yet.
+- Creating the `Drop` project in `ap-south-1` without a compute-size override returned 403. The read-only project list still shows only the existing `arjeetanand's Project`; no Drop project was created or configured.
+- The supplied PAT can create the organization and list projects, but organization details and project creation return 403. Supabase documents `organization_admin_read` and `organization_projects_create` for those operations. Hosted setup awaits a newly scoped token or manual project creation, with the plan verified before migrations or app configuration.
+- `.env.local` was not changed; the generated password for the rejected project request was removed. The user-approved 30-day cleanup policy remains implemented in the existing migration.
+- `npm run build -- --webpack` now passes. `./run.sh` restarted the app on port 4004 and Home returned HTTP 200. The build reports only outdated Browserslist data and an ambiguous Tailwind easing class. Hosted behavior remains unverified.
+
+## Implementation Status — 2026-10-24 (Share without a handle)
+
+- The composer offers an explicit handleless private-claim path from the blank recipient step. It discloses that anyone holding the bearer link can claim, keeps the account/payload-save gates, limits this route to Instant, and lets the sender return to handle entry with keyboard focus restored.
+- A successful recipientless claim issue is persisted as `claim_pending`; Sent and detail views show a neutral claim status instead of inventing a recipient or saying the link was shared. Existing addressed sends still require a confirmed handle.
+- Regression coverage includes eligibility, saved receipt persistence, generic recipient projection, and rejection of a normal delivered send without a recipient. The isolated Chrome run verified the handleless choice, disclosure, readiness gate, focus return, and saved claim detail/recovery at 360×844, 390×844, 430×844, and 1440×900. The full GIF and photo demo flows also passed; touch was used for the 360px GIF journey, and keyboard activation for the handleless route and claim recovery.
+- `npm test` passed 247/247; lint, no-incremental TypeScript, smoke-script syntax, and `git diff --check` passed. The browser request gate observed no cross-origin or Auth/RPC/Storage-write requests in the local flows.
+- Code commit `a6f8de7` (`feat: add handleless private claim route`) is pushed to `origin/fix-private-claim-share-cancel-copy`; product notes and this learning log are committed separately.
+- Hosted two-account delivery and real Storage deletion remain unverified because no hosted Drop project is set up. This slice does not change the existing 30-day retention policy. Screen-reader and physical-device checks also remain open. A production build was not rerun; prior attempts were blocked by `.next/trace` write permission in the checkout and Google Fonts DNS resolution in a scratch copy.
+
+## Implementation Status — 2026-10-24 (Home demo browser verification)
+
+- Home now links directly to a no-sign-in photo/GIF demo. It reuses the recipient reveal, reaction, and sender-copy screens, uses bundled media, and clearly says the sample stays on this device and is not sent or shared.
+- The demo saves into the current account’s local history without replacing the active draft. Its attachment write and rollback use the account captured before fetching the bundled media; account-switch regression checks cover changes before and during the IndexedDB write.
+- The isolated Chrome smoke now covers full GIF/reaction/reload/sender-copy flows at 360×844, 390×844, 430×844, and 1440×900, plus the bundled photo flow at 390×844. Touch activation passed at 360px; keyboard activation passed at 390px, 430px, and desktop. Home and the chooser have no horizontal overflow at those widths. The page-scoped gate observed no cross-origin, Auth, RPC, or Storage-write requests.
+- Verification this slice: `npm test` passed 241/241, `npm run lint`, no-incremental TypeScript, browser-script syntax, `git diff --check`, and the rendered Chrome smoke passed. The plain incremental `npm run typecheck` hit a sandbox EPERM writing ignored `tsconfig.tsbuildinfo`; `npx tsc --noEmit --incremental false` passed. The production build was not rerun because only the browser smoke script changed; it passed in the prior demo checkpoint.
+- Chrome touch input timed out at 430px in this environment, so that viewport uses the passing keyboard path. This local demo evidence does not cover hosted account-to-account sends, actual 30-day Storage deletion, screen-reader use, or physical-device keyboard/safe-area behavior. The user confirmed valid abandoned staging uploads should be deleted after 30 days; the existing migration already implements that cutoff, so no retention code or hosted resource changed.
+
 ## Implementation Status — 2026-10-18
 
+- The unknown-handle claim regression coverage now follows photo and GIF drops through three access states: before profile setup, after profile setup but before claim, and after explicit claim. The local Auth/Storage smoke and rollback-only SQL fixture check participant access and outsider denial; runtime verification still needs an isolated Supabase project with the media cleanup schedule configured.
 - Task 1 is complete. The mixed-payload model, default text behavior for older drafts, and compatible recipient routes are in place.
 - The core mobile sharing, receive, reaction, and optional relay flows have local implementations. Detailed code and browser checks are recorded in `tasks/todo.md`.
 - Seeded demo reactions now persist on this device and appear on the mailbox card; they are clearly marked as local and do not notify a sender.
-- Preview now offers an explicit same-device demo for instant drops: recipient reveal, local reaction, then a sender copy. The mailbox labels it as a demo and excludes it from the Sent count; it is never represented as delivered or shared.
+- Preview offers an explicit same-device demo for instant drops: recipient reveal, local reaction, then a sender copy. The mailbox labels it as a demo and excludes it from real Sent counts; its local completion state does not mean a message was sent or a notification delivered.
 - A disposable PostgreSQL regression test now covers relay token authorization, retry recovery, rotation/revocation, optional coordinates, participant-only route visibility, and private token-table denial.
 - Signed-in mailbox cards now show participant-visible reactions on sent drops; hosted account-to-account verification remains open.
 - First-use profile setup preserves customized local identity, suggests an editable account-specific handle, and only creates a sender profile after confirmed absence. Per-account unsynced edits survive lookup recovery, and handle conflicts stay recoverable on-device. The local smoke test verifies rejected updates and duplicate first-use inserts leave existing profiles unchanged. Authenticated browser onboarding remains unverified.
@@ -22,7 +71,7 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 
 - `/drop` is the new app and the only write target. `/letter` is read-only inspiration; source files and its existing uncommitted work must remain untouched.
 - Use the existing empty private GitHub repository `arjeetanand/drop`. Copy the working app into this folder without `.git`, environment secrets, generated output, or installed dependencies; preserve the plan files already here.
-- Verify each implementation slice before committing and push each passing commit to `main`.
+- Verify each implementation slice before committing and push each passing task-branch commit to `origin`. Merge into `main` only with explicit approval.
 - The earlier design chat did not record a final selection. Use its playful paper direction as the default: warm paper, cobalt actions, expressive media, small postmark details, and thumb-first navigation.
 
 ## Product Scope and Decisions

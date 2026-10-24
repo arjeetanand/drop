@@ -38,6 +38,13 @@ export async function POST(request: Request) {
   if (!paths) return json({ error: 'Invalid media request.' }, 400);
 
   const serviceClient = createClient(url, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } });
+  const removeStagedMedia = async () => {
+    try {
+      await serviceClient.storage.from('drop-media').remove([paths.stagedPath]);
+    } catch {
+      // Cleanup is best-effort; the media result must not be replaced by a cleanup failure.
+    }
+  };
   const { data: stagedMedia, error: downloadError } = await serviceClient.storage.from('drop-media').download(paths.stagedPath);
   if (downloadError || !stagedMedia || stagedMedia.size === 0 || stagedMedia.size > MAX_DROP_MEDIA_BYTES) {
     return json({ error: 'The staged image could not be validated. Choose it again and retry.' }, 400);
@@ -63,14 +70,12 @@ export async function POST(request: Request) {
     if (!savedMediaError && savedMedia && existingDrop.media_mime_type === media.mimeType && existingDrop.media_size_bytes === media.sizeBytes) {
       const savedBytes = Buffer.from(await savedMedia.arrayBuffer());
       if (savedBytes.equals(Buffer.from(media.bytes))) {
-        try {
-          await serviceClient.storage.from('drop-media').remove([paths.stagedPath]);
-        } catch {
-          // The linked copy is safe; an inaccessible staging copy can be removed later.
-        }
+        await removeStagedMedia();
         return json({ mediaPath: existingDrop.media_path, mediaMimeType: media.mimeType, mediaSizeBytes: media.sizeBytes });
       }
     }
+    await removeStagedMedia();
+    return json({ error: 'This drop already has a different attachment. Start a new draft to send another image.' }, 409);
   }
 
   const { error: uploadError } = await serviceClient.storage.from('drop-media').upload(
@@ -78,12 +83,20 @@ export async function POST(request: Request) {
     new Blob([media.bytes], { type: media.mimeType }),
     { contentType: media.mimeType, upsert: false },
   );
-  if (uploadError) return json({ error: 'The validated image could not be saved. Please retry.' }, 500);
+  if (uploadError) {
+    const { data: savedMedia, error: savedMediaError } = await serviceClient.storage.from('drop-media').download(paths.finalPath);
+    if (savedMediaError || !savedMedia) return json({ error: 'The validated image could not be saved. Please retry.' }, 500);
 
-  try {
-    await serviceClient.storage.from('drop-media').remove([paths.stagedPath]);
-  } catch {
-    // The final copy is safe to use; an inaccessible staging copy can be removed later.
+    const savedBytes = Buffer.from(await savedMedia.arrayBuffer());
+    if (!savedBytes.equals(Buffer.from(media.bytes))) {
+      await removeStagedMedia();
+      return json({ error: 'A different image is already stored for this draft. Choose the attachment again.' }, 409);
+    }
+
+    await removeStagedMedia();
+    return json({ mediaPath: paths.finalPath, mediaMimeType: media.mimeType, mediaSizeBytes: media.sizeBytes });
   }
+
+  await removeStagedMedia();
   return json({ mediaPath: paths.finalPath, mediaMimeType: media.mimeType, mediaSizeBytes: media.sizeBytes });
 }

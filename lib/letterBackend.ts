@@ -6,11 +6,21 @@ import { getPendingRemoteProfileSnapshot, suggestedDropUsername, withPendingRemo
 import { getSupabaseBrowserClient } from '@/lib/supabaseBrowser';
 import { isCurrentLocalAccount } from '@/lib/localAccountScope';
 import { normalizeDropRecipient, validateDropMedia } from '@/lib/dropValidation';
-import { createStagedDropMediaPath, isDropMediaFinalPath, resolveDropMediaPaths } from '@/lib/dropMediaStorage';
+import { createStagedDropMediaAttemptPath, isDropMediaFinalPath, resolveDropMediaPaths } from '@/lib/dropMediaStorage';
 import { mergeDropReactions, type DropReactionRow } from '@/lib/mergeDropReactions';
 import { matchesStoredDropMetadata, type DropSendIntent, type StoredDropSend } from '@/lib/dropSendRecovery';
-import { fetchAllPages } from '@/lib/fetchAllPages';
+import { fetchAllPages, fetchPagedMailbox } from '@/lib/fetchAllPages';
 import { uniqueRecentDropRecipients, type RecentDropRecipient, type RecentDropRecipientRow } from '@/lib/recentDropRecipients';
+import { subscribeToDropInbox } from '@/lib/dropInboxRealtime';
+import { subscribeToDropReactions } from '@/lib/dropReactionRealtime';
+import { isDropClaimToken, resolveDropClaimInviteResult } from '@/lib/dropClaim';
+import { isEligibleSenderClaim, markSenderClaimedDrops } from '@/lib/claimInviteStatus';
+import { withFallbackTimeout } from '@/lib/withFallbackTimeout';
+import { resolveSenderClaimReceiptResult, type SenderClaimReceiptRow } from '@/lib/claimReceipt';
+
+const SENDER_CLAIM_STATUS_TIMEOUT_MS = 5_000;
+
+export type RemoteClaimReceiptLookup = { accountId: string | null; status: boolean | null };
 
 type LetterRow = {
   id: string;
@@ -33,6 +43,19 @@ type LetterRow = {
   media_path: string | null;
   media_mime_type: string | null;
   media_size_bytes: number | null;
+  media_claim_expires_at?: string | null;
+};
+
+type RecipientRelayDropRow = {
+  id: string;
+  sender_display_name: string | null;
+  created_at: string;
+  dispatched_at: string | null;
+  handoff_count: number;
+  latest_carrier: string | null;
+  latest_neighborhood: string | null;
+  latest_note: string | null;
+  latest_handoff_at: string | null;
 };
 
 type ProfileRow = {
@@ -274,7 +297,7 @@ function rowToLetter(row: LetterRow, userId: string, revealContent = false): Moc
   const mediaFallback = row.payload_kind === 'gif' ? 'A GIF is waiting behind the seal.' : row.payload_kind === 'image' ? 'A photo is waiting behind the seal.' : 'A sealed drop waiting to be opened.';
   return {
     id: row.id,
-    recipient: row.recipient_name || row.recipient_username || 'your correspondent',
+    recipient: row.status === 'claim_pending' ? 'Anyone with the link' : row.recipient_name || row.recipient_username || 'your correspondent',
     sender: row.sender_display_name || undefined,
     senderUsername: row.sender_profile?.username || undefined,
     direction: row.sender_id === userId ? 'sent' : 'received',
@@ -294,35 +317,225 @@ function rowToLetter(row: LetterRow, userId: string, revealContent = false): Moc
     mediaPath: row.media_path || undefined,
     mediaMimeType: row.media_mime_type || undefined,
     mediaSizeBytes: row.media_size_bytes || undefined,
+    mediaExpiresAt: row.media_claim_expires_at || undefined,
+  };
+}
+
+function rowToRecipientRelayDrop(row: RecipientRelayDropRow): MockLetter {
+  const activityAt = row.latest_handoff_at || row.dispatched_at || row.created_at;
+  return {
+    id: row.id,
+    recipient: 'you',
+    sender: row.sender_display_name || 'Someone you know',
+    direction: 'received',
+    date: new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(activityAt)),
+    activityAt,
+    status: 'dispatched',
+    excerpt: 'The private part stays sealed while this drop travels.',
+    subject: 'A drop is on its way',
+    deliveryMode: 'relay',
+    relayProgress: {
+      handoffCount: row.handoff_count,
+      latestCarrier: row.latest_carrier,
+      latestNeighborhood: row.latest_neighborhood,
+      latestNote: row.latest_note,
+      latestHandoffAt: row.latest_handoff_at,
+    },
   };
 }
 
 const MAILBOX_SELECT = 'id, sender_id, sender_profile:public_profiles!letters_sender_id_fkey(username), recipient_id, sender_display_name, recipient_username, recipient_name, subject, teaser, status, seal_id, dispatched_at, delivered_at, created_at, payload_kind, delivery_mode, media_path, media_mime_type, media_size_bytes';
-const LETTER_SELECT = `${MAILBOX_SELECT}, content`;
+const LETTER_SELECT = `${MAILBOX_SELECT}, content, media_claim_expires_at`;
 
-export async function getRemoteLetters(): Promise<MockLetter[] | null> {
+export interface RemoteMailboxSnapshot {
+  letters: MockLetter[];
+  reactionsHydrated: boolean;
+  claimStatusHydrated: boolean;
+}
+
+type SenderClaimedDropRow = { letter_id: string };
+
+async function readSenderClaimedDropIds(context: AuthenticatedContext): Promise<string[] | null> {
+  try {
+    const { data, error } = await context.supabase
+      .rpc('get_sender_claimed_drop_ids')
+      .returns<SenderClaimedDropRow[]>();
+    if (error || !Array.isArray(data)) return null;
+    return data.flatMap((row) => typeof row.letter_id === 'string' ? [row.letter_id] : []);
+  } catch {
+    return null;
+  }
+}
+
+async function readSenderClaimedDropIdsWithTimeout(context: AuthenticatedContext): Promise<string[] | null> {
+  return withFallbackTimeout(readSenderClaimedDropIds(context), SENDER_CLAIM_STATUS_TIMEOUT_MS, null);
+}
+
+export async function getRemoteSenderClaimStatusForDrop(letterId: string): Promise<boolean | null> {
+  try {
+    return await withFallbackTimeout((async () => {
+      const context = await getAuthenticatedClient();
+      if (!context) return null;
+      const claimedDropIds = await readSenderClaimedDropIds(context);
+      return claimedDropIds === null ? null : claimedDropIds.includes(letterId);
+    })(), SENDER_CLAIM_STATUS_TIMEOUT_MS, null);
+  } catch {
+    return null;
+  }
+}
+
+export async function getRemoteClaimReceiptStatusForDrop(letterId: string): Promise<RemoteClaimReceiptLookup | null> {
+  try {
+    return await withFallbackTimeout((async () => {
+      const context = await getAuthenticatedClient();
+      if (!context) return { accountId: null, status: null };
+      const { data: row, error } = await context.supabase.from('letters')
+        .select('id, status, recipient_id, delivery_mode, payload_kind')
+        .eq('id', letterId)
+        .eq('sender_id', context.user.id)
+        .maybeSingle<SenderClaimReceiptRow>();
+      if (error || !row) return { accountId: context.user.id, status: null };
+      if (row.status === 'claim_pending' && row.recipient_id === null) {
+        return { accountId: context.user.id, status: resolveSenderClaimReceiptResult(row, null) };
+      }
+      if (row.status !== 'delivered') return { accountId: context.user.id, status: null };
+      const claimedDropIds = await readSenderClaimedDropIds(context);
+      return { accountId: context.user.id, status: resolveSenderClaimReceiptResult(row, claimedDropIds) };
+    })(), SENDER_CLAIM_STATUS_TIMEOUT_MS, null);
+  } catch {
+    return { accountId: null, status: null };
+  }
+}
+
+export type RemoteDropDirection = 'sent' | 'received' | 'signed-out' | 'unavailable';
+
+/** Read only enough to decide whether this detail route should monitor sender reactions. */
+export async function getRemoteDropDirection(letterId: string): Promise<RemoteDropDirection> {
+  try {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) return 'unavailable';
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError) return authError.name === 'AuthSessionMissingError' ? 'signed-out' : 'unavailable';
+    if (!authData.user) return 'signed-out';
+    const { data, error } = await supabase.from('letters')
+      .select('sender_id')
+      .eq('id', letterId)
+      .maybeSingle<{ sender_id: string }>();
+    if (error || !data) return 'unavailable';
+    return data.sender_id === authData.user.id ? 'sent' : 'received';
+  } catch {
+    return 'unavailable';
+  }
+}
+
+export async function getRemoteLetters(): Promise<RemoteMailboxSnapshot | null> {
   const context = await getAuthenticatedClient();
   if (!context) return null;
 
-  const { data, error } = await context.supabase
-    .from('letters')
-    .select(MAILBOX_SELECT)
-    .order('created_at', { ascending: false })
-    .returns<LetterRow[]>();
+  const mailbox = await fetchPagedMailbox<LetterRow, DropReactionRow>(
+    async (from, to) => {
+      const { data, error } = await context.supabase
+        .from('letters')
+        .select(MAILBOX_SELECT)
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
+        .range(from, to)
+        .returns<LetterRow[]>();
 
-  if (error || !data) return null;
-  const letters = data.map((row) => rowToLetter(row, context.user.id));
-  if (!letters.length) return letters;
+      return error || !data ? null : data;
+    },
+    async (letterIds) => {
+      const { data, error } = await context.supabase
+        .from('letter_reactions')
+        .select('letter_id, emoji, updated_at')
+        .in('letter_id', letterIds)
+        .returns<DropReactionRow[]>();
 
+      return error || !data ? null : data;
+    },
+  );
+
+  if (!mailbox) return null;
+  const letters = mailbox.letters.map((row) => rowToLetter(row, context.user.id));
+  const [claimedDropIds, recipientRelayRead] = await Promise.all([
+    readSenderClaimedDropIdsWithTimeout(context),
+    context.supabase.rpc('get_recipient_relay_drops').returns<RecipientRelayDropRow[]>(),
+  ]);
+  const claimedLetters = markSenderClaimedDrops(letters, claimedDropIds);
+  const { data: recipientRelayRows, error: recipientRelayError } = recipientRelayRead;
+  const recipientRelayDrops = recipientRelayError || !Array.isArray(recipientRelayRows)
+    ? []
+    : recipientRelayRows.map((row) => rowToRecipientRelayDrop(row as RecipientRelayDropRow));
+  const displayLetters = mailbox.reactions
+    ? mergeDropReactions(claimedLetters, mailbox.reactions)
+    : claimedLetters;
+  return {
+    letters: [...displayLetters, ...recipientRelayDrops],
+    reactionsHydrated: mailbox.reactions !== null,
+    claimStatusHydrated: claimedDropIds !== null,
+  };
+}
+
+export async function collectRemoteRelayDrop(letterId: string): Promise<{ ok: boolean; error?: string }> {
   try {
-    const { data: reactions, error: reactionError } = await context.supabase
-      .from('letter_reactions')
-      .select('letter_id, emoji')
-      .in('letter_id', letters.map((letter) => letter.id))
-      .returns<DropReactionRow[]>();
-    return reactionError || !reactions ? letters : mergeDropReactions(letters, reactions);
+    const context = await getAuthenticatedClient();
+    if (!context) return { ok: false, error: 'Sign in as the drop recipient to collect it.' };
+    const { error } = await context.supabase.rpc('collect_relay_drop', { p_letter_id: letterId });
+    if (error) return { ok: false, error: 'This drop could not be collected. Check your connection and try again.' };
+    return { ok: true };
   } catch {
-    return letters;
+    return { ok: false, error: 'This drop could not be collected. Check your connection and try again.' };
+  }
+}
+
+export async function subscribeToIncomingDropInbox(onDropSignal: (dropId?: string) => void): Promise<() => void> {
+  try {
+    const context = await getAuthenticatedClient();
+    return context ? subscribeToDropInbox(context.supabase, context.user.id, onDropSignal) : () => {};
+  } catch {
+    return () => {};
+  }
+}
+
+export async function subscribeToSenderDropReactions(onDropSignal: (dropId?: string) => void): Promise<() => void> {
+  let active = true;
+  let timeout: ReturnType<typeof setTimeout> | null = null;
+  const setup = (async () => {
+    try {
+      const context = await getAuthenticatedClient();
+      return context
+        ? await subscribeToDropReactions(context.supabase, context.user.id, (dropId) => {
+          if (active) onDropSignal(dropId);
+        })
+        : () => {};
+    } catch {
+      return () => {};
+    }
+  })();
+  const timedOut = Symbol('reaction-subscription-timeout');
+  try {
+    const result = await Promise.race([
+      setup,
+      new Promise<typeof timedOut>((resolve) => {
+        timeout = setTimeout(() => resolve(timedOut), 10_000);
+      }),
+    ]);
+    if (timeout) clearTimeout(timeout);
+    if (result === timedOut) {
+      active = false;
+      void setup.then((stop) => stop());
+      return () => { active = false; };
+    }
+    return () => {
+      if (!active) return;
+      active = false;
+      result();
+    };
+  } catch {
+    if (timeout) clearTimeout(timeout);
+    active = false;
+    void setup.then((stop) => stop());
+    return () => {};
   }
 }
 
@@ -372,14 +585,47 @@ export async function getRemoteLetterById(letterId: string): Promise<MockLetter 
     .maybeSingle<LetterRow>();
 
   if (error || !data) return null;
-  const letter = rowToLetter(data, context.user.id, true);
+  let letter = rowToLetter(data, context.user.id, true);
+  if (isEligibleSenderClaim(letter)) {
+    letter = markSenderClaimedDrops([letter], await readSenderClaimedDropIdsWithTimeout(context))[0];
+  }
   if (data.media_path) {
     const { data: signed } = await context.supabase.storage.from('drop-media').createSignedUrl(data.media_path, 60);
     letter.mediaUrl = signed?.signedUrl;
   }
-  const { data: reaction } = await context.supabase.from('letter_reactions').select('emoji').eq('letter_id', letterId).maybeSingle<{ emoji: string }>();
-  letter.reaction = reaction?.emoji;
+  const reactionSnapshot = await readRemoteReaction(context, letterId);
+  letter.reaction = reactionSnapshot.reaction ?? undefined;
   return letter;
+}
+
+export interface RemoteReactionSnapshot {
+  available: boolean;
+  reaction: string | null;
+}
+
+async function readRemoteReaction(context: AuthenticatedContext, letterId: string): Promise<RemoteReactionSnapshot> {
+  try {
+    const { data, error } = await context.supabase.from('letter_reactions')
+      .select('emoji')
+      .eq('letter_id', letterId)
+      .maybeSingle<{ emoji: string }>();
+    if (error) return { available: false, reaction: null };
+    if (!data) return { available: true, reaction: null };
+    return typeof data.emoji === 'string'
+      ? { available: true, reaction: data.emoji }
+      : { available: false, reaction: null };
+  } catch {
+    return { available: false, reaction: null };
+  }
+}
+
+export async function getRemoteReactionSnapshot(letterId: string): Promise<RemoteReactionSnapshot | null> {
+  try {
+    const context = await getAuthenticatedClient();
+    return context ? readRemoteReaction(context, letterId) : null;
+  } catch {
+    return null;
+  }
 }
 
 function eventsForDraft(draft: LetterDraftState): TrackingEvent[] {
@@ -402,6 +648,423 @@ function eventsForDraft(draft: LetterDraftState): TrackingEvent[] {
     done: index <= activeIndex,
     current: index === activeIndex,
   }));
+}
+
+export async function issueDropClaimInvite(draft: Pick<LetterDraftState, 'id' | 'subject' | 'content' | 'payloadKind' | 'deliveryMode'>, expectedAccountId: string | null, token: string): Promise<{ ok: boolean; error?: string; letterId?: string; dispatchedAt?: string }> {
+  if (!expectedAccountId) return { ok: false, error: 'Connect a Drop account before sending a private note invite.' };
+  if (draft.payloadKind !== 'text' || draft.deliveryMode !== 'instant' || !draft.content.trim()) {
+    return { ok: false, error: 'Private claim links are available for instant text notes with content.' };
+  }
+  if (!isDropClaimToken(token)) return { ok: false, error: 'This private invite could not be prepared. Try again.' };
+  const context = await getAuthenticatedClient();
+  if (!context) return { ok: false, error: 'Connect a Drop account before sending a private note invite.' };
+  if (context.user.id !== expectedAccountId || !isCurrentLocalAccount(expectedAccountId)) {
+    return { ok: false, error: 'Your account changed while you were preparing this note. Review it and try again.' };
+  }
+
+  try {
+    const { data, error } = await context.supabase.rpc('issue_drop_claim_invite', {
+      p_letter_id: draft.id,
+      p_subject: draft.subject.trim() || 'A note for you',
+      p_content: draft.content,
+      p_token: token,
+    });
+    if (error || data !== draft.id) {
+      return { ok: false, error: 'The private note could not be saved. Your draft is still here—try again.' };
+    }
+    if (!isCurrentLocalAccount(expectedAccountId)) {
+      return { ok: false, error: 'Your account changed while the note was being saved. Check Sent before retrying.' };
+    }
+    return { ok: true, letterId: data, dispatchedAt: new Date().toISOString() };
+  } catch {
+    return { ok: false, error: 'The private note could not be saved. Your draft is still here—try again.' };
+  }
+}
+
+type DropMediaClaimReceipt = {
+  ok: boolean;
+  error?: string;
+  letterId?: string;
+  dispatchedAt?: string;
+  mediaPath?: string;
+  mediaMimeType?: string;
+  mediaSizeBytes?: number;
+  mediaExpiresAt?: string;
+  cleanupQueued?: boolean;
+  retryUploadId?: string;
+};
+
+type DropMediaClaimRow = {
+  id: string;
+  sender_id: string;
+  recipient_id: string | null;
+  status: MockLetter['status'];
+  delivery_mode: DropDeliveryMode | null;
+  payload_kind: DropPayloadKind | null;
+  media_path: string | null;
+  media_mime_type: string | null;
+  media_size_bytes: number | null;
+  media_claim_expires_at: string | null;
+  dispatched_at: string | null;
+};
+
+const DROP_MEDIA_ISSUE_ERROR = 'The photo/GIF drop could not be saved. Your draft is still here—try again.';
+
+async function removeStagedDropMedia(context: AuthenticatedContext, path: string) {
+  try {
+    await context.supabase.storage.from('drop-media').remove([path]);
+  } catch {
+    // A failed cleanup leaves only an inaccessible staging object.
+  }
+}
+
+type UnlinkedDropMediaCleanupStatus = 'linked' | 'queued' | 'cleaning';
+
+async function queueUnlinkedDropMediaCleanup(
+  context: AuthenticatedContext,
+  letterId: string,
+  payloadKind: 'image' | 'gif',
+  mediaPath: string,
+): Promise<UnlinkedDropMediaCleanupStatus | null> {
+  const rpcArgs = {
+    p_letter_id: letterId,
+    p_payload_kind: payloadKind,
+    p_media_path: mediaPath,
+  };
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const { data, error } = await context.supabase.rpc('queue_unlinked_drop_media_cleanup_job', rpcArgs);
+      if (!error && (data === 'linked' || data === 'queued' || data === 'cleaning')) return data;
+    } catch {
+      // The cleanup RPC is idempotent, so retry once after an ambiguous response.
+    }
+  }
+  return null;
+}
+
+async function readIssuedDropMediaReceipt(
+  context: AuthenticatedContext,
+  letterId: string,
+  payloadKind: 'image' | 'gif',
+  mediaPath: string,
+  expectedMimeType?: string,
+  expectedSizeBytes?: number,
+): Promise<DropMediaClaimReceipt | null> {
+  try {
+    const { data: row, error } = await context.supabase.from('letters')
+      .select('id, sender_id, recipient_id, status, delivery_mode, payload_kind, media_path, media_mime_type, media_size_bytes, media_claim_expires_at, dispatched_at')
+      .eq('id', letterId)
+      .eq('sender_id', context.user.id)
+      .maybeSingle<DropMediaClaimRow>();
+    if (error || !row
+      || row.sender_id !== context.user.id
+      || row.recipient_id !== null
+      || row.status !== 'claim_pending'
+      || row.delivery_mode !== 'instant'
+      || row.payload_kind !== payloadKind
+      || row.media_path !== mediaPath
+      || !row.media_mime_type
+      || !row.media_size_bytes
+      || !row.media_claim_expires_at
+      || !Number.isFinite(Date.parse(row.media_claim_expires_at))
+      || Date.parse(row.media_claim_expires_at) <= Date.now()
+      || (expectedMimeType !== undefined && row.media_mime_type !== expectedMimeType)
+      || (expectedSizeBytes !== undefined && row.media_size_bytes !== expectedSizeBytes)) return null;
+    return {
+      ok: true,
+      letterId,
+      dispatchedAt: row.dispatched_at || undefined,
+      mediaPath,
+      mediaMimeType: row.media_mime_type,
+      mediaSizeBytes: row.media_size_bytes,
+      mediaExpiresAt: row.media_claim_expires_at,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function recoverOrQueueFailedDropMedia(
+  context: AuthenticatedContext,
+  letterId: string,
+  payloadKind: 'image' | 'gif',
+  mediaPath: string,
+  failureMessage = DROP_MEDIA_ISSUE_ERROR,
+): Promise<DropMediaClaimReceipt> {
+  const status = await queueUnlinkedDropMediaCleanup(context, letterId, payloadKind, mediaPath);
+  if (status === 'queued' || status === 'cleaning') {
+    return {
+      ok: false,
+      error: failureMessage,
+      cleanupQueued: true,
+      retryUploadId: crypto.randomUUID(),
+    };
+  }
+  return { ok: false, error: failureMessage };
+}
+
+function validFinalizedDropMedia(kind: 'image' | 'gif', mimeType: string, sizeBytes: number) {
+  const validMime = kind === 'gif'
+    ? mimeType === 'image/gif'
+    : ['image/jpeg', 'image/png', 'image/webp'].includes(mimeType);
+  return validMime && Number.isInteger(sizeBytes) && sizeBytes > 0 && sizeBytes <= 8_388_608;
+}
+
+export async function issueDropMediaClaimInvite(
+  draft: Pick<LetterDraftState, 'id' | 'subject' | 'content' | 'payloadKind' | 'deliveryMode' | 'mediaUploadId'>,
+  mediaFile: File,
+  expectedAccountId: string | null,
+  token: string,
+): Promise<DropMediaClaimReceipt> {
+  if (!expectedAccountId) return { ok: false, error: 'Connect a Drop account before sending a private photo/GIF invite.' };
+  if ((draft.payloadKind !== 'image' && draft.payloadKind !== 'gif') || draft.deliveryMode !== 'instant') {
+    return { ok: false, error: 'Private claim links are available for instant photo and GIF drops.' };
+  }
+  if (!isDropClaimToken(token)) return { ok: false, error: 'This private invite could not be prepared. Try again.' };
+  const validationError = validateDropMedia(mediaFile);
+  if (validationError) return { ok: false, error: validationError };
+  if ((mediaFile.type === 'image/gif' ? 'gif' : 'image') !== draft.payloadKind) {
+    return { ok: false, error: 'The selected file does not match this drop type.' };
+  }
+
+  const context = await getAuthenticatedClient();
+  if (!context) return { ok: false, error: 'Connect a Drop account before sending a private photo/GIF invite.' };
+  if (context.user.id !== expectedAccountId || !isCurrentLocalAccount(expectedAccountId)) {
+    return { ok: false, error: 'Your account changed while you were preparing this drop. Review it and try again.' };
+  }
+
+  const stagedPath = createStagedDropMediaAttemptPath(context.user.id, draft.id, draft.mediaUploadId || crypto.randomUUID());
+  if (!stagedPath) return { ok: false, error: 'This draft cannot accept an image attachment. Start a new draft and try again.' };
+  const paths = resolveDropMediaPaths(stagedPath, context.user.id);
+  if (!paths) return { ok: false, error: 'This draft cannot accept an image attachment. Start a new draft and try again.' };
+
+  let finalizeStarted = false;
+  let issueCommitted = false;
+  let committedReceipt: Pick<DropMediaClaimReceipt, 'letterId' | 'mediaPath' | 'mediaMimeType' | 'mediaSizeBytes'> | null = null;
+  try {
+    const { error: stagedUploadError } = await context.supabase.storage.from('drop-media').upload(stagedPath, mediaFile, {
+      contentType: mediaFile.type,
+      upsert: false,
+    });
+    if (stagedUploadError) {
+      const uploadErrorDetails = stagedUploadError as typeof stagedUploadError & {
+        status?: number;
+        statusCode?: string;
+      };
+      const duplicateStage = uploadErrorDetails.status === 409
+        || uploadErrorDetails.statusCode === 'Duplicate'
+        || /already exists|duplicate/i.test(stagedUploadError.message);
+      if (!duplicateStage) {
+        return { ok: false, error: 'The photo/GIF could not be uploaded. Your draft is still here—retry the upload.' };
+      }
+      // A collision is safe to continue only because the finalizer validates
+      // the staged bytes before it returns a finalized media path.
+    }
+    const { data: { session } } = await context.supabase.auth.getSession();
+    if (!session?.access_token) {
+      await removeStagedDropMedia(context, stagedPath);
+      return { ok: false, error: 'Sign in again before sending this photo/GIF drop.' };
+    }
+
+    finalizeStarted = true;
+    const response = await fetch('/api/drop-media/finalize', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stagedPath, payloadKind: draft.payloadKind }),
+    });
+    const finalized = await response.json().catch(() => null) as {
+      error?: string;
+      mediaPath?: string;
+      mediaMimeType?: string;
+      mediaSizeBytes?: number;
+    } | null;
+    if (!response.ok
+      || !finalized
+      || typeof finalized.mediaPath !== 'string'
+      || !isDropMediaFinalPath(finalized.mediaPath, context.user.id, draft.id)
+      || typeof finalized.mediaMimeType !== 'string'
+      || typeof finalized.mediaSizeBytes !== 'number'
+      || !validFinalizedDropMedia(draft.payloadKind, finalized.mediaMimeType, finalized.mediaSizeBytes)) {
+      await removeStagedDropMedia(context, stagedPath);
+      return recoverOrQueueFailedDropMedia(
+        context,
+        draft.id,
+        draft.payloadKind,
+        paths.finalPath,
+        finalized?.error || 'The photo/GIF could not be validated. Your draft is still here—try again.',
+      );
+    }
+
+    const mediaPath = finalized.mediaPath;
+    const mediaMimeType = finalized.mediaMimeType;
+    const mediaSizeBytes = finalized.mediaSizeBytes;
+    const rpcArgs = {
+      p_letter_id: draft.id,
+      p_subject: draft.subject.trim() || (draft.payloadKind === 'gif' ? 'A GIF for you' : 'A photo for you'),
+      p_content: draft.content,
+      p_payload_kind: draft.payloadKind,
+      p_media_path: mediaPath,
+      p_media_mime_type: mediaMimeType,
+      p_media_size_bytes: mediaSizeBytes,
+      p_token: token,
+    };
+    committedReceipt = { letterId: draft.id, mediaPath, mediaMimeType, mediaSizeBytes };
+
+    // Retrying the exact capability and payload is safe: the RPC is idempotent
+    // for the same letter and does not extend the original media deadline.
+    let issued: { data: unknown; error: unknown } | null = null;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        issued = await context.supabase.rpc('issue_drop_media_claim_invite', rpcArgs);
+        if (!issued.error) break;
+      } catch {
+        // The server may have committed before the connection failed. Retry
+        // with the same token and payload so RPC idempotency can resolve it.
+      }
+    }
+    if (!issued || issued.error || issued.data !== draft.id) {
+      await removeStagedDropMedia(context, stagedPath);
+      return recoverOrQueueFailedDropMedia(
+        context, draft.id, draft.payloadKind, mediaPath,
+      );
+    }
+    issueCommitted = true;
+    await removeStagedDropMedia(context, stagedPath);
+
+    const receipt = await readIssuedDropMediaReceipt(
+      context, draft.id, draft.payloadKind, mediaPath, mediaMimeType, mediaSizeBytes,
+    );
+    if (receipt) {
+      if (!isCurrentLocalAccount(expectedAccountId)) {
+        return { ...receipt, ok: false, error: 'Your account changed while the drop was being saved. Check Sent before retrying.' };
+      }
+      return receipt;
+    }
+    if (!isCurrentLocalAccount(expectedAccountId)) {
+      return { ok: false, error: 'Your account changed while the drop was being saved. Check Sent before retrying.', letterId: draft.id, mediaPath, mediaMimeType, mediaSizeBytes };
+    }
+    // The RPC succeeded, so retain the object even if this receipt read timed out.
+    return { ok: true, letterId: draft.id, mediaPath, mediaMimeType, mediaSizeBytes };
+  } catch {
+    await removeStagedDropMedia(context, stagedPath);
+    if (issueCommitted && committedReceipt) {
+      return isCurrentLocalAccount(expectedAccountId)
+        ? { ok: true, ...committedReceipt }
+        : { ok: false, error: 'Your account changed while the drop was being saved. Check Sent before retrying.', ...committedReceipt };
+    }
+    if (finalizeStarted) {
+      return recoverOrQueueFailedDropMedia(
+        context, draft.id, draft.payloadKind, paths.finalPath,
+      );
+    }
+    return { ok: false, error: DROP_MEDIA_ISSUE_ERROR };
+  }
+}
+
+export async function reissueDropClaimInvite(letterId: string, expectedAccountId: string | null, token: string): Promise<{ ok: boolean; error?: string; letterId?: string }> {
+  if (!expectedAccountId) return { ok: false, error: 'Connect a Drop account before sharing a fresh private note link.' };
+  if (!isDropClaimToken(token)) return { ok: false, error: 'This private invite could not be prepared. Try again.' };
+  const context = await getAuthenticatedClient();
+  if (!context) return { ok: false, error: 'Connect a Drop account before sharing a fresh private note link.' };
+  if (context.user.id !== expectedAccountId || !isCurrentLocalAccount(expectedAccountId)) {
+    return { ok: false, error: 'Your account changed while you were preparing this link. Try again.' };
+  }
+
+  try {
+    const { data, error } = await context.supabase.rpc('reissue_drop_claim_invite', {
+      p_letter_id: letterId,
+      p_token: token,
+    });
+    if (error || data !== letterId) {
+      return { ok: false, error: 'A fresh private link could not be saved. Try again.' };
+    }
+    if (!isCurrentLocalAccount(expectedAccountId)) {
+      return { ok: false, error: 'Your account changed while the link was being saved. Try again.' };
+    }
+    return { ok: true, letterId: data };
+  } catch {
+    return { ok: false, error: 'A fresh private link could not be saved. Try again.' };
+  }
+}
+
+export async function reissueDropMediaClaimInvite(
+  letterId: string,
+  expectedAccountId: string | null,
+  token: string,
+): Promise<DropMediaClaimReceipt> {
+  if (!expectedAccountId) return { ok: false, error: 'Connect a Drop account before sharing a fresh private photo/GIF link.' };
+  if (!isDropClaimToken(token)) return { ok: false, error: 'This private invite could not be prepared. Try again.' };
+  const context = await getAuthenticatedClient();
+  if (!context) return { ok: false, error: 'Connect a Drop account before sharing a fresh private photo/GIF link.' };
+  if (context.user.id !== expectedAccountId || !isCurrentLocalAccount(expectedAccountId)) {
+    return { ok: false, error: 'Your account changed while you were preparing this link. Try again.' };
+  }
+
+  try {
+    const { data: row, error: readError } = await context.supabase.from('letters')
+      .select('id, sender_id, recipient_id, status, delivery_mode, payload_kind, media_path, media_mime_type, media_size_bytes, media_claim_expires_at, dispatched_at')
+      .eq('id', letterId)
+      .eq('sender_id', context.user.id)
+      .maybeSingle<DropMediaClaimRow>();
+    if (readError || !row
+      || row.sender_id !== context.user.id
+      || row.recipient_id !== null
+      || row.status !== 'claim_pending'
+      || row.delivery_mode !== 'instant'
+      || (row.payload_kind !== 'image' && row.payload_kind !== 'gif')
+      || !row.media_path
+      || !row.media_mime_type
+      || !row.media_size_bytes
+      || !row.media_claim_expires_at
+      || !isDropMediaFinalPath(row.media_path, context.user.id, row.id)) {
+      return { ok: false, error: 'This photo/GIF invite is no longer available.' };
+    }
+    if (!validFinalizedDropMedia(row.payload_kind, row.media_mime_type, row.media_size_bytes)) {
+      return { ok: false, error: 'This photo/GIF invite is no longer available.' };
+    }
+
+    let reissued: { data: unknown; error: unknown } | null = null;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        reissued = await context.supabase.rpc('reissue_drop_claim_invite', {
+          p_letter_id: letterId,
+          p_token: token,
+        });
+        if (!reissued.error) break;
+      } catch {
+        // The same invite token makes a retry safe after an ambiguous response.
+      }
+    }
+    if (!reissued || reissued.error || reissued.data !== letterId) {
+      return { ok: false, error: 'A fresh private photo/GIF link could not be saved. Try again.' };
+    }
+    if (!isCurrentLocalAccount(expectedAccountId)) {
+      return { ok: false, error: 'Your account changed while the link was being saved. Try again.' };
+    }
+    return {
+      ok: true,
+      letterId,
+      dispatchedAt: row.dispatched_at || undefined,
+      mediaPath: row.media_path,
+      mediaMimeType: row.media_mime_type,
+      mediaSizeBytes: row.media_size_bytes,
+      mediaExpiresAt: row.media_claim_expires_at,
+    };
+  } catch {
+    return { ok: false, error: 'A fresh private photo/GIF link could not be saved. Try again.' };
+  }
+}
+
+export async function claimDropInvite(token: string): Promise<{ ok: boolean; error?: string; letterId?: string }> {
+  if (!isDropClaimToken(token)) return { ok: false, error: 'This invite link is incomplete. Open the original link again.' };
+  try {
+    const context = await getAuthenticatedClient();
+    if (!context) return { ok: false, error: 'Sign in and set up a Drop profile before claiming this note.' };
+    const { data, error } = await context.supabase.rpc('claim_drop_invite', { p_token: token });
+    return resolveDropClaimInviteResult({ data, error });
+  } catch {
+    return resolveDropClaimInviteResult({ data: null, error: true });
+  }
 }
 
 export async function syncDropToBackend(draft: LetterDraftState, confirmedRecipientId: string, expectedAccountId: string | null, mediaFile?: File): Promise<{ ok: boolean; error?: string; mediaPath?: string; mediaMimeType?: string; mediaSizeBytes?: number; dispatchedAt?: string }> {
@@ -468,14 +1131,13 @@ export async function syncDropToBackend(draft: LetterDraftState, confirmedRecipi
   let mediaMimeType: string | null = mediaFile?.type || null;
   let mediaSizeBytes: number | null = mediaFile?.size || null;
   if (mediaFile) {
-    const stagedPath = createStagedDropMediaPath(context.user.id, draft.id, crypto.randomUUID());
+    const stagedPath = createStagedDropMediaAttemptPath(context.user.id, draft.id, draft.mediaUploadId || crypto.randomUUID());
     if (!stagedPath) return { ok: false, error: 'This draft cannot accept an image attachment. Start a new draft and try again.' };
     stagedMediaPath = stagedPath;
     const { error } = await context.supabase.storage.from('drop-media').upload(stagedPath, mediaFile, {
       contentType: mediaFile.type,
       upsert: false,
     });
-    if (error) return { ok: false, error: 'The image did not finish uploading. Your draft is still here—try again.' };
     const removeStagedMedia = async () => {
       try {
         await context.supabase.storage.from('drop-media').remove([stagedPath]);
@@ -505,7 +1167,7 @@ export async function syncDropToBackend(draft: LetterDraftState, confirmedRecipi
       const validMediaPath = result?.mediaPath === expectedPath || isDropMediaFinalPath(result?.mediaPath, context.user.id, draft.id);
       if (!response.ok || !result || typeof result.mediaPath !== 'string' || !validMediaPath || typeof result.mediaMimeType !== 'string' || typeof result.mediaSizeBytes !== 'number') {
         await removeStagedMedia();
-        return { ok: false, error: result?.error || 'The image could not be validated. Your draft is still here—try again.' };
+        return { ok: false, error: result?.error || (error ? 'The image did not finish uploading. Your draft is still here—try again.' : 'The image could not be validated. Your draft is still here—try again.') };
       }
       mediaPath = result.mediaPath;
       mediaMimeType = result.mediaMimeType;
@@ -563,7 +1225,7 @@ export async function syncDropToBackend(draft: LetterDraftState, confirmedRecipi
     return { ok: true, mediaPath: existing.mediaPath || undefined, dispatchedAt: existing.dispatchedAt };
   }
   if (existing.state === 'conflict') {
-    await cleanupUploadedMedia();
+    await cleanupUploadedMedia(mediaPath !== existing.mediaPath);
     return { ok: false, error: 'This draft ID is already tied to a different drop. Check Sent before sending this edit.' };
   }
   if (existing.state === 'unavailable') {

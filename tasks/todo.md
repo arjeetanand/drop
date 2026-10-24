@@ -2,7 +2,202 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
-## Current Checkpoint — 2026-10-19
+## Checkpoint — Share-to-Drop PWA import and replay safety (2026-10-24)
+
+- [x] Add a PWA share target for supported photo/GIF files, with worker-side validation and a one-hour opaque IndexedDB handoff.
+- [x] Import into an unsent local draft; make retries idempotent, preserve user edits and attachments, and guard all composer exits while import is in progress.
+- [x] Pass 271 unit tests, targeted lint, no-incremental TypeScript, worker/test/smoke syntax, diff checks, production build, and local HTTP checks for Home, manifest, and worker on port 4004.
+- [x] Bound multipart request parsing to 8 MiB + 64 KiB even when `Content-Length` is missing or understated, preserve boundary casing, and cover both with regressions.
+- [x] Push feature commit `6d2ed9d` and follow-up fix `b02196a` to `origin/feat/demo-relay-preview`; record the latest checkpoint in a separate documentation commit.
+- [ ] Retry the share-target browser smoke when Chrome can publish its DevTools port; verify installed PWA and OS share-sheet behavior on a phone.
+- [ ] Verify with a screen reader and physical device; finish hosted two-account delivery and actual Storage deletion after the approved Free project can be accessed.
+
+## Checkpoint — fictional Relay demo preview (2026-10-24)
+
+- [x] Add a local-only three-stop Relay preview to `/demo`; keep its distinct sample illustration hidden until the visitor explicitly collects the sample.
+- [x] Expose upcoming, current, and completed stop states to assistive technology while keeping the live status announcement.
+- [x] `npm test` passes 251/251; lint, no-incremental TypeScript, production build, and `git diff --check` pass. Isolated Chrome passed at 360×844, 390×844, and 430×844 with keyboard and touch input, retained focus, no overflow, no failed requests, no page errors, and no external requests. Independent review found no concrete issue.
+- [x] Code commit `d218721` is pushed to `origin/feat/demo-relay-preview`; this checklist and the project notes are in a separate documentation commit.
+- [ ] Verify spoken route progress with a screen reader and check keyboard/safe-area behavior on a physical device.
+- [ ] Hosted Supabase remains separate: the local CLI exists but is unauthenticated (`AccessTokenRequiredError`); no hosted Drop project or delivery/cleanup behavior was changed or verified here.
+
+## Checkpoint — saved-claim recovery browser assertions (2026-10-24)
+
+- [x] Seed a disposable pending claim in an isolated browser and verify saved-state recovery after reload, without showing the in-memory-only copy-link control.
+- [x] Verify the saved-drop link targets the exact encoded detail path and the detail page exposes an enabled fresh-link button.
+- [x] `npm test` passes 245/245; lint, no-incremental TypeScript, browser-script syntax, and `git diff --check` pass. An isolated Chrome context passed 360×844 by touch and 390×844, 430×844, and 1440×900 by keyboard, with no overflow, Auth/REST/Storage or cross-origin requests, console errors, or JavaScript exceptions.
+- [x] Code commit `b064dab` is pushed to `origin/fix-private-claim-share-cancel-copy`; this checklist and notes are recorded in a separate documentation commit.
+- [ ] The project smoke runner's standalone Chrome timed out on DevTools `Page.navigate` in this environment. The same flow passed through a disposable context in the existing QA Chrome process; retry the standalone runner when its local browser launch works.
+- [ ] The OS share sheet cancellation, real two-account photo/GIF claim, actual 30-day Storage deletion, screen-reader output, and physical-device behavior remain unverified.
+
+## Checkpoint — accessible reaction names (2026-10-24)
+
+- [x] Give all five reaction buttons natural-language accessible names and reuse the same mapping for live reaction announcements.
+- [x] Add unit regressions and assert all five rendered labels in the isolated browser smoke. `npm test` passes 245/245; lint, no-incremental TypeScript, browser-script syntax, and diff checks pass.
+- [x] Isolated Chrome passed photo and GIF reaction flows at mobile and desktop sizes, including keyboard navigation, reload persistence, and no cross-origin/Auth/RPC/Storage writes. Main checkout `/` returns HTTP 200 on port 4004.
+- [ ] Verify with an actual screen reader and physical device; automated DOM/browser checks do not prove spoken output or device behavior.
+- [ ] Finish the first-friend private photo/GIF journey with two disposable accounts and verify physical Storage deletion. The PostgreSQL rollback fixture could not start because `initdb` failed to allocate shared memory (`shmget`, `No space left on device`); no SQL assertions ran.
+- [x] Code commits `7823b41` and `783bc52` are pushed to `origin/fix-private-claim-share-cancel-copy`; this checkpoint is in a separate documentation commit.
+
+## Checkpoint — private claim share recovery (2026-10-24)
+
+- [x] Keep the composer truthful after the share sheet is cancelled: the private link is saved but not shared, and the sender can copy it from the current screen.
+- [x] After recovery/reload, send the sender to the exact saved-drop detail route for claim status and fresh-link controls; encode the ID as one path segment.
+- [x] Add copy-state and route-encoding regressions. `npm test` passes 243/243; lint, no-incremental TypeScript, and `git diff --check` pass. Independent review found no concrete issue. Code commit `53cbb82` is pushed to `origin/fix-private-claim-share-cancel-copy`.
+- [x] Verify recovered saved-drop state after reload and the saved detail route, including its enabled fresh-link action, in an isolated rendered Chrome context across phone and desktop sizes. The project smoke runner's standalone Chrome timed out on DevTools `Page.navigate`; the equivalent flow passed in the existing QA Chrome process with an isolated browser context.
+- [ ] Verify the operating-system share-sheet cancellation in a real browser and the full two-account private-media claim plus physical Storage cleanup after a disposable local or approved Free Supabase runtime is available.
+
+## Checkpoint — private claim send receipt (2026-10-24)
+
+- [x] Keep share-sheet completion distinct from copied links; use neutral copy for legacy/invalid outcomes and keep bearer invite tokens out of receipt query parameters.
+- [x] Read waiting state only from the sender-owned pending drop row and claimed state only from the sender-scoped status RPC. Key and refresh status by receipt/account, suppress stale reads, and announce changes to assistive technology.
+- [x] Keep explicit missing receipt IDs authoritative so they cannot display another local draft. Cover route construction, status transitions, scope changes, and stale IDs with unit regressions.
+- [x] The user confirmed valid abandoned staging uploads should be deleted after 30 days; the existing cleanup policy matches, and no cleanup resource was changed here.
+- [x] `npm test` passes 237/237; lint, no-incremental TypeScript, `git diff --check`, and local Home/Sent HTTP checks pass. Code commit `ac0396f` is pushed to `origin/fix/private-claim-receipt-outcome`.
+- [ ] Retry the production build when `.next/trace` is writable; the current attempt ended with `EPERM`. Rendered browser, hosted two-account, unknown-handle photo/GIF, and actual Storage deletion checks remain open.
+
+## Checkpoint — PKCE callback effect replay (2026-10-24)
+
+- [x] Deduplicate the pending one-time PKCE code exchange across auth callback effect replay and suppress state/navigation work from disposed effect runs.
+- [x] Cover same-code reuse, different-code exchange, stale activity suppression, and the combined replay case where only the active run reaches the claim route.
+- [x] `npm test` passes 224/224; `npm run lint`, `npx tsc --noEmit --incremental false`, and `git diff --check` pass. Independent frontend review found no concrete issue. Code commit `7afdf3b` is pushed to `origin/fix/auth-callback-effect-replay`.
+- [ ] Retry the production build where the checkout can write `.next/trace`; this attempt stopped with `EPERM`. No browser-rendered, email/OAuth, hosted, or account-to-account verification ran.
+- [ ] Verify the auth callback and private claim flow with disposable accounts when browser tooling and isolated local or approved Free Supabase services are available.
+
+## Checkpoint — unknown-handle text claim smoke coverage (2026-10-24)
+
+- [x] Extend the local Supabase smoke with a fifth disposable account that receives an unknown-handle text invite, creates its profile, and explicitly claims the drop.
+- [x] Cover pending privacy, sender self-claim denial, reissue invalidation, same-account retry, outsider and replay denial, participant-only reads, sender claim status, and recipient reaction visibility. Require SQLSTATE `42501` and no returned drop ID for denied claims.
+- [x] `npm test` passes 220/220; lint, no-incremental TypeScript, `node --check scripts/local-supabase-smoke.mjs`, and `git diff --check` pass. Code commit `e5b7b43` is pushed to `origin/test/unknown-handle-claim-smoke`.
+- [ ] Run `npm run test:local-supabase` and `tests/db/drop_claim_invites.sql` against disposable local services. The Supabase API port is owned by an SSH listener; PostgreSQL startup failed because host shared-memory allocation is exhausted. No service was reset or stopped.
+- [ ] Verify rendered mobile/desktop claim interaction, keyboard/screen-reader behavior, and two-account photo/GIF claim/access cutoff after a confirmed disposable or approved Free Supabase runtime is available. No hosted project is configured.
+
+## Checkpoint — mobile claim-first return (2026-10-23)
+
+- [x] Return from profile setup to the sanitized claim handoff only after the remote profile sync succeeds; local-only saves and other profile returns stay on the profile page.
+- [x] Compact the claim header, progress indicator, and privacy/expiry summary while keeping the explicit claim action and 7-day link/30-day unclaimed-media facts.
+- [x] Focus the claim action after account readiness and retryable claim failures. Keep the claim page in place when browser storage cannot preserve the invite through sign-in.
+- [x] `npm test` passes 220/220; `npm run lint`, `npx tsc --noEmit --incremental false`, and `git diff --check` pass. `/`, `/claim`, claim-aware `/profile`, and `/auth/callback` return HTTP 200 on port 4004.
+- [x] Code commits `23240ea` and `9f188ee` are pushed to `origin/feat/claim-first-mobile-flow`.
+- [ ] Verify the rendered sign-in/claim sequence at mobile and desktop sizes, including focus, scrolling, keyboard, screen-reader, and storage-blocked messaging. Browser automation is unavailable in this session.
+- [ ] Verify email/Google sign-in, cross-tab handoff, and two-account claim against disposable accounts after the approved Free Supabase project is configured. No hosted or database resources changed in this slice.
+- [ ] A production build was not run for this slice; prior project builds were blocked while fetching the existing Google Fonts host. Retry where that host resolves.
+
+## Checkpoint — relay draft private-claim fallback (2026-10-23)
+
+- [x] When a connected sender selects a checked, unknown handle in Relay mode, offer an explicit switch to Instant so they can use the existing private claim-link flow.
+- [x] Preserve the full draft and saved photo/GIF attachment when switching; focus the existing private-link action and require its separate click before sharing.
+- [x] Disable and guard the switch while an invite is sharing, a send is active, or the draft is being deleted.
+- [x] `npm test` passes 219/219; lint, no-incremental TypeScript, and `git diff --check` pass. Branch `feat/relay-claim-fallback`, code commit `56dc3f2` is pushed.
+- [ ] Verify the rendered mobile/desktop interaction, keyboard focus, and screen-reader announcement in a browser; browser automation is unavailable in this session.
+- [ ] Verify unknown-handle photo/GIF claims across disposable accounts and hosted Supabase after the approved Free project is configured. This slice did not change claim authorization or database policy.
+- [ ] Production build and HTTP route response remain unverified in this environment; the existing Google Fonts fetch previously failed DNS resolution, and the local server listener started but the HTTP probe returned no response.
+
+## Checkpoint — 30-day staged-media cleanup and retry identity (2026-10-23)
+
+- [x] Add a service-role-only scan that queues only valid, unlinked `/pending/` Storage objects after 30 days; use the Storage API worker with retries, path locks, and 24-hour minimum tombstones.
+- [x] Preserve one finalized-media ID across upload attempts and backfill/persist it for restored legacy media drafts before issuing a private claim invite.
+- [x] Extend the rollback-only PostgreSQL fixture to prove authenticated owners can insert the current five-segment staging path and that the scan recognizes it.
+- [x] `npm test` passes 218/218; lint, `npx tsc --noEmit --incremental false`, and `git diff --check` pass. `tests/db/drop_claim_invites.sql` passes against isolated PostgreSQL 16.
+- [x] Code commits `d71c4e3`, `41247b6`, and `5bf4df3` are pushed to `origin/feat/claim-invite-journey`.
+- [ ] Apply migrations `20261023150000`, `20261023160000`, and `20261023170000` in order, then deploy the updated cleanup worker to the approved Free project; hosted Supabase is not configured yet.
+- [ ] Verify a real two-account photo/GIF claim and actual Storage deletion; run a Deno Edge bundle check and concurrent database interleaving checks when the local/hosted runtime is available.
+- [ ] Render the mobile claim/retry states with keyboard and screen-reader behavior. The production build remains blocked in this environment by DNS resolution of the existing Google Fonts host (`fonts.googleapis.com`).
+
+## Checkpoint — guest draft auth recovery (2026-10-23)
+
+- [x] Keep a guest draft auth return on the profile recovery screen when copying fails or neither guest nor account storage can verify the requested draft; provide retry/check-again guidance.
+- [x] Confirm the requested draft is persisted in the signed-in account before reopening Compose, including collision-remapped IDs; check that the active session still matches before and after async transfer/retry.
+- [x] `npm test` passes 206/206; lint, `npx tsc --noEmit --incremental false`, `npm run build -- --webpack`, and `git diff --check` pass. Home and Auth callback return HTTP 200 on port 4004; independent QA approved the final session-race fix.
+- [x] Code commit `67095bc` is pushed to `origin/fix/guest-draft-return-recovery`; this checklist, README, handoff, and learning entry are recorded in a separate documentation commit.
+- [ ] Verify the rendered retry/account-switch states at mobile and desktop sizes with keyboard and screen-reader interaction when browser automation is available.
+- [ ] Verify guest photo/GIF transfer across real accounts and confirm attachment bytes remain accessible after retry; hosted Supabase is not provisioned.
+
+## Checkpoint — retryable claim verification (2026-10-23)
+
+- [x] Separate claim RPC failures from successful empty results: SQLSTATE `42501` keeps generic unavailable/fresh-link guidance; transport, server, unknown RPC errors, and thrown exceptions get calm retry copy.
+- [x] Preserve the invite in the claim page after a failed attempt; keep raw backend errors and bearer tokens out of user-facing copy.
+- [x] `tests/dropClaim.test.mjs` passes 8/8; `npm test` passes 200/200; lint, `npx tsc --noEmit --incremental false`, and `git diff --check` pass. Home and Claim return HTTP 200 at `http://localhost:4004`.
+- [x] Code commit `e2e8db7` is pushed to `origin/fix/claim-rpc-retry-copy`; this checklist, README, handoff, and learning entry are in a separate documentation commit.
+- [ ] Verify the rendered retry and terminal states with keyboard and screen-reader interaction; no browser automation is available in this session.
+- [ ] Verify claim/reissue/status and pre/post-claim photo/GIF access across two disposable accounts, then verify actual Storage deletion after deployment to local or approved Free Supabase.
+
+## Checkpoint — cleanup endpoint boundary tests (2026-10-23)
+
+- [x] Extract the cleanup Edge Function request handler behind injected environment and service-client dependencies; keep `index.ts` as the Deno adapter.
+- [x] Add nine rejection cases that confirm method, configuration, secret, and content-length failures happen before client/RPC/Storage access; cover an authorized cleanup sequence and a retryable 503.
+- [x] `npm test` passes 196/196; focused endpoint tests pass 12/12; lint, `npx tsc --noEmit --incremental false`, and `git diff --check` pass. `/` and `/claim` return HTTP 200 at `http://localhost:4004`.
+- [x] Code commit `30e3190` is pushed to `origin/fix/cleanup-endpoint-boundary`; this checklist, README, handoff, and learning entry are recorded in a separate documentation commit.
+- [ ] Run a Deno/Supabase Edge bundle or serve check when the CLI/runtime is available; the fake-client tests do not prove deployed configuration or real Storage deletion.
+- [ ] Verify the unknown-handle photo/GIF claim journey and actual 30-day Storage deletion against a disposable local or approved Free Supabase project with two test accounts.
+
+## Checkpoint — local account-to-account smoke and blue-card contrast (2026-10-23)
+
+- [x] `npm run test:local-supabase` passed with four disposable local accounts: authenticated profiles, sender/recipient access, outsider denial, reactions, GIF finalize/lost-response retry, relay privacy/collection, and legacy relay normalization. The test process exited successfully after cleanup.
+- [x] Raise small white text opacity on the home, sent, and relay cobalt cards from 70%/75% to 80%; contrast on `#2b45f7` improves from 3.88:1/4.26:1 to 4.63:1.
+- [x] `npm test` passes 175/175; lint, `npx tsc --noEmit --incremental false`, `npm run build -- --webpack`, and `git diff --check` pass.
+- [x] `./run.sh start` keeps Drop available at `http://localhost:4004`; `/`, `/sent`, `/relay`, `/claim`, and `/compose` returned HTTP 200.
+- [x] Code commit `d842811` is pushed to `origin/fix/drop-card-contrast`; plan, README, handoff, checklist, and learning log are included in a separate documentation commit.
+- [x] Confirm the product retention decision for unclaimed photo/GIF drops: automatic deletion after 30 days, matching the existing immutable cutoff and cleanup policy.
+- [ ] Verify the unknown-handle photo/GIF claim path, including pre-claim isolation, explicit claim, sender status, replay behavior, and real Storage cleanup.
+- [ ] Verify rendered mobile/desktop behavior, keyboard and screen-reader access when browser automation is available; no browser renderer was exposed in this session.
+- [ ] Apply the approved Free-project migrations/worker and verify hosted claim access, deletion, index compatibility, and concurrent DB behavior.
+
+## Checkpoint — media orphan reconciliation (2026-10-23)
+
+- [x] Add a service-role-only 30-day scan that pages finalized, unlinked, validated private media into the existing Storage API cleanup queue.
+- [x] Keep existing cleanup leasing active when the best-effort orphan scan fails; report reconciliation failures after processing queued work.
+- [x] Extend worker and disposable PostgreSQL coverage for scan errors, 25+1 paging, cursor reset/wrap, an old object behind the cursor, near-cutoff objects, invalid limits, exclusions, grants, and idempotency.
+- [x] `npm test` passes 175/175; lint, no-incremental TypeScript, `git diff --check`, and `tests/db/drop_claim_invites.sql` pass.
+- [x] Code commit and separate documentation commit are pushed to `origin/feat/media-orphan-reconciliation`.
+- [ ] Apply migrations `20261023150000` and `20261023160000` before deploying the updated worker to the approved Free project; verify unknown-handle photo/GIF claims and actual Storage deletion.
+- [ ] Check the custom `storage.objects` index against hosted Supabase compatibility and a representative query plan; test concurrent database interleavings before production.
+
+## Checkpoint — Realtime fixture topic scoping (2026-10-23)
+
+- [x] Correct the SQL fixture to inspect messages on the simulated Realtime channel topic; keep production authorization policies unchanged.
+- [x] `tests/db/drop_reaction_broadcast.sql` passes against a disposable PostgreSQL 16 cluster; `git diff --check` passes.
+- [x] Code commit `88f9b11` is pushed to `origin/feat/media-orphan-reconciliation`.
+- [ ] Verify private Realtime channel delivery against the hosted Free project and a rendered two-account browser flow.
+
+## Checkpoint — relay collection terminal views (2026-10-23)
+
+- [x] Derive sender collection only from a delivered relay owned by the sender and use the persisted activity time across Journey and Relay.
+- [x] Complete the map, recipient stop, and custody timeline together; hide carrier invite controls once collection is confirmed.
+- [x] Keep collection unknown when the first status read is unavailable, and preserve a previously confirmed collection through refresh failures.
+- [x] `npm test` passes 161/161; lint, `npx tsc --noEmit --incremental false`, and `git diff --check` pass.
+- [x] `./run.sh start` serves Drop on port 4004; `/`, `/journey?letter=drop-fixture`, and `/relay?letter=drop-fixture` return HTTP 200.
+- [x] Code commit `3ee659a` is pushed to `origin/fix/relay-collection-terminal-state`.
+- [ ] Verify the collected state in a rendered browser at 390×844 and 1440×900. The isolated synthetic fixture failed to hydrate its sender row, so Journey showed unavailable and Relay remained in its waiting state; the collected-state render is not verified.
+- [ ] Check carrier mode, dispatched relay, and delivered instant drops; inspect browser console and accessibility behavior. The current browser pass did not capture console output.
+- [ ] Retry a production build where the existing Google Fonts host resolves, then verify two-account collection after the approved Free Supabase project is provisioned. No database rows or hosted resources changed in this slice.
+
+## Checkpoint — sender journey after relay collection (2026-10-23)
+
+- [x] Keep the sender's relay chain and custody timeline consistent with the recipient's durable collection status and timestamp.
+- [x] Add a regression for waiting versus collected presentation and confirm projections do not mutate saved handoff state.
+- [x] `npm test` passes 159/159; `npm run lint`, `npx tsc --noEmit --incremental false`, and `git diff --check` pass.
+- [x] Code commit `d9eeadb` is pushed to `origin/feat/journey-collection-receipt`.
+- [ ] Complete rendered mobile/desktop interaction and screen-reader checks; the available browser remained at "Checking your account…".
+- [ ] Re-run the production build when `fonts.googleapis.com` is reachable; this attempt stopped at DNS `ENOTFOUND` while fetching existing Google Fonts.
+
+## Checkpoint — persistent sender claim status (2026-10-23)
+
+- [x] Sent cards and sender detail retain “Claimed by [name]” after reload; ordinary delivered notes remain “Delivered,” and the live announcement remains one-time.
+- [x] The authenticated RPC returns only the current sender's completed text-claim IDs. Mailbox/detail status reads are bounded to five seconds; cold detail retries failed hydration without re-announcing an existing claim.
+- [x] `npm test` passes 158/158; lint, no-incremental TypeScript, the isolated PostgreSQL claim/broadcast/status fixture, and `git diff --check` pass. The isolated Webpack production build passes with existing Browserslist and Tailwind easing warnings.
+- [x] `/`, `/mailbox`, `/letter/incoming-1?view=sender`, and `/claim` return HTTP 200 on local port 4004.
+- [x] Code commit `84e5ba2` is pushed to `origin/feat/persistent-claim-status`; documentation is committed separately.
+- [ ] Verify the sender flow in a rendered browser with a screen reader and across two accounts after the three claim migrations are applied to the approved Free project.
+
+## Checkpoint — persistent engineering learning log (2026-10-23)
+
+- [x] Add `LEARNINGS.md` with dated issue, cause, fix, verification, Git, and follow-up notes, including the completed sender claim-status slice.
+- [x] Add a repository instruction to append a learning entry after each completed code-change or issue-resolution slice, and link the log from README.
+- [x] `git diff --check` passes; this documentation-only update did not require application tests.
+- [x] Save this workflow on dedicated branch `docs/drop-learning-log`, based on pushed commit `0b11a73`.
+
+## Checkpoint notes through — 2026-10-19
 
 - Added passwordless email-link sign-in alongside Google. Both disposable accounts signed in and synced profiles through local Supabase/Inbucket. `npm test` passes 70/70, lint passes, and a clean Next.js 16.3 production build passes. The two-account photo/GIF composer send-open-react flow remains unverified because the in-app browser did not open its file chooser; Edge's ChatGPT extension needs “Allow access to file URLs” enabled for this local test. No hosted Supabase project or SMTP is configured.
 - At 390px in Edge, the composer selected the bundled PNG and GIF fixtures through the normal file picker, previewed each as the recipient, opened each same-device demo, saved a reaction, and showed it on the sender copy. This verifies local draft/demo behavior only; the two sent demo records remain in browser storage because sent demos cannot be deleted in the UI. Hosted account-to-account delivery remains unverified.
@@ -127,6 +322,7 @@ Commit each completed code change separately with a descriptive message and push
 - [x] Choosing an incompatible format preserves the saved attachment and explains how to remove it; the photo flow and reload recovery pass in the local browser.
 - [x] The sender explicitly checks the recipient handle, sees the matched account, and must reconfirm if the normalized handle changes; failed lookups leave the local draft and attachment intact.
 - [x] A confirmed not-found result offers a generic `/invite` link without draft content; the composer saves before sharing and does not mark the drop sent.
+- [x] The composer surfaces account readiness and asks who receives the drop before showing payload and styling controls; draft/send behavior stays in the existing flow.
 
 **Verification:**
 - [ ] Complete one send for each payload kind with Supabase configured.
@@ -135,6 +331,7 @@ Commit each completed code change separately with a descriptive message and push
 - [x] Local authenticated browser flow sent a text drop to a confirmed recipient; Google OAuth and hosted behavior remain open.
 - [x] Unit coverage verifies confirmation only matches the current normalized handle; local Supabase smoke verifies exact and missing handle lookup results.
 - [x] Authenticated browser check confirmed a recipient handle, then verified changing it clears confirmation and disables sending.
+- [ ] Recheck the recipient-first composer in a rendered browser at 360px, 390px, and 430px; browser automation is unavailable in this environment.
 
 **Dependencies:** Tasks 1–3.
 
@@ -177,11 +374,17 @@ Commit each completed code change separately with a descriptive message and push
 - [ ] Instant drops bypass relay screens and location requests.
 - [ ] Relay-mode drops retain existing handoff and journey history behavior.
 - [x] Active carriers see their route/handoff history without private message, media, or exact location data.
+- [x] QR and manual PIN handoffs request current device location only after a clear, unchecked-by-default opt-in; manual neighborhood entry remains available.
+- [x] Remove third-party reverse geocoding from the relay handoff flow; successful-handoff location outcomes are announced to screen readers.
+- [x] New server-issued carrier invite links keep the bearer token in the URL fragment; previously issued query-token links remain compatible and are cleaned from the address bar when opened.
 
 **Verification:**
 - [ ] Test an existing letter relay and a new media relay through one handoff.
 - [x] Unit coverage verifies denied/unavailable location and confirms manual and QR handoffs do not invent coordinates.
 - [x] A capability-gated route RPC returns only names, neighborhoods, carrier notes, and timestamps; SQL coverage checks active, consumed, and invalid tokens plus private-data exclusions.
+- [x] Playwright/Chrome on a 390px viewport verified QR with location unchecked, opted in, and denied; manual PIN with location opted in; and token invite with a manual neighborhood. It observed zero geocoder requests and no page runtime errors. The fixture used synthetic handoff data.
+- [x] Focused URL tests confirm newly issued carrier tokens are outside the query string and old query-token invites still resolve.
+- [ ] Legacy `?d=` QR links still contain the previous carrier's coordinates and send them to Drop when opened. Existing payloads cannot be safely converted without their original server-issued credential; issue a fresh secure invite for future handoffs.
 - [ ] Browser end-to-end check: complete a valid carrier-issued handoff with location denied or unavailable.
 
 **Dependencies:** Tasks 1, 4, and 5.
@@ -262,3 +465,146 @@ Commit each completed code change separately with a descriptive message and push
 - [x] Replace opaque email-link network/response parsing errors with a clear retry message while preserving actionable Supabase Auth API errors; covered by three focused tests and shipped in `6cc9873`.
 - [x] Verified invite email sign-in, profile save/sync, and share-back in Edge against the loopback Supabase stack. A disposable account completed `/invite` → `/profile?invite=1` → synced handle → share-back; the copied payload contained only `@handle` and the local public `/u/<handle>` URL. Checked the flow at 360px and 390px, then removed the exact Auth user/profile and Mailpit message. No hosted project was used.
 - [x] Restricted public profile reads to username, display name, and bio; account metadata stays owner-only. Local Supabase smoke checks anonymous grants, signed-in owner scoping, recipient lookup, and mailbox sender embedding. `npm test` passes 81/81, lint, typecheck, and production build pass.
+
+## Current follow-up — 2026-10-22
+
+- [x] Save a stable media upload ID with each selected attachment and reuse it when a draft resumes or retries.
+- [x] Recover an unlinked final object after a lost response only when its bytes match the freshly validated retry; reject different media for a linked draft and attempt to remove its new staging object.
+- [x] Add regression coverage for lost-response recovery, one final object, staged cleanup on a linked-media conflict, and draft upload-ID persistence.
+- [x] Verification passed in an isolated checkout using the same commit and lockfile: `npm test` (84/84), lint, typecheck, `npm run build -- --webpack`, local smoke-script syntax, `bash -n run.sh`, and `git diff --check`.
+- [x] Exercise `run.sh` start/restart/stop and confirm the home and compose routes return HTTP 200 in the isolated checkout; the active checkout still needs its locked dependencies installed before it can run locally.
+- [ ] Run the authenticated local Supabase smoke and test a real lost-response retry in the browser. The local auth health endpoint on `127.0.0.1:54321` was unavailable; no local database was started or reset, and no hosted project exists.
+
+## Current follow-up — 2026-10-22 (reaction privacy and mobile sizing)
+
+- [x] Explain that live reactions are visible only to the sender and recipient, matching the participant-only Supabase read policy; distinguish device-only sample and demo reactions.
+- [x] Keep all five reaction controls in one row with 44px minimum targets and 8px gaps. At 360px, the row is 252px wide and each button measures 44×44px; at 390px and 430px the buttons grow, with no horizontal overflow.
+- [x] Playwright/Chrome opened a sample drop, saved a reaction, and confirmed device-only status at 360px, 390px, and 430px. The only console error was the browser's automatic request for missing /favicon.ico; no page runtime errors occurred.
+- [x] npm test passes (84/84), lint and typecheck pass, and the Webpack production build passes with the test font mock. Turbopack could not build the isolated copy because its node_modules symlink points outside the filesystem root.
+- [x] Push commit e18dda6 on ux/reaction-spacing-8px to origin.
+- [x] Install locked dependencies in the active GitHub clone, rerun the project checks there, and serve that checkout from run.sh on port 4004; the three-width browser flow passes against it.
+- [x] npm ci reported 15 audit advisories (1 moderate, 13 high, 1 critical); dependency versions were left unchanged.
+- [ ] Check keyboard interaction, reduced-motion behavior, desktop layout, and real-device safe areas; hosted account-to-account behavior remains open.
+
+## Current follow-up — 2026-10-23 (live sender reaction feedback)
+
+- [x] Add a private sender-scoped reaction Broadcast containing only the drop ID; reload the participant-visible reaction through RLS.
+- [x] Keep Home, Mailbox, and an open sent-drop page current; suppress baseline and duplicate reactions and announce changes accessibly.
+- [x] Prevent a recipient from moving a reaction to a different drop; add SQL regression coverage for the rejected move.
+- [x] `npm test` passes 107/107, `npm run lint`, `npx tsc --noEmit --incremental false`, `npm run build`, `bash -n run.sh`, and `git diff --check` pass. Local `/`, `/mailbox`, `/letter/incoming-1`, `/compose`, and `/journey` return HTTP 200 on port 4004.
+- [x] Commit `9c375a1` is pushed to `feat/live-reaction-feedback`. The local GitHub clone already has `.env.local` at mode 600; it is ignored by Git, so there was nothing to copy from OneDrive. The former OneDrive Drop directory is absent, and `/letter` remains untouched.
+- [ ] Run `tests/db/drop_reaction_broadcast.sql` against a disposable local database; Docker and temporary PostgreSQL startup are unavailable in this environment.
+- [ ] Verify mobile/desktop rendering and screen-reader behavior in a browser, then verify cross-account reactions after a Free hosted Supabase project is available.
+
+## Current follow-up — 2026-10-23 (relay acceptance retry recovery)
+
+- [x] Persist the same relay request ID and exact carrier details in tab-scoped storage, keyed by a SHA-256 fingerprint of the invite and active local account.
+- [x] Restore and lock those details after refresh, expire saved attempts after 24 hours, and clear them only after the local carrier pass is saved.
+- [x] Add regression tests for key scoping, exact retry restoration, expiry and malformed data cleanup, and unavailable browser storage.
+- [x] npm test passes 113/113; lint, typecheck, Webpack production build, bash -n run.sh, and git diff --check pass. The app restarted on port 4004 and /, /relay/scan, and /relay/handoff returned HTTP 200.
+- [ ] Verify an interrupted acceptance and page refresh in a rendered browser against local Supabase; browser automation and local Supabase are unavailable in this session.
+
+## Current follow-up — 2026-10-23 (mailbox filter empty states)
+
+- [x] Add distinct empty-state copy and next steps for All, Samples, On a journey, Received, Sent, and Drafts. Received directs people to profile handle setup; in-transit drops direct to the relay composer.
+- [x] Announce empty search results politely and clear the query while preserving the selected filter; whitespace-only queries count as empty.
+- [x] `npm test` passes 118/118, `npm run lint`, `npx tsc --noEmit --incremental false`, `npm run build -- --webpack`, `bash -n run.sh`, and `git diff --check` pass. `/`, `/mailbox`, `/profile`, and `/compose?new=1&mode=relay` return HTTP 200 on port 4004.
+- [x] Isolated Chrome verified no horizontal overflow at 360px, 390px, and 430px, confirmed the Received search-empty announcement and filter-preserving clear action, and followed the transit action to the relay composer.
+- [x] Code commit `10efead` is pushed to `origin/feat/mailbox-filter-empty-states`. This documentation update is committed separately.
+- [x] The old OneDrive `projects/drop` directory is absent from the synced path and connected folder listing. The local clone already has ignored `.env.local` at mode 600, so no file copy was needed; no secret values were read. The `/letter` folder was not changed.
+- [ ] Verify screen-reader announcements and real-device keyboard/safe-area behavior. Hosted account-to-account delivery and broader Drop acceptance remain open.
+
+## Current follow-up — 2026-10-23 (mailbox search focus and local checkout)
+
+- [x] Return focus to the search input after either clear action while preserving the selected mailbox filter.
+- [x] Hide the native WebKit search cancel control to prevent a duplicate clear icon beside Drop's accessible button.
+- [x] Run 118 unit tests, lint, TypeScript, and `git diff --check`; all pass.
+- [x] Build in an isolated copy with Next.js Google Fonts responses mocked because sandbox DNS could not resolve `fonts.googleapis.com`.
+- [x] Confirm `/` and `/mailbox` return HTTP 200 on the local app at port 4004.
+- [x] Confirm the OneDrive Drop directory is absent and `.env.local` already exists in the local clone with mode 600 and Git ignore coverage; preserve `/letter`.
+- [ ] Capture a final browser screenshot after the native clear-control rule; the isolated Chrome launch exited with code 134. Screen-reader and real-device checks remain open.
+
+## Current follow-up — 2026-10-23 (invite recovery, share resilience, and send receipt)
+
+- [x] Persist shared, copied, cancelled, and unavailable invite outcomes with the account's draft; migrate the older local invite reminder shape.
+- [x] Keep a manual invite link available after an unavailable retry is cancelled, including when the draft is reopened; announce the retry in progress and show the next action on the mailbox card.
+- [x] Scope asynchronous invite results to the account, draft, and current handle. A successful send only marks the exact submitted composition sent; newer same-draft edits remain drafts.
+- [x] Add store regressions for every invite outcome, restored manual-link availability, account and recipient scoping, sent-copy persistence, and concurrent draft edits.
+- [x] `npm test` passes 126/126; lint, TypeScript, Webpack production build, `bash -n run.sh`, and diff checks pass. `/compose?new=1` returns HTTP 200 on port 4004.
+- [x] Code commit `c1d57e0` and its separate README/checklist/handoff commit are pushed to `origin/feat/draft-invite-progress`. The active clone is `/Users/arjeetanand/projects/drop`; `.env.local` was already present, mode 600, ignored, and untracked. The former OneDrive Drop directory is absent, so no file was moved or deleted; `/letter` was not changed.
+- [x] Verify the active draft round-trips through local storage before opening the composer invite share flow; storage failures stop sharing and show a recovery message. Regression coverage includes successful read-back and rejected writes.
+- [x] Add an explicit profile invite “Copy handle + link” button. Clipboard denial or absence displays selectable fallback text containing only the public handle and profile URL; a cancelled native share still copies nothing.
+- [x] Commits `6f618ed` and `41c409e` are pushed to `origin/feat/invite-first-drop-resilience`. `npm test` passed 129/129, lint, TypeScript, Webpack production build, and diff checks passed. `/profile?invite=1` returned HTTP 200 on port 4004.
+- [ ] Verify invite sharing, clipboard-denied manual selection, and cancellation in a rendered browser at 360px and 390px, with screen reader and real-device checks. Hosted account-to-account invite/send checks remain open until the Free Drop Supabase project is available.
+
+## Current follow-up — 2026-10-23 (mailbox history and sender reaction reliability)
+
+- [x] Page mailbox letters beyond the 1,000-row API limit with deterministic ordering, and read reactions in bounded batches; keep letters visible if a reaction batch fails.
+- [x] Distinguish an empty reaction from a failed reaction read, discard stale point reads, and retain a pending baseline until a complete or signal-backed read.
+- [x] Capture a pre-channel reaction baseline, then start the private sender listener for sent/unknown routes; incoming and signed-out routes skip waiting for the sender-only baseline. Bound route reads and compare reaction values to recover startup changes without relying on cross-device clocks.
+- [x] `npm test` passes 144/144, `npm run lint`, `npx tsc --noEmit --incremental false`, `npm run build -- --webpack`, and `git diff --check` pass. The production build reports only the existing Browserslist and Tailwind easing warnings.
+- [x] Code commit `8493097` is pushed to `origin/feat/invite-first-drop-resilience`; documentation is committed and pushed separately.
+- [ ] Verify reaction updates in a rendered browser and across two hosted accounts after the Free Supabase project is provisioned. The local detail-route state and Realtime helpers are covered by unit tests; no hosted or browser interaction was run in this slice.
+- [ ] Complete the private photo/GIF relay journey recommended in `plan.md` after local or hosted two-account verification is available.
+
+## Current follow-up — 2026-10-23 (recipient relay collection)
+
+- [x] Add a route-only recipient summary and mailbox card; keep the private drop sealed until the recipient confirms collection.
+- [x] Add recipient-only, repeat-safe collection and refresh the sender journey after collection; normalize legacy `dispatched` rows whose delivery mode is still `instant`.
+- [x] Keep the first migration sealed by status and replace the legacy media-path check with validation on new or changed paths before backfilling historical rows.
+- [x] Extend unit and local Supabase smoke coverage for safe route summaries, message/media/reaction/event/note privacy, legacy dispatched rows, and repeat-safe collection.
+- [x] `npm test` passes 145/145; lint, TypeScript, local Supabase smoke, `bash -n run.sh`, and `git diff --check` pass. Local smoke authenticated four disposable accounts and cleaned them up.
+- [x] `run.sh` serves the local app on port 4004; `/` and `/mailbox` return HTTP 200.
+- [ ] Recheck a fresh production build when the active checkout can write `.next` and Google Fonts are reachable. This turn's active-checkout build hit sandbox `EPERM` on `.next/trace`; a scratch Webpack build stopped when `fonts.googleapis.com` did not resolve. An isolated production build had passed earlier in this feature work.
+- [ ] Verify the recipient card and collection flow in a rendered browser at mobile and desktop sizes, including keyboard and screen-reader behavior.
+- [ ] Apply both relay recipient migrations to the approved Free hosted project and verify two-account delivery when that project is provisioned; no hosted project is available yet.
+
+## Current follow-up — accountless private claim invite (text first)
+
+- [x] Add a one-time, seven-day sender-bound token digest and authenticated issue/reissue/claim RPCs; keep claim records inaccessible through direct anon/authenticated table access.
+- [x] Add unit and disposable PostgreSQL coverage for fragment-only token transport, generic share copy, pending-note privacy, explicit claim, token rotation, expiry, outsider/replay denial, whitespace-preserving reissue, and same-account retries after expiry.
+- [x] Add a sender-visible `claim_pending` state distinct from draft, relay, and delivered mail; do not infer it from `recipient_id IS NULL`.
+- [x] Add the text-only instant claim path to composer, the recipient claim flow, and profile/auth continuation. Preserve ordinary unknown-handle invite behavior for media and relay.
+- [x] `npm test` passes 151/151; lint, `npx tsc --noEmit --incremental false`, the isolated PostgreSQL claim fixture, and `git diff --check` pass.
+- [ ] Production build remains unchecked: the active checkout cannot write `.next/trace`, and a scratch build cannot resolve `fonts.googleapis.com` for `next/font`.
+- [ ] Rendered browser, screen-reader, and real-device claim/reissue checks remain open; browser automation is unavailable in this environment.
+- [ ] Verify auth/profile return and two-account claiming against the approved Free hosted Supabase project after it is available. No hosted resources were created by this slice.
+- [ ] Next: finish rendered text-claim acceptance, then extend verified claims to private photo/GIF and relay drops.
+
+## Current follow-up — persistent sender claim status
+
+- [x] Add an authenticated sender-only RPC that returns IDs for completed private text claims without exposing tokens or recipient account IDs.
+- [x] Show “Claimed by [name]” in Sent and sender detail, preserve ordinary “Delivered” labels, and keep the live claim announcement limited to the pending-to-claimed transition.
+- [x] Bound the optional status read to five seconds and retry failed cold-detail hydration after a short delay, then while the page is visible; successful negative reads stop retries.
+- [x] Move pending/revoked SQL exclusions after fixture setup so the assertions exercise real pending and revoked rows.
+- [x] `npm test` passes 158/158; lint, `npx tsc --noEmit --incremental false`, isolated PostgreSQL claim fixture, Webpack production build, and `git diff --check` pass. The build reports the existing Browserslist and Tailwind easing warnings.
+- [x] Local app remains available on port 4004; `/`, `/mailbox`, `/claim`, and `/letter/incoming-1?view=sender` return HTTP 200.
+- [x] Code commit `84e5ba2` is pushed to `origin/feat/persistent-claim-status`; the documentation update is being committed separately.
+- [ ] Verify sender status in a rendered browser with a screen reader and across two accounts after the approved Free Supabase project is provisioned and the three claim migrations are applied.
+- [ ] Continue the planned photo/GIF and relay claim journeys after the text path has been accepted.
+
+## Current follow-up — private photo/GIF claim links and cleanup (2026-10-23)
+
+- [x] Add instant private photo/GIF claim links for unknown handles; require sign-in and an explicit recipient claim before releasing media.
+- [x] Keep sender claim status durable for claimed photos/GIFs and limit the status RPC to sender-owned drop IDs.
+- [x] Cap media claim/access at 30 days from first send, keep links to 7 days, and prevent reissue from extending the media cutoff.
+- [x] Add retryable hourly cleanup through the Supabase Storage API, path locking/tombstones, and a fresh draft upload path only after cleanup is confirmed.
+- [x] Extend unit and disposable PostgreSQL coverage for media privacy, claim/reissue, cleanup queue, same-path recovery, sender status, and worker request handling.
+- [x] `npm test` passes 171/171; lint, `npx tsc --noEmit --incremental false`, `git diff --check`, and `bash -n run.sh` pass. The rollback-only PostgreSQL claim/media fixture passes against a disposable local PostgreSQL 16 cluster.
+- [x] `npm run build -- --webpack` passes with the existing Browserslist freshness and Tailwind easing warnings. `/`, `/compose`, `/claim`, `/mailbox`, and `/letter/drop-fixture?view=sender` return HTTP 200 on port 4004.
+- [x] Code commit `2d578ca` is pushed to `origin/feat/private-media-claims`; this checklist, plan, handoff, and learning entry are the separate documentation commit.
+- [ ] Apply the migration and configure the Edge Function/Vault secrets on the approved Free Supabase project; verify two-account photo/GIF claim, reissue, and actual Storage deletion. No hosted project or resources were created in this slice.
+- [ ] Verify the rendered composer, claim, and sender status flows at mobile and desktop sizes; browser automation is unavailable and no browser dependency was installed.
+- [x] Add orphan reconciliation for a finalized object when both queue RPC attempts fail; concurrent claim/issue/queue/lease interleavings remain open.
+
+## Current follow-up — claim email return across tabs (2026-10-23)
+
+- [x] Keep the claim bearer in the URL fragment on entry, then remove it from the address and save a short-lived same-browser handoff so email or Google sign-in can return in another tab. Only an opaque UUID appears in the profile/auth return path.
+- [x] Move a valid handoff into the receiving tab's session before removing the shared copy; reject expired/corrupt records, schedule cleanup while the source tab remains open, and prune stale records on claim-page load.
+- [x] Bind the session token to its handoff ID so a missing, expired, or different invite cannot fall back to another invite's stale tab token.
+- [x] Prefer the current auth callback's validated `next` over stale tab state and carry that return through both email and Google OAuth.
+- [x] Make profile setup and auth callback copy specific to claiming; remove the unrelated “send your handle back” panel from this return flow and provide a clear Continue to claim action after profile sync.
+- [x] `npm test` passes 184/184; lint, no-incremental TypeScript, `git diff --check`, and the rollback-only claim/media SQL fixture in disposable PostgreSQL 16 pass.
+- [x] The guarded `./run.sh start` serves Drop on port 4004; `/`, `/claim`, the claim-aware `/profile` return, and `/auth/callback` return HTTP 200.
+- [ ] Production build is blocked by the existing `next/font` fetch: `fonts.googleapis.com` resolves as `ENOTFOUND` in this environment.
+- [ ] Verify real email-link returns in the same tab and a separate tab, first-use profile creation, and explicit claim in a rendered browser at phone/desktop sizes; browser automation is unavailable. Hosted two-account claim and real Storage checks also remain open.

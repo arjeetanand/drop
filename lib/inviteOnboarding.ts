@@ -1,3 +1,5 @@
+import { safeInternalPath } from './safeInternalPath.ts';
+
 export function profileRoute(inviteContext: boolean, nextPath?: string | null) {
   const query = new URLSearchParams();
   if (inviteContext) query.set('invite', '1');
@@ -6,8 +8,27 @@ export function profileRoute(inviteContext: boolean, nextPath?: string | null) {
   return `/profile${search ? `?${search}` : ''}`;
 }
 
-export function authCallbackRoute(inviteContext: boolean) {
-  return inviteContext ? '/auth/callback?invite=1' : '/auth/callback';
+export function authCallbackRoute(inviteContext: boolean, nextPath?: string | null) {
+  const query = new URLSearchParams();
+  if (inviteContext) query.set('invite', '1');
+  const safeNextPath = safeInternalPath(nextPath ?? null, 'https://drop.invalid');
+  if (safeNextPath) query.set('next', safeNextPath);
+  const search = query.toString();
+  return `/auth/callback${search ? `?${search}` : ''}`;
+}
+
+export function isClaimReturnPath(path: string | null): boolean {
+  return path?.split(/[?#]/, 1)[0] === '/claim';
+}
+
+export function claimReturnAfterProfileSync(syncSucceeded: boolean, nextPath: string | null): string | null {
+  if (!syncSucceeded) return null;
+  const safePath = safeInternalPath(nextPath, 'https://drop.invalid');
+  return isClaimReturnPath(safePath) ? safePath : null;
+}
+
+export function resolveAuthReturnPath(callbackPath: string | null, tabPath: string | null, origin: string): string | null {
+  return safeInternalPath(callbackPath, origin) || safeInternalPath(tabPath, origin);
 }
 
 export function canEditInviteProfile(

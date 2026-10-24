@@ -39,6 +39,8 @@ export interface RouteMapProps extends HTMLAttributes<HTMLElement> {
   destinationCoords?: LatLng;
   /** Selects the current stop when stop states are not already supplied. */
   currentStopId?: string;
+  /** Marks every route stop complete after recipient collection. */
+  destinationReached?: boolean;
   /** Optional neighborhood selector for callers that do not have a stop id. */
   currentNeighborhood?: string;
   /** Optional current carrier label used when the current stop has no carrierName. */
@@ -168,9 +170,11 @@ function makeStops(
 function resolveStops(
   stops: readonly NormalizedStop[],
   currentStopId: string | undefined,
-  currentNeighborhood: string | undefined
+  currentNeighborhood: string | undefined,
+  destinationReached: boolean,
 ): ResolvedStop[] {
   if (stops.length === 0) return [];
+  if (destinationReached) return stops.map((stop) => ({ ...stop, state: 'complete' }));
 
   const requestedCurrentIndex = currentStopId
     ? stops.findIndex((stop) => stop.id === currentStopId)
@@ -310,6 +314,7 @@ export function RouteMap({
   destinationNeighborhood,
   destinationCoords,
   currentStopId,
+  destinationReached = false,
   currentNeighborhood,
   currentCarrierName,
   currentCarrier,
@@ -344,7 +349,7 @@ export function RouteMap({
     currentNeighborhood
   );
   const carrierLabel = currentCarrierName || currentCarrier;
-  const resolvedStops = resolveStops(normalizedStops, currentStopId, currentNeighborhood).map((stop) =>
+  const resolvedStops = resolveStops(normalizedStops, currentStopId, currentNeighborhood, destinationReached).map((stop) =>
     stop.state === 'current' && !stop.carrierName && carrierLabel
       ? { ...stop, carrierName: carrierLabel }
       : stop
