@@ -540,6 +540,24 @@ const VISIBLE_NEW_STATE = `(() => {
   };
 })()`;
 
+const HOME_FEATURED_UNREAD_STATE = `(() => {
+  const visible = (element) => {
+    if (!element) return false;
+    const style = getComputedStyle(element);
+    const rect = element.getBoundingClientRect();
+    return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+  };
+  const card = Array.from(document.querySelectorAll('a[href^="/letter/"]')).find((element) => visible(element)
+    && element.innerText.includes(${JSON.stringify(SUBJECT)}));
+  const text = card?.innerText.replace(/\\s+/g, ' ').trim().toLowerCase() || '';
+  return {
+    pathname: location.pathname,
+    cardNew: Boolean(card && text.split(/\\s+/).includes('new')),
+    cardInbox: Boolean(card && text.includes('in your inbox')),
+    accessibleLabel: card?.getAttribute('aria-label') || null,
+  };
+})()`;
+
 async function waitForMailbox() {
   await waitFor(async () => evaluate(pageCdp, `location.pathname === '/mailbox'
     && document.body.innerText.includes('A mailbox for your people.')
@@ -555,6 +573,36 @@ async function assertNewVisible(viewport) {
   assert.equal(state.pathname, '/mailbox');
   assert.equal(state.navLabel, '1 new drop');
   console.log(`[browser-unread-smoke] PASS ${viewport.name}: the delivered card and Inbox navigation show New.`);
+}
+
+async function assertHomeUnreadFeatured(viewport) {
+  await setViewport(pageCdp, viewport);
+  await navigate(pageCdp, `${APP_ORIGIN}/`);
+  let state;
+  try {
+    state = await waitFor(async () => {
+      const current = await evaluate(pageCdp, HOME_FEATURED_UNREAD_STATE);
+      return current?.pathname === '/' && current.cardNew && current.accessibleLabel?.startsWith('Open new drop')
+        ? current
+        : null;
+    }, `Home’s unread featured drop at ${viewport.name}`);
+  } catch (error) {
+    const diagnostic = await evaluate(pageCdp, `({ pathname: location.pathname, links: Array.from(document.querySelectorAll('a[href^="/letter/"]')).map((element) => ({ href: element.getAttribute('href'), text: element.innerText, aria: element.getAttribute('aria-label') })), body: document.body.innerText.slice(0, 1200) })`);
+    throw new Error(`${error.message}; Home state=${JSON.stringify(diagnostic)}`);
+  }
+  assert.equal(state.cardInbox, false, 'Home showed the read-state label for an unread featured drop.');
+  console.log(`[browser-unread-smoke] PASS ${viewport.name}: Home promotes the unread drop with a visible New label and an accessible new-drop name.`);
+}
+
+async function assertHomeReadFeatured(viewport) {
+  await setViewport(pageCdp, viewport);
+  await navigate(pageCdp, `${APP_ORIGIN}/`);
+  const state = await waitFor(async () => {
+    const current = await evaluate(pageCdp, HOME_FEATURED_UNREAD_STATE);
+    return current?.pathname === '/' && current.cardInbox && !current.cardNew ? current : null;
+  }, `Home’s read featured drop at ${viewport.name}`);
+  assert.ok(state.accessibleLabel?.startsWith('Open drop from'), 'The read featured drop lost its accessible name.');
+  console.log(`[browser-unread-smoke] PASS ${viewport.name}: Home clears the New treatment after the drop is opened.`);
 }
 
 function queryDisposableReadMarker() {
@@ -785,12 +833,16 @@ async function main() {
     await signInWithMagicLink(recipient, admin);
     console.log('[browser-unread-smoke] PASS recipient completed Supabase’s local magic-link sign-in in an isolated browser.');
 
+    await assertHomeUnreadFeatured(DESKTOP_VIEWPORT);
+    await assertHomeUnreadFeatured(MOBILE_VIEWPORT);
     await navigate(pageCdp, `${APP_ORIGIN}/mailbox`);
     await waitForMailbox();
     await assertNewVisible(DESKTOP_VIEWPORT);
     await assertNewVisible(MOBILE_VIEWPORT);
     await openDropAndVerifyRead();
     await reloadAndVerifyRead();
+    await assertHomeReadFeatured(DESKTOP_VIEWPORT);
+    await assertHomeReadFeatured(MOBILE_VIEWPORT);
 
     assert.deepEqual(failedLocalRequests, [], `A local browser request failed: ${JSON.stringify(failedLocalRequests)}`);
 

@@ -91,6 +91,20 @@ export function isUnreadReceivedDrop(letter: MockLetter) {
   return isEligibleReceivedDrop(letter) && letter.recipientReadAt === null;
 }
 
+/** Prefer live arrivals, then authoritatively unread received drops, over read inbox rows. */
+export function selectFeaturedInboxDrop(
+  letters: MockLetter[],
+  liveArrival: MockLetter | null,
+  recipientReadStatesHydrated: boolean,
+) {
+  if (liveArrival) return { letter: liveArrival, reason: 'arrival' as const };
+
+  const unread = recipientReadStatesHydrated ? letters.find(isUnreadReceivedDrop) : undefined;
+  if (unread) return { letter: unread, reason: 'unread' as const };
+
+  return { letter: letters[0] ?? null, reason: 'inbox' as const };
+}
+
 /** Return null until the durable read-state lookup has completed successfully. */
 export function getUnreadReceivedCount(letters: MockLetter[], recipientReadStatesHydrated: boolean) {
   return recipientReadStatesHydrated

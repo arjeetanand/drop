@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { mockLetters } from '../data/mockData.ts';
-import { filterMailboxLetters, getMailboxCounts, getMailboxEmptyState, getUnreadReceivedCount, isEligibleReceivedDrop, isUnreadReceivedDrop } from '../lib/mailboxView.ts';
+import { filterMailboxLetters, getMailboxCounts, getMailboxEmptyState, getUnreadReceivedCount, isEligibleReceivedDrop, isUnreadReceivedDrop, selectFeaturedInboxDrop } from '../lib/mailboxView.ts';
 
 const drops = [
   { id: 'real-in', subject: 'A note', recipient: 'me', direction: 'received', status: 'delivered' },
@@ -66,6 +66,29 @@ test('counts only authoritatively unread real received drops after read-state hy
   assert.equal(isUnreadReceivedDrop(unknown), false);
   assert.equal(getUnreadReceivedCount([unread, read, unknown, ...excluded], false), null);
   assert.equal(getUnreadReceivedCount([unread, read, unknown, ...excluded], true), 1);
+});
+
+test('promotes only a hydrated unread drop on Home while preserving live-arrival priority', () => {
+  const read = { id: 'read', direction: 'received', status: 'delivered', recipientReadAt: '2026-10-25T10:00:00Z' };
+  const unread = { id: 'unread', direction: 'received', status: 'delivered', recipientReadAt: null };
+  const unknown = { id: 'unknown', direction: 'received', status: 'delivered' };
+  const arrival = { id: 'live-arrival', direction: 'received', status: 'delivered', recipientReadAt: null };
+
+  assert.deepEqual(selectFeaturedInboxDrop([read, unread], null, true), { letter: unread, reason: 'unread' });
+  assert.deepEqual(selectFeaturedInboxDrop([read, unread], arrival, true), { letter: arrival, reason: 'arrival' });
+  assert.deepEqual(selectFeaturedInboxDrop([read, unread], null, false), { letter: read, reason: 'inbox' });
+  assert.deepEqual(selectFeaturedInboxDrop([read, unknown], null, true), { letter: read, reason: 'inbox' });
+
+  const excluded = [
+    { id: 'sample', direction: 'received', status: 'delivered', sample: true, recipientReadAt: null },
+    { id: 'demo', direction: 'received', status: 'delivered', localDemo: true, recipientReadAt: null },
+    { id: 'claim', direction: 'received', status: 'claim_pending', recipientReadAt: null },
+    { id: 'relay', direction: 'received', status: 'dispatched', deliveryMode: 'relay', recipientReadAt: null },
+    { id: 'sent', direction: 'sent', status: 'delivered', recipientReadAt: null },
+  ];
+  for (const letter of excluded) {
+    assert.notEqual(selectFeaturedInboxDrop([letter], null, true).reason, 'unread', `${letter.id} must not receive the unread treatment`);
+  }
 });
 
 test('shows search recovery without changing the active mailbox filter', () => {
