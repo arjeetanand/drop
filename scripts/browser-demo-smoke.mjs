@@ -769,15 +769,38 @@ async function runClaimRecoveryFlow(cdp, {
   }
 }
 
-async function runClaimProfileSetupFlow(cdp, { appUrl, viewport, keyboard, screenshotDir }) {
+async function runClaimProfileSetupFlow(cdp, {
+  appUrl,
+  viewport,
+  keyboard,
+  screenshotDir,
+  getPageLoadEvents,
+  getBlockedOrigins,
+  getPageConsoleErrors,
+  getPageExceptions,
+  getLastRequests,
+}) {
   await setViewport(cdp, viewport);
   const profileUrl = new URL('/profile', appUrl);
   profileUrl.searchParams.set('invite', '1');
   profileUrl.searchParams.set('next', '/claim?token=browser-smoke-placeholder');
-  await cdp.send('Page.navigate', { url: profileUrl.href });
-  await waitUntil(cdp, 'the first-use private-claim profile form', async () => (
-    await evaluate(cdp, `${normalizedVisibleText('Set your handle, then claim.')} && ${normalizedVisibleText('Add profile details')} && location.pathname === '/profile' && Boolean(document.querySelector('form #username'))`)
-  ));
+  const previousLoadEvents = getPageLoadEvents();
+  const navigation = await cdp.send('Page.navigate', { url: profileUrl.href });
+  if (navigation.errorText) throw new Error(`Chrome could not navigate to the claim-profile page: ${navigation.errorText}`);
+  try {
+    await waitUntil(cdp, 'a fresh claim-profile document load', async () => getPageLoadEvents() > previousLoadEvents, 15_000);
+    await waitUntil(cdp, 'the first-use private-claim profile form', async () => (
+      await evaluate(cdp, `${normalizedVisibleText('Set your handle, then claim.')} && ${normalizedVisibleText('Add profile details')} && location.pathname === '/profile' && Boolean(document.querySelector('form #username'))`)
+    ));
+  } catch (error) {
+    const details = [
+      `blocked origins=${JSON.stringify(getBlockedOrigins())}`,
+      `console errors=${JSON.stringify(getPageConsoleErrors().slice(-5))}`,
+      `JavaScript exceptions=${JSON.stringify(getPageExceptions().slice(-5))}`,
+      `recent requests=${JSON.stringify(getLastRequests().slice(-12))}`,
+    ].join('; ');
+    throw new Error(`${error.message}; browser diagnostics: ${details}`, { cause: error });
+  }
 
   const initialForm = await evaluate(cdp, `(() => {
     const form = document.querySelector('form');
@@ -1695,9 +1718,12 @@ async function main() {
   const recoveryBackendRequests = [];
   const pageConsoleErrors = [];
   const pageExceptions = [];
+  const lastRequests = [];
   let blockedRequestCount = 0;
   let browserStderr = '';
   let pageTargetId;
+  const profilePageTargetIds = [];
+  const profilePageConnections = new Set();
   let pageLoadEvents = 0;
   let chromeStopped = false;
   let capturingShareImportRequests = false;
@@ -1763,6 +1789,8 @@ async function main() {
       }
       const method = (request.method || 'GET').toUpperCase();
       const path = requestUrl.pathname;
+      lastRequests.push(`${method} ${requestUrl.origin}${path}`);
+      if (lastRequests.length > 40) lastRequests.shift();
       if (capturingShareImportRequests) {
         const entry = { method, path, origin: requestUrl.origin };
         shareImportRequests.push(entry);
@@ -1838,6 +1866,56 @@ async function main() {
     ]);
     await setViewport(pageCdp, MOBILE_VIEWPORTS[1]);
 
+    const createFreshProfilePage = async () => {
+      const profileTarget = await requestJson(`http://127.0.0.1:${devTools.port}/json/new?about:blank`, { method: 'PUT' });
+      assert.equal(typeof profileTarget.webSocketDebuggerUrl, 'string', 'Chrome did not create a fresh profile-smoke page target.');
+      profilePageTargetIds.push(profileTarget.id);
+      const profileCdp = await CdpConnection.connect(profileTarget.webSocketDebuggerUrl, interrupted.signal);
+      profilePageConnections.add(profileCdp);
+      profileCdp.on('Page.loadEventFired', () => { pageLoadEvents += 1; });
+      profileCdp.on('Runtime.exceptionThrown', ({ exceptionDetails }) => {
+        pageExceptions.push(exceptionDetails.exception?.description || exceptionDetails.text || 'Unknown browser exception');
+      });
+      profileCdp.on('Runtime.consoleAPICalled', ({ type, args = [] }) => {
+        if (type !== 'error') return;
+        pageConsoleErrors.push(args.map((argument) => argument.value ?? argument.description ?? '').filter(Boolean).join(' '));
+      });
+      profileCdp.on('Network.requestWillBeSent', ({ request }) => {
+        try {
+          const requestUrl = new URL(request.url);
+          lastRequests.push(`${(request.method || 'GET').toUpperCase()} ${requestUrl.origin}${requestUrl.pathname}`);
+          if (lastRequests.length > 40) lastRequests.shift();
+        } catch {
+          // Opaque requests are still rejected by the Fetch gate below.
+        }
+      });
+      profileCdp.on('Fetch.requestPaused', ({ requestId, request }) => {
+        let requestOrigin = 'invalid-origin';
+        try {
+          requestOrigin = new URL(request.url).origin;
+        } catch {
+          // Invalid and opaque origins are rejected below.
+        }
+        const allowed = requestOrigin === appUrl.origin;
+        if (!allowed) {
+          blockedRequestCount += 1;
+          blockedOrigins.add(requestOrigin);
+        }
+        const decision = allowed
+          ? profileCdp.send('Fetch.continueRequest', { requestId })
+          : profileCdp.send('Fetch.failRequest', { requestId, errorReason: 'BlockedByClient' });
+        void decision.catch((error) => { firewallFailure = error; });
+      });
+      await Promise.all([
+        profileCdp.send('Page.enable'),
+        profileCdp.send('Runtime.enable'),
+        profileCdp.send('DOM.enable'),
+        profileCdp.send('Network.enable'),
+        profileCdp.send('Fetch.enable', { patterns: [{ urlPattern: '*', requestStage: 'Request' }] }),
+      ]);
+      return profileCdp;
+    };
+
     console.log(`[browser-demo-smoke] Chrome: ${chromeExecutable}`);
     const flowName = shareTargetOnly ? 'share-target-only' : claimProfileOnly ? 'claim-profile-setup' : claimRecoveryOnly ? 'claim-recovery' : promptOnly ? 'prompt-only' : friendDraftOnly ? 'friend-draft-only' : 'full';
     const flowViewports = claimProfileOnly ? CLAIM_PROFILE_VIEWPORTS : friendDraftOnly || shareTargetOnly ? [MOBILE_VIEWPORTS[1]] : FLOW_VIEWPORTS;
@@ -1846,12 +1924,23 @@ async function main() {
 
     if (claimProfileOnly) {
       for (const viewport of CLAIM_PROFILE_VIEWPORTS) {
-        await runClaimProfileSetupFlow(pageCdp, {
-          appUrl,
-          viewport,
-          keyboard: true,
-          screenshotDir: viewport.width === 390 || !viewport.mobile ? screenshotDir : null,
-        });
+        const profileCdp = await createFreshProfilePage();
+        try {
+          await runClaimProfileSetupFlow(profileCdp, {
+            appUrl,
+            viewport,
+            keyboard: true,
+            screenshotDir: viewport.width === 390 || !viewport.mobile ? screenshotDir : null,
+            getPageLoadEvents: () => pageLoadEvents,
+            getBlockedOrigins: () => [...blockedOrigins],
+            getPageConsoleErrors: () => pageConsoleErrors,
+            getPageExceptions: () => pageExceptions,
+            getLastRequests: () => lastRequests,
+          });
+        } finally {
+          profileCdp.close();
+          await browserCdp.send('Target.closeTarget', { targetId: profilePageTargetIds.at(-1) }, 1_000).catch(() => undefined);
+        }
         console.log(`[browser-demo-smoke] PASS handle-first optional profile disclosure with keyboard at ${viewport.width}×${viewport.height}.`);
       }
       console.log('[browser-demo-smoke] PASS collapsed optional fields, required handle semantics, 44px disclosure target, and responsive layout.');
@@ -1976,6 +2065,10 @@ async function main() {
   } finally {
     pageCdp?.close();
     if (browserCdp && !browserCdp.closed) {
+      for (const profileCdp of profilePageConnections) profileCdp.close();
+      for (const targetId of profilePageTargetIds) {
+        await browserCdp.send('Target.closeTarget', { targetId }, 1_000).catch(() => undefined);
+      }
       if (pageTargetId) await browserCdp.send('Target.closeTarget', { targetId: pageTargetId }, 1_000).catch(() => undefined);
       await browserCdp.send('Browser.close', {}, 2_000).catch(() => undefined);
     }
