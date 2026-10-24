@@ -2,6 +2,14 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
+## Checkpoint — text-only Note demo (2026-10-24)
+
+- [x] Add a fictional, attachment-free Note as the first no-account demo choice and connect it to the recipient reveal, reaction, sender copy, and fresh-draft flow.
+- [x] Validate text-only local demo state and preserve the active photo draft and its IndexedDB attachment.
+- [x] Pass 274 unit tests, lint, no-incremental TypeScript, browser-smoke syntax, diff checks, production build, and the isolated Note browser journey at 360×844, 390×844, 430×844, and 1440×900.
+- [x] Push code commit `e5ee3f1` to `feat/demo-note-sample` and open [PR #4](https://github.com/arjeetanand/drop/pull/4).
+- [ ] Review and merge PR #4 with approval. Screen-reader output and physical-device behavior remain unverified.
+
 ## Checkpoint — Share-to-Drop PWA import and replay safety (2026-10-24)
 
 - [x] Add a PWA share target for supported photo/GIF files, with worker-side validation and a one-hour opaque IndexedDB handoff.

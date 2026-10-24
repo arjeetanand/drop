@@ -8,6 +8,14 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 
 ## Implementation Status — 2026-10-24
 
+### Latest checkpoint — text-only Note demo (2026-10-24)
+
+- `/demo` now leads with a warm-paper fictional Note that needs no attachment. It uses the existing recipient reveal, reaction, sender-copy, and blank-friend-draft journey; the current photo draft stays intact.
+- Text demo storage accepts nonblank text with no media metadata, writes no attachment, and preserves the active draft. The browser smoke checks the sealed preview, no media fetch on Note selection, exact photo draft and attachment preservation, and local-only behavior.
+- Verification: `npm test` passed 274/274; lint, no-incremental TypeScript, browser-smoke syntax, `git diff --check`, and `npm run build -- --webpack` passed. Isolated Chrome passed touch at 360×844 and keyboard at 390×844, 430×844, and 1440×900. No horizontal overflow, backend/API writes, cross-origin requests, console errors, or JavaScript exceptions were observed. The build reported only the existing Browserslist and Tailwind easing warnings.
+- Code commit `e5ee3f1` is pushed to `feat/demo-note-sample`; review is open in [PR #4](https://github.com/arjeetanand/drop/pull/4). Drop returned HTTP 200 on port 4004. `.env.local`, hosted Supabase, and `/letter` were untouched.
+- Remaining: review and merge PR #4 with approval; check spoken output on a screen reader and behavior on a physical device.
+
 ### Latest checkpoint — Share-to-Drop PWA import and replay safety (2026-10-24)
 
 - Added an installed web share target for JPEG, PNG, WebP, and GIF files up to 8 MB. The service worker stores an opaque one-hour IndexedDB handoff; Compose imports it as an unsent local draft.

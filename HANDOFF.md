@@ -2,6 +2,16 @@
 
 Updated: 2026-10-24
 
+## Latest checkpoint — text-only Note demo (2026-10-24)
+
+- Added the fictional warm-paper Note as the first `/demo` sample and routed it through recipient reveal, reaction, sender copy, and a fresh blank composer. The text sample uses no attachment; it preserves the sender’s current photo draft.
+- Extended `createLocalDemoDrop` to accept nonblank text drafts only when media metadata is absent. Regression tests reject empty text and every known media field, and verify that completing a Note leaves the active draft exactly as stored.
+- The isolated browser smoke verifies the sealed recipient/fragment states, no bundled media fetch on Note selection, no text-demo attachment, preserved attachment keys and SHA-256 bytes, reaction reload, and a blank new friend draft. It passed 360×844 by touch, plus 390×844, 430×844, and 1440×900 by keyboard. There was no horizontal overflow, backend/API write, cross-origin request, console error, or JavaScript exception.
+- Verification: `npm test` passed 274/274; `npm run lint`, `./node_modules/.bin/tsc --noEmit --incremental false`, `node --check scripts/browser-demo-smoke.mjs`, `git diff --check`, and `npm run build -- --webpack` passed. The production build emitted the existing Browserslist freshness and Tailwind easing-class warnings. `http://127.0.0.1:4004/` returned HTTP 200.
+- Active checkout: `/Users/arjeetanand/projects/drop`, branch `feat/demo-note-sample`. Code commit `e5ee3f1` (`feat: add text-only Note demo`) is pushed; [PR #4](https://github.com/arjeetanand/drop/pull/4) is open for review. Project notes are recorded in a separate documentation commit on this branch. `/letter`, `.env.local`, and hosted Supabase were untouched.
+
+**Next:** review PR #4 and merge only after approval. Screen-reader output and physical-device behavior remain to be checked.
+
 ## Latest checkpoint — Docker-backed local Supabase smoke repair (2026-10-24)
 
 - Corrected `scripts/local-supabase-smoke.mjs`: an invalid bearer token is denied before claim, while the existing check still rejects a second account replaying the valid token after the first claim. The raw recent-recipient query now expects both the direct recipient and the profiled claimant from the sender’s claimed text/media invites. No claim RPC behavior changed.

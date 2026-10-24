@@ -1236,3 +1236,34 @@ Test bearer-link access at two distinct states: invalid credentials before first
 ### Git and remaining gaps
 
 Code commit `8115a58` (`test: align claim smoke with bearer semantics`) is pushed to `origin/fix/local-bearer-claim-smoke` and tracked by [PR #2](https://github.com/arjeetanand/drop/pull/2). This learning entry and the setup/checklist/handoff updates are in a follow-up documentation commit on the same branch. No hosted Supabase project or resource was changed. Real aged-object deletion, hosted two-account delivery, and device/screen-reader behavior remain unverified.
+
+## 2026-10-24 — Add a text-only first-use demo
+
+### Issue
+
+The no-account demo chooser offered only photo and GIF examples. A visitor had no attachment-free way to try the core written-drop reveal and reaction journey.
+
+### Cause
+
+`createLocalDemoDrop` accepted only image/GIF drafts with valid media metadata, and `/demo` had no text sample path.
+
+### Resolution
+
+- Add a fictional warm-paper Note as the first chooser card and connect it to the existing recipient, reveal, reaction, and sender-copy screens.
+- Accept nonblank text-only local demos without media metadata or an IndexedDB attachment. Keep the existing image/GIF validation and active-draft preservation.
+- Extend the isolated browser smoke to verify the Note stays sealed until Open, does not fetch demo media or call backend APIs, preserves the photo draft and attachment bytes, and starts a blank friend draft from sender copy.
+
+### Learning
+
+A first-use sample can exercise the real interaction path without creating media, account, upload, or send dependencies. Verify the full journey in a browser and take a before/after snapshot of both draft state and attachment bytes when testing preservation.
+
+### Verification
+
+- `npm test` passed 274/274; `npm run lint`, no-incremental TypeScript, `node --check scripts/browser-demo-smoke.mjs`, and `git diff --check` passed.
+- `npm run build -- --webpack` passed and generated 22 routes. It emitted only the existing Browserslist freshness and ambiguous Tailwind easing-class warnings.
+- The isolated Chrome smoke passed touch at 360×844 and keyboard at 390×844, 430×844, and 1440×900. It verified sealing until open, reaction persistence after reload, sender copy, no backend/API writes or cross-origin requests, and exact preservation of the original photo draft fields, attachment keys, metadata, and SHA-256 bytes. No console errors, JavaScript exceptions, or horizontal overflow were observed.
+- The app returned HTTP 200 at `http://127.0.0.1:4004/` and was left running there. Visual captures are in `/private/tmp/drop-note-final.6woAix/`.
+
+### Git and remaining gaps
+
+Active checkout: `/Users/arjeetanand/projects/drop`; branch `feat/demo-note-sample`. Code commit `e5ee3f1` (`feat: add text-only Note demo`) is pushed to `origin/feat/demo-note-sample` and reviewed in [PR #4](https://github.com/arjeetanand/drop/pull/4). The project documentation and this learning entry are in a separate follow-up commit. PR #4 is not merged. `/letter`, `.env.local`, and hosted Supabase were not changed. Screen-reader output and physical-device behavior remain unverified.

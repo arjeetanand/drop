@@ -2,6 +2,14 @@
 
 Updated: 2026-10-24
 
+## Text Note demo (2026-10-24)
+
+- [x] Add an attachment-free fictional Note as the first `/demo` option and reuse the existing reveal, reaction, sender-copy, and fresh-composer flow.
+- [x] Preserve the active photo draft and all existing IndexedDB attachment keys and bytes; verify text-only storage and no backend/API or cross-origin request.
+- [x] Pass unit tests, lint, TypeScript, browser-script syntax, diff check, production build, and isolated Chrome at 360×844, 390×844, 430×844, and 1440×900.
+- [x] Push code commit `e5ee3f1` and open [PR #4](https://github.com/arjeetanand/drop/pull/4).
+- [ ] Review and merge PR #4 with approval; verify screen-reader output and a physical device.
+
 ## Candidate and PR
 
 - [x] Refresh `origin/main` and confirm the integration branch is based on the current main tip.

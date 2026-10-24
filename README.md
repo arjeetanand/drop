@@ -19,7 +19,9 @@ Open `http://localhost:4004`. Run `./run.sh` again to restart Drop, or `./run.sh
 
 ## Try a demo without an account
 
-Choose **Try a demo drop** on Home, then pick the bundled photo or GIF. The sample uses the existing recipient reveal, reaction, and sender-copy screens; it is saved in this browser only, does not upload or send anything, and leaves the active draft untouched. Demo reactions persist on this device.
+Choose **Try a demo drop** on Home, then pick the fictional Note, bundled photo, or GIF. The Note has no attachment and opens through the existing recipient reveal, reaction, and sender-copy screens. Every sample stays in this browser, makes no upload or send, and leaves the active draft untouched. Demo reactions persist on this device.
+
+Run `node scripts/browser-demo-smoke.mjs http://127.0.0.1:4004 --note-demo-only` to verify the Note remains sealed until opened, supports reactions and sender copy, preserves an existing photo draft and its attachment, and makes no backend or cross-origin requests at mobile and desktop widths.
 
 After opening the sender copy, **Make one for a friend** starts a new blank, editable text drop. The sample message, reaction, media, and demo identity stay local; an unfinished draft and its attachment remain available. Sending still follows the normal account and recipient steps.
 
