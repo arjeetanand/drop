@@ -481,11 +481,11 @@ function saveLetterHistory(letters: MockLetter[], accountId = getLocalAccountId(
   }
 }
 
-export function startNewLetter(): LetterDraftState {
+export function startNewLetter(options: { forceNew?: boolean } = {}): LetterDraftState {
   const current = getLetterDraft();
 
   // Avoid creating a second blank letter during React's development remount.
-  if (current.id.startsWith('draft-') && current.status === 'draft' && !current.content.trim()) {
+  if (!options.forceNew && current.id.startsWith('draft-') && current.status === 'draft' && !current.content.trim()) {
     return current;
   }
 

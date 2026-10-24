@@ -197,6 +197,39 @@ test('retains a media upload ID when a draft is saved and resumed', () => {
   }
 });
 
+test('a prompt starts a separate draft without replacing an empty media draft', () => {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const values = new Map();
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { localStorage: { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) } },
+  });
+  try {
+    setLocalAccountId(null);
+    const existing = saveLetterDraft({
+      id: 'draft-empty-photo-in-progress',
+      subject: 'Keep this attachment',
+      payloadKind: 'image',
+      mediaUploadId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    });
+
+    const promptedDraft = startNewLetter({ forceNew: true });
+    const recoveredExisting = getLetterDraftById(existing.id);
+    const populated = setActiveLetterDraft({ ...promptedDraft, content: 'Describe a small kindness you still remember.' });
+
+    assert.notEqual(populated.id, existing.id);
+    assert.equal(populated.content, 'Describe a small kindness you still remember.');
+    assert.equal(recoveredExisting?.subject, 'Keep this attachment');
+    assert.equal(recoveredExisting?.payloadKind, 'image');
+    assert.equal(recoveredExisting?.mediaUploadId, 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+    assert.equal(getLetterDraft().id, populated.id);
+  } finally {
+    setLocalAccountId(null);
+    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
+    else delete globalThis.window;
+  }
+});
+
 test('backfills and persists one media upload ID for a restored draft before private invite retries', () => {
   const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
   const values = new Map();

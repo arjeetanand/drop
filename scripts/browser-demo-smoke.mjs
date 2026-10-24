@@ -48,6 +48,23 @@ const CLAIM_RECOVERY_DRAFT = {
   dispatchedAt: '2026-10-24T00:00:00.000Z',
 };
 const CLAIM_DETAILS_PATH = `/letter/${encodeURIComponent(CLAIM_RECOVERY_DRAFT.id)}`;
+const PROMPT_ACTIVE_DRAFT = {
+  id: 'draft-empty-photo-in-progress',
+  recipient: '@close.friend',
+  subject: 'Keep this attachment',
+  content: '',
+  fontSize: 18,
+  alignment: 'left',
+  address: { name: '', street: '', city: '', postcode: '', country: '' },
+  sealId: 'fern',
+  sealColor: '#991b1b',
+  sealMonogram: '',
+  payloadKind: 'image',
+  deliveryMode: 'instant',
+  mediaUploadId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  status: 'draft',
+  updatedAt: '2026-10-24T00:00:00.000Z',
+};
 
 const interrupted = new AbortController();
 const onSignal = (signal) => interrupted.abort(new Error(`Received ${signal}; stopping the smoke check.`));
@@ -269,9 +286,20 @@ async function waitForDevTools(profileDir, child, getSpawnError, signal) {
 }
 
 async function requestJson(url, options = {}) {
-  const response = await fetch(url, { ...options, signal: AbortSignal.timeout(3_000) });
-  if (!response.ok) throw new Error(`Chrome DevTools HTTP endpoint returned ${response.status}.`);
-  return response.json();
+  let lastError;
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    let response;
+    try {
+      response = await fetch(url, { ...options, signal: AbortSignal.timeout(1_500) });
+    } catch (error) {
+      lastError = error;
+      if (attempt < 7) await new Promise((resolve) => setTimeout(resolve, Math.min(100 * (attempt + 1), 500)));
+      continue;
+    }
+    if (!response.ok) throw new Error(`Chrome DevTools HTTP endpoint returned ${response.status}.`);
+    return response.json();
+  }
+  throw new Error(`Could not reach Chrome DevTools at ${new URL(url).pathname}: ${lastError?.message || lastError || 'unknown error'}`);
 }
 
 async function evaluate(cdp, expression) {
@@ -597,6 +625,115 @@ async function runClaimRecoveryFlow(cdp, {
   }
 }
 
+async function runWritingPromptFlow(cdp, { appUrl, viewport, keyboard, screenshotDir }) {
+  await setViewport(cdp, viewport);
+  await cdp.send('Page.navigate', { url: appUrl.href });
+  await waitUntil(cdp, 'Home before starting a prompted draft', async () => (
+    await evaluate(cdp, `${normalizedVisibleText('Use this thought')} && location.pathname === '/'`)
+  ));
+
+  const seeded = await evaluate(cdp, `(async () => {
+    const draft = ${JSON.stringify(PROMPT_ACTIVE_DRAFT)};
+    localStorage.setItem('dear-exe:active-letter:v1', JSON.stringify(draft));
+    localStorage.setItem('dear-exe:letter-drafts:v1', JSON.stringify([draft]));
+    const response = await fetch('/demo-cat.png');
+    if (!response.ok) throw new Error('Could not load the local photo fixture.');
+    const blob = await response.blob();
+    const database = await new Promise((resolve, reject) => {
+      const request = indexedDB.open('dear-exe-draft-media', 1);
+      request.onupgradeneeded = () => request.result.createObjectStore('attachments');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    try {
+      await new Promise((resolve, reject) => {
+        const transaction = database.transaction('attachments', 'readwrite');
+        transaction.objectStore('attachments').put({ blob, name: 'demo-cat.png', type: blob.type, lastModified: 1 }, draft.id);
+        transaction.oncomplete = resolve;
+        transaction.onerror = () => reject(transaction.error);
+        transaction.onabort = () => reject(transaction.error);
+      });
+    } finally {
+      database.close();
+    }
+    return localStorage.getItem('dear-exe:active-letter:v1') === JSON.stringify(draft);
+  })()`);
+  assert.equal(seeded, true, 'The unfinished photo draft and its private attachment should be saved before starting a prompt draft.');
+  await assertNoHorizontalOverflow(cdp, 'Home prompt starter', viewport.width);
+  const prompt = await evaluate(cdp, `document.querySelector('aside p[aria-live="polite"]')?.innerText || ''`);
+  assert.ok(prompt.trim(), 'Home should show the writing thought that will be added to the draft.');
+  await activateFlowControl(cdp, { keyboard, name: 'Use this thought', expectedTag: 'BUTTON' });
+
+  await waitUntil(cdp, 'the new composer with an editable text field', async () => (
+    await evaluate(cdp, `location.pathname === '/compose' && Boolean(document.querySelector('#drop-content'))`)
+  ));
+  const initialComposerState = await evaluate(cdp, `(() => ({
+    url: location.href,
+    value: document.querySelector('#drop-content')?.value || '',
+    active: JSON.parse(localStorage.getItem('dear-exe:active-letter:v1') || 'null'),
+  }))()`);
+  assert.equal(initialComposerState.value, prompt, `The selected thought should seed the editor; state=${JSON.stringify(initialComposerState)}`);
+  assert.equal(initialComposerState.active?.content, prompt, 'The selected thought should be persisted in the new draft.');
+  assert.equal(initialComposerState.active?.payloadKind, 'text', 'A prompt draft should stay text-only and not inherit the previous media.');
+  await waitUntil(cdp, 'the local save state for the new prompt draft', async () => (
+    await evaluate(cdp, normalizedVisibleText('Saved on this device'))
+  ));
+  await assertNoFrameworkOverlay(cdp, 'Prompt composer');
+  await assertNoHorizontalOverflow(cdp, 'Prompt composer', viewport.width);
+  const state = await evaluate(cdp, `(() => {
+    const active = JSON.parse(localStorage.getItem('dear-exe:active-letter:v1') || 'null');
+    const drafts = JSON.parse(localStorage.getItem('dear-exe:letter-drafts:v1') || '[]');
+    return {
+      active,
+      preserved: drafts.find(draft => draft.id === ${JSON.stringify(PROMPT_ACTIVE_DRAFT.id)}) || null,
+      url: location.href,
+      textareaEditable: Boolean(document.querySelector('#drop-content') && !document.querySelector('#drop-content').disabled && !document.querySelector('#drop-content').readOnly),
+    };
+  })()`);
+  assert.equal(state.active.content, prompt, 'The selected thought should be the new draft content.');
+  assert.notEqual(state.active.id, PROMPT_ACTIVE_DRAFT.id, 'The prompt should use its own draft.');
+  assert.equal(state.preserved?.payloadKind, 'image', 'Starting a prompt must preserve an existing media draft.');
+  assert.equal(state.preserved?.mediaUploadId, PROMPT_ACTIVE_DRAFT.mediaUploadId, 'The existing media upload identity must stay with its draft.');
+  assert.equal(state.textareaEditable, true, 'The prompt should remain editable in the composer.');
+  const url = new URL(state.url);
+  assert.equal(url.pathname, '/compose');
+  assert.equal(url.searchParams.get('letter'), state.active.id, 'The new route should reopen the prompted draft by its stable ID.');
+  assert.equal(url.searchParams.has('prompt'), false, 'Prompt text should not be copied into the URL.');
+  assert.equal(state.url.includes('kindness you still remember'), false, 'Prompt text should stay out of browser history.');
+  const existingAttachment = await evaluate(cdp, `(async () => {
+    const database = await new Promise((resolve, reject) => {
+      const request = indexedDB.open('dear-exe-draft-media', 1);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    try {
+      return await new Promise((resolve, reject) => {
+        const transaction = database.transaction('attachments', 'readonly');
+        const request = transaction.objectStore('attachments').get(${JSON.stringify(PROMPT_ACTIVE_DRAFT.id)});
+        request.onsuccess = () => resolve({ name: request.result?.name || null, size: request.result?.blob?.size || 0 });
+        request.onerror = () => reject(request.error);
+      });
+    } finally {
+      database.close();
+    }
+  })()`);
+  assert.equal(existingAttachment.name, 'demo-cat.png', 'The unfinished media draft attachment should remain in private local storage.');
+  assert.ok(existingAttachment.size > 0, 'The unfinished media draft attachment bytes should remain intact.');
+  if (screenshotDir && (viewport.width === 390 || !viewport.mobile)) {
+    await captureScreenshot(cdp, screenshotDir, `${viewport.name}-prompt-composer`);
+  }
+
+  await cdp.send('Page.reload', { ignoreCache: true });
+  await waitUntil(cdp, 'the saved prompt after reload', async () => (
+    await evaluate(cdp, `location.pathname === '/compose'
+      && document.readyState === 'complete'
+      && document.querySelector('#drop-content')?.value === ${JSON.stringify(prompt)}
+      && ${normalizedVisibleText('Saved on this device')}`)
+  ));
+  await assertNoFrameworkOverlay(cdp, 'Prompt draft after reload');
+  await assertNoHorizontalOverflow(cdp, 'Prompt draft after reload', viewport.width);
+}
+
 async function runRecipientlessClaimChoiceFlow(cdp, { appUrl, viewport, keyboard }) {
   await setViewport(cdp, viewport);
   const composeUrl = new URL('/compose', appUrl);
@@ -633,12 +770,13 @@ async function runRecipientlessClaimChoiceFlow(cdp, { appUrl, viewport, keyboard
 
 async function main() {
   if (process.argv.includes('--help') || process.argv.includes('-h')) {
-    console.log('Usage: node scripts/browser-demo-smoke.mjs [http://127.0.0.1:4004] [--claim-recovery-only]');
+    console.log('Usage: node scripts/browser-demo-smoke.mjs [http://127.0.0.1:4004] [--claim-recovery-only|--prompt-only]');
     return;
   }
 
   const args = process.argv.slice(2);
   const claimRecoveryOnly = args.includes('--claim-recovery-only');
+  const promptOnly = args.includes('--prompt-only');
   const appUrl = parseAppUrl(args.find((argument) => !argument.startsWith('--')) || DEFAULT_APP_URL);
   if (typeof WebSocket !== 'function') throw new Error('This smoke check needs a Node runtime with the built-in WebSocket API.');
   const screenshotDir = screenshotDirectoryFromEnv();
@@ -665,6 +803,7 @@ async function main() {
   try {
     const hostnameForResolver = appUrl.hostname.replace(/^\[|\]$/g, '');
     const resolverRule = `MAP * ~NOTFOUND, EXCLUDE ${hostnameForResolver}`;
+    console.log(`[browser-demo-smoke] Starting isolated Chrome: ${chromeExecutable}`);
     chrome = spawn(chromeExecutable, [
       '--headless=new',
       '--remote-debugging-port=0',
@@ -691,11 +830,13 @@ async function main() {
     });
 
     const devTools = await waitForDevTools(profileDir, chrome, () => spawnError, interrupted.signal);
+    console.log('[browser-demo-smoke] Chrome DevTools is ready.');
     const versionInfo = await requestJson(`http://127.0.0.1:${devTools.port}/json/version`);
     assert.equal(typeof versionInfo.webSocketDebuggerUrl, 'string', 'Chrome did not expose its DevTools WebSocket URL.');
     browserCdp = await CdpConnection.connect(devTools.browserWebSocketUrl, interrupted.signal);
 
     const target = await requestJson(`http://127.0.0.1:${devTools.port}/json/new?about:blank`, { method: 'PUT' });
+    console.log('[browser-demo-smoke] Connected to the isolated Chrome page.');
     pageTargetId = target.id;
     assert.equal(typeof target.webSocketDebuggerUrl, 'string', 'Chrome did not create an isolated page target.');
     pageCdp = await CdpConnection.connect(target.webSocketDebuggerUrl, interrupted.signal);
@@ -755,9 +896,10 @@ async function main() {
     await setViewport(pageCdp, MOBILE_VIEWPORTS[1]);
 
     console.log(`[browser-demo-smoke] Chrome: ${chromeExecutable}`);
-    console.log(`[browser-demo-smoke] App: ${appUrl.origin}; ${claimRecoveryOnly ? 'claim-recovery' : 'full'} flow viewports: ${FLOW_VIEWPORTS.map(({ name }) => name).join(', ')}.`);
+    const flowName = claimRecoveryOnly ? 'claim-recovery' : promptOnly ? 'prompt-only' : 'full';
+    console.log(`[browser-demo-smoke] App: ${appUrl.origin}; ${flowName} flow viewports: ${FLOW_VIEWPORTS.map(({ name }) => name).join(', ')}.`);
 
-    if (!claimRecoveryOnly) {
+    if (!claimRecoveryOnly && !promptOnly) {
       const screenshotSteps = new Set(['home', 'chooser', 'recipient', 'fragments-revealed', 'reaction-saved', 'sender-copy']);
       for (const viewport of FLOW_VIEWPORTS) {
         const keyboard = viewport.width !== 360;
@@ -784,27 +926,41 @@ async function main() {
       });
     }
 
-    for (const viewport of FLOW_VIEWPORTS) {
-      await runRecipientlessClaimChoiceFlow(pageCdp, {
-        appUrl,
-        viewport,
-        keyboard: true,
-      });
-      console.log(`[browser-demo-smoke] PASS keyboard handleless claim choice and focus recovery at ${viewport.width}×${viewport.height}${viewport.mobile ? '' : ' desktop'}.`);
+    if (!claimRecoveryOnly) {
+      for (const viewport of FLOW_VIEWPORTS) {
+        await runWritingPromptFlow(pageCdp, {
+          appUrl,
+          viewport,
+          keyboard: true,
+          screenshotDir: viewport.width === 390 || !viewport.mobile ? screenshotDir : null,
+        });
+        console.log(`[browser-demo-smoke] PASS keyboard prompt-to-editable-draft flow and existing attachment preservation at ${viewport.width}×${viewport.height}${viewport.mobile ? '' : ' desktop'}.`);
+      }
     }
 
-    capturingRecoveryBackendRequests = true;
-    for (const viewport of FLOW_VIEWPORTS) {
-      await runClaimRecoveryFlow(pageCdp, {
-        appUrl,
-        viewport,
-        keyboard: true,
-        screenshotDir: viewport.width === 390 || !viewport.mobile ? screenshotDir : null,
-        getPageLoadEvents: () => pageLoadEvents,
-      });
-      console.log(`[browser-demo-smoke] PASS keyboard saved-claim recovery at ${viewport.width}×${viewport.height}${viewport.mobile ? '' : ' desktop'}.`);
+    if (!promptOnly) {
+      for (const viewport of FLOW_VIEWPORTS) {
+        await runRecipientlessClaimChoiceFlow(pageCdp, {
+          appUrl,
+          viewport,
+          keyboard: true,
+        });
+        console.log(`[browser-demo-smoke] PASS keyboard handleless claim choice and focus recovery at ${viewport.width}×${viewport.height}${viewport.mobile ? '' : ' desktop'}.`);
+      }
+
+      capturingRecoveryBackendRequests = true;
+      for (const viewport of FLOW_VIEWPORTS) {
+        await runClaimRecoveryFlow(pageCdp, {
+          appUrl,
+          viewport,
+          keyboard: true,
+          screenshotDir: viewport.width === 390 || !viewport.mobile ? screenshotDir : null,
+          getPageLoadEvents: () => pageLoadEvents,
+        });
+        console.log(`[browser-demo-smoke] PASS keyboard saved-claim recovery at ${viewport.width}×${viewport.height}${viewport.mobile ? '' : ' desktop'}.`);
+      }
+      capturingRecoveryBackendRequests = false;
     }
-    capturingRecoveryBackendRequests = false;
 
     assert.deepEqual(forbiddenRequests, [], `The local browser flow made forbidden auth, RPC, or Storage write requests: ${JSON.stringify(forbiddenRequests)}.`);
     assert.deepEqual(recoveryBackendRequests, [], `The saved-claim recovery flow made Auth, REST, or Storage requests without a configured backend: ${JSON.stringify(recoveryBackendRequests)}.`);
@@ -812,10 +968,12 @@ async function main() {
     assert.deepEqual(pageExceptions, [], `The browser reported JavaScript exceptions: ${JSON.stringify(pageExceptions)}.`);
     if (firewallFailure) throw new Error(`The browser network gate failed: ${firewallFailure.message}`);
 
-    console.log('[browser-demo-smoke] PASS saved-claim recovery after reload, including the encoded detail route and fresh-link action at all mobile and desktop widths.');
-    console.log('[browser-demo-smoke] PASS handleless claim disclosure, account readiness gate, and focus recovery at all mobile and desktop widths.');
-    console.log('[browser-demo-smoke] PASS no Auth, REST, or Storage request during the saved-claim recovery flow.');
-    if (!claimRecoveryOnly) {
+    if (!promptOnly) {
+      console.log('[browser-demo-smoke] PASS saved-claim recovery after reload, including the encoded detail route and fresh-link action at all mobile and desktop widths.');
+      console.log('[browser-demo-smoke] PASS handleless claim disclosure, account readiness gate, and focus recovery at all mobile and desktop widths.');
+      console.log('[browser-demo-smoke] PASS no Auth, REST, or Storage request during the saved-claim recovery flow.');
+    }
+    if (!claimRecoveryOnly && !promptOnly) {
       console.log('[browser-demo-smoke] PASS photo flow at 390×844, including saved reaction, reload persistence, and sender copy.');
       console.log('[browser-demo-smoke] PASS no horizontal overflow on Home and demo chooser at 360, 390, 430px and 1440×900.');
       console.log('[browser-demo-smoke] PASS no Auth, RPC, or Storage write request during the local demo.');

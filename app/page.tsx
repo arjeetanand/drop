@@ -3,16 +3,19 @@
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ArrowRight, ArrowUpRight, Camera, Eye, Mail, RefreshCw, Sparkles, Zap } from 'lucide-react';
 import { LiveDropStatus } from '@/components/LiveDropCue';
 import { LiveReactionCue } from '@/components/LiveReactionCue';
 import { LetterCard } from '@/components/LetterCard';
 import { writingPrompts } from '@/data/mockData';
 import { getRemoteProfile } from '@/lib/letterBackend';
+import { setActiveLetterDraft, startNewLetter } from '@/lib/letterStore';
 import { defaultUserProfile, getUserProfileForCurrentAccount, type UserProfile } from '@/lib/userStore';
 import { useLiveInbox } from '@/lib/useLiveInbox';
 
 export default function HomeDesk() {
+  const router = useRouter();
   const { letters, arrival, arrivalCount, dismissArrival, reaction, reactionCount, dismissReaction } = useLiveInbox();
   const [profile, setProfile] = useState<UserProfile>(defaultUserProfile);
   const [promptIndex, setPromptIndex] = useState(0);
@@ -32,6 +35,12 @@ export default function HomeDesk() {
   const featured = arrival ?? incoming[0];
   const isNewArrival = Boolean(arrival && featured?.id === arrival.id);
   const arrivalLabel = arrivalCount > 1 ? `${arrivalCount} new drops` : 'Just landed';
+
+  const startPromptDraft = () => {
+    const draft = startNewLetter({ forceNew: true });
+    const promptedDraft = setActiveLetterDraft({ ...draft, content: writingPrompts[promptIndex] });
+    router.push(`/compose?letter=${encodeURIComponent(promptedDraft.id)}`);
+  };
 
   return (
     <main className="page-shell page-enter !pt-5 sm:!pt-8">
@@ -106,7 +115,7 @@ export default function HomeDesk() {
           <aside className="rounded-2xl border border-[#ead5c6] bg-[#fff7ed] p-5 sm:p-6">
             <div className="flex items-center justify-between gap-3"><p className="eyebrow text-[#aa5f42]">A tiny writing spark</p><Camera className="h-4 w-4 text-[#df7951]" aria-hidden="true" /></div>
             <p className="mt-3 font-literata text-lg leading-relaxed text-ink-navy" aria-live="polite">{writingPrompts[promptIndex]}</p>
-            <Link href={`/compose?new=1&prompt=${encodeURIComponent(writingPrompts[promptIndex])}`} className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#152b43] px-4 text-xs font-bold text-white">Use this thought <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
+            <button type="button" onClick={startPromptDraft} className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#152b43] px-4 text-xs font-bold text-white">Use this thought <ArrowRight className="h-4 w-4" aria-hidden="true" /></button>
             <button type="button" className="mt-1 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl text-xs font-semibold text-ink-navy hover:bg-black/5" onClick={() => setPromptIndex((index) => (index + 1) % writingPrompts.length)}><RefreshCw className="h-3.5 w-3.5" aria-hidden="true" /> Another one</button>
           </aside>
         </section>
