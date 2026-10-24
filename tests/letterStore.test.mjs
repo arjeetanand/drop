@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { clearRecipientInviteProgressForDraft, completeSuccessfulSend, copyGuestDraftToAccount, createLocalDemoDrop, dispatchLetter, ensureLetterDraftMediaUploadId, getGuestDraftById, getJourneyNotes, getLetterDraft, getLetterDraftById, getLettersWithDraft, isLetterDraftPersisted, recordRecipientInviteProgress, saveJourneyNotes, saveLetterDraft, setActiveLetterDraft, startNewLetter } from '../lib/letterStore.ts';
+import { clearRecipientInviteProgressForDraft, completeSuccessfulSend, copyGuestDraftToAccount, createLocalDemoDrop, dispatchLetter, ensureLetterDraftMediaUploadId, getGuestDraftById, getJourneyNotes, getLetterDraft, getLetterDraftById, getLetterDraftByMediaUploadId, getLettersWithDraft, isLetterDraftPersisted, recordRecipientInviteProgress, saveJourneyNotes, saveLetterDraft, setActiveLetterDraft, startNewLetter } from '../lib/letterStore.ts';
 import { setLocalAccountId } from '../lib/localAccountScope.ts';
 
 test('transfers the starter draft and refreshes the preserved account draft snapshot', async () => {
@@ -57,6 +57,231 @@ test('verifies the active draft can be read back before it is shared', () => {
     const unsavedDraft = saveLetterDraft({ id: 'draft-rejected-before-invite', content: 'Keep this private.' });
     assert.equal(isLetterDraftPersisted(unsavedDraft), false);
     assert.equal(getLetterDraft().id, persistedDraft.id);
+  } finally {
+    setLocalAccountId(null);
+    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
+    else delete globalThis.window;
+  }
+});
+
+test('requires the previous editable draft to be preserved before starting a new one when opted in', () => {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const values = new Map();
+  let rejectDraftHistory = false;
+  let activeDraftWrites = 0;
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: {
+      localStorage: {
+        getItem: (key) => values.get(key) ?? null,
+        setItem: (key, value) => {
+          if (rejectDraftHistory && key === 'dear-exe:letter-drafts:v1:account:preserved-draft-account') {
+            throw new Error('draft history full');
+          }
+          if (key === 'dear-exe:active-letter:v1:account:preserved-draft-account') activeDraftWrites += 1;
+          values.set(key, value);
+        },
+      },
+    },
+  });
+  try {
+    setLocalAccountId('preserved-draft-account');
+    const original = saveLetterDraft({ id: 'draft-preserve-before-new', content: 'Keep this editable draft.' });
+    const activeKey = 'dear-exe:active-letter:v1:account:preserved-draft-account';
+    const originalActive = values.get(activeKey);
+    const writesBeforeAttempt = activeDraftWrites;
+
+    rejectDraftHistory = true;
+    assert.throws(() => startNewLetter({ forceNew: true, requirePreserved: true }), /could not be preserved/i);
+
+    assert.equal(activeDraftWrites, writesBeforeAttempt, 'the active draft must not be replaced if its history write fails');
+    assert.equal(values.get(activeKey), originalActive);
+    assert.equal(getLetterDraft().id, original.id);
+    assert.equal(getLetterDraft().content, original.content);
+  } finally {
+    setLocalAccountId(null);
+    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
+    else delete globalThis.window;
+  }
+});
+
+test('starts a verified new active draft after preserving the previous draft when opted in', () => {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const values = new Map();
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { localStorage: { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) } },
+  });
+  try {
+    setLocalAccountId('preserved-success-account');
+    const original = saveLetterDraft({ id: 'draft-preserved-success-original', content: 'The original remains editable.' });
+    const next = startNewLetter({ forceNew: true, requirePreserved: true });
+    const history = JSON.parse(values.get('dear-exe:letter-drafts:v1:account:preserved-success-account'));
+
+    assert.notEqual(next.id, original.id);
+    assert.equal(getLetterDraft().id, next.id);
+    assert.equal(isLetterDraftPersisted(next, 'preserved-success-account'), true);
+    assert.equal(history.find((draft) => draft.id === original.id)?.content, original.content);
+    assert.equal(getLetterDraftById(original.id, 'preserved-success-account')?.content, original.content);
+  } finally {
+    setLocalAccountId(null);
+    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
+    else delete globalThis.window;
+  }
+});
+
+test('aborts an opted-in new draft if its active record cannot be persisted', () => {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const values = new Map();
+  let rejectNewActive = false;
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: {
+      localStorage: {
+        getItem: (key) => values.get(key) ?? null,
+        setItem: (key, value) => {
+          if (rejectNewActive && key === 'dear-exe:active-letter:v1:account:active-write-account') {
+            const next = JSON.parse(value);
+            if (next.id !== 'draft-active-write-original') throw new Error('active draft write failed');
+          }
+          values.set(key, value);
+        },
+      },
+    },
+  });
+  try {
+    setLocalAccountId('active-write-account');
+    const original = saveLetterDraft({ id: 'draft-active-write-original', content: 'Still here if the new draft fails.' });
+    const activeKey = 'dear-exe:active-letter:v1:account:active-write-account';
+    const originalActive = values.get(activeKey);
+
+    rejectNewActive = true;
+    assert.throws(() => startNewLetter({ forceNew: true, requirePreserved: true }), /new draft could not be saved/i);
+
+    assert.equal(values.get(activeKey), originalActive, 'a failed active write must leave the previous active draft intact');
+    const history = JSON.parse(values.get('dear-exe:letter-drafts:v1:account:active-write-account'));
+    assert.equal(history.find((draft) => draft.id === original.id)?.content, original.content);
+  } finally {
+    setLocalAccountId(null);
+    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
+    else delete globalThis.window;
+  }
+});
+
+test('keeps legacy startNewLetter behavior when preservation is not requested', () => {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const values = new Map();
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: {
+      localStorage: {
+        getItem: (key) => values.get(key) ?? null,
+        setItem: (key, value) => {
+          if (key === 'dear-exe:letter-drafts:v1:account:legacy-new-letter-account') {
+            throw new Error('draft history full');
+          }
+          values.set(key, value);
+        },
+      },
+    },
+  });
+  try {
+    setLocalAccountId('legacy-new-letter-account');
+    const original = saveLetterDraft({ id: 'draft-legacy-new-letter', content: 'Existing caller behavior.' });
+    const next = startNewLetter({ forceNew: true });
+
+    assert.notEqual(next.id, original.id);
+    assert.equal(getLetterDraft().id, next.id);
+  } finally {
+    setLocalAccountId(null);
+    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
+    else delete globalThis.window;
+  }
+});
+
+test('finds media drafts by upload ID in active and history storage without crossing accounts', () => {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const values = new Map();
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { localStorage: { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) } },
+  });
+  try {
+    setLocalAccountId('media-lookup-account-one');
+    const historical = saveLetterDraft({
+      id: 'draft-media-lookup-history',
+      content: 'The original imported draft.',
+      payloadKind: 'image',
+      mediaUploadId: 'share-handoff-one',
+    });
+    startNewLetter();
+    assert.equal(getLetterDraftByMediaUploadId('share-handoff-one')?.id, historical.id);
+
+    setLocalAccountId('media-lookup-account-two');
+    const active = saveLetterDraft({
+      id: 'draft-media-lookup-active',
+      content: 'A different account draft.',
+      payloadKind: 'gif',
+      mediaUploadId: 'share-handoff-one',
+    });
+    assert.equal(getLetterDraftByMediaUploadId('share-handoff-one')?.id, active.id);
+    assert.equal(getLetterDraftByMediaUploadId('share-handoff-one', 'media-lookup-account-one')?.id, historical.id);
+    assert.equal(getLetterDraftByMediaUploadId('', 'media-lookup-account-one'), null);
+    assert.equal(getLetterDraftByMediaUploadId('unknown-handoff', 'media-lookup-account-one'), null);
+  } finally {
+    setLocalAccountId(null);
+    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
+    else delete globalThis.window;
+  }
+});
+
+test('media upload lookup never reopens completed drops and rejects a conflicting media kind', () => {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const values = new Map();
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { localStorage: { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) } },
+  });
+  try {
+    const accountId = 'media-replay-status-account';
+    setLocalAccountId(accountId);
+    const statuses = ['draft', 'sealed', 'dispatched', 'delivered', 'claim_pending'];
+    const drafts = statuses.map((status) => ({
+      id: `draft-share-${status}`,
+      recipient: '@saved.person',
+      subject: `Keep this ${status} subject`,
+      content: `Keep this ${status} caption`,
+      fontSize: 18,
+      alignment: 'left',
+      address: { name: 'Saved person', street: '', city: '', postcode: '', country: '' },
+      sealId: 'heart',
+      payloadKind: 'image',
+      deliveryMode: 'instant',
+      mediaUploadId: `share-${status}`,
+      status,
+      updatedAt: new Date().toISOString(),
+    }));
+    values.set('dear-exe:letter-drafts:v1:account:media-replay-status-account', JSON.stringify(drafts));
+    const historyBefore = values.get('dear-exe:letter-drafts:v1:account:media-replay-status-account');
+
+    for (const draft of drafts) {
+      const found = getLetterDraftByMediaUploadId(draft.mediaUploadId, accountId, 'image');
+      if (draft.status === 'draft' || draft.status === 'sealed') {
+        assert.equal(found?.id, draft.id);
+        assert.equal(found?.recipient, draft.recipient);
+        assert.equal(found?.subject, draft.subject);
+        assert.equal(found?.content, draft.content);
+      } else {
+        assert.equal(found, null, `${draft.status} must not be reopened as an editable draft`);
+      }
+      assert.throws(
+        () => getLetterDraftByMediaUploadId(draft.mediaUploadId, accountId, 'gif'),
+        /different media type/i,
+      );
+    }
+
+    assert.equal(values.get('dear-exe:letter-drafts:v1:account:media-replay-status-account'), historyBefore,
+      'lookup must not rewrite saved captions, recipients, subjects, or completion status');
   } finally {
     setLocalAccountId(null);
     if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);

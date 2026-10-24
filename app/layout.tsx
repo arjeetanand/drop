@@ -4,6 +4,7 @@ import { Inter, Playfair_Display, Literata, Courier_Prime } from 'next/font/goog
 import { Sidebar } from '@/components/Sidebar';
 import { MainContent } from '@/components/MainContent';
 import { LocalAccountProvider } from '@/components/LocalAccountProvider';
+import { ShareTargetServiceWorker } from '@/components/ShareTargetServiceWorker';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -51,6 +52,7 @@ export default function RootLayout({
           Skip to content
         </a>
         <LocalAccountProvider>
+          <ShareTargetServiceWorker />
           <div className="min-h-screen bg-[#f7f4ee] text-slate-900">
             <Sidebar />
             <MainContent>

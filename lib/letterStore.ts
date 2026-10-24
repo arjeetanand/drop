@@ -279,6 +279,26 @@ export function getLetterDraftById(id: string, accountId = getLocalAccountId()):
   });
 }
 
+/** Find an editable draft by its persisted media retry/import identifier. */
+export function getLetterDraftByMediaUploadId(
+  mediaUploadId: string,
+  accountId = getLocalAccountId(),
+  expectedPayloadKind?: DropPayloadKind,
+): LetterDraftState | null {
+  if (typeof mediaUploadId !== 'string' || !mediaUploadId.trim()) return null;
+
+  const active = readStoredLetterDraft(accountId);
+  const matches = [
+    ...(active?.mediaUploadId === mediaUploadId ? [active] : []),
+    ...getDraftHistory(accountId).filter((draft) => draft.mediaUploadId === mediaUploadId),
+  ];
+  if (expectedPayloadKind && matches.some((draft) => draft.payloadKind !== expectedPayloadKind)) {
+    throw new Error('This share identifier is already attached to a different media type.');
+  }
+
+  return matches.find((draft) => draft.status === 'draft' || draft.status === 'sealed') ?? null;
+}
+
 /** Return only a draft persisted in the requested account's storage scope. */
 export function getStoredLetterDraftById(id: string, accountId = getLocalAccountId()): LetterDraftState | null {
   const active = readStoredLetterDraft(accountId);
@@ -481,26 +501,42 @@ function saveLetterHistory(letters: MockLetter[], accountId = getLocalAccountId(
   }
 }
 
-export function startNewLetter(options: { forceNew?: boolean } = {}): LetterDraftState {
-  const current = getLetterDraft();
+export function startNewLetter(options: { forceNew?: boolean; requirePreserved?: boolean } = {}): LetterDraftState {
+  const accountId = getLocalAccountId();
+  const current = getLetterDraft(accountId);
 
   // Avoid creating a second blank letter during React's development remount.
   if (!options.forceNew && current.id.startsWith('draft-') && current.status === 'draft' && !current.content.trim()) {
     return current;
   }
 
-  const history = getLetterHistory().filter((letter) => letter.id !== current.id);
-  saveLetterHistory([...history, draftAsLetter(current)]);
-  const draftHistory = getDraftHistory().filter((draft) => draft.id !== current.id);
-  saveDraftHistory([...draftHistory, current]);
+  const draftHistory = getDraftHistory(accountId).filter((draft) => draft.id !== current.id);
+  if (options.requirePreserved) {
+    if (!canUseStorage() || !saveDraftHistory([...draftHistory, current], accountId)) {
+      throw new Error('The current draft could not be preserved before starting a new one.');
+    }
+  }
+
+  const history = getLetterHistory(accountId).filter((letter) => letter.id !== current.id);
+  saveLetterHistory([...history, draftAsLetter(current)], accountId);
+  if (!options.requirePreserved) saveDraftHistory([...draftHistory, current], accountId);
 
   const next = blankDraft();
   if (canUseStorage()) {
     try {
-      window.localStorage.setItem(localAccountStorageKey(STORAGE_KEY), JSON.stringify(next));
+      window.localStorage.setItem(localAccountStorageKey(STORAGE_KEY, accountId), JSON.stringify(next));
     } catch {
+      if (options.requirePreserved) {
+        throw new Error('The new draft could not be saved on this device. The previous draft is still preserved.');
+      }
       // The new letter still works for the current session.
     }
+  } else if (options.requirePreserved) {
+    throw new Error('Local draft storage is unavailable, so a new draft could not be started safely.');
+  }
+
+  if (options.requirePreserved && !isLetterDraftPersisted(next, accountId)) {
+    throw new Error('The new draft could not be verified on this device. The previous draft is still preserved.');
   }
   return next;
 }
