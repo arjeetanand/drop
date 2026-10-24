@@ -1267,3 +1267,34 @@ When an action means “start a new thing,” do not rely on a generic new-route
 ### Git and remaining gaps
 
 Code commit `a71612b` (`fix: start fresh draft from received drop`) is pushed to `origin/fix/drop-back-fresh-draft` and tracked by [PR #5](https://github.com/arjeetanand/drop/pull/5), which is open and unmerged. This learning entry and project-note updates are in a separate documentation commit. Hosted account-to-account behavior, screen-reader output, and physical-device behavior remain unverified. No hosted resources, credentials, or `/letter` files were changed.
+
+## 2026-10-24 — Verify local Docker services and repair the rendered E2E harness
+
+### Issue
+
+The shell initially reported a permission error for Rancher Desktop’s Docker socket, and the first rendered two-account run stopped while waiting for the signed-in profile label.
+
+### Cause
+
+The Docker daemon and local Supabase services were healthy; the workspace sandbox blocked direct access to the Docker socket. The browser harness used an admin-generated magic link, which bypassed the browser’s PKCE setup, then had brittle assertions for CSS-uppercased text, serialized DOM nodes, an inverted enabled-button predicate, and an outdated receipt-page action.
+
+### Resolution
+
+- Confirm local Docker/Supabase status through read-only elevated inspection; leave socket permissions and global Docker settings unchanged.
+- Run the app’s rendered email sign-in against local Mailpit so the one-time link returns to the same browser context that stored the PKCE verifier.
+- Correct the temporary harness’s case-insensitive UI checks, primitive DOM predicates, enabled-button condition, and receipt-to-mailbox navigation. Do not invoke the cleanup worker.
+
+### Learning
+
+When testing PKCE email sign-in, request the link through the same browser session that will exchange it. For rendered UI checks, normalize visible text and return primitive values from Chrome Runtime evaluation; keep the browser journey aligned with the current visible receipt actions.
+
+### Verification
+
+- `npm run test:local-supabase` passed all eight groups with five disposable accounts; cleanup verified the test accounts were removed.
+- The isolated Chrome run at 390×844 passed real local email sign-in, sender creation of text/photo/GIF private claim drops, recipient claim/open for all three, and visible photo/GIF rendering. Browser requests stayed on the Drop and Supabase loopback origins; no console errors occurred.
+- Cleanup verified zero matching disposable users and zero sender-prefix objects; it removed two test Storage objects and two Mailpit messages and removed the browser profiles. The browser script passed `node --check` and remained temporary under `/private/tmp`.
+- Filtered `npx supabase status --output json` confirmed local API, Studio, and Mailpit URLs without displaying key values. No hosted project was accessed.
+
+### Git and remaining gaps
+
+No application source changed. The current code commit is `a71612b` on `fix/drop-back-fresh-draft`, pushed to `origin/fix/drop-back-fresh-draft` and tracked by open, unmerged [PR #5](https://github.com/arjeetanand/drop/pull/5). This verification and its documentation are a follow-up on that branch. Actual aged-object deletion remains unverified: the cleanup-worker POST was blocked by the automatic approval review because the endpoint can delete aged media. Hosted account-to-account, desktop, screen-reader, and physical-device checks also remain open.

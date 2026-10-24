@@ -2,6 +2,17 @@
 
 Updated: 2026-10-24
 
+## Latest checkpoint — Docker-backed local account-to-account verification (2026-10-24)
+
+- The local Docker/Supabase stack is healthy. The initial Docker socket denial came from the workspace sandbox blocking Rancher Desktop access; read-only elevated status confirmed the daemon and local services. No socket permissions or global Docker settings were changed.
+- The local stack has the project migrations applied, `pg_cron`/`pg_net`, local Vault configuration, the hourly media-cleanup schedule, and the local cleanup Edge Function runtime. Local API and Mailpit are on `127.0.0.1:54321` and `127.0.0.1:54324`. `.env.local` remains ignored and mode `600`; no keys were printed or committed.
+- `npm run test:local-supabase` passed with five disposable accounts and cleaned them up. An isolated Chrome run at 390×844 then used the actual profile email sign-in and local Mailpit link in one browser context; a second account claimed and opened sent text, photo, and GIF drops, and both media attachments rendered. The browser stayed on local origins with no console errors.
+- Browser-test cleanup verified zero matching accounts and sender-prefix Storage objects remain; it removed two test Storage objects, two captured sign-in emails, and the isolated Chrome profiles. The corrected browser harness is temporary under `/private/tmp`; no application source changed.
+- The cleanup worker was not invoked, so actual 30-day Storage deletion remains unverified. A worker POST was previously stopped by the automatic approval review because the endpoint can delete aged media. Hosted Supabase, `/letter`, and unrelated Docker data were not changed.
+- Current code candidate remains `fix/drop-back-fresh-draft` at `a71612b`, pushed and tracked by [PR #5](https://github.com/arjeetanand/drop/pull/5); PR #5 is open and unmerged. This checkpoint records local verification only.
+
+**Next:** verify actual deletion with an exact disposable aged-object fixture if the deletion action clears review; run the pending SQL fixture; finish hosted, screen-reader, and physical-device checks separately.
+
 ## Latest checkpoint — Drop back draft isolation (2026-10-24)
 
 - Fixed the received-drop **Drop back** action so it creates a separate persisted text draft addressed to the sender. The old `/compose?new=1` route could intentionally reuse any empty-text draft, including one with a photo/GIF. The new action normalizes the sender handle, requires the old draft to be preserved and the new draft to be verifiably stored, and navigates by the new draft ID. If storage fails, it stays on the received drop and reports that the existing draft is unchanged.

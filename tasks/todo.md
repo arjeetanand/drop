@@ -77,8 +77,10 @@ Tasks are ordered by dependency. Progress is recorded at each tested and pushed 
 - [x] Extend the local Supabase smoke with a fifth disposable account that receives an unknown-handle text invite, creates its profile, and explicitly claims the drop.
 - [x] Cover pending privacy, sender self-claim denial, reissue invalidation, same-account retry, outsider and replay denial, participant-only reads, sender claim status, and recipient reaction visibility. Require SQLSTATE `42501` and no returned drop ID for denied claims.
 - [x] `npm test` passes 220/220; lint, no-incremental TypeScript, `node --check scripts/local-supabase-smoke.mjs`, and `git diff --check` pass. Code commit `e5b7b43` is pushed to `origin/test/unknown-handle-claim-smoke`.
-- [ ] Run `npm run test:local-supabase` and `tests/db/drop_claim_invites.sql` against disposable local services. The Supabase API port is owned by an SSH listener; PostgreSQL startup failed because host shared-memory allocation is exhausted. No service was reset or stopped.
-- [ ] Verify rendered mobile/desktop claim interaction, keyboard/screen-reader behavior, and two-account photo/GIF claim/access cutoff after a confirmed disposable or approved Free Supabase runtime is available. No hosted project is configured.
+- [x] Run `npm run test:local-supabase` against the local Docker stack; all eight smoke groups passed with five disposable accounts and cleanup verified.
+- [ ] Run `tests/db/drop_claim_invites.sql` against disposable local PostgreSQL; it was not part of this smoke run.
+- [x] Verify the rendered 390×844 local two-account email sign-in and text/photo/GIF claim/open flow; both attachments rendered and the exact test accounts, Storage objects, Mailpit messages, and browser profiles were removed.
+- [ ] Verify desktop, screen-reader, and physical-device behavior; actual 30-day Storage deletion and hosted behavior remain open.
 
 ## Checkpoint — mobile claim-first return (2026-10-23)
 
