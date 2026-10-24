@@ -8,6 +8,16 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 
 ## Implementation Status — 2026-10-24
 
+### Latest checkpoint — Handle-first private-claim setup (2026-10-24)
+
+- First-time recipients returning from a private claim now see the required Drop handle first. Display name and bio remain optional behind a keyboard-operable disclosure; existing values are preserved and the ordinary profile-editing order is unchanged.
+- Added handle-only profile persistence coverage. The local Supabase flow now claims with blank optional profile fields, and isolated Chrome checks disclosure semantics, keyboard operation, retained values, and layout at mobile portrait/landscape and desktop sizes.
+- Verification: 273/273 unit tests, lint, no-incremental TypeScript, five-viewport browser smoke, local Docker Supabase smoke across five disposable accounts, production build, syntax checks, `git diff --check`, and HTTP 200 on port 4004 passed. The build reports existing Browserslist freshness and Tailwind easing-class ambiguity warnings.
+- Review: code commit `2b53bcd` is pushed on `fix/claim-first-use-profile` and tracked by [PR #3](https://github.com/arjeetanand/drop/pull/3). The PR is not merged.
+- Hosted two-account behavior, actual aged-object cleanup, physical-device behavior, and spoken screen-reader output remain open. The browser smoke does not submit the form or save a remote profile.
+
+**Next:** complete full authenticated browser-to-claim coverage and the remaining hosted/device checks as those environments are available; merge PR #3 only after approval.
+
 ### Latest checkpoint — Share-to-Drop PWA import and replay safety (2026-10-24)
 
 - Added an installed web share target for JPEG, PNG, WebP, and GIF files up to 8 MB. The service worker stores an opaque one-hour IndexedDB handoff; Compose imports it as an unsent local draft.
