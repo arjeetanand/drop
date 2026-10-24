@@ -1206,3 +1206,33 @@ Use deterministic, clearly synthetic identifiers where a test is not measuring e
 ### Git and remaining gaps
 
 Code commit `8ecb1a4` (`test: use deterministic UUID fixtures`) is pushed to `feat/demo-relay-preview` and included in [PR #1](https://github.com/arjeetanand/drop/pull/1). GitGuardian remains the only reported check failure, and `main` has no required branch-protection checks. The live PR page holds the current gate state; no GitGuardian finding was dismissed in its dashboard.
+
+## 2026-10-24 — Align the local claim smoke with bearer-link behavior
+
+### Issue
+
+The local Supabase smoke expected an unrelated account to be denied before claim even though it was given the valid bearer link. After correcting that case, the smoke also failed because the sender’s recent-recipient query now included the profiled account from newly claimed text and media invites.
+
+### Cause
+
+A claim link is a bearer capability: the first authenticated, profiled account holding the valid token can claim it. The authorization boundary is the token before claim, then the first claimant’s account after claim. Separately, the smoke inspected raw sender drop rows and expected only the direct-recipient fixture, overlooking the sender’s additional claimed drops.
+
+### Resolution
+
+- Use a fresh invalid token for the pre-claim denial assertion and preserve the valid-token cross-account replay denial after the claimant succeeds.
+- Update recent-recipient assertions to expect the direct recipient and the profiled claimant, including each claimed text/media row.
+- Document the local Docker cleanup-worker setup: pending migrations, `pg_cron`/`pg_net`, Vault values, scheduler, and local Edge Function server.
+
+### Learning
+
+Test bearer-link access at two distinct states: invalid credentials before first claim and a different account replaying a consumed credential after claim. When an integration flow creates legitimate records, update downstream query expectations to reflect the complete scenario instead of hiding those records or changing production authorization.
+
+### Verification
+
+- `npm run test:local-supabase` passed with five disposable accounts; the `finally` cleanup left zero `drop-smoke-*` auth accounts.
+- `npm test`: 272/272 passed. Lint, TypeScript check, `node --check scripts/local-supabase-smoke.mjs`, and `git diff --check` passed. `npm run build -- --webpack` passed with existing Browserslist and Tailwind ambiguity warnings. The app root returned HTTP 200 on port 4004.
+- Local Docker Supabase services were running; the cleanup cron job is active and all three required Vault entries are present. The local function server is running in the current terminal session.
+
+### Git and remaining gaps
+
+Code commit `8115a58` (`test: align claim smoke with bearer semantics`) is pushed to `origin/fix/local-bearer-claim-smoke` and tracked by [PR #2](https://github.com/arjeetanand/drop/pull/2). This learning entry and the setup/checklist/handoff updates are in a follow-up documentation commit on the same branch. No hosted Supabase project or resource was changed. Real aged-object deletion, hosted two-account delivery, and device/screen-reader behavior remain unverified.

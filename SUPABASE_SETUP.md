@@ -23,6 +23,28 @@ The Supabase CLI is pinned in `package.json`; Node.js 20+ and a Docker-compatibl
 
 The local stack is for development and testing only. Do not expose it to external traffic. Use the profile’s email-link sign-in and open the message in Inbucket to authenticate disposable local accounts through the normal callback flow.
 
+### Local photo/GIF cleanup worker
+
+Run `./node_modules/.bin/supabase migration up --local` after starting the local stack to apply pending migrations without resetting local data. Keep `.env.local` ignored and add a high-entropy `DROP_MEDIA_CLEANUP_SECRET` there; use the same value for the local function and Vault. In the local Supabase Studio SQL editor, run this once, replacing the two placeholders with the local anon key and the secret from `.env.local`:
+
+```sql
+create extension if not exists pg_cron;
+create extension if not exists pg_net;
+select vault.create_secret('http://kong:8000', 'drop_media_cleanup_project_url');
+select vault.create_secret('<local-anon-key>', 'drop_media_cleanup_anon_key');
+select vault.create_secret('<same-DROP_MEDIA_CLEANUP_SECRET>', 'drop_media_cleanup_secret');
+select private.schedule_drop_media_cleanup();
+select jobname, schedule, active from cron.job where jobname = 'drop-expired-drop-media-hourly';
+```
+
+`http://kong:8000` is the local API address reachable from the database container. Keep the function-server command running in a separate terminal while exercising cleanup locally:
+
+```bash
+./node_modules/.bin/supabase functions serve cleanup-expired-drop-media --env-file .env.local --no-verify-jwt
+```
+
+The local function checks its private cleanup secret; `--no-verify-jwt` is for this local CLI server only. Do not use `supabase db reset` when you need to preserve local data. The smoke test does not invoke a live deletion pass; actual removal of an aged Storage object remains a separate verification.
+
 With the local stack running and `.env.local` filled from its CLI output, run `npm run test:local-supabase`. The smoke test starts a temporary Next.js server, creates five disposable local accounts, and exercises text insert/read, reaction RLS, the real private GIF finalize route, participant storage reads, and an unknown-handle text claim from an unprofiled account through explicit claim and sender-status recovery. It also checks reissue invalidation, same-account retry, outsider/replay denial, and pre/post-claim privacy, then removes its test objects and accounts. It refuses any Supabase URL that does not resolve to this machine. It tests backend boundaries directly, not browser sign-in or the full composer flow, and does not verify hosted OAuth or hosted project settings.
 
 ## Local policy smoke test
