@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
+cd "$ROOT"
 PORT=4004
 NEXT_BIN="$ROOT/node_modules/next/dist/bin/next"
 LOG_FILE="${TMPDIR:-/tmp}/drop-4004.log"
