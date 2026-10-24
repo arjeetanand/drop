@@ -438,6 +438,14 @@ function Composer() {
   }, [ready, router, searchParams]);
 
   useEffect(() => {
+    const previous = privateClaimContextRef.current;
+    const nextDraftId = draft?.id ?? null;
+    if (previous.accountId !== currentAccountId || (previous.draftId !== null && previous.draftId !== nextDraftId)) {
+      setPrivateClaimUrl('');
+      setShowPrivateClaimQr(false);
+      setPrivateClaimAction(null);
+      focusPrivateClaimQrOnRender.current = false;
+    }
     privateClaimContextRef.current = { accountId: currentAccountId, draftId: draft?.id ?? null, url: privateClaimUrl };
   }, [currentAccountId, draft?.id, privateClaimUrl]);
 
