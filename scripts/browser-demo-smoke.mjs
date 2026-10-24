@@ -66,6 +66,20 @@ const PROMPT_ACTIVE_DRAFT = {
   status: 'draft',
   updatedAt: '2026-10-24T00:00:00.000Z',
 };
+const DROP_BACK_RECEIVED_FIXTURE = {
+  id: 'drop-back-received-fixture',
+  recipient: 'test.recipient',
+  sender: 'A friend',
+  senderUsername: 'friend.handle',
+  direction: 'received',
+  date: 'Today',
+  status: 'delivered',
+  excerpt: 'A tiny note for your day.',
+  subject: 'A little hello',
+  payloadKind: 'text',
+  deliveryMode: 'instant',
+  localDemo: true,
+};
 const SHARE_TARGET_CAPTION = 'A little memory from our group chat ✨';
 const SHARE_TARGET_FILENAME = 'drop-share-smoke.png';
 const SHARE_IMPORT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -695,6 +709,154 @@ async function runDemoFlow(cdp, {
     await assertNoHorizontalOverflow(cdp, 'Fresh draft from demo', viewport.width);
     await captureScreenshot(cdp, screenshotDir, `${viewport.name}-friend-draft-composer`);
   }
+}
+
+async function runDropBackFlow(cdp, { appUrl, screenshotDir }) {
+  const viewport = MOBILE_VIEWPORTS[1];
+  await setViewport(cdp, viewport);
+  await cdp.send('Page.navigate', { url: appUrl.href });
+  await waitUntil(cdp, `Home with “${LABELS.homeDemo}” before seeding Drop back`, async () => (
+    await evaluate(cdp, `${normalizedVisibleText(LABELS.homeDemo)} && location.pathname === '/'`)
+  ));
+
+  const seeded = await evaluate(cdp, `(async () => {
+    const draft = ${JSON.stringify(PROMPT_ACTIVE_DRAFT)};
+    const letter = ${JSON.stringify(DROP_BACK_RECEIVED_FIXTURE)};
+    localStorage.setItem('dear-exe:active-letter:v1', JSON.stringify(draft));
+    localStorage.setItem('dear-exe:letter-drafts:v1', JSON.stringify([draft]));
+    localStorage.setItem('dear-exe:letter-history:v1', JSON.stringify([letter]));
+    const database = await new Promise((resolve, reject) => {
+      const request = indexedDB.open('dear-exe-draft-media', 1);
+      request.onupgradeneeded = () => request.result.createObjectStore('attachments');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    try {
+      const blob = new Blob([new Uint8Array([1, 4, 9, 16, 25])], { type: 'image/png' });
+      await new Promise((resolve, reject) => {
+        const transaction = database.transaction('attachments', 'readwrite');
+        transaction.objectStore('attachments').put({ blob, name: 'keep-this-photo.png', type: blob.type, lastModified: 42 }, draft.id);
+        transaction.oncomplete = resolve;
+        transaction.onerror = () => reject(transaction.error);
+        transaction.onabort = () => reject(transaction.error);
+      });
+    } finally {
+      database.close();
+    }
+    return localStorage.getItem('dear-exe:active-letter:v1') === JSON.stringify(draft)
+      && JSON.parse(localStorage.getItem('dear-exe:letter-history:v1') || '[]')[0]?.id === letter.id;
+  })()`);
+  assert.equal(seeded, true, 'The existing photo draft and opened received-drop fixture should be saved in this isolated browser profile.');
+  const originalAttachment = await readAttachmentSnapshot(cdp, PROMPT_ACTIVE_DRAFT.id);
+  assert.ok(originalAttachment.attachment?.size > 0, 'The unfinished photo draft should have saved attachment bytes before Drop back.');
+
+  const receivedPath = `/letter/${encodeURIComponent(DROP_BACK_RECEIVED_FIXTURE.id)}`;
+  await cdp.send('Page.navigate', { url: new URL(receivedPath, appUrl).href });
+  await waitUntil(cdp, 'the seeded received drop before opening', async () => (
+    await evaluate(cdp, `location.pathname === ${JSON.stringify(receivedPath)} && ${normalizedVisibleText('Reveal demo fragments')}`)
+  ));
+  await activateFlowControl(cdp, { keyboard: true, name: LABELS.reveal, expectedTag: 'BUTTON' });
+  await waitUntil(cdp, 'the received drop reveal action', async () => (
+    await evaluate(cdp, `${normalizedVisibleText('Open demo drop')}`)
+  ));
+  await activateFlowControl(cdp, { keyboard: true, name: 'Open demo drop', expectedTag: 'BUTTON' });
+  await waitUntil(cdp, 'the optional Drop back action', async () => (
+    await evaluate(cdp, `${normalizedVisibleText('Drop back')} && ${normalizedVisibleText('No rush')}`)
+  ));
+  await assertNoFrameworkOverlay(cdp, 'Received drop before Drop back');
+  await assertNoHorizontalOverflow(cdp, 'Received drop before Drop back', viewport.width);
+  await captureScreenshot(cdp, screenshotDir, 'drop-back-received');
+
+  const actionTag = await evaluate(cdp, `Array.from(document.querySelectorAll('a,button')).find((node) => (node.innerText || node.textContent || '').replace(/\\s+/g, ' ').trim().toLocaleLowerCase() === 'drop back')?.tagName || null`);
+  assert.ok(actionTag === 'A' || actionTag === 'BUTTON', `The Drop back control should be an actionable link or button; found ${actionTag}.`);
+  await activateFlowControl(cdp, { keyboard: true, name: 'Drop back', expectedTag: actionTag });
+  await waitUntil(cdp, 'the fresh sender-addressed compose draft', async () => (
+    await evaluate(cdp, `location.pathname === '/compose' && Boolean(document.querySelector('#drop-content'))`)
+  ));
+  await waitUntil(cdp, 'the composer recipient prefilled from the received drop', async () => (
+    await evaluate(cdp, `document.querySelector('#drop-recipient')?.value === ${JSON.stringify(DROP_BACK_RECEIVED_FIXTURE.senderUsername)}
+      && JSON.parse(localStorage.getItem('dear-exe:active-letter:v1') || 'null')?.recipient === ${JSON.stringify(`@${DROP_BACK_RECEIVED_FIXTURE.senderUsername}`)}`)
+  ));
+
+  const state = await evaluate(cdp, `(() => {
+    const active = JSON.parse(localStorage.getItem('dear-exe:active-letter:v1') || 'null');
+    const drafts = JSON.parse(localStorage.getItem('dear-exe:letter-drafts:v1') || '[]');
+    const url = new URL(location.href);
+    const editor = document.querySelector('#drop-content');
+    const recipient = document.querySelector('#drop-recipient');
+    const connectLink = Array.from(document.querySelectorAll('a')).find((node) => /connect to send|account options/i.test(node.innerText || node.textContent || ''));
+    return {
+      routeDraftId: url.searchParams.get('letter'),
+      recipientQuery: url.searchParams.get('recipient'),
+      active,
+      preserved: drafts.find((draft) => draft.id === ${JSON.stringify(PROMPT_ACTIVE_DRAFT.id)}) || null,
+      editorValue: editor?.value ?? null,
+      recipientValue: recipient?.value ?? null,
+      sendButton: Array.from(document.querySelectorAll('button')).find((node) => /send drop/i.test(node.innerText || node.textContent || ''))?.disabled ?? null,
+      connectLink: connectLink?.innerText.trim() || null,
+      sendReceiptCount: JSON.parse(localStorage.getItem('dear-exe:letter-history:v1') || '[]').filter((letter) => letter.status !== 'draft').length,
+      scrollY: window.scrollY,
+    };
+  })()`);
+  assert.ok(state.routeDraftId, 'Drop back should open a stable draft route ID.');
+  assert.equal(state.routeDraftId, state.active?.id, 'The composer route should address the fresh active draft.');
+  assert.notEqual(state.active?.id, PROMPT_ACTIVE_DRAFT.id, 'Drop back must not reuse the existing photo draft.');
+  assert.equal(state.active?.status, 'draft');
+  assert.equal(state.active?.payloadKind, 'text');
+  assert.equal(state.active?.content, '');
+  assert.equal(state.active?.subject, '');
+  assert.equal(state.active?.recipient, '@friend.handle', 'The sender handle should be saved as the prefilled recipient.');
+  assert.equal(state.recipientQuery, '@friend.handle');
+  assert.equal(state.recipientValue, 'friend.handle');
+  assert.equal(state.editorValue, '', 'Drop back should open an editable blank message.');
+  assert.deepEqual(state.preserved, PROMPT_ACTIVE_DRAFT, 'The original media draft fields should remain unchanged.');
+  assert.equal(state.sendButton, null, 'A signed-out local fixture must not send automatically.');
+  assert.ok(state.connectLink, 'The flow should retain the explicit account step before sending.');
+  assert.equal(state.sendReceiptCount, 1, 'Opening Drop back should not create a sent drop.');
+  assert.ok(state.scrollY <= 16, `The new composer should start at the top; found scrollY=${state.scrollY}.`);
+
+  const finalAttachment = await readAttachmentSnapshot(cdp, PROMPT_ACTIVE_DRAFT.id);
+  assert.deepEqual(finalAttachment.keys, originalAttachment.keys, 'Drop back should not add or remove existing attachment records.');
+  assert.deepEqual(finalAttachment.attachment, originalAttachment.attachment, 'The original attachment metadata and bytes should remain unchanged.');
+  await assertNoFrameworkOverlay(cdp, 'Fresh Drop back composer');
+  await assertNoHorizontalOverflow(cdp, 'Fresh Drop back composer', viewport.width);
+  await captureScreenshot(cdp, screenshotDir, 'drop-back-fresh-compose');
+}
+
+async function readAttachmentSnapshot(cdp, draftId) {
+  return evaluate(cdp, `(async () => {
+    const database = await new Promise((resolve, reject) => {
+      const request = indexedDB.open('dear-exe-draft-media', 1);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    try {
+      return await new Promise((resolve, reject) => {
+        const transaction = database.transaction('attachments', 'readonly');
+        const store = transaction.objectStore('attachments');
+        const keysRequest = store.getAllKeys();
+        const attachmentRequest = store.get(${JSON.stringify(draftId)});
+        transaction.oncomplete = async () => {
+          const value = attachmentRequest.result;
+          const bytes = value?.blob ? Array.from(new Uint8Array(await value.blob.arrayBuffer())) : [];
+          resolve({
+            keys: keysRequest.result.map(String).sort(),
+            attachment: value ? {
+              name: value.name,
+              type: value.type,
+              lastModified: value.lastModified,
+              size: value.blob?.size || 0,
+              bytes,
+            } : null,
+          });
+        };
+        transaction.onerror = () => reject(transaction.error);
+        transaction.onabort = () => reject(transaction.error);
+      });
+    } finally {
+      database.close();
+    }
+  })()`);
 }
 
 async function runClaimRecoveryFlow(cdp, {
@@ -1591,7 +1753,7 @@ async function runShareTargetFlow(cdp, { appUrl, screenshotDir, getPageLoadEvent
 
 async function main() {
   if (process.argv.includes('--help') || process.argv.includes('-h')) {
-    console.log('Usage: node scripts/browser-demo-smoke.mjs [http://127.0.0.1:4004] [--claim-recovery-only|--prompt-only|--friend-draft-only|--share-target-only]');
+    console.log('Usage: node scripts/browser-demo-smoke.mjs [http://127.0.0.1:4004] [--claim-recovery-only|--prompt-only|--friend-draft-only|--share-target-only|--drop-back-only]');
     return;
   }
 
@@ -1600,7 +1762,8 @@ async function main() {
   const promptOnly = args.includes('--prompt-only');
   const friendDraftOnly = args.includes('--friend-draft-only');
   const shareTargetOnly = args.includes('--share-target-only');
-  assert.ok([claimRecoveryOnly, promptOnly, friendDraftOnly, shareTargetOnly].filter(Boolean).length <= 1, 'Choose only one focused browser-smoke mode.');
+  const dropBackOnly = args.includes('--drop-back-only');
+  assert.ok([claimRecoveryOnly, promptOnly, friendDraftOnly, shareTargetOnly, dropBackOnly].filter(Boolean).length <= 1, 'Choose only one focused browser-smoke mode.');
   const appUrl = parseAppUrl(args.find((argument) => !argument.startsWith('--')) || DEFAULT_APP_URL);
   if (typeof WebSocket !== 'function') throw new Error('This smoke check needs a Node runtime with the built-in WebSocket API.');
   const screenshotDir = screenshotDirectoryFromEnv();
@@ -1762,9 +1925,14 @@ async function main() {
     await setViewport(pageCdp, MOBILE_VIEWPORTS[1]);
 
     console.log(`[browser-demo-smoke] Chrome: ${chromeExecutable}`);
-    const flowName = shareTargetOnly ? 'share-target-only' : claimRecoveryOnly ? 'claim-recovery' : promptOnly ? 'prompt-only' : friendDraftOnly ? 'friend-draft-only' : 'full';
-    const flowViewports = friendDraftOnly || shareTargetOnly ? [MOBILE_VIEWPORTS[1]] : FLOW_VIEWPORTS;
+    const flowName = dropBackOnly ? 'drop-back-only' : shareTargetOnly ? 'share-target-only' : claimRecoveryOnly ? 'claim-recovery' : promptOnly ? 'prompt-only' : friendDraftOnly ? 'friend-draft-only' : 'full';
+    const flowViewports = friendDraftOnly || shareTargetOnly || dropBackOnly ? [MOBILE_VIEWPORTS[1]] : FLOW_VIEWPORTS;
     console.log(`[browser-demo-smoke] App: ${appUrl.origin}; ${flowName} flow viewports: ${flowViewports.map(({ name }) => name).join(', ')}.`);
+
+    if (dropBackOnly) {
+      await runDropBackFlow(pageCdp, { appUrl, screenshotDir });
+      console.log(`[browser-demo-smoke] PASS keyboard Drop back creates a fresh sender-addressed draft at ${MOBILE_VIEWPORTS[1].width}×${MOBILE_VIEWPORTS[1].height}; existing photo fields and exact bytes stay preserved; no send occurs.`);
+    }
 
     if (shareTargetOnly) {
       await runShareTargetFlow(pageCdp, {
@@ -1801,7 +1969,7 @@ async function main() {
       console.log(`[browser-demo-smoke] PASS keyboard sender-copy to fresh editable text draft at ${viewport.width}×${viewport.height}; existing media draft and local demo remain preserved.`);
     }
 
-    if (!friendDraftOnly && !claimRecoveryOnly && !promptOnly && !shareTargetOnly) {
+    if (!friendDraftOnly && !claimRecoveryOnly && !promptOnly && !shareTargetOnly && !dropBackOnly) {
       const screenshotSteps = new Set(['home', 'chooser', 'recipient', 'fragments-revealed', 'reaction-saved', 'sender-copy']);
       for (const viewport of FLOW_VIEWPORTS) {
         const keyboard = viewport.width !== 360;
@@ -1828,7 +1996,7 @@ async function main() {
       });
     }
 
-    if (!friendDraftOnly && !claimRecoveryOnly && !shareTargetOnly) {
+    if (!friendDraftOnly && !claimRecoveryOnly && !shareTargetOnly && !dropBackOnly) {
       for (const viewport of FLOW_VIEWPORTS) {
         await runWritingPromptFlow(pageCdp, {
           appUrl,
@@ -1840,7 +2008,7 @@ async function main() {
       }
     }
 
-    if (!friendDraftOnly && !promptOnly && !shareTargetOnly) {
+    if (!friendDraftOnly && !promptOnly && !shareTargetOnly && !dropBackOnly) {
       for (const viewport of FLOW_VIEWPORTS) {
         await runRecipientlessClaimChoiceFlow(pageCdp, {
           appUrl,
@@ -1870,12 +2038,12 @@ async function main() {
     assert.deepEqual(pageExceptions, [], `The browser reported JavaScript exceptions: ${JSON.stringify(pageExceptions)}.`);
     if (firewallFailure) throw new Error(`The browser network gate failed: ${firewallFailure.message}`);
 
-    if (!friendDraftOnly && !promptOnly && !shareTargetOnly) {
+    if (!friendDraftOnly && !promptOnly && !shareTargetOnly && !dropBackOnly) {
       console.log('[browser-demo-smoke] PASS saved-claim recovery after reload, including the encoded detail route and fresh-link action at all mobile and desktop widths.');
       console.log('[browser-demo-smoke] PASS handleless claim disclosure, account readiness gate, and focus recovery at all mobile and desktop widths.');
       console.log('[browser-demo-smoke] PASS no Auth, REST, or Storage request during the saved-claim recovery flow.');
     }
-    if (!friendDraftOnly && !claimRecoveryOnly && !promptOnly && !shareTargetOnly) {
+    if (!friendDraftOnly && !claimRecoveryOnly && !promptOnly && !shareTargetOnly && !dropBackOnly) {
       console.log('[browser-demo-smoke] PASS photo flow at 390×844, including saved reaction, reload persistence, and sender copy.');
       console.log('[browser-demo-smoke] PASS no horizontal overflow on Home and demo chooser at 360, 390, 430px and 1440×900.');
       console.log('[browser-demo-smoke] PASS no Auth, RPC, or Storage write request during the local demo.');
