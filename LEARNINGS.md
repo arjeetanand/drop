@@ -932,3 +932,32 @@ When an action starts a new writing flow from existing context, persist that con
 ### Git and remaining gaps
 
 Code commit `2a29ffa` (`fix: seed home thought into fresh drop draft`) is pushed to `origin/fix-private-claim-share-cancel-copy`; the accompanying plan, README, checklist, handoff, and learning update are committed separately on the same branch. No PR or merge was created. `/letter`, `.env.local`, and hosted Supabase resources were not changed. The user reports an active Supabase login, but no dashboard control is available in this task; the approved Free plan/project, hosted two-account sends, and physical Storage cleanup remain unverified. Screen-reader and physical-device checks also remain open.
+
+## 2026-10-24 — Correct relay carrier stats and mobile layout
+
+### Issue
+
+The seeded relay stat counted the sender as a carrier, and the Relay page called the count “People” while Journey called it “Carriers.” The small-screen buttons also read more clearly as a vertical action group.
+
+### Cause
+
+The count excluded only recipient handoffs, so sender handoffs were included. The initial phone screenshot was a 390-pixel image rendered from a 492-pixel CSS viewport because Chrome applied macOS scaling; its apparent clipping was not evidence of app overflow.
+
+### Resolution
+
+- Count only handoffs with the `carrier` role and use the same “Carriers” label on Relay and Journey.
+- Stack Relay view controls on narrow screens, wrap the passport identifier, and constrain the headline for a readable mobile line break.
+- Check the actual CSS viewport and document width before diagnosing overflow from a screenshot’s pixel dimensions.
+
+### Learning
+
+Use the domain role as the source of truth for a product metric, and keep the label specific enough to explain what is counted. For responsive QA, compare CSS viewport and document widths; a raster image’s dimensions alone can hide device-scale conversion.
+
+### Verification
+
+- Relay regression checks passed for the seeded route (2 carriers), a sender-only route (0), and a route with one carrier (1). `npm test` passed 249/249; `npm run lint`, `npx tsc --noEmit --incremental false`, `npm run build`, and `git diff --check` passed.
+- A disposable Chrome route check measured matching document/client widths at 390 CSS pixels and 1432 CSS pixels on desktop; no elements extended beyond those viewports. The mobile and desktop captures showed the consistent “Carriers” metric. The repo browser smoke still timed out on its initial `Page.navigate`, so this turn did not verify the complete demo journey.
+
+### Git and remaining gaps
+
+Code commit `4f8d512` (`fix: correct relay carrier count and mobile layout`) is pushed to `origin/fix/relay-carrier-count`. No PR or merge was created. The `Drop App Free` organization and project were not changed; the read-only Supabase CLI call reported that no CLI access token is available, and `.env.local` was not changed or displayed. Hosted account-to-account sends, the actual 30-day Storage deletion, screen-reader use, and physical-device behavior remain unverified. Next: finish the sender-copy to fresh-draft product slice, then resume hosted setup once CLI or dashboard access is available.

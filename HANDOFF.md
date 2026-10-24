@@ -2,6 +2,16 @@
 
 Updated: 2026-10-24
 
+## Latest checkpoint — relay count and mobile pass (2026-10-24)
+
+- Relay statistics now count `carrier` handoffs only, excluding sender and recipient roles. Relay and Journey both label the value **Carriers**.
+- The Relay controls stack on narrow screens; its passport ID and main headline wrap within the content width.
+- Verification: `npm test` passed 249/249; lint, no-incremental TypeScript, `git diff --check`, and `npm run build` passed. A disposable Chrome check measured no overflow at 390 CSS pixels and desktop width. The repo smoke runner timed out on its initial `Page.navigate`, so the complete demo journey was not verified in this checkpoint.
+- Active checkout: `/Users/arjeetanand/projects/drop`; branch `fix/relay-carrier-count`. Code commit `4f8d512` is pushed to `origin/fix/relay-carrier-count`. No PR or merge was created. `/letter` and `.env.local` were not changed.
+- The Supabase CLI has no authenticated access token. The approved Free project, hosted two-account sends, actual 30-day Storage deletion, screen-reader behavior, and physical-device checks remain open.
+
+**Next:** connect the sender-side demo copy to a fresh editable draft while preserving existing work, then resume Supabase setup when authenticated CLI or dashboard access is available.
+
 ## Latest checkpoint — Home writing spark (2026-10-24)
 
 - Home’s **Use this thought** now opens a new editable text-drop draft seeded with the displayed prompt. The route carries the draft ID only; prompt text remains in draft content.

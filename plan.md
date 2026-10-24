@@ -6,6 +6,14 @@ Build Drop as a mobile-first private sharing app where a person can send a photo
 
 The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailbox, and relay foundations. Existing letters continue to work as text drops, and their routes and saved content remain readable. The build covers the end-to-end mobile flow: choose content, attach an image or GIF, choose a recipient, send, open, react, and optionally follow a relay.
 
+## Implementation Status — 2026-10-24 (Relay count and mobile pass)
+
+- Relay statistics now count only carrier handoffs, and both Relay and Journey label the value “Carriers.” Regression coverage excludes sender and recipient roles.
+- The narrow-screen Relay controls stack, and the passport identifier and headline use mobile-safe wrapping. Exact Chrome checks measured no document overflow at 390 CSS pixels or desktop width.
+- Verification: `npm test` passed 249/249; lint, no-incremental TypeScript, `git diff --check`, and the production build passed. The full demo browser smoke timed out on initial `Page.navigate`, so no full journey claim is made for this checkpoint.
+- Code commit `4f8d512` is pushed to `origin/fix/relay-carrier-count`; hosted Supabase setup remains blocked because the local CLI has no access token. No project, billing, or `.env.local` change was made.
+- Next: connect the demo sender copy to a fresh editable draft without inheriting demo content or replacing an active draft, then complete the hosted Free project setup when authenticated access is available.
+
 ## Implementation Status — 2026-10-24 (Home writing spark)
 
 - Home’s **Use this thought** action now creates a fresh text drop and seeds it with the currently displayed writing prompt. The composer remains editable and receives only the draft ID in its route.

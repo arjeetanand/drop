@@ -17,6 +17,8 @@ Open `http://localhost:4004`. Run `./run.sh` again to restart Drop, or `./run.sh
 
 Choose **Try a demo drop** on Home, then pick the bundled photo or GIF. The sample uses the existing recipient reveal, reaction, and sender-copy screens; it is saved in this browser only, does not upload or send anything, and leaves the active draft untouched. Demo reactions persist on this device.
 
+Relay passports count carrier handoffs only; the metric is labeled consistently as **Carriers**, and its actions and headline wrap for narrow screens.
+
 Reaction buttons expose text labels such as “React with heart hands” to assistive technology instead of relying on emoji pronunciation.
 
 With Drop running on port 4004, run `node scripts/browser-demo-smoke.mjs`. The smoke opens an isolated temporary Chrome/Edge/Chromium profile and checks complete GIF flows at 360×844, 390×844, 430×844, and 1440×900, plus a photo flow at 390×844. It uses touch at 360px and keyboard activation at 390px, 430px, and desktop. The no-handle choice, its “anyone with the link can claim” disclosure, account gate, focus return, and saved-claim recovery/detail copy are checked with keyboard at all four widths. Home and the chooser are checked for horizontal overflow at all widths. Use `node scripts/browser-demo-smoke.mjs http://127.0.0.1:4004 --claim-recovery-only` for handleless-choice and seeded recovery flows, or `--prompt-only` for the Home writing-spark flow. The page-scoped request gate checks for cross-origin, Auth, REST, RPC, and Storage-write requests; these local checks do not validate hosted sends, server-side activity, screen readers, or physical devices. Chrome touch input timed out at 430px in this environment, so that viewport uses the tested keyboard path.

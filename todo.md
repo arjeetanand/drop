@@ -2,6 +2,16 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
+## Current Checkpoint — 2026-10-24 (Relay count and mobile pass)
+
+- [x] Count only actual carrier handoffs; the seeded route reports two carriers, excluding its sender and recipient.
+- [x] Align the Relay metric label with Journey and improve the narrow-screen action group, passport identifier, and headline wrapping.
+- [x] `npm test` passes 249/249; lint, no-incremental TypeScript, `git diff --check`, and the production build pass.
+- [x] Exact local Chrome checks report no overflow at 390 CSS pixels and desktop width; the repository browser smoke timed out at its initial `Page.navigate`, so the full demo journey is not counted as verified here.
+- [x] Code commit `4f8d512` is pushed to `origin/fix/relay-carrier-count`.
+- [ ] Connect the demo sender-copy to a clean, editable first drop while preserving any active draft and the “nothing was sent” explanation.
+- [ ] Provision/verify the approved Free Supabase project, then check two-account sending and actual 30-day Storage deletion. Screen-reader and physical-device checks remain open.
+
 ## Current Checkpoint — 2026-10-24 (Home writing spark)
 
 - [x] Make **Use this thought** open a fresh editable text-drop draft seeded with the displayed Home prompt; navigate by draft ID rather than putting prompt text in the URL.
