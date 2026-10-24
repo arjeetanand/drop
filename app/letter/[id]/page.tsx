@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { ArrowLeft, ArrowRight, Check, LockKeyhole, MailOpen, Share2, Sparkles } from 'lucide-react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import type { MockLetter } from '@/data/mockData';
-import { getRemoteDropDirection, getRemoteLetterById, getRemoteLetters, getRemoteReactionSnapshot, getRemoteSenderClaimStatusForDrop, reissueDropClaimInvite, reissueDropMediaClaimInvite, saveRemoteReaction, subscribeToIncomingDropInbox, subscribeToSenderDropReactions } from '@/lib/letterBackend';
+import { getRemoteDropDirection, getRemoteLetterById, getRemoteLetters, getRemoteReactionSnapshot, getRemoteSenderClaimStatusForDrop, markRemoteDropRead, reissueDropClaimInvite, reissueDropMediaClaimInvite, saveRemoteReaction, subscribeToIncomingDropInbox, subscribeToSenderDropReactions } from '@/lib/letterBackend';
 import { getLetterById, startNewLetter } from '@/lib/letterStore';
 import { startDropBackDraft } from '@/lib/dropBackDraft';
 import { getLiveClaimCompletionUpdate } from '@/lib/liveClaimStatus';
@@ -21,6 +21,8 @@ import { startVisibleDataRefresh, type VisibleDataRefreshController } from '@/li
 import { buildDropClaimUrl, createDropClaimSharePayload, createDropClaimToken } from '@/lib/dropClaim';
 import { getLocalAccountId, isCurrentLocalAccount } from '@/lib/localAccountScope';
 import { shareInviteLink } from '@/lib/shareInvite';
+import { announceRecipientDropRead } from '@/lib/recipientDropReadEvent';
+import { isEligibleReceivedDrop } from '@/lib/mailboxView';
 
 const inFlightClaimReissues = new Set<string>();
 
@@ -409,7 +411,12 @@ export default function LetterArrivalPage() {
   };
 
   const openDrop = async () => {
+    const currentLetter = letter;
+    if (!currentLetter) return;
     setContentNotice('');
+    let openedRemoteLetter: MockLetter | null = fullContentAvailable && isEligibleReceivedDrop(currentLetter)
+      ? currentLetter
+      : null;
     if (!fullContentAvailable && letterId) {
       setContentLoading(true);
       try {
@@ -419,6 +426,7 @@ export default function LetterArrivalPage() {
           return;
         }
         setLetter((current) => retainKnownClaimStatus(current, remoteDetail));
+        openedRemoteLetter = remoteDetail;
         if (remoteDetail.mediaPath && !remoteDetail.mediaUrl) {
           setContentNotice('The private attachment could not load. Check your connection, then try opening again.');
           return;
@@ -432,6 +440,29 @@ export default function LetterArrivalPage() {
       }
     }
     setOpened(true);
+    if (openedRemoteLetter
+      && isEligibleReceivedDrop(openedRemoteLetter)
+      && typeof openedRemoteLetter.recipientReadAt !== 'string') {
+      const letterIdToMark = openedRemoteLetter.id;
+      const accountId = getLocalAccountId();
+      if (!accountId) return;
+      void markRemoteDropRead(letterIdToMark).then((readAt) => {
+        if (!readAt || !isCurrentLocalAccount(accountId)) return;
+        const detail = { accountId, letterId: letterIdToMark, readAt };
+        setLetter((current) => {
+          if (!current || current.id !== letterIdToMark) return current;
+          const readLetter = {
+            ...current,
+            recipientReadAt: typeof current.recipientReadAt === 'string' ? current.recipientReadAt : readAt,
+          };
+          currentLetterRef.current = readLetter;
+          return readLetter;
+        });
+        announceRecipientDropRead(detail);
+      }).catch(() => {
+        // Opening the drop is independent from the optional durable read receipt.
+      });
+    }
   };
 
   const shareFreshClaimLink = async () => {

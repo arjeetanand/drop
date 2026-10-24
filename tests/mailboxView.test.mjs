@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { mockLetters } from '../data/mockData.ts';
-import { filterMailboxLetters, getMailboxCounts, getMailboxEmptyState } from '../lib/mailboxView.ts';
+import { filterMailboxLetters, getMailboxCounts, getMailboxEmptyState, getUnreadReceivedCount, isEligibleReceivedDrop, isUnreadReceivedDrop } from '../lib/mailboxView.ts';
 
 const drops = [
   { id: 'real-in', subject: 'A note', recipient: 'me', direction: 'received', status: 'delivered' },
@@ -46,6 +46,26 @@ test('keeps recipient relays in Transit until they collect the drop', () => {
   assert.deepEqual(getMailboxCounts(relays), { total: 4, transit: 3, received: 1, sent: 1, drafts: 0, samples: 0 });
   assert.deepEqual(filterMailboxLetters(relays, 'received', '').map((letter) => letter.id), ['relay-collected']);
   assert.deepEqual(filterMailboxLetters(relays, 'transit', '').map((letter) => letter.id), ['relay-in-transit', 'legacy-relay-in-transit', 'relay-sent']);
+});
+
+test('counts only authoritatively unread real received drops after read-state hydration', () => {
+  const unread = { id: 'unread', direction: 'received', status: 'delivered', recipientReadAt: null };
+  const read = { id: 'read', direction: 'received', status: 'delivered', recipientReadAt: '2026-10-25T10:00:00Z' };
+  const unknown = { id: 'unknown', direction: 'received', status: 'delivered' };
+  const excluded = [
+    { id: 'sent', direction: 'sent', status: 'delivered', recipientReadAt: null },
+    { id: 'sample', direction: 'received', status: 'delivered', sample: true, recipientReadAt: null },
+    { id: 'demo', direction: 'received', status: 'delivered', localDemo: true, recipientReadAt: null },
+    { id: 'claim', direction: 'received', status: 'claim_pending', recipientReadAt: null },
+    { id: 'transit', direction: 'received', status: 'dispatched', deliveryMode: 'relay', recipientReadAt: null },
+  ];
+
+  assert.equal(isEligibleReceivedDrop(unread), true);
+  assert.equal(isUnreadReceivedDrop(unread), true);
+  assert.equal(isUnreadReceivedDrop(read), false);
+  assert.equal(isUnreadReceivedDrop(unknown), false);
+  assert.equal(getUnreadReceivedCount([unread, read, unknown, ...excluded], false), null);
+  assert.equal(getUnreadReceivedCount([unread, read, unknown, ...excluded], true), 1);
 });
 
 test('shows search recovery without changing the active mailbox filter', () => {
