@@ -1298,3 +1298,33 @@ When testing PKCE email sign-in, request the link through the same browser sessi
 ### Git and remaining gaps
 
 No application source changed. The current code commit is `a71612b` on `fix/drop-back-fresh-draft`, pushed to `origin/fix/drop-back-fresh-draft` and tracked by open, unmerged [PR #5](https://github.com/arjeetanand/drop/pull/5). This verification and its documentation are a follow-up on that branch. Actual aged-object deletion remains unverified: the cleanup-worker POST was blocked by the automatic approval review because the endpoint can delete aged media. Hosted account-to-account, desktop, screen-reader, and physical-device checks also remain open.
+
+## 2026-10-24 — Restore the local Docker-backed runtime
+
+### Issue
+
+Drop's local URL refused connections on port 4004, and a default sandboxed Docker command returned a permission error for Rancher Desktop's socket.
+
+### Cause
+
+The Next.js development server had stopped. Docker and the local Supabase services were already running; only the sandboxed command context was blocked from accessing the Docker socket.
+
+### Resolution
+
+- Started the app with the documented `./run.sh start` command on port 4004.
+- Used the approved local runtime context for read-only Docker and HTTP health checks; left Docker socket permissions and global settings unchanged.
+- Kept the existing Docker-backed Supabase stack and verified its Auth and Mailpit endpoints.
+
+### Learning
+
+When localhost is unavailable, first check whether the app process is running. A Docker socket permission error from a restricted command context does not prove the Docker daemon is stopped; verify Docker through an authorized local context before changing runtime settings or reinstalling tools.
+
+### Verification
+
+- App, local Supabase Auth, and Mailpit returned HTTP 200.
+- `npm run test:local-supabase` passed all eight groups with five disposable accounts and temporary media; its cleanup completed successfully.
+- The app remains running on port 4004. The smoke did not invoke the aged-media cleanup worker.
+
+### Git and remaining gaps
+
+No application code or environment file changed. This issue-resolution record is on `chore/docker-runtime-recovery`; see the branch's latest Git commit for the exact SHA and the final task report for push status. Hosted Supabase behavior, real aged-object deletion, screen-reader use, and physical-device checks remain open.

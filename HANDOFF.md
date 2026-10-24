@@ -2,6 +2,15 @@
 
 Updated: 2026-10-24
 
+## Latest checkpoint — Restore the local Docker-backed runtime (2026-10-24)
+
+- The app initially refused connections on port 4004 because its Next.js process was stopped. The Docker client and Rancher Desktop daemon were already installed/running; the default sandboxed command could not access the Docker socket, while the approved local runtime context could. No Docker permissions or global settings were changed.
+- Started Drop with `./run.sh start` on its documented port. The app, Supabase Auth, and Mailpit returned HTTP 200. The existing local Supabase Docker services remained in place.
+- `npm run test:local-supabase` passed all eight groups with five disposable local accounts; the script's cleanup completed. The cleanup worker was not invoked, and no hosted Supabase resources or unrelated containers were changed.
+- No application code changed. The Next.js app runs directly through Node; the local Supabase backend runs in Docker through the Supabase CLI. This checkpoint is on `chore/docker-runtime-recovery`; see the branch's latest Git commit and the final task report for its exact SHA and push state.
+
+**Next:** use `http://localhost:4004`; continue the open product, hosted-project, aged-object deletion, screen-reader, and device checks when their required access is available.
+
 ## Latest checkpoint — Docker-backed local account-to-account verification (2026-10-24)
 
 - The local Docker/Supabase stack is healthy. The initial Docker socket denial came from the workspace sandbox blocking Rancher Desktop access; read-only elevated status confirmed the daemon and local services. No socket permissions or global Docker settings were changed.

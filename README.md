@@ -17,6 +17,8 @@ npm ci
 
 Open `http://localhost:4004`. Run `./run.sh` again to restart Drop, or `./run.sh stop` to stop it. Without Supabase credentials, the app runs with local demo data. Real account-to-account media delivery needs the Supabase migrations and private storage setup in [SUPABASE_SETUP.md](./SUPABASE_SETUP.md). Hosted Drop provisioning is currently waiting on project-creation access; no Drop project has been created.
 
+The local Supabase backend runs in Docker through the Supabase CLI (`npm run supabase:start`); the Next.js app runs as a local Node process through `run.sh`. The main local endpoints are app `4004`, Supabase API `54321`, Studio `54323`, and Mailpit `54324`. Use `npm run supabase:stop` to stop this project's local Supabase stack.
+
 ## Try a demo without an account
 
 Choose **Try a demo drop** on Home, then pick the bundled photo or GIF. The sample uses the existing recipient reveal, reaction, and sender-copy screens; it is saved in this browser only, does not upload or send anything, and leaves the active draft untouched. Demo reactions persist on this device.

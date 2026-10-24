@@ -29,6 +29,13 @@ Updated: 2026-10-24
 - [x] Push code commit `a71612b` and open [PR #5](https://github.com/arjeetanand/drop/pull/5) to `main`; the PR remains unmerged.
 - [ ] Verify with a screen reader and on a physical device. The browser case uses a local received-demo fixture, not a real hosted account-to-account drop.
 
+## Docker-backed local runtime recovery (2026-10-24)
+
+- [x] Confirm the existing Rancher Desktop daemon and Drop Supabase services are available through the approved local runtime context; leave Docker socket permissions and global settings unchanged.
+- [x] Restart Drop with `./run.sh start` and verify HTTP 200 on port 4004; verify local Auth and Mailpit return HTTP 200.
+- [x] Pass `npm run test:local-supabase` across eight groups; the test script removes its five disposable accounts and temporary media.
+- [x] Leave Drop running on port 4004 for local use.
+
 ## Product checks still open
 
 - [ ] Verify the installed PWA share target and OS share sheet in a browser/device that supports the required flow.
