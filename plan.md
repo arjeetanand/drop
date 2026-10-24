@@ -6,6 +6,14 @@ Build Drop as a mobile-first private sharing app where a person can send a photo
 
 The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailbox, and relay foundations. Existing letters continue to work as text drops, and their routes and saved content remain readable. The build covers the end-to-end mobile flow: choose content, attach an image or GIF, choose a recipient, send, open, react, and optionally follow a relay.
 
+## Implementation Status — 2026-10-24 (Demo to first drop)
+
+- The opened local demo’s sender copy now offers **Make one for a friend**. It opens a fresh, blank, editable text draft by ID; the demo’s sample content and reaction stay in the demo, the “nothing was sent or shared” explanation remains visible, and an unfinished image draft plus its IndexedDB bytes stay recoverable.
+- The CTA preserves the existing account and recipient gates. The new browser mode checks the sender-copy transition, the empty composer, scroll-to-top, and prior draft/attachment preservation at 390×844.
+- Verification: `npm test` passed 249/249; lint, `npx tsc --noEmit --incremental false`, browser-script syntax, `git diff --check`, and `npm run build` passed. Isolated Chrome passed on a clean retry with no cross-origin requests. A no-env browser attempt intermittently remained at the account-check placeholder; a configured `.env.local` browser session cannot pass the smoke’s cross-origin auth gate.
+- Code commit `df710fd` (`feat: start a fresh drop from the demo`) is pushed to `origin/feat/demo-to-first-drop`. No PR or merge was created; `/letter` and `.env.local` were not changed.
+- The user reports being signed in to Supabase, but the session is not exposed to this task. The read-only CLI attempt was blocked before contacting Supabase by an `EPERM` writing its telemetry file under `~/.supabase`; no project or billing changes were made. Verify the approved Free plan/project before hosted migrations or sends.
+
 ## Implementation Status — 2026-10-24 (Relay count and mobile pass)
 
 - Relay statistics now count only carrier handoffs, and both Relay and Journey label the value “Carriers.” Regression coverage excludes sender and recipient roles.

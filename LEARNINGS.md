@@ -961,3 +961,33 @@ Use the domain role as the source of truth for a product metric, and keep the la
 ### Git and remaining gaps
 
 Code commit `4f8d512` (`fix: correct relay carrier count and mobile layout`) is pushed to `origin/fix/relay-carrier-count`. No PR or merge was created. The `Drop App Free` organization and project were not changed; the read-only Supabase CLI call reported that no CLI access token is available, and `.env.local` was not changed or displayed. Hosted account-to-account sends, the actual 30-day Storage deletion, screen-reader use, and physical-device behavior remain unverified. Next: finish the sender-copy to fresh-draft product slice, then resume hosted setup once CLI or dashboard access is available.
+
+## 2026-10-24 — Start a fresh drop from the demo
+
+### Issue
+
+Finishing the local demo showed the sender copy and reaction, but did not offer a direct next step into composing a real drop.
+
+### Cause
+
+The demo correctly stays on-device and does not send its sample. Its sender view only linked back to the recipient demo, leaving people to find the separate compose action themselves.
+
+### Resolution
+
+- Add **Make one for a friend** to the local demo sender-copy view. Keep the same-device “nothing was sent or shared” notice and explain that the sample message, reaction, and media stay in the demo.
+- Start a forced-new blank text draft and route by its ID. Preserve the prior active draft, including its IndexedDB photo attachment; keep the demo record in local history. Existing sign-in and recipient gates still control sending.
+- Add a focused keyboard browser mode that checks the sender-copy CTA, blank editable composer, top-of-page landing, old draft/blob recovery, and no cross-origin requests.
+
+### Learning
+
+When a safe product demo is meant to lead into real use, put the next action where the demo ends. Create a separate editable object and keep sample content, identity, and reactions out of it; preserve in-progress work before changing routes.
+
+### Verification
+
+- `npm test` passed 249/249; `npm run lint`, `npx tsc --noEmit --incremental false`, `node --check scripts/browser-demo-smoke.mjs`, `git diff --check`, and `npm run build` passed. The production build only warned about outdated Browserslist data.
+- Isolated Chrome passed `--friend-draft-only` at 390×844. It verified the same-device unsent notice, a new route ID matching an empty editable text draft, no copied demo identity/reaction/media, scroll position at the top, and preservation of the original image draft and actual IndexedDB blob. The passing run observed no cross-origin requests, console errors, or JavaScript exceptions. Screenshots were saved outside the repo at `/private/tmp/drop-browser-fresh-qa-20261024d/`.
+- A run against the configured `.env.local` stayed at “Checking your account…” because the isolated browser blocks cross-origin auth. One no-env startup also timed out at that placeholder; a fresh no-env retry passed. Hosted sending, screen readers, and physical-device behavior were not tested.
+
+### Git and remaining gaps
+
+Code commit `df710fd` (`feat: start a fresh drop from the demo`) is pushed to `origin/feat/demo-to-first-drop`; the project notes are committed separately on the same branch. No PR or merge was created. `/letter` and `.env.local` were not changed. The user reports being signed in to Supabase, but this task has no authenticated dashboard control. The read-only CLI attempt stopped before a Supabase API request because the sandbox blocked its telemetry-file write under `~/.supabase`; no project or billing change was made. Verify the approved Free project before hosted migrations, two-account delivery, or physical 30-day Storage cleanup. First-use usability, screen-reader, and physical-device checks also remain open.

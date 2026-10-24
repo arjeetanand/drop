@@ -2,6 +2,17 @@
 
 Updated: 2026-10-24
 
+## Latest checkpoint — demo to first drop (2026-10-24)
+
+- The local demo sender copy now offers **Make one for a friend** and opens a forced-new blank, editable text draft by its ID. The sample message, reaction, media, and demo identity stay in the local demo; the “nothing was sent or shared” notice remains visible. The prior draft and its local photo attachment remain recoverable, and the composer lands at the top.
+- The action keeps the existing account and recipient send gates. The product path is a contextual first action after a safe same-device tryout; real first-use comprehension still needs user observation.
+- Verification: `npm test` passed 249/249; lint, no-incremental TypeScript, `node --check scripts/browser-demo-smoke.mjs`, `git diff --check`, and `npm run build` passed. Isolated Chrome passed the focused sender-copy → CTA → composer keyboard flow at 390×844. It checked the CTA and unsent notice, route/draft identity, empty editable fields, no copied reaction/demo identity/media, top-of-page landing, and the old draft plus IndexedDB photo bytes. No cross-origin requests, console errors, or browser exceptions were observed in the passing run. The production build reports only outdated Browserslist data.
+- Browser screenshot evidence is outside the repo at `/private/tmp/drop-browser-fresh-qa-20261024d/`. The smoke must use a no-env app copy when `.env.local` contains hosted credentials because the isolated browser deliberately blocks cross-origin auth; one no-env startup attempt also timed out at the account placeholder, then a fresh retry passed.
+- Active checkout: `/Users/arjeetanand/projects/drop`; branch `feat/demo-to-first-drop`. Code commit `df710fd` (`feat: start a fresh drop from the demo`) is pushed to `origin/feat/demo-to-first-drop`. No PR or merge was created. `/letter` and `.env.local` were not changed.
+- The user reports a Supabase dashboard login, but this task has no authenticated dashboard control. The read-only CLI check stopped before its API request because the sandbox blocked writing CLI telemetry under `~/.supabase`; no project, plan, or billing change was made. Hosted Free-plan verification, two-account delivery, physical 30-day deletion, screen-reader use, and physical-device behavior remain open.
+
+**Next:** verify the approved Free Supabase project through an available dashboard or scoped CLI session, then apply/configure hosted services and test two-account delivery plus actual Storage cleanup. Run a small first-use usability check and complete screen-reader and physical-device checks.
+
 ## Latest checkpoint — relay count and mobile pass (2026-10-24)
 
 - Relay statistics now count `carrier` handoffs only, excluding sender and recipient roles. Relay and Journey both label the value **Carriers**.

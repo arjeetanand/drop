@@ -2,6 +2,16 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
+## Current Checkpoint — 2026-10-24 (Demo to first drop)
+
+- [x] Add **Make one for a friend** to the local demo sender-copy screen, with the unsent/same-device explanation still visible.
+- [x] Open a forced-new blank text draft by stable ID; keep the demo message, reaction, media, and identity in the local demo, and preserve an unfinished photo draft plus its IndexedDB attachment.
+- [x] Add store assertions and a focused keyboard browser flow; `npm test` passes 249/249, lint, no-incremental TypeScript, `node --check`, `git diff --check`, and the production build pass.
+- [x] Isolated Chrome passed the sender-copy → CTA → blank composer flow at 390×844 in a no-env copy. It verified the same-device notice, route ID, editable empty fields, top-of-page landing, old draft metadata and photo bytes, and no cross-origin requests. One retry timed out at the account-check placeholder; the subsequent clean run passed.
+- [x] Code commit `df710fd` is pushed to `origin/feat/demo-to-first-drop`.
+- [ ] Verify the approved Free Supabase project and run hosted two-account delivery plus actual 30-day Storage cleanup. The current task cannot access the signed-in dashboard; its read-only CLI attempt stopped at a sandbox telemetry-file permission error.
+- [ ] Complete first-use usability, screen-reader, and physical-device checks.
+
 ## Current Checkpoint — 2026-10-24 (Relay count and mobile pass)
 
 - [x] Count only actual carrier handoffs; the seeded route reports two carriers, excluding its sender and recipient.
@@ -9,7 +19,7 @@ Tasks are ordered by dependency. Progress is recorded at each tested and pushed 
 - [x] `npm test` passes 249/249; lint, no-incremental TypeScript, `git diff --check`, and the production build pass.
 - [x] Exact local Chrome checks report no overflow at 390 CSS pixels and desktop width; the repository browser smoke timed out at its initial `Page.navigate`, so the full demo journey is not counted as verified here.
 - [x] Code commit `4f8d512` is pushed to `origin/fix/relay-carrier-count`.
-- [ ] Connect the demo sender-copy to a clean, editable first drop while preserving any active draft and the “nothing was sent” explanation.
+- [x] Connect the demo sender-copy to a clean, editable first drop while preserving any active draft and the “nothing was sent” explanation.
 - [ ] Provision/verify the approved Free Supabase project, then check two-account sending and actual 30-day Storage deletion. Screen-reader and physical-device checks remain open.
 
 ## Current Checkpoint — 2026-10-24 (Home writing spark)
