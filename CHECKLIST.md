@@ -25,7 +25,7 @@ Updated: 2026-10-24
 - [x] Add unit regressions for a blank-caption photo draft, its exact attachment bytes, sender normalization, and invalid-handle refusal.
 - [x] Pass `npm test` (274/274), lint, no-incremental TypeScript, browser-script syntax, `git diff --check`, and `npm run build -- --webpack`.
 - [x] Pass the isolated Chrome `--drop-back-only` flow at 390×844: stable draft ID, sender handle in the composer, original photo record/bytes unchanged, no send, no overflow, and no cross-origin requests.
-- [x] Push code commit `a71612b` to `origin/fix/drop-back-fresh-draft`; no PR or merge has been created.
+- [x] Push code commit `a71612b` and open [PR #5](https://github.com/arjeetanand/drop/pull/5) to `main`; the PR remains unmerged.
 - [ ] Verify with a screen reader and on a physical device. The browser case uses a local received-demo fixture, not a real hosted account-to-account drop.
 
 ## Product checks still open

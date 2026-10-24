@@ -12,7 +12,7 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 
 - Drop back now starts a persisted new text draft by stable ID and pre-fills the sender's normalized handle. It does not reuse an empty-caption photo/GIF draft, and storage failures stop navigation with a recovery message.
 - Verification passed: 274 unit tests, lint, no-incremental TypeScript, browser-script syntax, diff checks, Webpack production build, and isolated mobile Chrome at 390×844. The browser fixture confirmed the old attachment bytes stay intact and no send or cross-origin request occurs.
-- Code commit `a71612b` is pushed to `origin/fix/drop-back-fresh-draft`; this branch has no PR or merge yet. Hosted account-to-account, screen-reader, and physical-device checks remain open.
+- Code commit `a71612b` is pushed to `origin/fix/drop-back-fresh-draft` and tracked by [PR #5](https://github.com/arjeetanand/drop/pull/5), which is open and unmerged. Hosted account-to-account, screen-reader, and physical-device checks remain open.
 
 ### Latest checkpoint — Share-to-Drop PWA import and replay safety (2026-10-24)
 

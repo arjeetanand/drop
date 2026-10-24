@@ -1266,4 +1266,4 @@ When an action means “start a new thing,” do not rely on a generic new-route
 
 ### Git and remaining gaps
 
-Code commit `a71612b` (`fix: start fresh draft from received drop`) is pushed to `origin/fix/drop-back-fresh-draft`. This learning entry and project-note updates are in a separate documentation commit. No PR or merge has been created. Hosted account-to-account behavior, screen-reader output, and physical-device behavior remain unverified. No hosted resources, credentials, or `/letter` files were changed.
+Code commit `a71612b` (`fix: start fresh draft from received drop`) is pushed to `origin/fix/drop-back-fresh-draft` and tracked by [PR #5](https://github.com/arjeetanand/drop/pull/5), which is open and unmerged. This learning entry and project-note updates are in a separate documentation commit. Hosted account-to-account behavior, screen-reader output, and physical-device behavior remain unverified. No hosted resources, credentials, or `/letter` files were changed.

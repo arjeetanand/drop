@@ -7,8 +7,8 @@ Tasks are ordered by dependency. Progress is recorded at each tested and pushed 
 - [x] Start Drop back from a received drop using a persisted fresh draft ID and the sender's normalized handle.
 - [x] Preserve the existing empty-caption photo draft and exact IndexedDB attachment; reject invalid handles without replacing the active draft.
 - [x] Pass 274 unit tests, lint, no-incremental TypeScript, browser-script syntax, diff checks, Webpack build, and isolated Chrome keyboard flow at 390×844. Confirm no send, overflow, or cross-origin requests.
-- [x] Push code commit `a71612b` to `origin/fix/drop-back-fresh-draft`.
-- [ ] Open a PR after review; verify the real received-drop flow with disposable accounts, a screen reader, and a physical device.
+- [x] Push code commit `a71612b` to `origin/fix/drop-back-fresh-draft` and open [PR #5](https://github.com/arjeetanand/drop/pull/5).
+- [ ] Merge PR #5 after approval; verify the real received-drop flow with disposable accounts, a screen reader, and a physical device.
 
 ## Checkpoint — Share-to-Drop PWA import and replay safety (2026-10-24)
 
