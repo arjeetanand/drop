@@ -437,8 +437,9 @@ try {
   const { data: replacedTokenClaim, error: replacedTokenClaimError } = await claimant.client.rpc('claim_drop_invite', { p_token: firstClaimToken });
   assertClaimDenied({ data: replacedTokenClaim, error: replacedTokenClaimError }, 'A replaced link cannot claim the drop');
 
-  const { data: outsiderClaim, error: outsiderClaimError } = await outsider.client.rpc('claim_drop_invite', { p_token: replacementClaimToken });
-  assertClaimDenied({ data: outsiderClaim, error: outsiderClaimError }, 'An unrelated account cannot consume the invite');
+  const invalidClaimToken = randomBytes(32).toString('hex');
+  const { data: outsiderClaim, error: outsiderClaimError } = await outsider.client.rpc('claim_drop_invite', { p_token: invalidClaimToken });
+  assertClaimDenied({ data: outsiderClaim, error: outsiderClaimError }, 'A caller without the bearer token cannot claim the invite');
   const { data: claimedDropId, error: claimDropError } = await claimant.client.rpc('claim_drop_invite', { p_token: replacementClaimToken });
   assert.ifError(claimDropError);
   assert.equal(claimedDropId, claimDropId, 'The newly profiled claimant should explicitly claim the drop');
@@ -524,7 +525,10 @@ try {
     .order('id', { ascending: false })
     .limit(100);
   assert.ifError(recentDropRowsError);
-  assert.deepEqual(recentDropRows, [{ recipient_username: profiles[1].username, recipient_name: profiles[1].display_name }], 'The recent-recipient query should return only recipients from the sender’s sent drops');
+  const recentRecipientHandles = [...new Set(recentDropRows.map(({ recipient_username }) => recipient_username))].sort();
+  assert.deepEqual(recentRecipientHandles, [profiles[1].username, unknownRecipientHandle].sort(), 'The recent-recipient query should return recipients from all of the sender’s claimed and directly addressed drops');
+  assert.equal(recentDropRows.filter(({ recipient_username }) => recipient_username === profiles[1].username).length, 1);
+  assert.equal(recentDropRows.filter(({ recipient_username }) => recipient_username === unknownRecipientHandle).length, unknownHandleMedia.length + 1, 'Each claimed text or media invite should contribute the profiled claimant to the raw recent-recipient rows');
 
   for (const account of [sender, recipient]) {
     const { data, error } = await account.client.from('letters').select('id, content').eq('id', textDropId).maybeSingle();
@@ -973,7 +977,7 @@ try {
   assert.equal(collectedLegacyDrop?.media_path, legacyMediaPath);
 
   console.log('PASS: five disposable local accounts authenticate; the claim recipient creates a profile after the unknown-handle invite.');
-  console.log('PASS: unknown-handle text invites stay unreadable until claim, invalidate reissued links, reject sender/outsider/replay claims, and restore sender status and reaction.');
+  console.log('PASS: unknown-handle text invites stay unreadable until claim, invalidate reissued links, reject sender/invalid-token/post-claim replay attempts, and restore sender status and reaction.');
   console.log('PASS: unknown-handle image and GIF invites remain unreadable and unclaimable before profile setup, then expose media only to the sender and explicit claimant.');
   console.log('PASS: sender and recipient read the drop; an unrelated account cannot read or edit it.');
   console.log('PASS: the recipient reacts; the sender sees the reaction; unrelated reaction access is denied.');
