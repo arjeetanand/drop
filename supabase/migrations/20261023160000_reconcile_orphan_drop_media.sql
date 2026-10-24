@@ -1,6 +1,7 @@
 -- Recover finalized private objects that the sender could not enqueue after
--- both issue/cleanup attempts failed. The hourly worker scans a small indexed
--- page and retains a cursor so a large bucket is not rescanned every run.
+-- both issue/cleanup attempts failed. The hourly worker scans a small ordered
+-- page and retains a cursor so each run continues after its last candidate.
+-- Storage metadata may require more scanning/sorting as the bucket grows.
 -- Objects without a linked drop are retained for 30 days from Storage upload.
 
 create table if not exists private.drop_media_cleanup_scan_state (
@@ -17,14 +18,6 @@ on conflict (id) do nothing;
 
 revoke all on table private.drop_media_cleanup_scan_state from public, anon, authenticated, service_role;
 alter table private.drop_media_cleanup_scan_state enable row level security;
-
--- Keep each hourly scan to an ordered page of old drop-media metadata.
-create index if not exists drop_media_cleanup_created_at_name_idx
-  on storage.objects (created_at, name)
-  where bucket_id = 'drop-media' and created_at is not null and name is not null;
-
-comment on index storage.drop_media_cleanup_created_at_name_idx is
-  'Supports the bounded age-ordered reconciliation scan for Drop private media.';
 
 create or replace function public.reconcile_orphan_drop_media_cleanup_jobs(p_limit integer default 25)
 returns integer
