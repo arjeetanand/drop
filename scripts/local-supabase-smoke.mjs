@@ -372,7 +372,7 @@ try {
   const claimantProfile = {
     id: claimant.id,
     username: unknownRecipientHandle,
-    display_name: 'Smoke Claimant',
+    display_name: '',
     bio: '',
   };
   const { error: claimantProfileError } = await claimant.client.from('profiles').upsert(claimantProfile);
@@ -385,8 +385,8 @@ try {
   assert.deepEqual(profiledRecipientLookup, {
     id: claimant.id,
     username: unknownRecipientHandle,
-    display_name: 'Smoke Claimant',
-  }, 'The sender can confirm only the public identity needed after profile setup');
+    display_name: '',
+  }, 'A handle-only claimant profile supports the minimum public identity needed for claiming');
 
   for (const mediaDrop of unknownHandleMedia) {
     await assertMediaUnavailableToAccount(claimant, mediaDrop, 'After profile setup, before explicit claim');

@@ -12,6 +12,11 @@ const PROJECT_ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const MOBILE_VIEWPORTS = [360, 390, 430].map((width) => ({ name: `mobile-${width}`, width, height: 844, deviceScaleFactor: 1, mobile: true }));
 const DESKTOP_VIEWPORT = { name: 'desktop-1440', width: 1440, height: 900, deviceScaleFactor: 1, mobile: false };
 const FLOW_VIEWPORTS = [...MOBILE_VIEWPORTS, DESKTOP_VIEWPORT];
+const CLAIM_PROFILE_VIEWPORTS = [
+  ...MOBILE_VIEWPORTS,
+  { name: 'claim-profile-landscape', width: 844, height: 390, deviceScaleFactor: 1, mobile: true },
+  DESKTOP_VIEWPORT,
+];
 let activeViewport = MOBILE_VIEWPORTS[1];
 const STEP_TIMEOUT_MS = 20_000;
 const LABELS = {
@@ -761,6 +766,75 @@ async function runClaimRecoveryFlow(cdp, {
   await assertNoHorizontalOverflow(cdp, 'Saved claim detail', viewport.width);
   if (screenshotDir && (viewport.width === 390 || !viewport.mobile)) {
     await captureScreenshot(cdp, screenshotDir, `${viewport.name}-claim-detail`);
+  }
+}
+
+async function runClaimProfileSetupFlow(cdp, { appUrl, viewport, keyboard, screenshotDir }) {
+  await setViewport(cdp, viewport);
+  const profileUrl = new URL('/profile', appUrl);
+  profileUrl.searchParams.set('invite', '1');
+  profileUrl.searchParams.set('next', '/claim?token=browser-smoke-placeholder');
+  await cdp.send('Page.navigate', { url: profileUrl.href });
+  await waitUntil(cdp, 'the first-use private-claim profile form', async () => (
+    await evaluate(cdp, `${normalizedVisibleText('Set your handle, then claim.')} && ${normalizedVisibleText('Add profile details')} && location.pathname === '/profile' && Boolean(document.querySelector('form #username'))`)
+  ));
+
+  const initialForm = await evaluate(cdp, `(() => {
+    const form = document.querySelector('form');
+    const details = form?.querySelector('details');
+    const summary = details?.querySelector('summary');
+    const username = form?.querySelector('#username');
+    const optionalFields = [form?.querySelector('#display-name'), form?.querySelector('#bio')];
+    return {
+      order: [...(form?.querySelectorAll('input, textarea') || [])].map((field) => field.id),
+      isCollapsed: details?.open === false,
+      summaryTag: summary?.tagName,
+      summaryText: summary?.innerText.replace(/\\s+/g, ' ').trim(),
+      summaryHeight: summary?.getBoundingClientRect().height || 0,
+      usernameRequired: username?.getAttribute('aria-required') === 'true',
+      optionalFieldsNotRequired: optionalFields.every((field) => field && !field.required),
+      optionalFieldsHidden: optionalFields.every((field) => field && !field.checkVisibility()),
+      optionalValues: optionalFields.map((field) => field?.value ?? null),
+      helpText: form?.querySelector('#username-help')?.innerText || '',
+    };
+  })()`);
+  assert.deepEqual(initialForm.order, ['username', 'display-name', 'bio'], 'The required handle should precede optional profile details in reading order.');
+  assert.equal(initialForm.isCollapsed, true, 'Optional display name and bio fields should start collapsed for claim setup.');
+  assert.equal(initialForm.summaryTag, 'SUMMARY', 'Optional fields should use a native keyboard-operable disclosure control.');
+  assert.match(initialForm.summaryText, /add profile details.*optional/i);
+  assert.ok(initialForm.summaryHeight >= 44, `The optional-fields disclosure is only ${initialForm.summaryHeight}px high.`);
+  assert.equal(initialForm.usernameRequired, true, 'The handle should be announced as required during private-claim setup.');
+  assert.equal(initialForm.optionalFieldsNotRequired, true, 'Display name and bio must remain optional.');
+  assert.equal(initialForm.optionalFieldsHidden, true, `Collapsed optional fields should not take up first-use space: ${JSON.stringify(initialForm)}.`);
+  assert.match(initialForm.helpText, /needed to claim this drop/i);
+
+  await activateFlowControl(cdp, {
+    keyboard,
+    selector: 'form details summary',
+    expectedTag: 'SUMMARY',
+  });
+  await waitUntil(cdp, 'the optional claim-profile details to expand', async () => (
+    await evaluate(cdp, `document.querySelector('form details')?.open === true`)
+  ));
+  const expandedFields = await evaluate(cdp, `(() => {
+    const form = document.querySelector('form');
+    const details = form?.querySelector('details');
+    return {
+      open: details?.open === true,
+      optionalFieldsVisible: [form?.querySelector('#display-name'), form?.querySelector('#bio')].every((field) => field && field.getClientRects().length > 0),
+      optionalFieldsNotRequired: [form?.querySelector('#display-name'), form?.querySelector('#bio')].every((field) => field && !field.required),
+      optionalValues: [form?.querySelector('#display-name')?.value ?? null, form?.querySelector('#bio')?.value ?? null],
+    };
+  })()`);
+  assert.equal(expandedFields.open, true);
+  assert.equal(expandedFields.optionalFieldsVisible, true, 'Expanding the disclosure should reveal the existing profile values for editing.');
+  assert.equal(expandedFields.optionalFieldsNotRequired, true);
+  assert.deepEqual(expandedFields.optionalValues, initialForm.optionalValues, 'Opening the disclosure should preserve any existing display name and bio.');
+  await evaluate(cdp, `document.querySelector('form details summary')?.scrollIntoView({ behavior: 'instant', block: 'center' })`);
+  await assertNoFrameworkOverlay(cdp, 'First-use claim profile');
+  await assertNoHorizontalOverflow(cdp, 'First-use claim profile', viewport.width);
+  if (screenshotDir && (viewport.width === 390 || !viewport.mobile)) {
+    await captureScreenshot(cdp, screenshotDir, `${viewport.name}-claim-profile-setup`);
   }
 }
 
@@ -1591,16 +1665,17 @@ async function runShareTargetFlow(cdp, { appUrl, screenshotDir, getPageLoadEvent
 
 async function main() {
   if (process.argv.includes('--help') || process.argv.includes('-h')) {
-    console.log('Usage: node scripts/browser-demo-smoke.mjs [http://127.0.0.1:4004] [--claim-recovery-only|--prompt-only|--friend-draft-only|--share-target-only]');
+    console.log('Usage: node scripts/browser-demo-smoke.mjs [http://127.0.0.1:4004] [--claim-recovery-only|--claim-profile-only|--prompt-only|--friend-draft-only|--share-target-only]');
     return;
   }
 
   const args = process.argv.slice(2);
   const claimRecoveryOnly = args.includes('--claim-recovery-only');
+  const claimProfileOnly = args.includes('--claim-profile-only');
   const promptOnly = args.includes('--prompt-only');
   const friendDraftOnly = args.includes('--friend-draft-only');
   const shareTargetOnly = args.includes('--share-target-only');
-  assert.ok([claimRecoveryOnly, promptOnly, friendDraftOnly, shareTargetOnly].filter(Boolean).length <= 1, 'Choose only one focused browser-smoke mode.');
+  assert.ok([claimRecoveryOnly, claimProfileOnly, promptOnly, friendDraftOnly, shareTargetOnly].filter(Boolean).length <= 1, 'Choose only one focused browser-smoke mode.');
   const appUrl = parseAppUrl(args.find((argument) => !argument.startsWith('--')) || DEFAULT_APP_URL);
   if (typeof WebSocket !== 'function') throw new Error('This smoke check needs a Node runtime with the built-in WebSocket API.');
   const screenshotDir = screenshotDirectoryFromEnv();
@@ -1713,7 +1788,7 @@ async function main() {
       if (capturingRecoveryBackendRequests && /\/(?:auth|rest|storage)\/v1\//i.test(path)) {
         recoveryBackendRequests.push({ method, path });
       }
-      if (/\/auth\/v1\//i.test(path)
+      if ((/\/auth\/v1\//i.test(path) && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method))
         || /\/rest\/v1\/rpc\//i.test(path)
         || (/\/storage\/v1\//i.test(path) && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method))) {
         forbiddenRequests.push({ method, path });
@@ -1762,9 +1837,24 @@ async function main() {
     await setViewport(pageCdp, MOBILE_VIEWPORTS[1]);
 
     console.log(`[browser-demo-smoke] Chrome: ${chromeExecutable}`);
-    const flowName = shareTargetOnly ? 'share-target-only' : claimRecoveryOnly ? 'claim-recovery' : promptOnly ? 'prompt-only' : friendDraftOnly ? 'friend-draft-only' : 'full';
-    const flowViewports = friendDraftOnly || shareTargetOnly ? [MOBILE_VIEWPORTS[1]] : FLOW_VIEWPORTS;
+    const flowName = shareTargetOnly ? 'share-target-only' : claimProfileOnly ? 'claim-profile-setup' : claimRecoveryOnly ? 'claim-recovery' : promptOnly ? 'prompt-only' : friendDraftOnly ? 'friend-draft-only' : 'full';
+    const flowViewports = claimProfileOnly ? CLAIM_PROFILE_VIEWPORTS : friendDraftOnly || shareTargetOnly ? [MOBILE_VIEWPORTS[1]] : FLOW_VIEWPORTS;
     console.log(`[browser-demo-smoke] App: ${appUrl.origin}; ${flowName} flow viewports: ${flowViewports.map(({ name }) => name).join(', ')}.`);
+
+
+    if (claimProfileOnly) {
+      for (const viewport of CLAIM_PROFILE_VIEWPORTS) {
+        await runClaimProfileSetupFlow(pageCdp, {
+          appUrl,
+          viewport,
+          keyboard: true,
+          screenshotDir: viewport.width === 390 || !viewport.mobile ? screenshotDir : null,
+        });
+        console.log(`[browser-demo-smoke] PASS handle-first optional profile disclosure with keyboard at ${viewport.width}×${viewport.height}.`);
+      }
+      console.log('[browser-demo-smoke] PASS collapsed optional fields, required handle semantics, 44px disclosure target, and responsive layout.');
+      console.log('[browser-demo-smoke] NOTE This isolated browser flow does not sign in or save a remote profile; local Supabase smoke covers backend profile writes and claims.');
+    }
 
     if (shareTargetOnly) {
       await runShareTargetFlow(pageCdp, {
@@ -1801,7 +1891,7 @@ async function main() {
       console.log(`[browser-demo-smoke] PASS keyboard sender-copy to fresh editable text draft at ${viewport.width}×${viewport.height}; existing media draft and local demo remain preserved.`);
     }
 
-    if (!friendDraftOnly && !claimRecoveryOnly && !promptOnly && !shareTargetOnly) {
+    if (!friendDraftOnly && !claimRecoveryOnly && !claimProfileOnly && !promptOnly && !shareTargetOnly) {
       const screenshotSteps = new Set(['home', 'chooser', 'recipient', 'fragments-revealed', 'reaction-saved', 'sender-copy']);
       for (const viewport of FLOW_VIEWPORTS) {
         const keyboard = viewport.width !== 360;
@@ -1828,7 +1918,7 @@ async function main() {
       });
     }
 
-    if (!friendDraftOnly && !claimRecoveryOnly && !shareTargetOnly) {
+    if (!friendDraftOnly && !claimRecoveryOnly && !claimProfileOnly && !shareTargetOnly) {
       for (const viewport of FLOW_VIEWPORTS) {
         await runWritingPromptFlow(pageCdp, {
           appUrl,
@@ -1840,7 +1930,7 @@ async function main() {
       }
     }
 
-    if (!friendDraftOnly && !promptOnly && !shareTargetOnly) {
+    if (!friendDraftOnly && !claimProfileOnly && !promptOnly && !shareTargetOnly) {
       for (const viewport of FLOW_VIEWPORTS) {
         await runRecipientlessClaimChoiceFlow(pageCdp, {
           appUrl,
@@ -1870,12 +1960,12 @@ async function main() {
     assert.deepEqual(pageExceptions, [], `The browser reported JavaScript exceptions: ${JSON.stringify(pageExceptions)}.`);
     if (firewallFailure) throw new Error(`The browser network gate failed: ${firewallFailure.message}`);
 
-    if (!friendDraftOnly && !promptOnly && !shareTargetOnly) {
+    if (!friendDraftOnly && !claimProfileOnly && !promptOnly && !shareTargetOnly) {
       console.log('[browser-demo-smoke] PASS saved-claim recovery after reload, including the encoded detail route and fresh-link action at all mobile and desktop widths.');
       console.log('[browser-demo-smoke] PASS handleless claim disclosure, account readiness gate, and focus recovery at all mobile and desktop widths.');
       console.log('[browser-demo-smoke] PASS no Auth, REST, or Storage request during the saved-claim recovery flow.');
     }
-    if (!friendDraftOnly && !claimRecoveryOnly && !promptOnly && !shareTargetOnly) {
+    if (!friendDraftOnly && !claimRecoveryOnly && !claimProfileOnly && !promptOnly && !shareTargetOnly) {
       console.log('[browser-demo-smoke] PASS photo flow at 390×844, including saved reaction, reload persistence, and sender copy.');
       console.log('[browser-demo-smoke] PASS no horizontal overflow on Home and demo chooser at 360, 390, 430px and 1440×900.');
       console.log('[browser-demo-smoke] PASS no Auth, RPC, or Storage write request during the local demo.');

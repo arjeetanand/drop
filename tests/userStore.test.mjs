@@ -51,6 +51,28 @@ test('preserves a customized local identity when creating a first account profil
   assert.equal(getFirstUseProfile('user-2', 'New Person', localProfile, 'user-1').username, suggestedDropUsername('user-2'));
 });
 
+test('stores a handle-only profile with blank optional display name and bio', () => {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const values = new Map();
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { localStorage: { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) } },
+  });
+  try {
+    const handleOnlyProfile = {
+      ...getFirstUseProfile('claimant-account', ''),
+      displayName: '',
+      username: 'new.friend',
+      bio: '',
+    };
+    assert.deepEqual(saveUserProfile(handleOnlyProfile, 'claimant-account'), handleOnlyProfile);
+    assert.deepEqual(getUserProfileForAccount('claimant-account'), handleOnlyProfile);
+  } finally {
+    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
+    else delete globalThis.window;
+  }
+});
+
 test('distinguishes a customized local identity from the seeded profile', () => {
   assert.equal(hasCustomizedUserIdentity(defaultUserProfile), false);
   assert.equal(hasCustomizedUserIdentity({ ...defaultUserProfile, username: 'mina.p' }), true);
