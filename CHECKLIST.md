@@ -8,8 +8,16 @@ Updated: 2026-10-24
 - [x] Review the Relay token handoff and launcher changes with the focused review agents.
 - [x] Run the app test suite, lint, TypeScript check, production build, and external-directory launcher smoke.
 - [x] Push each verified code commit separately to `feat/demo-relay-preview`.
-- [x] Open [PR #1](https://github.com/arjeetanand/drop/pull/1) into `main`; use the PR page as the source of truth for current checks and merge state.
+- [x] Merge [PR #1](https://github.com/arjeetanand/drop/pull/1) into `main`.
+- [x] Open [PR #2](https://github.com/arjeetanand/drop/pull/2) for the local claim-smoke repair; use its page as the source of truth for current checks and merge state.
 - [x] Trace the GitGuardian findings to test UUID fixtures; current test files use deterministic UUIDv4 fixtures. Earlier commits in the PR history still trigger the scanner.
+
+## Local Docker and claim-smoke repair (2026-10-24)
+
+- [x] Start the local Supabase services in Docker and configure `pg_cron`, `pg_net`, Vault values, the hourly cleanup schedule, and the local Edge Function runtime.
+- [x] Correct the bearer-link smoke: reject an invalid token before claim, retain cross-account replay denial after claim, and include legitimate claim recipients in recent-recipient history.
+- [x] Pass `npm run test:local-supabase`, `npm test`, lint, type-check, and production build; confirm the smoke removes its disposable accounts.
+- [ ] Verify a real aged-object deletion through the local cleanup worker; no Storage deletion was triggered in this repair.
 
 ## Product checks still open
 

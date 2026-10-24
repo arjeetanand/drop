@@ -2,6 +2,15 @@
 
 Updated: 2026-10-24
 
+## Latest checkpoint — Docker-backed local Supabase smoke repair (2026-10-24)
+
+- Corrected `scripts/local-supabase-smoke.mjs`: an invalid bearer token is denied before claim, while the existing check still rejects a second account replaying the valid token after the first claim. The raw recent-recipient query now expects both the direct recipient and the profiled claimant from the sender’s claimed text/media invites. No claim RPC behavior changed.
+- The Docker-backed local Supabase stack is running. `pg_cron` and `pg_net` are enabled; the three local Vault entries are present; `drop-expired-drop-media-hourly` is active; and the local cleanup Edge Function is being served by the CLI process. `.env.local` remains ignored and mode `600`; no secret values were printed or committed.
+- Verification: `npm run test:local-supabase` passed across five disposable accounts and its cleanup left zero `drop-smoke-*` accounts. `npm test` passed 272/272; lint, type-check, `node --check scripts/local-supabase-smoke.mjs`, `git diff --check`, and `npm run build -- --webpack` passed. The build only reported the existing Browserslist data and ambiguous Tailwind easing-class warnings. `http://localhost:4004/` returned HTTP 200.
+- Code commit `8115a58` (`test: align claim smoke with bearer semantics`) is pushed on `fix/local-bearer-claim-smoke`; [PR #2](https://github.com/arjeetanand/drop/pull/2) tracks the change. Hosted Supabase provisioning was not attempted. The smoke and unit tests do not confirm an actual aged Storage object deletion; screen-reader and physical-device checks remain open.
+
+**Next:** keep the local Edge Function server running while using the local Supabase stack; follow [SUPABASE_SETUP.md](./SUPABASE_SETUP.md) to restart it. Verify actual object deletion only with a disposable aged-object fixture.
+
 ## Latest checkpoint — Main integration PR and Relay invite safety (2026-10-24)
 
 - Current integration candidate: `/Users/arjeetanand/projects/drop`, branch `feat/demo-relay-preview`; GitHub PR [#1](https://github.com/arjeetanand/drop/pull/1) targets `main`. The PR opened at head `1c5870aa362ee3005c59420ca95c410f77b8ccb0` against `main` at `1887ac4c702952f26ebb4a196ae19fd6ac2cb620`; test-fixture cleanup later advanced the code head to `8ecb1a4edff12ce1843a9830d21b1884b6d55a63`. At that code head, `origin/main...HEAD` was `0 126`; this project-note commit adds one more commit. The live PR page records current review, checks, and merge state.
