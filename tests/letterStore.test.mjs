@@ -343,6 +343,106 @@ test('creates the home demo without replacing or sending the active user draft',
   }
 });
 
+test('creates a text-only local demo while preserving the active draft exactly', () => {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const values = new Map();
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { localStorage: { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) } },
+  });
+  try {
+    setLocalAccountId(null);
+    const active = saveLetterDraft({
+      id: 'draft-unfinished-note-demo-test',
+      recipient: '@close.friend',
+      subject: 'Keep this thought',
+      content: 'This unfinished note must remain a draft.',
+    });
+    const activeBefore = values.get('dear-exe:active-letter:v1');
+    const demoDraft = {
+      id: 'draft-local-demo-text-only',
+      recipient: 'demo.friend',
+      subject: 'A very tiny update',
+      content: 'A dog in a yellow raincoat just trotted past the bus stop. You’d have loved the confidence. Had to tell you.',
+      fontSize: 18,
+      alignment: 'left',
+      address: { name: 'Your person', street: '', city: '', postcode: '', country: '' },
+      sealId: 'celestial',
+      sealColor: '#102a43',
+      sealMonogram: '',
+      payloadKind: 'text',
+      deliveryMode: 'instant',
+      status: 'draft',
+      updatedAt: new Date().toISOString(),
+      localDemo: true,
+    };
+
+    const completed = createLocalDemoDrop(demoDraft);
+
+    assert.equal(completed?.status, 'delivered');
+    assert.equal(completed?.localDemo, true);
+    assert.equal(completed?.payloadKind, 'text');
+    assert.equal(completed?.content, demoDraft.content);
+    for (const key of ['mediaPath', 'mediaMimeType', 'mediaSizeBytes', 'mediaUploadId', 'mediaUrl', 'mediaExpiresAt']) {
+      assert.equal(completed?.[key], undefined, `Text demo should not carry ${key}.`);
+    }
+    assert.equal(getLetterDraft().id, active.id);
+    assert.equal(getLetterDraft().content, active.content);
+    assert.equal(values.get('dear-exe:active-letter:v1'), activeBefore);
+    assert.equal(getLetterDraftById(demoDraft.id)?.localDemo, true);
+    assert.equal(getLetterDraftById(demoDraft.id)?.status, 'delivered');
+  } finally {
+    setLocalAccountId(null);
+    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
+    else delete globalThis.window;
+  }
+});
+
+test('rejects empty or media-bearing text local demos', () => {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const values = new Map();
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { localStorage: { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) } },
+  });
+  try {
+    setLocalAccountId(null);
+    const base = {
+      id: 'draft-local-demo-invalid-text',
+      recipient: 'demo.friend',
+      subject: 'A very tiny update',
+      content: 'A text-only sample.',
+      fontSize: 18,
+      alignment: 'left',
+      address: { name: 'Your person', street: '', city: '', postcode: '', country: '' },
+      sealId: 'celestial',
+      payloadKind: 'text',
+      deliveryMode: 'instant',
+      status: 'draft',
+      updatedAt: new Date().toISOString(),
+      localDemo: true,
+    };
+    const invalidDrafts = [
+      { ...base, id: `${base.id}-empty`, content: '  \n' },
+      { ...base, id: `${base.id}-path`, mediaPath: 'demo/object.png' },
+      { ...base, id: `${base.id}-mime`, mediaMimeType: 'image/png' },
+      { ...base, id: `${base.id}-size`, mediaSizeBytes: 64 },
+      { ...base, id: `${base.id}-upload`, mediaUploadId: 'demo-upload-id' },
+      { ...base, id: `${base.id}-url`, mediaUrl: 'https://example.invalid/demo.png' },
+      { ...base, id: `${base.id}-expiry`, mediaExpiresAt: new Date().toISOString() },
+    ];
+
+    for (const draft of invalidDrafts) {
+      assert.equal(createLocalDemoDrop(draft), null, `Should reject ${draft.id}.`);
+      assert.equal(getLetterDraftById(draft.id), null, `${draft.id} must not enter local history.`);
+    }
+  } finally {
+    setLocalAccountId(null);
+    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
+    else delete globalThis.window;
+  }
+});
+
 test('keeps account-scoped demos out of other accounts and rejects an account switch', () => {
   const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
   const values = new Map();

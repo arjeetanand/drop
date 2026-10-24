@@ -692,7 +692,7 @@ export function saveLocalDemoDrop(letterId: string): LetterDraftState | null {
   return dispatchLetter(source.id, 'delivered');
 }
 
-/** Save a bundled-media demo in local history and mark it complete without replacing the active draft. */
+/** Save a text or bundled-media demo in local history without replacing the active draft. */
 export function createLocalDemoDrop(
   draft: LetterDraftState,
   expectedAccountId = getLocalAccountId(),
@@ -702,6 +702,10 @@ export function createLocalDemoDrop(
   const active = readStoredLetterDraft(accountId);
   const history = getDraftHistory(accountId);
   const next = hydrateDraft(draft);
+  const isTextOnly = next.payloadKind === 'text';
+  const textDraftFields = next as unknown as Record<string, unknown>;
+  const hasMediaMetadata = ['mediaPath', 'mediaMimeType', 'mediaSizeBytes', 'mediaUploadId', 'mediaUrl', 'mediaExpiresAt']
+    .some((field) => textDraftFields[field] !== undefined);
   const allowedMimeTypes = next.payloadKind === 'gif'
     ? new Set(['image/gif'])
     : new Set(['image/jpeg', 'image/png', 'image/webp']);
@@ -711,24 +715,32 @@ export function createLocalDemoDrop(
     || !next.localDemo
     || next.status !== 'draft'
     || next.deliveryMode !== 'instant'
-    || (next.payloadKind !== 'image' && next.payloadKind !== 'gif')
     || !normalizeDropRecipient(next.recipient)
-    || !next.mediaMimeType
-    || !allowedMimeTypes.has(next.mediaMimeType)
-    || !Number.isSafeInteger(next.mediaSizeBytes)
-    || (next.mediaSizeBytes ?? 0) < 1
-    || (next.mediaSizeBytes ?? 0) > 8 * 1024 * 1024
+    || (isTextOnly
+      ? (!next.content.trim() || hasMediaMetadata)
+      : ((next.payloadKind !== 'image' && next.payloadKind !== 'gif')
+        || !next.mediaMimeType
+        || !allowedMimeTypes.has(next.mediaMimeType)
+        || !Number.isSafeInteger(next.mediaSizeBytes)
+        || (next.mediaSizeBytes ?? 0) < 1
+        || (next.mediaSizeBytes ?? 0) > 8 * 1024 * 1024))
     || active?.id === next.id
     || history.some((item) => item.id === next.id)) return null;
 
   const nextHistory = [...history, next];
   if (!saveDraftHistory(nextHistory, accountId)) return null;
 
-  const completed = completeSuccessfulSend(next, accountId, 'delivered', new Date().toISOString(), {
-    mediaPath: next.mediaPath,
-    mediaMimeType: next.mediaMimeType,
-    mediaSizeBytes: next.mediaSizeBytes,
-  });
+  const completed = completeSuccessfulSend(
+    next,
+    accountId,
+    'delivered',
+    new Date().toISOString(),
+    isTextOnly ? {} : {
+      mediaPath: next.mediaPath,
+      mediaMimeType: next.mediaMimeType,
+      mediaSizeBytes: next.mediaSizeBytes,
+    },
+  );
   if (completed) return completed;
 
   saveDraftHistory(history, accountId);
