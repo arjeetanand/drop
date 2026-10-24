@@ -25,6 +25,7 @@ import {
   type LatLng,
 } from '@/lib/gpsUtils';
 import { confirmHandoff, getRelayState } from '@/lib/relayStore';
+import { resolveRelayToken, stripRelayTokenQuery } from '@/lib/relayInviteUrl';
 import { getLocalAccountId, isCurrentLocalAccount, localAccountStorageKey } from '@/lib/localAccountScope';
 
 type HandoffPhase = 'enter' | 'locating' | 'confirmed' | 'error';
@@ -61,7 +62,7 @@ function HandoffContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const encoded = searchParams.get('d') ?? '';
-  const token = searchParams.get('token') ?? '';
+  const hasQueryToken = searchParams.has('token');
   const handoffPayload = useMemo<HandoffQRPayload | null>(
     () => (encoded ? parseHandoffQRPayload(encoded) : null),
     [encoded],
@@ -80,6 +81,9 @@ function HandoffContent() {
   const [note, setNote] = useState('');
   const [useLocation, setUseLocation] = useState(false);
   const [phase, setPhase] = useState<HandoffPhase>('enter');
+  const [token, setToken] = useState('');
+  const [tokenReady, setTokenReady] = useState(false);
+  const [rejectedQueryToken, setRejectedQueryToken] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [coords, setCoords] = useState<LatLng | null>(null);
@@ -89,6 +93,18 @@ function HandoffContent() {
   const errorSummaryRef = useRef<HTMLDivElement>(null);
   // shortcut: blocks repeat submits in this tab only; cross-device replay needs server-backed claims.
   const submittingRef = useRef(false);
+
+  useEffect(() => {
+    const resolvedToken = resolveRelayToken(window.location.hash);
+    setToken(resolvedToken);
+    setRejectedQueryToken(hasQueryToken && !resolvedToken);
+    setTokenReady(true);
+
+    if (hasQueryToken) {
+      const safeUrl = stripRelayTokenQuery(new URL(window.location.href));
+      window.history.replaceState(window.history.state, '', safeUrl);
+    }
+  }, [hasQueryToken]);
 
   useEffect(() => {
     setLetterId(initialLetterId);
@@ -232,6 +248,23 @@ function HandoffContent() {
   const backHref = letterId.trim()
     ? `/relay?letter=${encodeURIComponent(letterId.trim())}`
     : '/relay';
+
+  if (!tokenReady) {
+    return <main className="page-shell"><div className="page-container max-w-3xl"><p className="meta" role="status">Opening your secure carrier invite…</p></div></main>;
+  }
+
+  if (rejectedQueryToken && !token) {
+    return (
+      <main className="page-shell page-enter">
+        <div className="page-container max-w-3xl">
+          <p className="eyebrow">Secure carrier invite</p>
+          <h1 className="display-title mt-4">Ask for a fresh link.</h1>
+          <p className="body-copy mt-5 max-w-2xl text-lg">This invite uses an older URL format. Drop no longer accepts carrier tokens in query parameters. Ask the current carrier to send a new invite link.</p>
+          <Link href="/relay" className="button-quiet mt-8"><ArrowLeft className="h-4 w-4" aria-hidden="true" /> Relay passport</Link>
+        </div>
+      </main>
+    );
+  }
 
   if (token) {
     const tokenBackHref = queryLetterId

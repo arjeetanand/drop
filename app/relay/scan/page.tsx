@@ -23,7 +23,7 @@ import {
   parseHandoffQRPayload,
 } from '@/lib/gpsUtils';
 import { confirmHandoffFromQR, getRelayState } from '@/lib/relayStore';
-import { resolveRelayToken } from '@/lib/relayInviteUrl';
+import { resolveRelayToken, stripRelayTokenQuery } from '@/lib/relayInviteUrl';
 import { getLocalAccountId, isCurrentLocalAccount, localAccountStorageKey } from '@/lib/localAccountScope';
 
 type ScanPhase = 'preview' | 'locating' | 'confirmed' | 'expired' | 'invalid' | 'error';
@@ -59,13 +59,14 @@ function ScanContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const encoded = searchParams.get('d') ?? '';
-  const queryToken = searchParams.get('token');
+  const hasQueryToken = searchParams.has('token');
   const tokenLetterId = searchParams.get('letter') ?? '';
   const tokenDestination = searchParams.get('dest') ?? 'Recipient area';
   const payload = useMemo(() => (encoded ? parseHandoffQRPayload(encoded) : null), [encoded]);
 
-  const [token, setToken] = useState(queryToken ?? '');
-  const [tokenReady, setTokenReady] = useState(Boolean(queryToken));
+  const [token, setToken] = useState('');
+  const [tokenReady, setTokenReady] = useState(false);
+  const [rejectedQueryToken, setRejectedQueryToken] = useState(false);
   const [phase, setPhase] = useState<ScanPhase>(encoded ? 'preview' : 'invalid');
   const [name, setName] = useState('');
   const [note, setNote] = useState('');
@@ -79,17 +80,16 @@ function ScanContent() {
   const submittingRef = useRef(false);
 
   useEffect(() => {
-    const resolvedToken = resolveRelayToken(queryToken, window.location.hash);
+    const resolvedToken = resolveRelayToken(window.location.hash);
     setToken(resolvedToken);
+    setRejectedQueryToken(hasQueryToken && !resolvedToken);
     setTokenReady(true);
 
-    if (queryToken && resolvedToken) {
-      const safeUrl = new URL(window.location.href);
-      safeUrl.searchParams.delete('token');
-      safeUrl.hash = new URLSearchParams({ token: resolvedToken }).toString();
+    if (hasQueryToken) {
+      const safeUrl = stripRelayTokenQuery(new URL(window.location.href));
       window.history.replaceState(window.history.state, '', safeUrl);
     }
-  }, [queryToken]);
+  }, [hasQueryToken]);
 
   useEffect(() => {
     setName('');
@@ -218,6 +218,19 @@ function ScanContent() {
 
   if (!encoded && !token && !tokenReady) {
     return <main className="page-shell"><div className="page-container max-w-3xl"><p className="meta" role="status">Opening your secure carrier invite…</p></div></main>;
+  }
+
+  if (rejectedQueryToken && !token) {
+    return (
+      <main className="page-shell page-enter">
+        <div className="page-container max-w-3xl">
+          <p className="eyebrow">Secure carrier invite</p>
+          <h1 className="display-title mt-4">Ask for a fresh link.</h1>
+          <p className="body-copy mt-5 max-w-2xl text-lg">This invite uses an older URL format. Drop no longer accepts carrier tokens in query parameters. Ask the current carrier to send a new invite link.</p>
+          <Link href="/relay" className="button-quiet mt-8"><ArrowLeft className="h-4 w-4" aria-hidden="true" /> Relay passport</Link>
+        </div>
+      </main>
+    );
   }
 
   if (token) {

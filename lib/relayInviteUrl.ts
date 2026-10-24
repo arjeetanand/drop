@@ -13,9 +13,15 @@ export function buildRelayScanUrl(origin: string, invite: RelayScanInvite): stri
   return url.toString();
 }
 
-/** Read new fragment links while retaining short-lived compatibility with issued query links. */
-export function resolveRelayToken(queryToken: string | null, hash: string): string {
-  if (queryToken) return queryToken;
+/** Read bearer capabilities only from URL fragments, never request queries. */
+export function resolveRelayToken(hash: string): string {
   const fragment = hash.startsWith('#') ? hash.slice(1) : hash;
   return new URLSearchParams(fragment).get('token') ?? '';
+}
+
+/** Remove a rejected legacy bearer query from the visible URL. */
+export function stripRelayTokenQuery(url: URL): URL {
+  const safeUrl = new URL(url.href);
+  safeUrl.searchParams.delete('token');
+  return safeUrl;
 }
