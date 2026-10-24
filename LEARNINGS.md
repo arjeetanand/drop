@@ -1359,3 +1359,35 @@ For an in-person QR handoff, encode only the existing bearer URL and make its cl
 ### Git and remaining gaps
 
 Code commits `1975212` (`feat: add QR sharing for private claim links`) and `23f51b1` (`fix: clear claim QR on account or draft change`) are pushed to `origin/feat/private-claim-qr` and tracked by open [PR #7](https://github.com/arjeetanand/drop/pull/7). This learning, checklist, README, and handoff update is a separate documentation commit. PR #7 is not merged. Authenticated QR browser/camera verification remains next; hosted Supabase and `/letter` were not changed.
+
+
+## 2026-10-25 — Verify authenticated private-claim QR in local browser
+
+### Issue
+
+The standard Chrome smoke stayed on “Checking your account…” and the authenticated QR issue/show/hide path was pending.
+
+### Cause
+
+The smoke's Fetch gate intentionally allows only the app origin. Configured Supabase Auth runs on its own local origin (port 54321), so the browser cannot establish a session when that configuration is present. Separately, the local claim-issue RPC requires the disposable test user to have a corresponding `public.profiles` row.
+
+### Resolution
+
+- Kept the standard smoke's same-origin gate unchanged. Ran its no-auth recovery path in a fresh env-free app copy with a clean `.next` build.
+- Used a separate temporary authenticated browser fixture with a disposable local account/profile and a request allowlist limited to the app and local Supabase.
+- Verified QR issuance and show/hide, then removed the temporary account, profile/drop data, Mailpit message, screenshot, private-link file, and QA copy.
+
+### Learning
+
+Treat account-readiness hangs as a possible harness/origin mismatch before attributing them to app behavior. For authenticated local browser checks, create all required local records and scope the allowlist to known localhost origins; do not weaken the standard smoke's cross-origin gate.
+
+### Verification
+
+- No-auth `--claim-recovery-only` passed in isolated Chrome at 360×844, 390×844, 430×844, and 1440×900.
+- Authenticated QR issuance passed at 390×844. The local RPC and pending row were verified, sender content stayed sealed, the labelled QR region received focus, show/hide worked, and macOS Vision decoded the screenshot to the exact displayed private link. The link was not printed or opened from the browser.
+- Disposable local Auth/profile/drop counts returned zero after cleanup. The QR temp directory and fresh QA copy were removed.
+- App, local Auth, and Mailpit returned HTTP 200 on ports 4004, 54321, and 54324.
+
+### Git and remaining gaps
+
+No application source or environment file changed. This documentation update is on `feat/private-claim-qr`, whose code commits `1975212` and `23f51b1` are pushed and tracked by open [PR #7](https://github.com/arjeetanand/drop/pull/7). The PR remains unmerged. Camera/phone scan, real sign-in UI, screen reader, physical device, hosted behavior, and actual Storage cleanup remain open.

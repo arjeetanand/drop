@@ -42,9 +42,10 @@ Updated: 2026-10-25
 - [x] Disclose that anyone scanning can claim the drop; clear the QR when its account/draft/recipient context changes and focus the scan-code region after issuance.
 - [x] Pass `npm test` (274/274), lint, no-incremental TypeScript, production build, and `git diff --check`.
 - [x] Before the final context-reset follow-up, isolated Chrome `--claim-recovery-only` passed at 360×844, 390×844, 430×844, and 1440×900; this covered adjacent claim disclosure/recovery, not authenticated QR issuance.
-- [ ] Re-run the smoke on the current branch. Three attempts (two on 4004 and one env-free QA copy on 6004) timed out in Chrome DevTools `Runtime.evaluate` while `/compose` still showed “Checking your account…”. Local Drop and Supabase Auth health both returned HTTP 200; the timeout cause is not established.
+- [x] Re-run `--claim-recovery-only` against a fresh, env-free QA copy on port 6004: passed at 360×844, 390×844, 430×844, and 1440×900. The earlier account-check timeout was a harness mismatch: the standard smoke intentionally permits only the app origin, while local Supabase Auth is a separate origin on port 54321.
+- [x] Exercise authenticated QR issuance/show/hide in isolated Chrome at 390×844 using a disposable local account and profile. Verified the local issue RPC, pending database row, sealed sender content, labelled/focused QR region, show/hide state, and screenshot decode matching the displayed private link; browser requests were limited to the app and local Supabase origins. Test account, drop, screenshot, and bearer-link temp file were cleaned up.
 - [x] Push code commits `1975212` and `23f51b1` on `feat/private-claim-qr` and open [PR #7](https://github.com/arjeetanand/drop/pull/7).
-- [ ] Exercise the authenticated QR issuance/show/hide action and scan it with a camera; verify screen-reader output and a physical device.
+- [ ] Verify with an actual phone/camera scan, real sign-in UI, screen reader, and physical-device behavior.
 - [ ] Merge PR #7 after review and explicit approval.
 
 ## Product checks still open
