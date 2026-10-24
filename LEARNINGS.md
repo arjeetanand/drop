@@ -1026,3 +1026,33 @@ Code commits `8605dbf` (`fix: avoid indexing managed storage metadata`) and `280
 ### Follow-up — hosted Supabase session reachability (2026-10-24)
 
 The user reports being signed in to Supabase in a browser. This task has no connected dashboard control, and a read-only `supabase projects list` check could not run because the Supabase CLI executable is not installed. No hosted project or billing resource was inspected or changed. A browser login alone does not provide an authenticated session to task tools; continue only when a dashboard control or scoped CLI session is available. The local Drop app was restarted through `run.sh` and returned HTTP 200 on port 4004.
+
+## 2026-10-24 — Seal and clarify the Relay demo journey
+
+### Issue
+
+The demo chooser already showed `/demo-cat.png`, and the Relay reveal reused that same image. The promise that the sample stayed sealed until collection was therefore visually false. The route's current and completed states were also conveyed only by styling and decorative icons.
+
+### Cause
+
+The chooser and Relay preview shared one fixture image. The ordered list had visual progress, but its numbers and checks were hidden from assistive technology and its list items exposed no current step.
+
+### Resolution
+
+- Added a distinct blue-hour illustration and render it only after **Collect this drop**.
+- Marked the active route item with `aria-current="step"` and added screen-reader-only upcoming, current, and completed labels.
+- Kept the preview fictional and local-state-only; it does not use location, sign-in, backend services, persistence, or sharing.
+
+### Learning
+
+Check the entire visible page for reused sample content before calling a reveal sealed. A live announcement is helpful, but route progress also needs state attached to each step so someone navigating the list can tell what is done, current, or ahead.
+
+### Verification
+
+- `npm test` passed 251/251; lint, `npx tsc --noEmit --incremental false`, `git diff --check`, and `npm run build -- --webpack` passed. The build reports the existing outdated Browserslist database and ambiguous Tailwind easing-class warnings.
+- Isolated Chrome passed at 360×844, 390×844, and 430×844. Keyboard and touch advanced the preview, keyboard focus stayed on the primary action, the separate illustration was absent before collection and loaded after, route state was present in the DOM, and there was no overflow, failed request, browser error, or external request. Screenshot: `/private/tmp/drop-relay-demo-browser-smoke.png`.
+- This was a rendered browser check, not a screen-reader or physical-device check. It used the existing QA Chrome target; its temporary CDP script is `/private/tmp/drop-relay-demo-browser-smoke.mjs`.
+
+### Git and remaining gaps
+
+Code commit `d218721` (`feat: add sealed Relay preview to demo`) is pushed to `origin/feat/demo-relay-preview`. Project notes are in a separate documentation commit on the same branch; no PR or merge was created. `/letter`, `.env.local`, and hosted Supabase were not changed in this slice. The checkout's local Supabase CLI dependency exists, but the project-list request returns `AccessTokenRequiredError`; the user's browser login does not authenticate the CLI. No hosted Drop project was created. Screen-reader use, physical-device behavior, hosted delivery, and actual Storage cleanup remain open.

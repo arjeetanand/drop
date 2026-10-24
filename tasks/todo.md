@@ -2,6 +2,15 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
+## Checkpoint — fictional Relay demo preview (2026-10-24)
+
+- [x] Add a local-only three-stop Relay preview to `/demo`; keep its distinct sample illustration hidden until the visitor explicitly collects the sample.
+- [x] Expose upcoming, current, and completed stop states to assistive technology while keeping the live status announcement.
+- [x] `npm test` passes 251/251; lint, no-incremental TypeScript, production build, and `git diff --check` pass. Isolated Chrome passed at 360×844, 390×844, and 430×844 with keyboard and touch input, retained focus, no overflow, no failed requests, no page errors, and no external requests. Independent review found no concrete issue.
+- [x] Code commit `d218721` is pushed to `origin/feat/demo-relay-preview`; this checklist and the project notes are in a separate documentation commit.
+- [ ] Verify spoken route progress with a screen reader and check keyboard/safe-area behavior on a physical device.
+- [ ] Hosted Supabase remains separate: the local CLI exists but is unauthenticated (`AccessTokenRequiredError`); no hosted Drop project or delivery/cleanup behavior was changed or verified here.
+
 ## Checkpoint — saved-claim recovery browser assertions (2026-10-24)
 
 - [x] Seed a disposable pending claim in an isolated browser and verify saved-state recovery after reload, without showing the in-memory-only copy-link control.

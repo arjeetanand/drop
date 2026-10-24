@@ -8,6 +8,14 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 
 ## Implementation Status — 2026-10-24
 
+### Latest checkpoint — fictional Relay demo preview (2026-10-24)
+
+- `/demo` now includes an interactive, fictional three-carrier journey with explicit collection. Its distinct blue-hour illustration and sample text render only after collection; the visible photo/GIF chooser does not reveal this preview's content.
+- The route identifies upcoming, current, and completed steps to assistive technology. The preview is state-only and does not use location, account, backend, send, or persistence flows.
+- Verification: `npm test` passed 251/251; lint, no-incremental TypeScript, production build, and `git diff --check` passed. Isolated Chrome at 360, 390, and 430 CSS pixels checked keyboard/touch progression, focus retention, accessible state, hidden-before-collection content, no overflow, no page errors, and no external requests. Product/accessibility review found no concrete issue.
+- Code commit `d218721` (`feat: add sealed Relay preview to demo`) is pushed to `origin/feat/demo-relay-preview`. No PR or merge was created. No Supabase project or hosted service changed; the local CLI is installed but its project-list request returns `AccessTokenRequiredError`.
+- Remaining: real screen-reader and physical-device checks, plus hosted account-to-account delivery and physical Storage cleanup after the approved Free project is available.
+
 ### Latest checkpoint — local cleanup migration and media claim recovery (2026-10-24)
 
 - Removed the reconciliation index from `storage.objects` after the local Supabase migration role rejected it. The cleanup RPC still walks ordered cursor pages; database scan/sort cost may grow with the bucket.
