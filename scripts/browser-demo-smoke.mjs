@@ -16,6 +16,7 @@ let activeViewport = MOBILE_VIEWPORTS[1];
 const STEP_TIMEOUT_MS = 20_000;
 const LABELS = {
   homeDemo: 'Try a demo drop',
+  chooseNote: 'Try a note',
   choosePhoto: 'Try a photo',
   chooseGif: 'Try a GIF',
   reveal: 'Reveal demo fragments',
@@ -24,6 +25,7 @@ const LABELS = {
   makeForFriend: 'Make one for a friend',
   reaction: 'React with heart hands',
 };
+const NOTE_DEMO_CONTENT = 'A dog in a yellow raincoat trotted past the bus stop. You’d have loved the confidence. Had to tell you.';
 const REACTION_BUTTON_LABELS = [
   'React with a purple heart',
   'React with fire',
@@ -450,6 +452,7 @@ function screenshotDirectoryFromEnv() {
 
 async function captureScreenshot(cdp, directory, name) {
   if (!directory) return;
+  await sleep(420, interrupted.signal);
   const result = await cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true, captureBeyondViewport: false });
   const path = join(directory, `${name}.png`);
   await writeFile(path, Buffer.from(result.data, 'base64'), { flag: 'wx' });
@@ -465,13 +468,56 @@ async function assertNoFrameworkOverlay(cdp, step) {
   assert.equal(overlayText, '', `${step}: framework error overlay text was visible (${overlayText}).`);
 }
 
-async function waitForPageEnter(cdp, step) {
-  await waitUntil(cdp, `${step} entrance animation`, async () => (
-    await evaluate(cdp, `(() => {
-      const page = document.querySelector('main.page-enter');
-      return Boolean(page) && page.getAnimations().every((animation) => animation.playState === 'finished');
-    })()`)
-  ));
+async function assertNoteRemainsSealed(cdp, step) {
+  const contentVisible = await evaluate(cdp, `Boolean(
+    document.body?.innerText.includes(${JSON.stringify(NOTE_DEMO_CONTENT)})
+    || document.querySelector('#letter-body')?.textContent.includes(${JSON.stringify(NOTE_DEMO_CONTENT)})
+  )`);
+  assert.equal(contentVisible, false, `${step}: the full Note content should remain hidden until the visitor opens it.`);
+}
+
+async function readAttachmentSnapshot(cdp, attachmentId) {
+  return evaluate(cdp, `(async () => {
+    const database = await new Promise((resolve, reject) => {
+      const request = indexedDB.open('dear-exe-draft-media', 1);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    try {
+      const result = await new Promise((resolve, reject) => {
+        const transaction = database.transaction('attachments', 'readonly');
+        const store = transaction.objectStore('attachments');
+        const keysRequest = store.getAllKeys();
+        const attachmentRequest = store.get(${JSON.stringify(attachmentId)});
+        let keys;
+        let attachment;
+        keysRequest.onerror = () => reject(keysRequest.error);
+        keysRequest.onsuccess = () => { keys = keysRequest.result.map(String).sort(); };
+        attachmentRequest.onerror = () => reject(attachmentRequest.error);
+        attachmentRequest.onsuccess = () => { attachment = attachmentRequest.result ?? null; };
+        transaction.oncomplete = () => resolve({ keys, attachment });
+        transaction.onerror = () => reject(transaction.error);
+        transaction.onabort = () => reject(transaction.error);
+      });
+      const attachment = result.attachment;
+      if (!attachment) return { keys: result.keys, attachment: null };
+      const bytes = await attachment.blob.arrayBuffer();
+      const digest = await crypto.subtle.digest('SHA-256', bytes);
+      const sha256 = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+      return {
+        keys: result.keys,
+        attachment: {
+          name: attachment.name || null,
+          type: attachment.type || null,
+          size: attachment.blob.size,
+          lastModified: attachment.lastModified ?? null,
+          sha256,
+        },
+      };
+    } finally {
+      database.close();
+    }
+  })()`);
 }
 
 async function activateFlowControl(cdp, { keyboard, name, selector, expectedTag, expectedHref }) {
@@ -489,10 +535,12 @@ async function runDemoFlow(cdp, {
   payload,
   keyboard,
   verifyFreshDraft = false,
+  verifyTextDemo = false,
   screenshotDir,
   screenshotSteps = new Set(),
   checkResponsive = false,
   getPageLoadEvents,
+  getBundledDemoMediaRequestCount = () => 0,
 }) {
   const prefix = viewport.name;
   const capture = async (step) => {
@@ -502,14 +550,15 @@ async function runDemoFlow(cdp, {
     if (checkResponsive && ['Home', 'Demo chooser'].includes(step)) await assertResponsiveWidths(cdp, step);
     else await assertNoHorizontalOverflow(cdp, step, viewport.width);
   };
+  let originalAttachmentKeys = null;
+  let originalPhotoAttachment = null;
 
   await setViewport(cdp, viewport);
   await cdp.send('Page.navigate', { url: appUrl.href });
   await waitUntil(cdp, `Home with “${LABELS.homeDemo}”`, async () => (
     await evaluate(cdp, `${normalizedVisibleText(LABELS.homeDemo)} && location.pathname === '/'`)
   ));
-  await waitForPageEnter(cdp, 'Home');
-  if (verifyFreshDraft) {
+  if (verifyFreshDraft || verifyTextDemo) {
     const seeded = await evaluate(cdp, `(async () => {
       const draft = ${JSON.stringify(PROMPT_ACTIVE_DRAFT)};
       localStorage.setItem('dear-exe:active-letter:v1', JSON.stringify(draft));
@@ -538,19 +587,32 @@ async function runDemoFlow(cdp, {
     })()`);
     assert.equal(seeded, true, 'The in-progress media draft and its local attachment should be saved before the demo starts.');
   }
+  if (verifyFreshDraft || verifyTextDemo) {
+    const snapshot = await readAttachmentSnapshot(cdp, PROMPT_ACTIVE_DRAFT.id);
+    originalAttachmentKeys = snapshot.keys;
+    originalPhotoAttachment = snapshot.attachment;
+    assert.ok(originalAttachmentKeys.includes(PROMPT_ACTIVE_DRAFT.id), 'The fixture photo attachment should be present before the Note demo starts.');
+    assert.equal(originalPhotoAttachment?.name, 'demo-cat.png', 'The seeded photo fixture should keep its expected name.');
+    assert.equal(originalPhotoAttachment?.type, 'image/png', 'The seeded photo fixture should keep its expected media type.');
+    assert.ok(originalPhotoAttachment?.size > 0, 'The seeded photo fixture should contain bytes.');
+  }
   await assertNoFrameworkOverlay(cdp, 'Home');
   await checkWidth('Home');
   await capture('home');
   await activateFlowControl(cdp, { keyboard, name: LABELS.homeDemo, expectedTag: 'A', expectedHref: '/demo' });
 
-  const optionLabel = payload === 'gif' ? LABELS.chooseGif : LABELS.choosePhoto;
+  const optionLabel = payload === 'gif' ? LABELS.chooseGif : payload === 'text' ? LABELS.chooseNote : LABELS.choosePhoto;
   await waitUntil(cdp, `the demo chooser with “${optionLabel}”`, async () => (
     await evaluate(cdp, `${normalizedVisibleText(optionLabel)} && location.pathname === '/demo'`)
   ));
   await assertNoFrameworkOverlay(cdp, 'Demo chooser');
   await checkWidth('Demo chooser');
   await capture('chooser');
+  const bundledMediaRequestsBeforeSelection = getBundledDemoMediaRequestCount();
   await activateFlowControl(cdp, { keyboard, name: optionLabel, expectedTag: 'BUTTON' });
+  if (verifyTextDemo) {
+    assert.equal(getBundledDemoMediaRequestCount(), bundledMediaRequestsBeforeSelection, 'Choosing a Note should not fetch the bundled photo or GIF.');
+  }
 
   await waitUntil(cdp, 'the recipient demo route', async () => (
     await evaluate(cdp, `${normalizedVisibleText('See your drop as the recipient.')} && /^\\/letter\\/[^/]+$/.test(location.pathname)`)
@@ -558,6 +620,7 @@ async function runDemoFlow(cdp, {
   const recipientPath = await evaluate(cdp, 'location.pathname');
   await assertNoFrameworkOverlay(cdp, 'Recipient preview');
   await assertNoHorizontalOverflow(cdp, 'Recipient preview', viewport.width);
+  if (verifyTextDemo) await assertNoteRemainsSealed(cdp, 'Recipient preview');
   await capture('recipient');
   await activateFlowControl(cdp, { keyboard, name: LABELS.reveal, expectedTag: 'BUTTON' });
 
@@ -566,13 +629,62 @@ async function runDemoFlow(cdp, {
   ));
   await assertNoFrameworkOverlay(cdp, 'Fragments revealed');
   await assertNoHorizontalOverflow(cdp, 'Fragments revealed', viewport.width);
+  if (verifyTextDemo) await assertNoteRemainsSealed(cdp, 'Revealed fragments');
   await capture('fragments-revealed');
   await activateFlowControl(cdp, { keyboard, name: LABELS.open, expectedTag: 'BUTTON' });
 
-  const payloadLabel = payload === 'gif' ? 'GIF' : 'Photo';
-  await waitUntil(cdp, `the opened ${payloadLabel.toLowerCase()} and reaction controls`, async () => (
-    await evaluate(cdp, `Boolean(document.querySelector('#letter-body img')?.complete && document.querySelector('#letter-body img')?.naturalWidth > 0) && document.querySelector('#letter-body')?.innerText.toLocaleLowerCase().includes(${JSON.stringify(payloadLabel.toLocaleLowerCase())}) && Boolean(document.querySelector(${JSON.stringify(`[aria-label="${LABELS.reaction}"]`)}))`)
+  const payloadLabel = payload === 'gif' ? 'GIF' : payload === 'text' ? 'note' : 'Photo';
+  await waitUntil(cdp, `the opened ${payloadLabel} and reaction controls`, async () => (
+    await evaluate(cdp, payload === 'text'
+      ? `document.querySelector('#letter-body')?.innerText.includes(${JSON.stringify(NOTE_DEMO_CONTENT)}) && !document.querySelector('#letter-body img') && Boolean(document.querySelector(${JSON.stringify(`[aria-label="${LABELS.reaction}"]`)}))`
+      : `Boolean(document.querySelector('#letter-body img')?.complete && document.querySelector('#letter-body img')?.naturalWidth > 0) && document.querySelector('#letter-body')?.innerText.toLocaleLowerCase().includes(${JSON.stringify(payloadLabel.toLocaleLowerCase())}) && Boolean(document.querySelector(${JSON.stringify(`[aria-label="${LABELS.reaction}"]`)}))`)
   ));
+  if (verifyTextDemo) {
+    const localTextState = await evaluate(cdp, `(async () => {
+      const id = decodeURIComponent(location.pathname.split('/').pop() || '');
+      const drafts = JSON.parse(localStorage.getItem('dear-exe:letter-drafts:v1') || '[]');
+      const demo = drafts.find((draft) => draft.id === id) || null;
+      const database = await new Promise((resolve, reject) => {
+        const request = indexedDB.open('dear-exe-draft-media', 1);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      try {
+        const [keys, attachment] = await new Promise((resolve, reject) => {
+          const transaction = database.transaction('attachments', 'readonly');
+          const store = transaction.objectStore('attachments');
+          const keysRequest = store.getAllKeys();
+          const attachmentRequest = store.get(id);
+          let allKeys;
+          let noteAttachment;
+          keysRequest.onerror = () => reject(keysRequest.error);
+          keysRequest.onsuccess = () => { allKeys = keysRequest.result.map(String).sort(); };
+          attachmentRequest.onerror = () => reject(attachmentRequest.error);
+          attachmentRequest.onsuccess = () => { noteAttachment = attachmentRequest.result ?? null; };
+          transaction.oncomplete = () => resolve([allKeys, noteAttachment]);
+          transaction.onerror = () => reject(transaction.error);
+          transaction.onabort = () => reject(transaction.error);
+        });
+        return {
+          demo,
+          hasMediaMetadata: ['mediaPath', 'mediaMimeType', 'mediaSizeBytes', 'mediaUploadId', 'mediaUrl', 'mediaExpiresAt'].some((key) => demo?.[key] !== undefined),
+          attachment: attachment?.name || null,
+          attachmentKeys: keys,
+          active: localStorage.getItem('dear-exe:active-letter:v1'),
+        };
+      } finally {
+        database.close();
+      }
+    })()`);
+    assert.equal(localTextState.demo?.payloadKind, 'text', 'The local Note demo should be saved as text.');
+    assert.equal(localTextState.demo?.content, NOTE_DEMO_CONTENT, 'The local Note should retain its complete message.');
+    assert.equal(localTextState.demo?.localDemo, true);
+    assert.equal(localTextState.hasMediaMetadata, false, 'The Note demo should not carry media metadata.');
+    assert.equal(localTextState.attachment, null, 'The Note demo should not create an IndexedDB attachment.');
+    assert.deepEqual(localTextState.attachmentKeys, originalAttachmentKeys, 'The Note demo should preserve every pre-existing IndexedDB attachment key.');
+    assert.equal(localTextState.active, JSON.stringify(PROMPT_ACTIVE_DRAFT), 'Creating a Note demo should preserve the active media draft exactly.');
+    assert.equal(getBundledDemoMediaRequestCount(), bundledMediaRequestsBeforeSelection, 'The Note flow should not fetch either bundled media sample.');
+  }
   const reactionLabels = await evaluate(cdp, `Array.from(document.querySelectorAll('section[aria-labelledby="drop-reaction-heading"] button')).map(button => button.getAttribute('aria-label'))`);
   assert.deepEqual(reactionLabels, REACTION_BUTTON_LABELS, 'Every reaction button should expose a descriptive spoken name.');
   await assertNoFrameworkOverlay(cdp, `Opened ${payloadLabel} drop`);
@@ -596,10 +708,12 @@ async function runDemoFlow(cdp, {
     ));
     await assertNoFrameworkOverlay(cdp, 'Recipient demo after reload');
     await assertNoHorizontalOverflow(cdp, 'Recipient demo after reload', viewport.width);
+    if (verifyTextDemo) await assertNoteRemainsSealed(cdp, 'Recipient demo after reload');
     await activateFlowControl(cdp, { keyboard, name: LABELS.reveal, expectedTag: 'BUTTON' });
     await waitUntil(cdp, `“${LABELS.open}” after reload`, async () => (
       await evaluate(cdp, `${normalizedVisibleText(LABELS.open)} && !document.querySelector('#letter-fragments')?.innerText.includes('confidential fragment')`)
     ));
+    if (verifyTextDemo) await assertNoteRemainsSealed(cdp, 'Revealed fragments after reload');
     await activateFlowControl(cdp, { keyboard, name: LABELS.open, expectedTag: 'BUTTON' });
     await waitUntil(cdp, 'the persisted reaction after reload', async () => (
       await evaluate(cdp, `document.querySelector(${JSON.stringify(`[aria-label="${LABELS.reaction}"]`)})?.getAttribute('aria-pressed') === 'true'`)
@@ -616,7 +730,7 @@ async function runDemoFlow(cdp, {
   await capture('sender-copy');
   assert.equal(await evaluate(cdp, 'location.pathname'), recipientPath, 'Sender copy should keep the same demo drop.');
 
-  if (verifyFreshDraft) {
+  if (verifyFreshDraft || verifyTextDemo) {
     const demoId = await evaluate(cdp, `decodeURIComponent(location.pathname.split('/').pop() || '')`);
     await waitUntil(cdp, `the “${LABELS.makeForFriend}” action`, async () => (
       await evaluate(cdp, `${normalizedVisibleText(LABELS.makeForFriend)} && new URL(location.href).searchParams.get('view') === 'sender'`)
@@ -629,13 +743,11 @@ async function runDemoFlow(cdp, {
       return { scrollY: window.scrollY, top: bounds.top, bottom: bounds.bottom, height: window.innerHeight };
     })()`);
     assert.ok(friendActionScroll && friendActionScroll.top >= 0 && friendActionScroll.bottom <= friendActionScroll.height, `The “${LABELS.makeForFriend}” action should be scrolled into view for the screenshot; found ${JSON.stringify(friendActionScroll)}.`);
-    await waitForPageEnter(cdp, 'Sender copy');
     await captureScreenshot(cdp, screenshotDir, `${viewport.name}-friend-draft-cta`);
     await activateFlowControl(cdp, { keyboard, name: LABELS.makeForFriend, expectedTag: 'BUTTON' });
     await waitUntil(cdp, 'a fresh editable composer opened from the demo', async () => (
       await evaluate(cdp, `location.pathname === '/compose' && Boolean(document.querySelector('#drop-content'))`)
     ));
-    await waitForPageEnter(cdp, 'Fresh draft from demo');
     const state = await evaluate(cdp, `(() => {
       const active = JSON.parse(localStorage.getItem('dear-exe:active-letter:v1') || 'null');
       const drafts = JSON.parse(localStorage.getItem('dear-exe:letter-drafts:v1') || '[]');
@@ -669,28 +781,12 @@ async function runDemoFlow(cdp, {
     assert.equal(state.editorValue, '', 'The composer should be blank and ready for the sender’s own words.');
     assert.equal(state.editorEditable, true);
     assert.ok(state.scrollY <= 16, `The new composer should start at the top; found scrollY=${state.scrollY}.`);
-    assert.equal(state.preserved?.payloadKind, 'image', 'The existing media draft should remain recoverable.');
-    assert.equal(state.preserved?.mediaUploadId, PROMPT_ACTIVE_DRAFT.mediaUploadId);
+    const preservedFields = Object.fromEntries(Object.keys(PROMPT_ACTIVE_DRAFT).map((key) => [key, state.preserved?.[key]]));
+    assert.deepEqual(preservedFields, PROMPT_ACTIVE_DRAFT, 'The existing photo draft fields should remain unchanged when the fresh composer opens.');
     assert.equal(state.demo?.localDemo, true, 'The completed same-device demo should remain in local history.');
-    const preservedAttachment = await evaluate(cdp, `(async () => {
-      const database = await new Promise((resolve, reject) => {
-        const request = indexedDB.open('dear-exe-draft-media', 1);
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
-      });
-      try {
-        return await new Promise((resolve, reject) => {
-          const transaction = database.transaction('attachments', 'readonly');
-          const request = transaction.objectStore('attachments').get(${JSON.stringify(PROMPT_ACTIVE_DRAFT.id)});
-          request.onsuccess = () => resolve({ name: request.result?.name || null, size: request.result?.blob?.size || 0 });
-          request.onerror = () => reject(request.error);
-        });
-      } finally {
-        database.close();
-      }
-    })()`);
-    assert.equal(preservedAttachment.name, 'demo-cat.png', 'The original media attachment should still be available after the fresh draft opens.');
-    assert.ok(preservedAttachment.size > 0, 'The original local attachment bytes should remain intact.');
+    const preservedAttachmentSnapshot = await readAttachmentSnapshot(cdp, PROMPT_ACTIVE_DRAFT.id);
+    assert.deepEqual(preservedAttachmentSnapshot.keys, originalAttachmentKeys, 'The fresh composer should leave the complete attachment key set unchanged.');
+    assert.deepEqual(preservedAttachmentSnapshot.attachment, originalPhotoAttachment, 'The original photo metadata and bytes should remain unchanged after the fresh draft opens.');
     await assertNoFrameworkOverlay(cdp, 'Fresh draft from demo');
     await assertNoHorizontalOverflow(cdp, 'Fresh draft from demo', viewport.width);
     await captureScreenshot(cdp, screenshotDir, `${viewport.name}-friend-draft-composer`);
@@ -1591,7 +1687,7 @@ async function runShareTargetFlow(cdp, { appUrl, screenshotDir, getPageLoadEvent
 
 async function main() {
   if (process.argv.includes('--help') || process.argv.includes('-h')) {
-    console.log('Usage: node scripts/browser-demo-smoke.mjs [http://127.0.0.1:4004] [--claim-recovery-only|--prompt-only|--friend-draft-only|--share-target-only]');
+    console.log('Usage: node scripts/browser-demo-smoke.mjs [http://127.0.0.1:4004] [--claim-recovery-only|--prompt-only|--friend-draft-only|--note-demo-only|--share-target-only]');
     return;
   }
 
@@ -1599,8 +1695,9 @@ async function main() {
   const claimRecoveryOnly = args.includes('--claim-recovery-only');
   const promptOnly = args.includes('--prompt-only');
   const friendDraftOnly = args.includes('--friend-draft-only');
+  const noteDemoOnly = args.includes('--note-demo-only');
   const shareTargetOnly = args.includes('--share-target-only');
-  assert.ok([claimRecoveryOnly, promptOnly, friendDraftOnly, shareTargetOnly].filter(Boolean).length <= 1, 'Choose only one focused browser-smoke mode.');
+  assert.ok([claimRecoveryOnly, promptOnly, friendDraftOnly, noteDemoOnly, shareTargetOnly].filter(Boolean).length <= 1, 'Choose only one focused browser-smoke mode.');
   const appUrl = parseAppUrl(args.find((argument) => !argument.startsWith('--')) || DEFAULT_APP_URL);
   if (typeof WebSocket !== 'function') throw new Error('This smoke check needs a Node runtime with the built-in WebSocket API.');
   const screenshotDir = screenshotDirectoryFromEnv();
@@ -1613,9 +1710,13 @@ async function main() {
   let pageCdp;
   let firewallFailure;
   let capturingRecoveryBackendRequests = false;
+  let capturingNoteDemoRequests = false;
   const blockedOrigins = new Set();
   const forbiddenRequests = [];
   const recoveryBackendRequests = [];
+  const noteDemoForbiddenRequests = [];
+  const noteDemoBlockedRequests = [];
+  const bundledDemoMediaRequests = [];
   const pageConsoleErrors = [];
   const pageExceptions = [];
   let blockedRequestCount = 0;
@@ -1686,6 +1787,9 @@ async function main() {
       }
       const method = (request.method || 'GET').toUpperCase();
       const path = requestUrl.pathname;
+      if (/^\/demo-cat\.(?:png|gif)$/i.test(path)) {
+        bundledDemoMediaRequests.push({ method, path });
+      }
       if (capturingShareImportRequests) {
         const entry = { method, path, origin: requestUrl.origin };
         shareImportRequests.push(entry);
@@ -1712,6 +1816,12 @@ async function main() {
       }
       if (capturingRecoveryBackendRequests && /\/(?:auth|rest|storage)\/v1\//i.test(path)) {
         recoveryBackendRequests.push({ method, path });
+      }
+      if (capturingNoteDemoRequests
+        && (/\/(?:auth|rest|storage)\/v1\//i.test(path)
+          || path.startsWith('/api/')
+          || ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method))) {
+        noteDemoForbiddenRequests.push({ method, path });
       }
       if (/\/auth\/v1\//i.test(path)
         || /\/rest\/v1\/rpc\//i.test(path)
@@ -1744,6 +1854,7 @@ async function main() {
       if (!allowed) {
         blockedRequestCount += 1;
         blockedOrigins.add(requestOrigin);
+        if (capturingNoteDemoRequests) noteDemoBlockedRequests.push({ method: request.method || 'GET', url: request.url });
         if (capturingShareImportRequests) shareImportForbiddenRequests.push({ method: request.method || 'GET', url: request.url, reason: 'cross-origin request blocked by browser firewall' });
       }
       const decision = allowed
@@ -1762,7 +1873,7 @@ async function main() {
     await setViewport(pageCdp, MOBILE_VIEWPORTS[1]);
 
     console.log(`[browser-demo-smoke] Chrome: ${chromeExecutable}`);
-    const flowName = shareTargetOnly ? 'share-target-only' : claimRecoveryOnly ? 'claim-recovery' : promptOnly ? 'prompt-only' : friendDraftOnly ? 'friend-draft-only' : 'full';
+    const flowName = shareTargetOnly ? 'share-target-only' : noteDemoOnly ? 'note-demo-only' : claimRecoveryOnly ? 'claim-recovery' : promptOnly ? 'prompt-only' : friendDraftOnly ? 'friend-draft-only' : 'full';
     const flowViewports = friendDraftOnly || shareTargetOnly ? [MOBILE_VIEWPORTS[1]] : FLOW_VIEWPORTS;
     console.log(`[browser-demo-smoke] App: ${appUrl.origin}; ${flowName} flow viewports: ${flowViewports.map(({ name }) => name).join(', ')}.`);
 
@@ -1801,7 +1912,30 @@ async function main() {
       console.log(`[browser-demo-smoke] PASS keyboard sender-copy to fresh editable text draft at ${viewport.width}×${viewport.height}; existing media draft and local demo remain preserved.`);
     }
 
-    if (!friendDraftOnly && !claimRecoveryOnly && !promptOnly && !shareTargetOnly) {
+    if (noteDemoOnly) {
+      capturingNoteDemoRequests = true;
+      for (const viewport of FLOW_VIEWPORTS) {
+        const keyboard = viewport.width !== 360;
+        await runDemoFlow(pageCdp, {
+          appUrl,
+          viewport,
+          payload: 'text',
+          keyboard,
+          verifyTextDemo: true,
+          screenshotDir: viewport.width === 390 || !viewport.mobile ? screenshotDir : null,
+          screenshotSteps: screenshotDir && (viewport.width === 390 || !viewport.mobile)
+            ? new Set(['home', 'chooser', 'recipient', 'fragments-revealed', 'reaction-saved', 'sender-copy'])
+            : new Set(),
+          checkResponsive: viewport.width === 360,
+          getPageLoadEvents: () => pageLoadEvents,
+          getBundledDemoMediaRequestCount: () => bundledDemoMediaRequests.length,
+        });
+        console.log(`[browser-demo-smoke] COMPLETED ${keyboard ? 'keyboard' : 'touch'} Note flow at ${viewport.width}×${viewport.height}${viewport.mobile ? '' : ' desktop'}; final network and browser-error gates are still pending.`);
+      }
+      capturingNoteDemoRequests = false;
+    }
+
+    if (!friendDraftOnly && !noteDemoOnly && !claimRecoveryOnly && !promptOnly && !shareTargetOnly) {
       const screenshotSteps = new Set(['home', 'chooser', 'recipient', 'fragments-revealed', 'reaction-saved', 'sender-copy']);
       for (const viewport of FLOW_VIEWPORTS) {
         const keyboard = viewport.width !== 360;
@@ -1828,7 +1962,7 @@ async function main() {
       });
     }
 
-    if (!friendDraftOnly && !claimRecoveryOnly && !shareTargetOnly) {
+    if (!friendDraftOnly && !noteDemoOnly && !claimRecoveryOnly && !shareTargetOnly) {
       for (const viewport of FLOW_VIEWPORTS) {
         await runWritingPromptFlow(pageCdp, {
           appUrl,
@@ -1840,7 +1974,7 @@ async function main() {
       }
     }
 
-    if (!friendDraftOnly && !promptOnly && !shareTargetOnly) {
+    if (!friendDraftOnly && !noteDemoOnly && !promptOnly && !shareTargetOnly) {
       for (const viewport of FLOW_VIEWPORTS) {
         await runRecipientlessClaimChoiceFlow(pageCdp, {
           appUrl,
@@ -1870,12 +2004,18 @@ async function main() {
     assert.deepEqual(pageExceptions, [], `The browser reported JavaScript exceptions: ${JSON.stringify(pageExceptions)}.`);
     if (firewallFailure) throw new Error(`The browser network gate failed: ${firewallFailure.message}`);
 
-    if (!friendDraftOnly && !promptOnly && !shareTargetOnly) {
+    if (noteDemoOnly) {
+      assert.deepEqual(noteDemoForbiddenRequests, [], `The local Note demo made an Auth, REST, RPC, Storage, API, or write request: ${JSON.stringify(noteDemoForbiddenRequests)}.`);
+      assert.deepEqual(noteDemoBlockedRequests, [], `The local Note demo attempted a cross-origin request: ${JSON.stringify(noteDemoBlockedRequests)}.`);
+      console.log('[browser-demo-smoke] PASS Note stays text-only and sealed until opened, creates no attachment, preserves the complete photo draft and attachment bytes, fetches no bundled media when selected, and makes no backend or cross-origin requests.');
+    }
+
+    if (!friendDraftOnly && !noteDemoOnly && !promptOnly && !shareTargetOnly) {
       console.log('[browser-demo-smoke] PASS saved-claim recovery after reload, including the encoded detail route and fresh-link action at all mobile and desktop widths.');
       console.log('[browser-demo-smoke] PASS handleless claim disclosure, account readiness gate, and focus recovery at all mobile and desktop widths.');
       console.log('[browser-demo-smoke] PASS no Auth, REST, or Storage request during the saved-claim recovery flow.');
     }
-    if (!friendDraftOnly && !claimRecoveryOnly && !promptOnly && !shareTargetOnly) {
+    if (!friendDraftOnly && !noteDemoOnly && !claimRecoveryOnly && !promptOnly && !shareTargetOnly) {
       console.log('[browser-demo-smoke] PASS photo flow at 390×844, including saved reaction, reload persistence, and sender copy.');
       console.log('[browser-demo-smoke] PASS no horizontal overflow on Home and demo chooser at 360, 390, 430px and 1440×900.');
       console.log('[browser-demo-smoke] PASS no Auth, RPC, or Storage write request during the local demo.');

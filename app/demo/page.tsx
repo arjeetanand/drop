@@ -12,7 +12,7 @@ import { validateDropMedia } from '@/lib/dropValidation';
 import { getLocalAccountId } from '@/lib/localAccountScope';
 import { RelayDemoPreview } from '@/components/RelayDemoPreview';
 
-const demoOptions: Array<{
+type MediaDemoOption = {
   kind: Exclude<DropPayloadKind, 'text'>;
   label: string;
   eyebrow: string;
@@ -23,13 +23,21 @@ const demoOptions: Array<{
   mimeType: string;
   subject: string;
   note: string;
-}> = [
+};
+
+const noteDemo = {
+  label: 'Try a note',
+  subject: 'A very tiny update',
+  content: 'A dog in a yellow raincoat trotted past the bus stop. You’d have loved the confidence. Had to tell you.',
+};
+
+const demoOptions: MediaDemoOption[] = [
   {
     kind: 'image',
     label: 'Try a photo drop',
     eyebrow: 'A still little moment',
     title: 'The blue hour',
-    description: 'A tiny photo drop to open, react to, and send back to yourself.',
+    description: 'Open it like you received it, react, then peek at the sender copy.',
     image: '/demo-cat.png',
     fileName: 'drop-demo-photo.png',
     mimeType: 'image/png',
@@ -66,6 +74,26 @@ function makeDemoDraft(kind: Exclude<DropPayloadKind, 'text'>, subject: string, 
     deliveryMode: 'instant',
     mediaMimeType: file.type,
     mediaSizeBytes: file.size,
+    status: 'draft',
+    updatedAt: new Date().toISOString(),
+    localDemo: true,
+  };
+}
+
+function makeNoteDemoDraft(): LetterDraftState {
+  return {
+    id: `draft-local-demo-${crypto.randomUUID()}`,
+    recipient: 'demo.friend',
+    subject: noteDemo.subject,
+    content: noteDemo.content,
+    fontSize: 18,
+    alignment: 'left',
+    address: { name: 'Your person', street: '', city: '', postcode: '', country: '' },
+    sealId: 'celestial',
+    sealColor: '#102a43',
+    sealMonogram: '',
+    payloadKind: 'text',
+    deliveryMode: 'instant',
     status: 'draft',
     updatedAt: new Date().toISOString(),
     localDemo: true,
@@ -115,6 +143,20 @@ export default function DemoPage() {
     }
   };
 
+  const startNoteDemo = () => {
+    if (startingKind) return;
+    setStartingKind('text');
+    setError('');
+    try {
+      const completed = createLocalDemoDrop(makeNoteDemoDraft(), getLocalAccountId());
+      if (!completed) throw new Error('This demo could not be saved on this device.');
+      router.push(`/letter/${encodeURIComponent(completed.id)}`);
+    } catch {
+      setError('This sample could not open. Your saved draft is still here; please try again.');
+      setStartingKind(null);
+    }
+  };
+
   return (
     <main className="page-shell page-enter !pt-4 sm:!pt-8">
       <div className="page-container max-w-[900px]">
@@ -132,7 +174,30 @@ export default function DemoPage() {
 
           {error && <p className="error-notice mt-5" role="alert">{error}</p>}
 
-          <div className="mt-7 grid gap-4 sm:grid-cols-2 sm:gap-5" aria-busy={startingKind !== null}>
+          <div className="mt-7 grid gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3" aria-busy={startingKind !== null}>
+            <article className="overflow-hidden rounded-[1.4rem] border border-[rgba(16,42,67,.12)] bg-white shadow-[0_9px_24px_rgba(16,42,67,.06)]">
+              <div className="flex aspect-[4/3] flex-col justify-between bg-[#f4e7d7] p-5 sm:p-6">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="rounded-full bg-white/75 px-3 py-1.5 font-mono text-[0.6rem] font-bold uppercase tracking-[0.1em] text-ink-navy">Fictional note</span>
+                  <span className="font-mono text-[0.6rem] font-semibold uppercase tracking-[0.1em] text-[#8b5e4b]">Stays here</span>
+                </div>
+                <p className="my-4 max-w-[29ch] font-headline-md text-[1.05rem] font-semibold leading-relaxed text-ink-navy">“{noteDemo.content}”</p>
+                <p className="border-t border-dashed border-[#b89179]/60 pt-3 font-mono text-[0.65rem] text-[#765743]">a little thing, just for you</p>
+              </div>
+              <div className="p-5 sm:p-6">
+                <p className="eyebrow text-[#aa5f42]">A message for your person</p>
+                <h2 className="mt-2 font-headline-md text-xl font-semibold text-ink-navy">{noteDemo.subject}</h2>
+                <p className="mt-2 min-h-10 text-sm leading-relaxed text-on-surface-variant">Open it like you received it, react, then peek at the sender copy.</p>
+                <button
+                  type="button"
+                  onClick={startNoteDemo}
+                  disabled={startingKind !== null}
+                  className="button-primary mt-5 w-full !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white disabled:cursor-wait disabled:opacity-65"
+                >
+                  {startingKind === 'text' ? <><LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" /> Opening your demo…</> : <><Sparkles className="h-4 w-4" aria-hidden="true" /> {noteDemo.label} <ArrowRight className="h-4 w-4" aria-hidden="true" /></>}
+                </button>
+              </div>
+            </article>
             {demoOptions.map((option) => (
               <article key={option.kind} className="overflow-hidden rounded-[1.4rem] border border-[rgba(16,42,67,.12)] bg-white shadow-[0_9px_24px_rgba(16,42,67,.06)]">
                 <div className="relative aspect-[4/3] overflow-hidden bg-[#eee9df]">
@@ -159,7 +224,7 @@ export default function DemoPage() {
           {startingKind && <p className="mt-5 text-center text-sm text-on-surface-variant" role="status" aria-live="polite">Saving this sample only in your browser…</p>}
         </section>
 
-        <p className="mx-auto mt-5 max-w-xl text-center text-xs leading-relaxed text-on-surface-variant">Your unfinished drop stays where it is. This sample uses a bundled image and never uploads it.</p>
+        <p className="mx-auto mt-5 max-w-xl text-center text-xs leading-relaxed text-on-surface-variant">Your unfinished drop stays where it is. Photo and GIF samples are bundled; the note has no attachment. Every sample stays on this device and nothing is sent or uploaded.</p>
       </div>
     </main>
   );
