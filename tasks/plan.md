@@ -8,6 +8,14 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 
 ## Implementation Status — 2026-10-24
 
+### Latest checkpoint — saved private-claim recovery browser assertions (2026-10-24)
+
+- The isolated browser smoke seeds a synthetic pending claim, reloads Compose, checks the durable saved-drop message without exposing the lost in-memory copy link, and verifies the encoded detail route plus an enabled **Share a fresh private link** button.
+- `npm test` passed 245/245; lint, no-incremental TypeScript, browser-script syntax, and `git diff --check` passed. A disposable Chrome context passed at 360×844 by touch and 390×844, 430×844, and 1440×900 by keyboard; there was no horizontal overflow, cross-origin traffic, Auth/REST/Storage request, console error, or JavaScript exception.
+- The repository runner's standalone Chrome timed out on DevTools `Page.navigate` in this environment. The same flow passed in a new isolated context on the existing QA Chrome process. This fixture does not exercise the OS share sheet, real account-to-account delivery, or physical deletion.
+- Code commit `b064dab` (`test: verify saved claim recovery in browser`) is pushed on `fix-private-claim-share-cancel-copy`; this checkpoint's learning and project notes are recorded in a separate documentation commit. No PR or merge was created.
+- Next: verify real photo/GIF claims and actual 30-day Storage cleanup against the isolated local or approved Free Supabase backend; then test screen-reader output and a physical device.
+
 ### Latest checkpoint — accessible reaction names (2026-10-24)
 
 - Reaction buttons expose the shared natural-language names already used by live reaction announcements, so assistive technology receives labels such as “React with heart hands.” The browser smoke asserts all five labels.
@@ -20,9 +28,9 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 
 - The composer now distinguishes a prepared-but-unshared private link from a recovered claim-pending drop, without claiming the recipient is already waiting. The in-memory link remains copyable after share cancellation; after reload, **Open saved drop** routes to the exact encoded drop ID and its existing status/fresh-link controls.
 - Added regressions for both copy states and for encoding the detail route as one path segment. Independent review found no concrete issue.
-- `npm test` passed 243/243; `npm run lint`, `npx tsc --noEmit --incremental false`, and `git diff --check` passed. The isolated Chrome smoke did not reach its Home flow: its page-level origin gate blocked the configured Supabase auth request and the page remained at “Checking your account…”. That gate does not cover server-side activity; the share-cancel/detail route remains unverified in a rendered browser.
+- `npm test` passed 243/243; `npm run lint`, `npx tsc --noEmit --incremental false`, and `git diff --check` passed for the original share-recovery change. The recovery/detail route has since been verified in a rendered isolated browser context. The full signed-in send and operating-system share-sheet cancellation remain unverified.
 - Code commit `53cbb82` (`fix: make private claim recovery truthful`) is pushed on `fix-private-claim-share-cancel-copy`; this checkpoint is recorded in a separate documentation commit on the same branch. No PR or merge was created. The 30-day automatic deletion rule for valid abandoned staging media remains confirmed and unchanged.
-- Next: verify the rendered recovery/detail route with a disposable local or approved Free Supabase fixture, then complete the hosted two-account media claim and actual Storage deletion checks.
+- Next: test operating-system share cancellation in a real browser, then complete the two-account media claim and actual Storage deletion checks against the approved Free or disposable local Supabase runtime.
 
 ### Latest checkpoint — private claim send receipt (2026-10-24)
 

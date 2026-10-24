@@ -2,6 +2,36 @@
 
 Append one dated entry for every completed code-change or issue-resolution slice. Keep the record evidence-based: issue, cause, resolution, a reusable learning, verification, Git checkpoint, and remaining gaps. Tie statements to the actual diff, commit history, and test output. Do not store credentials or private content here.
 
+## 2026-10-24 — Strengthen saved-claim recovery browser assertions
+
+### Issue
+
+The browser smoke's compound wait could accept only its first text condition because `|| false` was interpolated without parentheses. The detail assertion also accepted visible “Share a fresh private link” text even if no enabled button was present.
+
+### Cause
+
+JavaScript evaluates `&&` before `||`, so an unparenthesized helper expression such as `text.includes(expected) || false` could bypass the remaining route and text checks. The detail check inspected body text but did not inspect the control's semantic element or disabled state. CSS text transforms also render some control labels in uppercase.
+
+### Resolution
+
+- Parenthesize the normalized text predicate so each combined wait checks all requested phrases and the expected route.
+- Add a credential-free pending-claim fixture that verifies reload recovery, hides the lost in-memory copy action, checks the exact encoded detail link, and requires an enabled fresh-link button.
+- Add `--claim-recovery-only` so this saved-state flow can run without the signed-in demo prerequisites. Keep the backend request gate enabled.
+
+### Learning
+
+Treat a rendered smoke assertion as a boolean expression whose full grouping is explicit. Normalize text for CSS transforms, and verify the actual element type and enabled state when a sentence is meant to be an action.
+
+### Verification
+
+- `npm test`: 245/245 passed. `npm run lint`, `./node_modules/.bin/tsc --noEmit --incremental false`, `node --check scripts/browser-demo-smoke.mjs`, and `git diff --check` passed.
+- An isolated Chrome context passed saved-claim recovery after reload at 360×844 by touch and 390×844, 430×844, and 1440×900 by keyboard. It verified the saved state, exact detail route, enabled fresh-link button, no horizontal overflow, no Auth/REST/Storage or cross-origin requests, and no console or JavaScript errors.
+- The repository smoke runner's newly launched standalone Chrome timed out on DevTools `Page.navigate` in this host. The equivalent flow was run in a disposable browser context on the existing QA Chrome process. This did not simulate the native OS share sheet.
+
+### Git and remaining gaps
+
+Code commit `b064dab` (`test: verify saved claim recovery in browser`) is pushed to `origin/fix-private-claim-share-cancel-copy`; this entry and project notes are committed separately. The user-approved 30-day deletion policy for valid abandoned staging uploads remains unchanged. Real two-account photo/GIF delivery, actual Storage deletion, screen-reader output, and physical-device behavior remain open. `/letter`, `.env.local`, and hosted resources were not changed.
+
 ## 2026-10-24 — Give reaction controls natural-language names
 
 ### Issue

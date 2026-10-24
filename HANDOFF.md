@@ -2,6 +2,14 @@
 
 Updated: 2026-10-24
 
+## Latest checkpoint — saved private-claim recovery browser assertions (2026-10-24)
+
+- The browser smoke now seeds a disposable pending claim, verifies Compose recovers the saved drop after reload without offering the lost in-memory copy link, and checks that **Open saved drop** leads to the exact encoded detail route with an enabled fresh-link button.
+- Verification: `npm test` passed 245/245; lint, no-incremental TypeScript, `node --check scripts/browser-demo-smoke.mjs`, and `git diff --check` passed. An isolated Chrome context passed at 360×844 by touch and 390×844, 430×844, and 1440×900 by keyboard. The pages had no horizontal overflow, cross-origin or Auth/REST/Storage request, console error, or JavaScript exception.
+- The repo runner's standalone Chrome timed out on DevTools `Page.navigate` in this environment. The equivalent recovery flow passed in a disposable context on the existing QA Chrome process. This does not verify the OS share sheet, live account-to-account delivery, actual Storage deletion, screen readers, or a physical phone.
+- Active checkout: `/Users/arjeetanand/projects/drop`; branch `fix-private-claim-share-cancel-copy`. Code commit `b064dab` (`test: verify saved claim recovery in browser`) is pushed; this handoff and project notes are being committed separately. No PR or merge was created; `/letter`, `.env.local`, and hosted resources were not changed.
+- Next: verify the real two-account photo/GIF claim and physical 30-day Storage cleanup against the approved Free or disposable local Supabase backend, then complete screen-reader and physical-device checks.
+
 ## Latest checkpoint — accessible reaction names (2026-10-24)
 
 - Reaction buttons now have natural-language names (“React with a purple heart”, “React with a face holding back tears”, “React with heart hands”, and similar) using the same shared mapping as live reaction announcements. Unit tests cover all supported reactions and an unknown-reaction fallback; the rendered browser smoke checks all five button names.
@@ -14,10 +22,10 @@ Updated: 2026-10-24
 
 - The composer now says when a private claim link is ready but has not been shared, and keeps the copy action available after a cancelled share sheet. On reload, the copy stays neutral about whether it was shared; **Open saved drop** opens the corresponding encoded detail route for claim status and the existing fresh-link action.
 - Regression coverage checks the unshared/recovered copy and single-segment path encoding. Verification: `npm test` passed 243/243; lint, no-incremental TypeScript, and `git diff --check` passed. Independent review found no concrete issue.
-- The isolated Chrome smoke did not reach its demo flow: the page-level origin gate blocked the configured Supabase auth request, leaving the page at “Checking your account…”. The gate did not cover server-side activity. The new recovery/detail route has no rendered-browser verification yet.
+- The full signed-in demo still did not reach its flow because its page-level gate blocks the configured Auth request. The saved recovery/detail route has since been verified separately in a credential-free isolated browser context. No server-side activity was covered by the browser gate.
 - The 30-day deletion rule for valid abandoned staging uploads remains confirmed and already implemented. Hosted two-account delivery and actual Storage cleanup remain open until the approved Free project or an isolated local fixture is available.
 - Active checkout: `/Users/arjeetanand/projects/drop`; branch `fix-private-claim-share-cancel-copy`. Code commit `53cbb82` (`fix: make private claim recovery truthful`) is pushed; this handoff and learning entry are recorded in a separate documentation commit on the same branch. No PR or merge was created; `/letter`, `.env.local`, and hosted resources were not changed.
-- Next: render the recovered saved-drop route with a disposable local/Free Supabase auth fixture, then verify the complete two-account photo/GIF claim and 30-day Storage cleanup journey.
+- Next: test operating-system share cancellation in a real browser, then verify the complete two-account photo/GIF claim and 30-day Storage cleanup journey against the approved Free or disposable local Supabase runtime.
 
 ## Latest checkpoint — demo browser viewport coverage (2026-10-24)
 

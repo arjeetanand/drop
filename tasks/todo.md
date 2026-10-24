@@ -2,6 +2,15 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
+## Checkpoint — saved-claim recovery browser assertions (2026-10-24)
+
+- [x] Seed a disposable pending claim in an isolated browser and verify saved-state recovery after reload, without showing the in-memory-only copy-link control.
+- [x] Verify the saved-drop link targets the exact encoded detail path and the detail page exposes an enabled fresh-link button.
+- [x] `npm test` passes 245/245; lint, no-incremental TypeScript, browser-script syntax, and `git diff --check` pass. An isolated Chrome context passed 360×844 by touch and 390×844, 430×844, and 1440×900 by keyboard, with no overflow, Auth/REST/Storage or cross-origin requests, console errors, or JavaScript exceptions.
+- [x] Code commit `b064dab` is pushed to `origin/fix-private-claim-share-cancel-copy`; this checklist and notes are recorded in a separate documentation commit.
+- [ ] The project smoke runner's standalone Chrome timed out on DevTools `Page.navigate` in this environment. The same flow passed through a disposable context in the existing QA Chrome process; retry the standalone runner when its local browser launch works.
+- [ ] The OS share sheet cancellation, real two-account photo/GIF claim, actual 30-day Storage deletion, screen-reader output, and physical-device behavior remain unverified.
+
 ## Checkpoint — accessible reaction names (2026-10-24)
 
 - [x] Give all five reaction buttons natural-language accessible names and reuse the same mapping for live reaction announcements.
@@ -16,8 +25,8 @@ Tasks are ordered by dependency. Progress is recorded at each tested and pushed 
 - [x] Keep the composer truthful after the share sheet is cancelled: the private link is saved but not shared, and the sender can copy it from the current screen.
 - [x] After recovery/reload, send the sender to the exact saved-drop detail route for claim status and fresh-link controls; encode the ID as one path segment.
 - [x] Add copy-state and route-encoding regressions. `npm test` passes 243/243; lint, no-incremental TypeScript, and `git diff --check` pass. Independent review found no concrete issue. Code commit `53cbb82` is pushed to `origin/fix-private-claim-share-cancel-copy`.
-- [ ] Verify the share-cancel and saved-detail states in a rendered browser. The isolated Chrome smoke stayed at “Checking your account…” because its page-level origin gate blocked the configured auth request; server-side activity was not covered.
-- [ ] Verify real two-account private media claims and physical Storage cleanup after the approved Free project or an isolated local Supabase fixture is available. The 30-day rule for valid abandoned staging uploads remains confirmed and implemented.
+- [x] Verify recovered saved-drop state after reload and the saved detail route, including its enabled fresh-link action, in an isolated rendered Chrome context across phone and desktop sizes. The project smoke runner's standalone Chrome timed out on DevTools `Page.navigate`; the equivalent flow passed in the existing QA Chrome process with an isolated browser context.
+- [ ] Verify the operating-system share-sheet cancellation in a real browser and the full two-account private-media claim plus physical Storage cleanup after a disposable local or approved Free Supabase runtime is available.
 
 ## Checkpoint — private claim send receipt (2026-10-24)
 
