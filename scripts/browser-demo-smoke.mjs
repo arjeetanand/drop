@@ -791,6 +791,7 @@ async function runClaimProfileSetupFlow(cdp, { appUrl, viewport, keyboard, scree
       summaryTag: summary?.tagName,
       summaryText: summary?.innerText.replace(/\\s+/g, ' ').trim(),
       summaryHeight: summary?.getBoundingClientRect().height || 0,
+      usernameNativeRequired: username?.required === true,
       usernameRequired: username?.getAttribute('aria-required') === 'true',
       optionalFieldsNotRequired: optionalFields.every((field) => field && !field.required),
       optionalFieldsHidden: optionalFields.every((field) => field && !field.checkVisibility()),
@@ -803,6 +804,7 @@ async function runClaimProfileSetupFlow(cdp, { appUrl, viewport, keyboard, scree
   assert.equal(initialForm.summaryTag, 'SUMMARY', 'Optional fields should use a native keyboard-operable disclosure control.');
   assert.match(initialForm.summaryText, /add profile details.*optional/i);
   assert.ok(initialForm.summaryHeight >= 44, `The optional-fields disclosure is only ${initialForm.summaryHeight}px high.`);
+  assert.equal(initialForm.usernameNativeRequired, true, 'The claim handle should use native required-field semantics.');
   assert.equal(initialForm.usernameRequired, true, 'The handle should be announced as required during private-claim setup.');
   assert.equal(initialForm.optionalFieldsNotRequired, true, 'Display name and bio must remain optional.');
   assert.equal(initialForm.optionalFieldsHidden, true, `Collapsed optional fields should not take up first-use space: ${JSON.stringify(initialForm)}.`);

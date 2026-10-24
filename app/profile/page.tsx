@@ -596,6 +596,7 @@ function ProfileContent() {
         autoComplete="username"
         spellCheck={false}
         disabled={profileFieldsDisabled}
+        required={claimReturn}
         aria-required={claimReturn}
         aria-describedby={profileError ? 'username-help username-error' : 'username-help'}
         aria-invalid={Boolean(profileError)}
