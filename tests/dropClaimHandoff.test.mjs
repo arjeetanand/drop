@@ -12,7 +12,7 @@ import {
 import { profileRoute } from '../lib/inviteOnboarding.ts';
 
 const token = 'a'.repeat(64);
-const handoffId = '123e4567-e89b-42d3-a456-426614174000';
+const handoffId = '00000000-0000-4000-8000-000000000001';
 
 class MemoryStorage {
   values = new Map();
@@ -59,7 +59,7 @@ test('falls back to the plain claim route for invalid handoff IDs', () => {
 
 test('does not reuse a tab token for a different or unreadable handoff', () => {
   assert.equal(canUseDropClaimSessionToken(handoffId, handoffId, true), true);
-  assert.equal(canUseDropClaimSessionToken('123e4567-e89b-42d3-a456-426614174001', handoffId, true), false);
+  assert.equal(canUseDropClaimSessionToken('00000000-0000-4000-8000-000000000002', handoffId, true), false);
   assert.equal(canUseDropClaimSessionToken(null, handoffId, true), false);
   assert.equal(canUseDropClaimSessionToken(null, null, false), true);
   assert.equal(canUseDropClaimSessionToken(null, handoffId, false), false);
@@ -75,7 +75,7 @@ test('expires cross-tab handoffs and removes their stored token', () => {
 
 test('rejects malformed IDs and corrupt or overlong records', () => {
   const storage = new MemoryStorage();
-  storage.setItem('drop:claim-handoff:v1:123e4567-e89b-42d3-a456-426614174000', JSON.stringify({
+  storage.setItem('drop:claim-handoff:v1:00000000-0000-4000-8000-000000000001', JSON.stringify({
     token: 'not-a-claim-token',
     expiresAt: 50_000,
   }));
