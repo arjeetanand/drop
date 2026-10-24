@@ -9,7 +9,7 @@ Updated: 2026-10-24
 - Sender detail reads now use the shared claim eligibility check for text, image, and GIF. Corrected stale cleanup fixture assertions for claimed-drop count and the account that claimed the media.
 - Verification: `npm test` passed 249/249; lint, no-incremental TypeScript, and `git diff --check` passed. The rollback SQL fixture passed in a fresh disposable local database, which was dropped afterward. The hosted worker, two-account delivery, physical Storage deletion, and browser flow were not exercised in this slice.
 - Active checkout: `/Users/arjeetanand/projects/drop`; branch `fix/storage-objects-index-role`. Code commits `8605dbf` and `2807ea4` are pushed. No PR or merge was created. `/letter`, `.env.local`, and hosted resources were not changed.
-- The user reports being signed in to Supabase, but no authenticated dashboard control or CLI access token is connected to this task. No hosted Free project, Vault value, schedule, or Edge Function was verified or changed. Screen-reader and physical-device checks remain open.
+- The user reports being signed in to Supabase, but no authenticated dashboard control is connected to this task and the Supabase CLI is not installed (`supabase: command not found`). No hosted Free project, Vault value, schedule, or Edge Function was verified or changed. Screen-reader and physical-device checks remain open.
 
 **Next:** verify the approved Free project through an accessible dashboard or scoped CLI session, then configure the cleanup worker and complete two-account media claims plus actual Storage deletion. Measure scan cost before scaling storage volume.
 

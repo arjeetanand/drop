@@ -1022,3 +1022,7 @@ Treat managed Supabase schemas as platform-owned. When a migration fails, verify
 ### Git and remaining gaps
 
 Code commits `8605dbf` (`fix: avoid indexing managed storage metadata`) and `2807ea4` (`fix: restore media claim status on detail pages`) are pushed to `origin/fix/storage-objects-index-role`. The project-note update is committed separately. No PR or merge was created. `/letter`, `.env.local`, and hosted resources were not changed. No Supabase CLI access token or authenticated dashboard control is available in this task; hosted Free-plan verification, two-account delivery, cleanup scheduling, actual Storage deletion, screen-reader use, and physical-device behavior remain open. Large-bucket scan cost and concurrent database interleavings are also unmeasured.
+
+### Follow-up — hosted Supabase session reachability (2026-10-24)
+
+The user reports being signed in to Supabase in a browser. This task has no connected dashboard control, and a read-only `supabase projects list` check could not run because the Supabase CLI executable is not installed. No hosted project or billing resource was inspected or changed. A browser login alone does not provide an authenticated session to task tools; continue only when a dashboard control or scoped CLI session is available. The local Drop app was restarted through `run.sh` and returned HTTP 200 on port 4004.

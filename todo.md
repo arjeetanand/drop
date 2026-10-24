@@ -10,7 +10,7 @@ Tasks are ordered by dependency. Progress is recorded at each tested and pushed 
 - [x] Correct the SQL fixture's stale total (the expired text claim is already claimed by this point) and expect the unprofiled account that actually claimed the media.
 - [x] `npm test` passes 249/249; lint and no-incremental TypeScript pass. The rollback-only SQL fixture passes in a fresh disposable local database, then the database is dropped.
 - [x] Code commits `8605dbf` and `2807ea4` are pushed to `origin/fix/storage-objects-index-role`.
-- [ ] Verify the hosted Free project, configure its cleanup schedule/Vault/Edge Function, and exercise two-account media claim plus actual Storage deletion. The authenticated dashboard is unavailable to this task and no CLI access token is configured.
+- [ ] Verify the hosted Free project, configure its cleanup schedule/Vault/Edge Function, and exercise two-account media claim plus actual Storage deletion. The user reports being signed in, but dashboard controls are not connected to this task and the Supabase CLI is not installed.
 - [ ] Complete screen-reader and physical-device checks; measure cleanup-scan cost before large-bucket use.
 
 ## Current Checkpoint — 2026-10-24 (Demo to first drop)
