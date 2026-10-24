@@ -1,6 +1,6 @@
 # Drop integration checklist
 
-Updated: 2026-10-24
+Updated: 2026-10-25
 
 ## Candidate and PR
 
@@ -35,6 +35,18 @@ Updated: 2026-10-24
 - [x] Restart Drop with `./run.sh start` and verify HTTP 200 on port 4004; verify local Auth and Mailpit return HTTP 200.
 - [x] Pass `npm run test:local-supabase` across eight groups; the test script removes its five disposable accounts and temporary media.
 - [x] Leave Drop running on port 4004 for local use.
+
+## Private claim scan code (2026-10-25)
+
+- [x] Add **Show scan code** to both private claim entry paths; use the same issued bearer URL for the QR and subsequent copy/share actions.
+- [x] Disclose that anyone scanning can claim the drop; clear the QR when its account/draft/recipient context changes and focus the scan-code region after issuance.
+- [x] Pass `npm test` (274/274), lint, no-incremental TypeScript, production build, and `git diff --check`.
+- [x] Before the final context-reset follow-up, isolated Chrome `--claim-recovery-only` passed at 360×844, 390×844, 430×844, and 1440×900; this covered adjacent claim disclosure/recovery, not authenticated QR issuance.
+- [x] Re-run `--claim-recovery-only` against a fresh, env-free QA copy on port 6004: passed at 360×844, 390×844, 430×844, and 1440×900. The earlier account-check timeout was a harness mismatch: the standard smoke intentionally permits only the app origin, while local Supabase Auth is a separate origin on port 54321.
+- [x] Exercise authenticated QR issuance/show/hide in isolated Chrome at 390×844 using a disposable local account and profile. Verified the local issue RPC, pending database row, sealed sender content, labelled/focused QR region, show/hide state, and screenshot decode matching the displayed private link; browser requests were limited to the app and local Supabase origins. Test account, drop, screenshot, and bearer-link temp file were cleaned up.
+- [x] Push code commits `1975212` and `23f51b1` on `feat/private-claim-qr` and open [PR #7](https://github.com/arjeetanand/drop/pull/7).
+- [ ] Verify with an actual phone/camera scan, real sign-in UI, screen reader, and physical-device behavior.
+- [ ] Merge PR #7 after review and explicit approval.
 
 ## Product checks still open
 

@@ -1,6 +1,18 @@
 # Drop handoff
 
-Updated: 2026-10-24
+Updated: 2026-10-25
+
+## Latest checkpoint — private claim QR (2026-10-25)
+
+- Compose offers **Show scan code** for the handleless and confirmed-missing-handle private claim flows. The QR encodes the same issued bearer URL; copy/share from the ready-link panel reuse it. Anyone with the code can claim, so the screen states that consequence and the link expiry.
+- Clearing or switching the account, draft, or recipient clears the QR/link state. Async share completion is scoped to its original account and draft; successful issuance focuses the labelled scan-code region.
+- Verification: existing source checks passed on the code commits: `npm test` (274/274), lint, `npx tsc --noEmit --incremental false`, `git diff --check`, and `npm run build -- --webpack`. The build emitted existing Browserslist freshness and ambiguous Tailwind easing-class warnings. Current-branch isolated Chrome `--claim-recovery-only` passed at 360×844, 390×844, 430×844, and 1440×900 using a fresh env-free QA copy. An authenticated Chrome run at 390×844 issued a local claim invite, rendered and focused the labelled QR region, verified show/hide, checked the claim-pending DB row and sealed sender content, and decoded the QR screenshot with macOS Vision to match the displayed private link exactly. Browser requests were limited to the app and local Supabase origins. The disposable account/profile/drop, Mailpit message, screenshot, and private-link temp file were cleaned up.
+- The standard smoke's prior “Checking your account…” timeout came from its intentional same-origin request gate: configured local Supabase Auth runs on port 54321, a different origin from the app. The no-auth smoke passed in a fresh copy without `.env.local` or `.next`; authenticated checks used a separate scoped local-only fixture. No product failure was established by the earlier timeout.
+- Docker-backed local services remain running. The app, Auth, and Mailpit returned HTTP 200; Drop remains available at `http://localhost:4004`.
+- Active checkout: `/Users/arjeetanand/projects/drop`; branch `feat/private-claim-qr`, based on `main` at `5138f88`. Code commits `1975212` (`feat: add QR sharing for private claim links`) and `23f51b1` (`fix: clear claim QR on account or draft change`) are pushed. [PR #7](https://github.com/arjeetanand/drop/pull/7) remains open and unmerged, as requested.
+- Real phone/camera scan, sign-in UI, screen-reader output, physical-device behavior, hosted account-to-account delivery, and real Storage cleanup remain open. No application code, `.env.local`, hosted resource, or `/letter` file changed in this verification.
+
+**Next:** review PR #7 and run the remaining camera, accessibility, and physical-device checks. Merge only after review and explicit approval.
 
 ## Latest checkpoint — PR #5 merged into main (2026-10-24)
 
