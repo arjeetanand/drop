@@ -1,6 +1,15 @@
 # Drop handoff
 
-Updated: 2026-10-24
+Updated: 2026-10-25
+
+## Latest checkpoint — private, durable unread state (2026-10-25)
+
+- Added private server-side read markers for actual delivered recipient drops, recipient-scoped RPCs, unread card/navigation indicators on desktop and mobile, and account-safe handling of asynchronous read events. Read markers are not exposed to senders.
+- Verification: `npm test` passed 280/280; lint, no-incremental TypeScript, `git diff --check`, and the isolated Webpack production build passed. `npm run test:local-supabase` passed all 9 groups, and the rollback-only SQL fixture passed against a disposable local database. Authenticated Edge browser verification passed at 390×844 and 1440×900: sign-in, open, successful read RPC, cleared markers, and persisted state after reload. Cleanup left no disposable users or drops, no port 5004 listener, and no temporary browser profile or owned app process.
+- Code commit `a416d81` is pushed to `origin/feat/recipient-unread-state`. This branch has not been opened as a PR or merged. PR #7 remains open for the private-claim QR browser check.
+- No hosted Supabase resource or credential changed. The local app was not left running by the isolated browser smoke.
+
+**Next:** verify read synchronization in a second authenticated session for the same recipient, then complete hosted migration/API, screen-reader, and physical-device checks when available. Start the normal app with `./run.sh start`; it serves at `http://localhost:4004`.
 
 ## Latest checkpoint — PR #5 merged into main (2026-10-24)
 

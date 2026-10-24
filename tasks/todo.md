@@ -2,6 +2,16 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
+## Checkpoint — private, durable unread state (2026-10-25)
+
+- [x] Add recipient-only server read markers for delivered drops; deny sender and outsider access.
+- [x] Show a “New” marker on unread received cards and a private unread count on Inbox navigation across desktop and mobile.
+- [x] Mark read only after full content opens; keep the server timestamp idempotent and prevent stale refresh or account-switch responses from reverting state.
+- [x] Exclude samples, demos, sent/draft/claim-pending drops, signed-out state, and uncollected relay drops.
+- [x] Add unit and rollback-only SQL coverage; pass local Supabase smoke and authenticated local browser checks; update README, checklist, handoff, and learning log.
+- [x] Push code commit `a416d81` to `origin/feat/recipient-unread-state`.
+- [ ] Verify the same recipient's read state in a second authenticated browser session; complete hosted, screen-reader, and physical-device checks.
+
 ## Checkpoint — received-drop Drop back draft isolation (2026-10-24)
 
 - [x] Start Drop back from a received drop using a persisted fresh draft ID and the sender's normalized handle.

@@ -1328,3 +1328,35 @@ When localhost is unavailable, first check whether the app process is running. A
 ### Git and remaining gaps
 
 No application code or environment file changed. This issue-resolution record is on `chore/docker-runtime-recovery`; see the branch's latest Git commit for the exact SHA and the final task report for push status. Hosted Supabase behavior, real aged-object deletion, screen-reader use, and physical-device checks remain open.
+
+## 2026-10-25 — Add private, durable recipient unread state
+
+### Issue
+
+Delivered drops looked the same whether or not the recipient had opened them, and that status needed to stay private from senders while surviving reloads.
+
+### Cause
+
+The mailbox had no durable recipient-owned read marker. Local-only state could not reliably sync across sessions, and an in-flight read response could otherwise be applied after the signed-in account changed.
+
+### Resolution
+
+- Add a private read-state table and authenticated recipient-scoped RPCs for marking and reading delivered-drop markers. Use server timestamps and make mark calls idempotent; deny sender and outsider access.
+- Add “New” on eligible received cards and an unread Inbox count on desktop and mobile. Mark only after the full drop opens, preserve read state through stale refreshes, and bind asynchronous updates to the account that started them.
+- Add unit and rollback-only SQL checks plus disposable local Supabase and authenticated browser smoke coverage.
+- Fix the browser smoke's cleared-badge wait to locate the visible card independently from its unread badge; the earlier predicate had coupled card visibility to the badge that the feature intentionally removes.
+
+### Learning
+
+For account-scoped asynchronous state, capture the active account when work starts and verify it is still current before applying the result. Browser checks for an element that changes state should locate the stable parent independently from the changing state marker.
+
+### Verification
+
+- `npm test`: 280/280 passed; `npm run lint`, `npm exec tsc -- --noEmit --incremental false`, browser-smoke syntax, and `git diff --check` passed.
+- `npm run test:local-supabase` passed all 9 groups, including marker persistence/idempotence and sender/outsider denial. The rollback-only SQL fixture passed on a disposable local database.
+- Authenticated local Edge smoke passed on mobile 390×844 and desktop 1440×900: sign-in, “New” indicators, full drop open, successful mark RPC, both markers cleared, and persisted state after reload. Cleanup confirmed zero disposable users/drops and no 5004 listener or temporary profile.
+- The isolated Webpack production build passed. No hosted Supabase project or key was used; no files in `/letter` changed.
+
+### Git and remaining gaps
+
+Code commit `a416d81` is pushed to `origin/feat/recipient-unread-state`. Project notes are being recorded in a separate follow-up commit on the same branch. No PR was opened for this branch; PR #7 remains open for its QR browser check. A second authenticated recipient session, hosted migration/API, screen-reader, and physical-device checks remain pending.

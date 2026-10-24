@@ -6,7 +6,24 @@ Build Drop as a mobile-first private sharing app where a person can send a photo
 
 The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailbox, and relay foundations. Existing letters continue to work as text drops, and their routes and saved content remain readable. The build covers the end-to-end mobile flow: choose content, attach an image or GIF, choose a recipient, send, open, react, and optionally follow a relay.
 
-## Implementation Status — 2026-10-24
+## Implementation Status — 2026-10-25
+
+### Latest checkpoint — private, durable unread state (2026-10-25)
+
+- Added recipient-only server read markers for delivered drops, with narrow authenticated RPCs, idempotent server timestamps, and private table access. Senders and outsiders cannot read or create markers.
+- Inbox cards show “New” and Inbox navigation shows the recipient's unread count on desktop and mobile. A drop becomes read only after its full detail opens; read state merges monotonically and stale responses cannot cross account changes.
+- Exclusions cover samples, local demos, sent drops, drafts, claim-pending items, in-transit relays, and signed-out state.
+- Verification passed: 280/280 unit tests, lint, no-incremental TypeScript, the local Supabase smoke (9 groups), the rollback-only SQL fixture, and authenticated Edge browser flow at 390×844 and 1440×900. The browser opened a real local delivered drop, confirmed the read RPC, saw both markers clear, reloaded, and confirmed persisted state. `npm run build -- --webpack` passed in an isolated copy.
+- Code commit `a416d81` is pushed to `origin/feat/recipient-unread-state`. No PR was opened for this branch. PR #7 remains open for its private-claim QR browser check.
+- Remaining: confirm synchronization in a second authenticated recipient session, perform screen-reader and physical-device checks, and deploy/verify against the hosted project when available. The local Edge test cleaned its disposable users and drop; hosted Supabase was untouched.
+
+### Acceptance follow-up
+
+- [x] Unit coverage for unread eligibility, account-safe monotonic merges, and excluded item types.
+- [x] Rollback-only SQL fixture for recipient/sender/outsider privacy and idempotence.
+- [x] Authenticated local browser verification at desktop and mobile widths, including persisted state after reload.
+- [ ] Verify that a second authenticated session for the same recipient observes the server-synced state.
+- [ ] Verify hosted migration/API behavior, screen-reader announcements, and physical-device behavior.
 
 ### Latest checkpoint — received-drop Drop back draft isolation (2026-10-24)
 

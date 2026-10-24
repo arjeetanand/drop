@@ -6,7 +6,7 @@ The append-only engineering learning log is in [LEARNINGS.md](./LEARNINGS.md); i
 
 ## Branch status and latest checkpoint
 
-`main` is the integration release line. [PR #1](https://github.com/arjeetanand/drop/pull/1), [PR #2](https://github.com/arjeetanand/drop/pull/2), and [PR #5](https://github.com/arjeetanand/drop/pull/5) are merged. PR #5 delivered code commit `a71612b` and Docker runtime notes in head `37afbda`; its merge commit is `e098388`. That is the latest code-bearing merge. Its handoff and verification are recorded in [HANDOFF.md](./HANDOFF.md). Use each live PR page for current checks and merge state. Check `git status --short --branch` and `git log -1 --oneline --decorate` for the active checkout. After `git fetch origin`, compare `origin/main` and your branch with `git rev-list --left-right --count origin/main...HEAD` (first number: commits only on `main`; second: commits only on your branch). Branches whose tips are already ancestors of `main` are included in it; they are not separate latest versions.
+`main` is the integration release line at `5138f88`, the PR #6 merge. [PR #1](https://github.com/arjeetanand/drop/pull/1), [PR #2](https://github.com/arjeetanand/drop/pull/2), [PR #5](https://github.com/arjeetanand/drop/pull/5), and [PR #6](https://github.com/arjeetanand/drop/pull/6) are merged. [PR #7](https://github.com/arjeetanand/drop/pull/7) remains open for its private-claim QR browser check. Recipient unread state is pushed separately on `feat/recipient-unread-state` at `a416d81`; that branch has no PR yet. See [HANDOFF.md](./HANDOFF.md) for the latest checkpoint. Check `git status --short --branch` and `git log -1 --oneline --decorate` for the active checkout. After `git fetch origin`, compare `origin/main` and your branch with `git rev-list --left-right --count origin/main...HEAD` (first number: commits only on `main`; second: commits only on your branch). Branches whose tips are already ancestors of `main` are included in it; they are not separate latest versions.
 
 ## Run locally
 
@@ -18,6 +18,12 @@ npm ci
 Open `http://localhost:4004`. Run `./run.sh` again to restart Drop, or `./run.sh stop` to stop it. Without Supabase credentials, the app runs with local demo data. Real account-to-account media delivery needs the Supabase migrations and private storage setup in [SUPABASE_SETUP.md](./SUPABASE_SETUP.md). Hosted Drop provisioning is currently waiting on project-creation access; no Drop project has been created.
 
 The local Supabase backend runs in Docker through the Supabase CLI (`npm run supabase:start`); the Next.js app runs as a local Node process through `run.sh`. The main local endpoints are app `4004`, Supabase API `54321`, Studio `54323`, and Mailpit `54324`. Use `npm run supabase:stop` to stop this project's local Supabase stack.
+
+## Private unread state
+
+For delivered drops addressed to the signed-in recipient, the inbox shows a “New” marker and Inbox navigation count until the full drop opens successfully. The server stores read markers privately for that recipient; senders cannot see them. The local migration and API are covered by `npm run test:local-supabase` and the rollback-only `tests/db/drop_recipient_read_state.sql` fixture.
+
+To run the authenticated browser smoke, start the local Supabase stack and keep `.env.local` configured with the local CLI URL, anon key, and service-role key, then run `node scripts/browser-unread-smoke.mjs`. It verifies sign-in, read/open behavior, and persistence after reload at mobile 390×844 and desktop 1440×900. It requires free test port 5004 (the isolated app port mapped from main port 4004) and an installed Chrome or Edge browser. The script creates and removes disposable local accounts and a drop; it rejects a non-loopback Supabase URL and does not use hosted Supabase.
 
 ## Try a demo without an account
 

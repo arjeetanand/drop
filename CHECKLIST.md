@@ -1,6 +1,21 @@
 # Drop integration checklist
 
-Updated: 2026-10-24
+Updated: 2026-10-25
+
+## Private unread state (2026-10-25)
+
+- [x] Add private recipient read markers and authenticated, recipient-scoped mark/read RPCs for delivered drops.
+- [x] Add unread card markers and desktop/mobile Inbox counts; clear only after full open and guard asynchronous state against account changes.
+- [x] Pass `npm test` (280/280), `npm run lint`, no-incremental TypeScript, `npm run test:local-supabase` (9 groups), and the rollback-only SQL fixture.
+- [x] Pass authenticated local Edge browser flow at 390×844 and 1440×900: read RPC, cleared markers, reload persistence, and cleanup of disposable records.
+- [x] Pass isolated Webpack production build and `git diff --check`.
+- [x] Push code commit `a416d81` to `origin/feat/recipient-unread-state`.
+- [ ] Verify the same recipient in a second authenticated session; verify hosted behavior, screen-reader output, and physical-device behavior.
+
+## Current branch state
+
+- [x] Keep PR #7 open for the private-claim QR browser check; unread-state work remains on its own pushed branch without a PR.
+- [ ] Review and merge branches only through their PRs after the remaining checks pass.
 
 ## Candidate and PR
 
