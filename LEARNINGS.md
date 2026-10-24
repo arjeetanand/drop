@@ -1119,3 +1119,90 @@ Enforce upload limits while reading the request body, not after a multipart pars
 ### Git and remaining gaps
 
 Code fix `b02196a` (`fix: bound share target request bodies`) is pushed to `origin/feat/demo-relay-preview`; these notes are committed separately after it. No merge to `main` was made. The candidate was 122 commits ahead and 0 behind `origin/main` before this notes commit. `/letter`, `.env.local`, and hosted Supabase were not changed. The installed PWA, OS share sheet, screen-reader output, physical-device behavior, hosted delivery, and Storage deletion remain unverified.
+
+
+## 2026-10-24 — Keep Relay bearer tokens out of request queries
+
+### Issue
+
+Relay carrier links could contain a bearer token in a request query. A query token is sent with the initial HTTP request, where infrastructure may record it.
+
+### Cause
+
+The handoff and scan routes previously read tokens from query parameters for compatibility with older links.
+
+### Resolution
+
+- Resolve carrier tokens only from the URL fragment, which browsers do not include in the HTTP request.
+- Reject query-only legacy invites, remove the token query from visible browser history, and ask the carrier to issue a fresh link.
+- Add regressions for fragment-only resolution and query stripping.
+
+### Learning
+
+Treat bearer links as credentials: keep them in fragments and do not preserve query-based compatibility just because client code later cleans up the URL. Client cleanup cannot undo the first request.
+
+### Verification
+
+- `npm test` passed 272/272; lint, no-incremental TypeScript, production build, and `git diff --check` passed.
+- The build generated 22 routes and showed the existing Browserslist freshness and ambiguous Tailwind easing-class warnings.
+
+### Git and remaining gaps
+
+Code commit `fb7bd07` (`fix: keep relay tokens out of request queries`) is pushed to `feat/demo-relay-preview`. It is included in [PR #1](https://github.com/arjeetanand/drop/pull/1). The system share-sheet browser, physical-device, screen-reader, hosted two-account, and Storage cleanup checks remain open.
+
+## 2026-10-24 — Start Drop from its checkout directory
+
+### Issue
+
+Starting `run.sh` by absolute path from another directory could launch npm with the caller's working directory.
+
+### Cause
+
+The script computed the project root for the Next binary but did not change the shell's current directory before running the package command.
+
+### Resolution
+
+- Change to the resolved project root before invoking npm.
+- Keep the existing owned-process check and stable port behavior.
+
+### Learning
+
+A script that resolves its own paths should also set its working directory when later commands depend on package metadata or relative configuration.
+
+### Verification
+
+- `bash -n run.sh` passed.
+- An external-directory smoke used a fake npm shim and confirmed npm ran from `/Users/arjeetanand/projects/drop` with the expected dev-server arguments.
+- The full test, lint, TypeScript, and production build checks passed for the same candidate.
+
+### Git and remaining gaps
+
+Code commit `1c5870a` (`fix: launch Drop from its project directory`) is pushed to `feat/demo-relay-preview` and included in [PR #1](https://github.com/arjeetanand/drop/pull/1). The installed share target and device flow remain unverified.
+
+## 2026-10-24 — Use deterministic UUID fixtures in tests
+
+### Issue
+
+GitGuardian classified three high-entropy-looking UUID test fixtures in the integration branch as possible secrets.
+
+### Cause
+
+Tests used random-looking UUIDs as stable identifiers, although those tests exercised identifier routing and storage rather than token entropy.
+
+### Resolution
+
+- Replace the current Relay and claim-handoff fixtures with deterministic canonical UUIDv4 values.
+- Keep the test assertions for fragment handling, canonical IDs, and cross-tab handoff behavior.
+
+### Learning
+
+Use deterministic, clearly synthetic identifiers where a test is not measuring entropy. Secret scanners inspect commit history as well as the current files, so a cleanup commit may not clear older historical findings.
+
+### Verification
+
+- `npm test` passed 272/272; `npm run lint` and `git diff --check` passed.
+- The latest GitGuardian run still reports the three earlier occurrences because it scans the full 126-commit PR range. Their locations are unit-test UUID fixtures; the current versions are deterministic. No real credentials were found in those flagged fixtures.
+
+### Git and remaining gaps
+
+Code commit `8ecb1a4` (`test: use deterministic UUID fixtures`) is pushed to `feat/demo-relay-preview` and included in [PR #1](https://github.com/arjeetanand/drop/pull/1). GitGuardian remains the only reported check failure, and `main` has no required branch-protection checks. The live PR page holds the current gate state; no GitGuardian finding was dismissed in its dashboard.

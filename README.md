@@ -6,7 +6,7 @@ The append-only engineering learning log is in [LEARNINGS.md](./LEARNINGS.md); i
 
 ## Branch status and latest checkpoint
 
-`main` is the merged release line. The current integration candidate is `feat/demo-relay-preview`; its exact local/remote commit, verification, and remaining gaps are recorded at the top of [HANDOFF.md](./HANDOFF.md). Check `git status --short --branch` and `git log -1 --oneline --decorate` for the active checkout. After `git fetch origin`, compare `origin/main` with the candidate using `git rev-list --left-right --count origin/main...HEAD` (first number: commits only on `main`; second: commits only on the candidate). Branches whose tips are already ancestors of the candidate are included in it; they are not separate latest versions.
+`main` is the integration release line. The current Drop integration is tracked in [PR #1](https://github.com/arjeetanand/drop/pull/1); use its live page for review, checks, and merge state. The branch tip, local verification, and remaining product checks are recorded in [HANDOFF.md](./HANDOFF.md). Check `git status --short --branch` and `git log -1 --oneline --decorate` for the active checkout. After `git fetch origin`, compare `origin/main` and the candidate with `git rev-list --left-right --count origin/main...HEAD` (first number: commits only on `main`; second: commits only on the candidate). Branches whose tips are already ancestors of the candidate are included in it; they are not separate latest versions.
 
 ## Run locally
 
