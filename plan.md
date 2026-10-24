@@ -6,6 +6,15 @@ Build Drop as a mobile-first private sharing app where a person can send a photo
 
 The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailbox, and relay foundations. Existing letters continue to work as text drops, and their routes and saved content remain readable. The build covers the end-to-end mobile flow: choose content, attach an image or GIF, choose a recipient, send, open, react, and optionally follow a relay.
 
+## Implementation Status — 2026-10-24 (Share without a handle)
+
+- The composer offers an explicit handleless private-claim path from the blank recipient step. It discloses that anyone holding the bearer link can claim, keeps the account/payload-save gates, limits this route to Instant, and lets the sender return to handle entry with keyboard focus restored.
+- A successful recipientless claim issue is persisted as `claim_pending`; Sent and detail views show a neutral claim status instead of inventing a recipient or saying the link was shared. Existing addressed sends still require a confirmed handle.
+- Regression coverage includes eligibility, saved receipt persistence, generic recipient projection, and rejection of a normal delivered send without a recipient. The isolated Chrome run verified the handleless choice, disclosure, readiness gate, focus return, and saved claim detail/recovery at 360×844, 390×844, 430×844, and 1440×900. The full GIF and photo demo flows also passed; touch was used for the 360px GIF journey, and keyboard activation for the handleless route and claim recovery.
+- `npm test` passed 247/247; lint, no-incremental TypeScript, smoke-script syntax, and `git diff --check` passed. The browser request gate observed no cross-origin or Auth/RPC/Storage-write requests in the local flows.
+- Code commit `a6f8de7` (`feat: add handleless private claim route`) is pushed to `origin/fix-private-claim-share-cancel-copy`; product notes and this learning log are committed separately.
+- Hosted two-account delivery and real Storage deletion remain unverified because no hosted Drop project is set up. This slice does not change the existing 30-day retention policy. Screen-reader and physical-device checks also remain open. A production build was not rerun; prior attempts were blocked by `.next/trace` write permission in the checkout and Google Fonts DNS resolution in a scratch copy.
+
 ## Implementation Status — 2026-10-24 (Home demo browser verification)
 
 - Home now links directly to a no-sign-in photo/GIF demo. It reuses the recipient reveal, reaction, and sender-copy screens, uses bundled media, and clearly says the sample stays on this device and is not sent or shared.

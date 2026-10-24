@@ -2,6 +2,16 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
+## Current Checkpoint — 2026-10-24 (Share without a handle)
+
+- [x] Add an explicit handleless Instant private-claim route with a clear bearer-link warning, connected-account and saved-payload gates, and a return to handle entry.
+- [x] Persist recipientless `claim_pending` receipts and show a generic recipient label; keep ordinary delivered sends gated on a confirmed recipient.
+- [x] Keep saved claim details neutral about whether a cancelled share was actually shared; add regression coverage for eligibility, receipt persistence, and the new rendered copy.
+- [x] `npm test` passes 247/247; lint, no-incremental TypeScript, smoke-script syntax, and `git diff --check` pass.
+- [x] Full isolated Chrome smoke passes GIF at 360×844 (touch), 390×844, 430×844, and 1440×900 (keyboard), photo at 390×844, handleless disclosure/focus return at all four widths (keyboard), and saved-claim recovery/detail copy at all four widths (keyboard). No horizontal overflow, cross-origin requests, or Auth/RPC/Storage-write requests were observed.
+- [x] Code commit `a6f8de7` is pushed to `origin/fix-private-claim-share-cancel-copy`; project notes are recorded in a separate commit.
+- [ ] Verify actual account-to-account claims and Storage cleanup in the approved Free Supabase project; complete screen-reader and physical-device checks. No production build was rerun in this slice because earlier attempts were blocked by checkout write permissions and Google Fonts DNS resolution.
+
 ## Current Checkpoint — 2026-10-24 (Rendered demo viewport matrix)
 
 - [x] Add a Home entry and demo chooser that take a visitor into the existing recipient reveal, reaction, and sender-copy journey without sign-in or a handle.

@@ -2,6 +2,15 @@
 
 Updated: 2026-10-24
 
+## Latest checkpoint — handleless private claim links
+
+- The composer now offers **Share without a handle** from an empty recipient step. The sender must choose this route explicitly; the panel explains that anyone holding the bearer link can claim, and it keeps the connected-account, saved-payload, and Instant-delivery gates. Switching back restores focus to the handle field.
+- Successful recipientless claim issuance persists as `claim_pending` with a generic recipient label in Sent. Saved detail copy reports the pending status without saying the link was shared. Ordinary addressed sends still require a confirmed handle.
+- Regression tests cover explicit eligibility, saved `claim_pending` persistence, generic local/remote recipient projections, and refusal of a normal delivered send without a recipient. The browser smoke now checks disclosure, account readiness, unchanged saved-draft status, focus return, neutral detail copy, and reload recovery.
+- Verification: `npm test` passed 247/247; lint, no-incremental TypeScript, browser-script syntax, and `git diff --check` passed. The full isolated Chrome smoke passed the GIF flow at 360×844 (touch), 390×844, 430×844, and 1440×900 (keyboard), photo at 390×844, and the handleless and claim-recovery flows at all four widths (keyboard). No horizontal overflow, cross-origin requests, or Auth/RPC/Storage-write requests were observed. Screen-reader and physical-device behavior were not tested.
+- Active checkout: `/Users/arjeetanand/projects/drop`; app remains available at `http://localhost:4004`. Branch: `fix-private-claim-share-cancel-copy`. Code commit `a6f8de7` (`feat: add handleless private claim route`) is pushed to `origin/fix-private-claim-share-cancel-copy`; the project notes are committed separately on the same branch. No PR or merge was created. The production build was not rerun: prior attempts were blocked by `.next/trace` write permission and Google Fonts DNS resolution.
+- The user reconfirmed 30-day deletion for abandoned staging uploads; the existing migration already matches, so this slice changed no retention code. No hosted Drop project is configured, so real account-to-account claims and actual Storage deletion remain unverified. Next: validate those against the approved Free setup, then complete screen-reader and physical-device checks.
+
 ## Latest checkpoint — saved private-claim recovery browser assertions (2026-10-24)
 
 - The browser smoke now seeds a disposable pending claim, verifies Compose recovers the saved drop after reload without offering the lost in-memory copy link, and checks that **Open saved drop** leads to the exact encoded detail route with an enabled fresh-link button.

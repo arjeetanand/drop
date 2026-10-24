@@ -832,3 +832,34 @@ A successful database write does not mean an operating-system share sheet comple
 ### Git and remaining gaps
 
 Code commit `53cbb82` (`fix: make private claim recovery truthful`) is pushed to `origin/fix-private-claim-share-cancel-copy`. The README, plan, checklist, handoff, and this learning entry are recorded in a separate documentation commit on the same branch. No PR or merge was created. `/letter`, `.env.local`, and hosted resources were not changed. Next: render the recovery route with isolated local/approved Free Supabase auth, then validate the two-account photo/GIF flow and actual 30-day Storage cleanup.
+
+## 2026-10-24 — Share a drop without knowing a handle
+
+### Issue
+
+Senders had to check a Drop handle before the composer would offer a private claim link. That blocked sharing with a new friend whose handle was not known yet. The sender-side detail page could also imply that a pending link had already been shared, and switching to a handleless route could make an already-saved blank draft appear unsaved.
+
+### Cause
+
+The invite UI eligibility was tied to a checked “not found” handle even though the backend claim path can create a `claim_pending` drop with no recipient account. Local send completion rejected a blank recipient, and Sent projections had no generic label. Detail copy treated a saved claim record as proof that the share sheet completed. The route selection also changed only view state, so it should not dirty an unchanged draft.
+
+### Resolution
+
+- Add an explicit **Share without a handle** route for Instant claims. Show that anyone holding the bearer link can claim, preserve the connected-account and saved-payload gates, and let the sender return to handle entry.
+- Allow only this explicit route to persist a recipientless `claim_pending` receipt. Keep normal delivered sends gated on a confirmed recipient and render a generic recipient label in local and remote Sent projections.
+- Use neutral detail-page wording for claim-pending drops. Restore focus when switching recipient routes, reset route state when loading another draft, and keep an already-saved blank draft marked saved.
+- Add eligibility, persistence, and copy checks plus isolated Chrome assertions for account readiness, link disclosure, focus, saved state, and recovery. Use keyboard activation for this route across viewports after CDP touch dispatch intermittently timed out; the 360px GIF journey still exercises touch.
+
+### Learning
+
+Model the saved claim record and the share-sheet outcome as separate states: `claim_pending` proves a claim exists, while only the share/copy result proves how the sender received or shared its link. A UI-only route choice should not flip a saved indicator unless the persisted draft changed. Persistence tests should use the complete address shape that draft hydration writes, rather than a sparse fixture that normalizes differently.
+
+### Verification
+
+- `npm test` passed 247/247; `npm run lint`, `./node_modules/.bin/tsc --noEmit --incremental false`, `node --check scripts/browser-demo-smoke.mjs`, and `git diff --check` passed.
+- The full isolated Chrome smoke passed GIF at 360×844 by touch and 390×844, 430×844, and 1440×900 by keyboard; photo at 390×844; and the handleless and saved-claim recovery flows at all four viewports by keyboard. There was no horizontal overflow, cross-origin request, Auth/RPC/Storage write, browser console error, or JavaScript exception. The handleless disclosure and saved indicator were also verified after the final state fix.
+- A production build was not rerun for this slice. Prior attempts were blocked by write permission on `.next/trace` in the checkout and DNS resolution of the existing Google Fonts host in a scratch build. No hosted account-to-account send or actual Storage deletion was verified.
+
+### Git and remaining gaps
+
+Code commit `a6f8de7` (`feat: add handleless private claim route`) is pushed to `origin/fix-private-claim-share-cancel-copy`. The README, plan, checklist, handoff, and learning entry are committed separately on the same branch. No PR or merge was created. The user's 30-day abandoned-staging deletion choice matches the existing migration; this slice changed no retention code. `/letter`, `.env.local`, and hosted resources were not changed. Next: verify two-account claims and actual Storage cleanup against the approved Free project, then complete screen-reader and physical-device checks.
