@@ -2,6 +2,16 @@
 
 Updated: 2026-10-24
 
+## Latest checkpoint — Claim-profile browser smoke stability (2026-10-24)
+
+- The focused profile smoke intermittently timed out on the account-checking placeholder while reusing one page across five viewport navigations. Fresh-page probes rendered successfully, and the same-origin gate reported no blocked requests, so the failures did not indicate a viewport-specific layout bug.
+- The profile-only runner now creates a fresh Chrome page target for each viewport, waits for that document's load event before checking the form, and includes blocked origins, recent query-free request paths, console errors, and JavaScript exceptions in failures. The request gate remains same-origin.
+- Verification: `npm test` passed 273/273; lint, no-incremental TypeScript, script syntax, and `git diff --check` passed. The five-viewport smoke passed twice at 360×844, 390×844, 430×844, 844×390, and 1440×900, with zero blocked cross-origin requests. Local Docker Supabase Auth health returned HTTP 200; the app remains on port 4004.
+- Code commit `ee844cb` (`fix: stabilize claim profile browser smoke`) is pushed on `fix/claim-first-use-profile` and updates [PR #3](https://github.com/arjeetanand/drop/pull/3). No merge was performed.
+- No app/backend data or hosted resources changed. `.env.local` stayed ignored and unchanged; `/letter` was not touched. Hosted account-to-account behavior, actual aged-object deletion, screen-reader output, and physical-device behavior remain unverified.
+
+**Next:** continue the Drop feature plan with the stable profile smoke available; merge PR #3 only after explicit approval.
+
 ## Latest checkpoint — authenticated first-use claim in browser (2026-10-24)
 
 - The claim-return handle now has native required-field semantics. Added a local-only browser smoke that signs a new recipient in through Mailpit, saves the required handle from the rendered profile form, verifies the drop remains sealed and unreadable before claim, then explicitly claims and opens it.

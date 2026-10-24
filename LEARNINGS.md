@@ -1296,3 +1296,32 @@ For admin-backed local browser tests, validate the daemon endpoint, not only its
 ### Git and remaining gaps
 
 Code commit `aabe941` (`fix: verify first-use private claim in local browser`) is pushed to `fix/claim-first-use-profile`; the documentation update is committed separately on the same branch. PR #3 remains unmerged. This verifies the local journey only; hosted two-account delivery, actual aged-object cleanup, screen-reader output, and physical-device behavior remain open. `.env.local`, `/letter`, and hosted Supabase resources were not changed.
+
+## 2026-10-24 — Stabilize claim-profile viewport smoke
+
+### Issue
+
+The profile-only browser smoke intermittently stayed on the global “Checking your account…” placeholder while checking mobile, landscape, and desktop sizes. The failed viewport varied between runs.
+
+### Cause
+
+Fresh-page probes rendered the form with and without request interception, and the same-origin gate reported no blocked origins. That rules against a repeatable viewport layout defect or a blocked-request explanation. Reusing one DevTools page across several viewport navigations was the likely source of test flakiness, though the exact trigger was not isolated.
+
+### Resolution
+
+- Give every viewport in the profile-only run a fresh Chrome page target.
+- Wait for the new document's load event before asserting the profile form.
+- Preserve the same-origin request gate and include blocked origins, recent query-free request paths, console errors, and JavaScript exceptions in failure output.
+
+### Learning
+
+When browser failures move across viewport sizes, compare a fresh-page render and inspect the network gate before changing UI code. Isolating each viewport in its own browser target helps separate page-lifecycle instability from responsive defects.
+
+### Verification
+
+- The five-viewport profile smoke passed twice at 360×844, 390×844, 430×844, 844×390, and 1440×900; both runs blocked zero cross-origin requests.
+- `npm test` passed 273/273; lint, no-incremental TypeScript, script syntax, and `git diff --check` passed. Local Docker Supabase Auth health returned HTTP 200.
+
+### Git and remaining gaps
+
+Code commit `ee844cb` (`fix: stabilize claim profile browser smoke`) is pushed to `fix/claim-first-use-profile` and updates PR #3; the documentation update is being committed separately. PR #3 remains unmerged. The browser smoke checks local layout and keyboard behavior only; hosted delivery, physical Storage deletion, screen-reader output, and device behavior remain open. `.env.local`, `/letter`, and hosted Supabase resources were not changed.

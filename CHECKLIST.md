@@ -7,9 +7,11 @@ Updated: 2026-10-24
 - [x] Make the handle first and required on private-claim return; keep display name and bio optional and collapsed.
 - [x] Add handle-only persistence coverage and exercise the blank-optional-fields profile through local Supabase text/image/GIF claim smoke.
 - [x] Verify keyboard disclosure and responsive layout at mobile portrait/landscape and desktop sizes; pass unit, lint, type, build, browser, and local Supabase checks.
+- [x] Stabilize the focused browser run with a fresh page per viewport, a page-load wait, and failure diagnostics; repeat the five-viewport run twice with zero cross-origin requests blocked.
 - [x] Verify the rendered email-link sign-in → required-handle profile save → sealed pre-claim state → explicit claim/open flow against local Docker Supabase; verify test mail, drop, accounts, and temporary files are removed.
 - [x] Make the browser runner reject a non-local Docker endpoint and Supabase URL credentials/query/fragment; recover accounts by exact email plus a unique marker if creation response is lost.
 - [x] Push profile setup commit `2b53bcd` and browser-to-claim follow-up `aabe941` on `fix/claim-first-use-profile`; both are tracked by [PR #3](https://github.com/arjeetanand/drop/pull/3).
+- [x] Push smoke-stability commit `ee844cb` to the same branch and update PR #3; keep the PR unmerged pending explicit approval.
 - [ ] Merge PR #3 after explicit approval.
 - [ ] Verify hosted account-to-account behavior, aged-object deletion, physical-device input, and spoken screen-reader output.
 

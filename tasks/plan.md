@@ -8,7 +8,15 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 
 ## Implementation Status — 2026-10-24
 
-### Latest checkpoint — Handle-first private-claim setup (2026-10-24)
+### Latest checkpoint — Claim-profile browser smoke stability (2026-10-24)
+
+- The focused claim-profile smoke had intermittent waits on “Checking your account…” across changing viewport sizes. Fresh single-page probes passed, and the browser gate reported no blocked origins. This points to fragile shared-page navigation in the smoke, not a viewport-specific styling failure; the exact trigger was not isolated.
+- The profile-only run now creates a fresh Chrome page target for each viewport, waits for that page's load event before asserting the form, and records blocked origins, recent query-free request paths, console errors, and JavaScript exceptions on failure. The same-origin request gate is unchanged.
+- Verification: `npm test` passed 273/273; lint, no-incremental TypeScript, script syntax, and `git diff --check` passed. The five-viewport browser smoke passed twice at 360×844, 390×844, 430×844, 844×390, and 1440×900; both runs blocked zero cross-origin requests. Local Docker Supabase Auth health returned HTTP 200.
+- Code commit `ee844cb` is pushed to `origin/fix/claim-first-use-profile` and updates PR #3. The PR remains unmerged.
+- This verifies the focused local profile layout and keyboard disclosure. It does not save a profile through the browser or establish hosted behavior; actual aged-object cleanup, screen-reader output, and physical-device behavior remain open.
+
+### Previous checkpoint — Handle-first private-claim setup (2026-10-24)
 
 - First-time recipients returning from a private claim now see the required Drop handle first. Display name and bio remain optional behind a keyboard-operable disclosure; existing values are preserved and the ordinary profile-editing order is unchanged.
 - Added handle-only profile persistence coverage. The local Supabase flow now claims with blank optional profile fields, and isolated Chrome checks disclosure semantics, keyboard operation, retained values, and layout at mobile portrait/landscape and desktop sizes.
