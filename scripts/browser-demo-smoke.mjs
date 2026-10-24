@@ -584,8 +584,10 @@ async function runClaimRecoveryFlow(cdp, {
   });
 
   await waitUntil(cdp, 'the saved pending claim detail and fresh-link action', async () => (
-    await evaluate(cdp, `${normalizedVisibleText('Waiting for them to claim.')} && ${normalizedVisibleText('Share a fresh private link')} && location.pathname === ${JSON.stringify(CLAIM_DETAILS_PATH)}`)
+    await evaluate(cdp, `${normalizedVisibleText('Waiting for them to claim.')} && ${normalizedVisibleText('Share a fresh private link')} && ${normalizedVisibleText('“A note waiting to be claimed” is waiting to be claimed. Open this page to check its status or make a fresh private link.')} && location.pathname === ${JSON.stringify(CLAIM_DETAILS_PATH)}`)
   ));
+  const claimsItWasShared = await evaluate(cdp, `${normalizedVisibleText('You sent this drop to Anyone with the link')}`);
+  assert.equal(claimsItWasShared, false, 'A saved claim-pending drop must not imply the bearer link was shared.');
   const freshLinkButtonEnabled = await evaluate(cdp, `Array.from(document.querySelectorAll('button')).some(node => (node.innerText || node.textContent || '').replace(/\\s+/g, ' ').trim().toLocaleLowerCase() === 'share a fresh private link' && !node.disabled && node.getAttribute('aria-disabled') !== 'true')`);
   assert.equal(freshLinkButtonEnabled, true, 'The saved claim detail should expose an enabled fresh-link button.');
   await assertNoFrameworkOverlay(cdp, 'Saved claim detail');
@@ -593,6 +595,40 @@ async function runClaimRecoveryFlow(cdp, {
   if (screenshotDir && (viewport.width === 390 || !viewport.mobile)) {
     await captureScreenshot(cdp, screenshotDir, `${viewport.name}-claim-detail`);
   }
+}
+
+async function runRecipientlessClaimChoiceFlow(cdp, { appUrl, viewport, keyboard }) {
+  await setViewport(cdp, viewport);
+  const composeUrl = new URL('/compose', appUrl);
+  composeUrl.searchParams.set('new', '1');
+  await cdp.send('Page.navigate', { url: composeUrl.href });
+  await waitUntil(cdp, 'the fresh composer and handleless claim option', async () => (
+    await evaluate(cdp, `${normalizedVisibleText('Send a little moment.')} && ${normalizedVisibleText('Share without a handle')} && location.pathname === '/compose'`)
+  ));
+  await waitUntil(cdp, 'the blank draft saved before selecting a delivery route', async () => (
+    await evaluate(cdp, `${normalizedVisibleText('Saved on this device')}`)
+  ));
+  await activateFlowControl(cdp, { keyboard, name: 'Share without a handle', expectedTag: 'BUTTON' });
+  await waitUntil(cdp, 'the focused handleless claim explanation', async () => (
+    await evaluate(cdp, `(() => {
+      const panel = document.querySelector('[role="region"][aria-labelledby="unaddressed-claim-title"]');
+      return Boolean(panel && document.activeElement === panel
+        && ${normalizedVisibleText('Anyone holding the link can claim this drop')}
+        && ${normalizedVisibleText('Connect your Drop account before making a private claim link.')});
+    })()`)
+  ));
+  const blankDraftStillSaved = await evaluate(cdp, `${normalizedVisibleText('Saved on this device')}`);
+  assert.equal(blankDraftStillSaved, true, 'Selecting an unaddressed route must not mark an unchanged saved draft as unsaved.');
+  const unsafeShareActionVisible = await evaluate(cdp, `Array.from(document.querySelectorAll('button')).some(node => (node.innerText || node.textContent || '').replace(/\\s+/g, ' ').trim().toLocaleLowerCase() === 'share private link')`);
+  assert.equal(unsafeShareActionVisible, false, 'An unconnected account must not be offered an actionable private-link share.');
+  await assertNoFrameworkOverlay(cdp, 'Handleless claim explanation');
+  await assertNoHorizontalOverflow(cdp, 'Handleless claim explanation', viewport.width);
+
+  await activateFlowControl(cdp, { keyboard, name: 'Use a Drop handle instead', expectedTag: 'BUTTON' });
+  await waitUntil(cdp, 'focus returned to the Drop handle field', async () => (
+    await evaluate(cdp, `document.activeElement?.id === 'drop-recipient'`)
+  ));
+  await assertNoHorizontalOverflow(cdp, 'Handleless route switched back to recipient entry', viewport.width);
 }
 
 async function main() {
@@ -748,16 +784,25 @@ async function main() {
       });
     }
 
+    for (const viewport of FLOW_VIEWPORTS) {
+      await runRecipientlessClaimChoiceFlow(pageCdp, {
+        appUrl,
+        viewport,
+        keyboard: true,
+      });
+      console.log(`[browser-demo-smoke] PASS keyboard handleless claim choice and focus recovery at ${viewport.width}×${viewport.height}${viewport.mobile ? '' : ' desktop'}.`);
+    }
+
     capturingRecoveryBackendRequests = true;
     for (const viewport of FLOW_VIEWPORTS) {
       await runClaimRecoveryFlow(pageCdp, {
         appUrl,
         viewport,
-        keyboard: viewport.width !== 360,
+        keyboard: true,
         screenshotDir: viewport.width === 390 || !viewport.mobile ? screenshotDir : null,
         getPageLoadEvents: () => pageLoadEvents,
       });
-      console.log(`[browser-demo-smoke] PASS ${viewport.width === 360 ? 'touch' : 'keyboard'} saved-claim recovery at ${viewport.width}×${viewport.height}${viewport.mobile ? '' : ' desktop'}.`);
+      console.log(`[browser-demo-smoke] PASS keyboard saved-claim recovery at ${viewport.width}×${viewport.height}${viewport.mobile ? '' : ' desktop'}.`);
     }
     capturingRecoveryBackendRequests = false;
 
@@ -768,6 +813,7 @@ async function main() {
     if (firewallFailure) throw new Error(`The browser network gate failed: ${firewallFailure.message}`);
 
     console.log('[browser-demo-smoke] PASS saved-claim recovery after reload, including the encoded detail route and fresh-link action at all mobile and desktop widths.');
+    console.log('[browser-demo-smoke] PASS handleless claim disclosure, account readiness gate, and focus recovery at all mobile and desktop widths.');
     console.log('[browser-demo-smoke] PASS no Auth, REST, or Storage request during the saved-claim recovery flow.');
     if (!claimRecoveryOnly) {
       console.log('[browser-demo-smoke] PASS photo flow at 390×844, including saved reaction, reload persistence, and sender copy.');

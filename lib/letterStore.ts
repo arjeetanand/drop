@@ -565,6 +565,10 @@ export function completeSuccessfulSend(
   const history = getDraftHistory(accountId);
   const source = active?.id === submittedDraft.id ? active : history.find((draft) => draft.id === submittedDraft.id);
   const normalizedRecipient = normalizeDropRecipient(submittedDraft.recipient);
+  const unaddressedClaim = status === 'claim_pending'
+    && submittedDraft.deliveryMode === 'instant'
+    && !normalizedRecipient
+    && !submittedDraft.address.name.trim();
   const submittedComposition = [
     submittedDraft.recipient,
     submittedDraft.subject,
@@ -601,13 +605,16 @@ export function completeSuccessfulSend(
     source.mediaUploadId,
     source.status,
   ];
-  if (!source || !normalizedRecipient || normalizeDropRecipient(source.recipient) !== normalizedRecipient
+  const recipientMatches = unaddressedClaim
+    ? !normalizeDropRecipient(source?.recipient ?? '') && !source?.address.name.trim()
+    : Boolean(normalizedRecipient && source && normalizeDropRecipient(source.recipient) === normalizedRecipient);
+  if (!source || !recipientMatches
     || JSON.stringify(currentComposition) !== JSON.stringify(submittedComposition)) return null;
 
   const next = hydrateDraft({
     ...source,
     ...metadata,
-    ...(source.recipientInviteProgress?.username === normalizedRecipient ? { recipientInviteProgress: undefined } : {}),
+    ...(unaddressedClaim || source.recipientInviteProgress?.username === normalizedRecipient ? { recipientInviteProgress: undefined } : {}),
     status,
     dispatchedAt,
     updatedAt: new Date().toISOString(),
@@ -703,7 +710,7 @@ function formatDate(isoDate: string) {
 export function draftAsLetter(draft: LetterDraftState): MockLetter {
   return {
     id: draft.id,
-    recipient: draft.address.name || draft.recipient,
+    recipient: draft.address.name || draft.recipient || (draft.status === 'claim_pending' ? 'Anyone with the link' : ''),
     date: formatDate(draft.dispatchedAt ?? draft.updatedAt),
     activityAt: draft.dispatchedAt ?? draft.updatedAt,
     status: draft.status,

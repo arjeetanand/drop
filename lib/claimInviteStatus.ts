@@ -21,6 +21,7 @@ type PrivateClaimInviteEligibility = {
   recipientStatus: string;
   recipientUsername: string | null;
   checkedUsername: string | null;
+  shareWithoutHandle?: boolean;
   deliveryMode?: MockLetter['deliveryMode'];
   payloadKind?: MockLetter['payloadKind'];
   hasText: boolean;
@@ -30,11 +31,14 @@ type PrivateClaimInviteEligibility = {
 };
 
 function hasEligiblePrivateClaimRecipientAndPayload(input: PrivateClaimInviteEligibility): boolean {
-  if (!input.accountConnected
-    || input.recipientStatus !== 'not-found'
-    || !input.recipientUsername
-    || input.checkedUsername !== input.recipientUsername
-    || input.attachmentBusy) return false;
+  const unaddressedLink = input.shareWithoutHandle === true
+    && input.recipientStatus === 'idle'
+    && !input.recipientUsername
+    && !input.checkedUsername;
+  const checkedMissingHandle = input.recipientStatus === 'not-found'
+    && Boolean(input.recipientUsername)
+    && input.checkedUsername === input.recipientUsername;
+  if (!input.accountConnected || (!unaddressedLink && !checkedMissingHandle) || input.attachmentBusy) return false;
 
   const payloadKind = input.payloadKind || 'text';
   return payloadKind === 'text'

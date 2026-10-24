@@ -297,7 +297,7 @@ function rowToLetter(row: LetterRow, userId: string, revealContent = false): Moc
   const mediaFallback = row.payload_kind === 'gif' ? 'A GIF is waiting behind the seal.' : row.payload_kind === 'image' ? 'A photo is waiting behind the seal.' : 'A sealed drop waiting to be opened.';
   return {
     id: row.id,
-    recipient: row.status === 'claim_pending' ? 'your invited friend' : row.recipient_name || row.recipient_username || 'your correspondent',
+    recipient: row.status === 'claim_pending' ? 'Anyone with the link' : row.recipient_name || row.recipient_username || 'your correspondent',
     sender: row.sender_display_name || undefined,
     senderUsername: row.sender_profile?.username || undefined,
     direction: row.sender_id === userId ? 'sent' : 'received',

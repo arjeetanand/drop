@@ -659,6 +659,8 @@ export default function LetterArrivalPage() {
               ? letter.direction === 'received' ? 'Explore this example, then try a reaction. Nothing was sent and no one will be notified.' : 'Explore this example. It is seeded content, not a drop you sent or received.'
               : letter.localDemo
               ? senderView ? 'This copy is saved on this device for you to review. Your recipient has not received it.' : 'Open it as if you were the recipient, then try a reaction. Nothing leaves this browser.'
+              : letter.status === 'claim_pending'
+              ? `“${letter.subject}” is waiting to be claimed. Open this page to check its status or make a fresh private link.`
               : letter.direction === 'sent'
               ? `You sent this drop to ${letter.recipient || 'your recipient'}. Open your copy to see the message and any reaction.`
               : `${sender} left a message in your hands. Read the fragments first, then open the full drop when you are ready.`}

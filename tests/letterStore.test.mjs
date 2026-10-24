@@ -414,6 +414,40 @@ test('persists a private claim as an unclaimed sent receipt', () => {
   }
 });
 
+test('persists an explicitly unaddressed claim with a generic recipient label', () => {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const values = new Map();
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { localStorage: { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value), removeItem: (key) => values.delete(key) } },
+  });
+  try {
+    setLocalAccountId('unaddressed-claim-owner');
+    const draft = saveLetterDraft({
+      id: 'draft-unaddressed-claim',
+      recipient: '',
+      address: { name: '', street: '', city: '', postcode: '', country: '' },
+      content: 'A note for whoever needs it.',
+      recipientInviteProgress: { username: 'old.friend', status: 'copied' },
+    });
+    const sent = completeSuccessfulSend(draft, 'unaddressed-claim-owner', 'claim_pending', '2026-10-24T00:00:00.000Z', {});
+
+    assert.equal(sent?.status, 'claim_pending');
+    assert.equal(sent?.recipient, '');
+    assert.equal(sent?.address.name, '');
+    assert.equal(sent?.recipientInviteProgress, undefined);
+    assert.equal(getLetterDraftById(draft.id)?.status, 'claim_pending');
+    assert.equal(getLettersWithDraft().find((letter) => letter.id === draft.id)?.recipient, 'Anyone with the link');
+
+    const ordinaryDraft = saveLetterDraft({ id: 'draft-blank-ordinary-send', recipient: '', content: 'Still needs a recipient.' });
+    assert.equal(completeSuccessfulSend(ordinaryDraft, 'unaddressed-claim-owner', 'delivered', '2026-10-24T00:00:01.000Z', {}), null);
+  } finally {
+    setLocalAccountId(null);
+    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
+    else delete globalThis.window;
+  }
+});
+
 test('clears only progress for the recipient of the completed send', () => {
   const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
   const values = new Map();

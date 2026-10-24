@@ -60,9 +60,14 @@ function Composer() {
   const [previewUrl, setPreviewUrl] = useState('');
   const [content, setContent] = useState('');
   const [recipient, setRecipient] = useState('');
+  const [shareWithoutHandle, setShareWithoutHandle] = useState(false);
   const [recipientCheck, setRecipientCheck] = useState<RecipientCheck>({ status: 'idle', username: null });
   const [recentRecipients, setRecentRecipients] = useState<RecentDropRecipient[]>([]);
   const recipientCheckRequest = useRef(0);
+  const recipientInputRef = useRef<HTMLInputElement>(null);
+  const recipientlessPanelRef = useRef<HTMLDivElement>(null);
+  const focusRecipientlessPanel = useRef(false);
+  const focusRecipientInput = useRef(false);
   const privateClaimButtonRef = useRef<HTMLButtonElement>(null);
   const focusPrivateClaimButtonAfterModeSwitch = useRef(false);
   const [subject, setSubject] = useState('');
@@ -109,6 +114,9 @@ function Composer() {
     setMediaExpiresAt(null);
     setContent(current.content);
     setRecipient(requestedRecipient);
+    setShareWithoutHandle(false);
+    focusRecipientlessPanel.current = false;
+    focusRecipientInput.current = false;
     recipientCheckRequest.current += 1;
     setRecipientCheck({ status: 'idle', username: null });
     setRecentRecipients([]);
@@ -203,6 +211,7 @@ function Composer() {
     recipientStatus: recipientCheck.status,
     recipientUsername,
     checkedUsername: recipientCheck.username,
+    shareWithoutHandle,
     deliveryMode,
     payloadKind,
     hasText: Boolean(content.trim()),
@@ -212,12 +221,31 @@ function Composer() {
   };
   const canSendPrivateClaim = canOfferPrivateClaimInvite(privateClaimEligibility);
   const canSwitchToInstantClaim = canOfferInstantClaimSwitch(privateClaimEligibility);
+  const privateClaimReadinessMessage = accountState !== 'connected'
+    ? 'Connect your Drop account before making a private claim link.'
+    : attachmentLoading || attachmentSaving
+      ? 'Wait until the attachment finishes saving on this device.'
+      : payloadKind === 'text'
+        ? 'Add a note before making a private claim link.'
+        : !file
+          ? `Add a ${payloadKind === 'gif' ? 'GIF' : 'photo'} before making a private claim link.`
+          : 'Wait until the attachment finishes saving on this device.';
 
   useEffect(() => {
     if (!canSendPrivateClaim || !focusPrivateClaimButtonAfterModeSwitch.current) return;
     focusPrivateClaimButtonAfterModeSwitch.current = false;
     privateClaimButtonRef.current?.focus();
   }, [canSendPrivateClaim]);
+
+  useEffect(() => {
+    if (shareWithoutHandle && focusRecipientlessPanel.current) {
+      focusRecipientlessPanel.current = false;
+      recipientlessPanelRef.current?.focus();
+    } else if (!shareWithoutHandle && focusRecipientInput.current) {
+      focusRecipientInput.current = false;
+      recipientInputRef.current?.focus();
+    }
+  }, [shareWithoutHandle]);
 
   const updateKind = (kind: DropPayloadKind) => {
     setError('');
@@ -330,6 +358,7 @@ function Composer() {
 
   const handleRecipientChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const next = `@${event.target.value.replace(/^@/, '')}`;
+    setShareWithoutHandle(false);
     clearRecipientInviteProgressForRecipient(next);
     if (normalizeDropRecipient(next) !== recipientUsername) {
       recipientCheckRequest.current += 1;
@@ -371,6 +400,7 @@ function Composer() {
 
   const selectRecentRecipient = (username: string) => {
     const nextRecipient = `@${username}`;
+    setShareWithoutHandle(false);
     clearRecipientInviteProgressForRecipient(nextRecipient);
     setRecipient(nextRecipient);
     setSaved(false);
@@ -379,6 +409,29 @@ function Composer() {
     setManualInviteUrl('');
     setPrivateClaimUrl('');
     void checkRecipient(username);
+  };
+
+  const chooseLinkWithoutHandle = () => {
+    if (sharingInvite || sending || deletingRef.current) return;
+    clearRecipientInviteProgressForRecipient('');
+    recipientCheckRequest.current += 1;
+    focusRecipientlessPanel.current = true;
+    setRecipient('');
+    setRecipientCheck({ status: 'idle', username: null });
+    setShareWithoutHandle(true);
+    setInviteNotice('');
+    setManualInviteUrl('');
+    setPrivateClaimUrl('');
+  };
+
+  const chooseHandleInstead = () => {
+    recipientCheckRequest.current += 1;
+    focusRecipientInput.current = true;
+    setShareWithoutHandle(false);
+    setRecipient('');
+    setRecipientCheck({ status: 'idle', username: null });
+    setInviteNotice('');
+    setPrivateClaimUrl('');
   };
 
   const sharePrivateClaimInvite = async () => {
@@ -692,7 +745,7 @@ function Composer() {
           <h1 className="mt-2 font-headline-md text-4xl font-semibold leading-[1.02] tracking-[-0.045em] text-ink-navy sm:text-5xl">Send a little moment.</h1>
           <p className="mt-3 max-w-xl text-sm leading-relaxed text-on-surface-variant sm:text-base">One person, one thing you wanted them to see. The rest can wait.</p>
         {accountState !== 'connected' && <div className="rounded-xl border border-[#e9d6c7] bg-[#fff6ec] p-4"><p className="text-sm font-semibold text-ink-navy">{accountState === 'checking' ? 'Checking your account…' : accountState === 'unavailable' ? 'Preview mode' : 'Connect your account to send.'}</p><p className="mt-1 text-xs leading-relaxed text-on-surface-variant">{accountState === 'unavailable' ? 'Sign-in isn’t available in this preview. Your drafts stay on this device.' : 'Connect your account to send a private note or invite someone to claim one.'}</p><Link href={profileHref} onClick={saveBeforeLeaving} aria-disabled={attachmentSaving || Boolean(file && !attachmentSaved)} className="mt-2 inline-flex min-h-11 items-center text-xs font-bold text-[#2b45f7]">{accountState === 'unavailable' ? 'Account options' : 'Your profile'} <ArrowRightIcon /></Link></div>}
-          {accountState === 'connected' && <p className="mt-4 rounded-xl border border-[#cae6d5] bg-[#f0f9f3] px-4 py-3 text-sm font-semibold text-[#26734f]" role="status">Your account is ready. Start by choosing who gets this drop.</p>}
+        {accountState === 'connected' && <p className="mt-4 rounded-xl border border-[#cae6d5] bg-[#f0f9f3] px-4 py-3 text-sm font-semibold text-[#26734f]" role="status">Your account is ready. {shareWithoutHandle ? 'Choose what goes in this drop, then share its private link.' : 'Start by choosing who gets this drop.'}</p>}
         </div>
 
         {draft?.status === 'claim_pending' ? <section className="mt-6 rounded-2xl border border-[rgba(16,42,67,.12)] bg-[#fffdf9] p-5 shadow-[0_8px_24px_rgba(16,42,67,.04)] sm:mt-8 sm:p-7" aria-labelledby="claim-pending-title">
@@ -713,10 +766,35 @@ function Composer() {
           <fieldset disabled={deleting || sending} aria-label="Compose drop" className="m-0 min-w-0 space-y-4 border-0 p-0 sm:space-y-5">
           <section className="rounded-2xl border border-[rgba(16,42,67,.12)] bg-white/55 p-4 sm:p-6">
             <p className="eyebrow">First · your person</p>
+            {shareWithoutHandle ? <div ref={recipientlessPanelRef} role="region" aria-labelledby="unaddressed-claim-title" tabIndex={-1} className="mt-2 rounded-xl border border-[#e9d6c7] bg-[#fff6ec] p-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2b45f7]">
+              <h3 id="unaddressed-claim-title" className="text-sm font-semibold text-ink-navy">Let them choose a handle later.</h3>
+              <p className="mt-1 text-xs leading-relaxed text-on-surface-variant">They can sign in or join Drop, choose a handle if they are new, and claim this drop from the link.</p>
+              <p className="mt-2 rounded-lg border border-[rgba(16,42,67,.12)] bg-white/75 p-3 text-xs leading-relaxed text-on-surface-variant">Anyone holding the link can claim this drop, so share it directly with the person you have in mind.</p>
+              <button type="button" onClick={chooseHandleInstead} disabled={sharingInvite || sending} className="button-secondary mt-3 !min-h-12 w-full !rounded-xl disabled:opacity-50">Use a Drop handle instead</button>
+              {deliveryMode === 'relay' && <div className="mt-3 rounded-lg border border-[rgba(16,42,67,.12)] bg-[#eef1ff] p-3">
+                <p className="text-xs leading-relaxed text-on-surface-variant">Private claim links use Instant delivery. Relay needs an existing Drop handle.</p>
+                {canSwitchToInstantClaim && <button type="button" onClick={switchToInstantForPrivateClaim} disabled={sharingInvite || sending || deleting} className="button-secondary mt-3 !min-h-12 w-full !rounded-xl disabled:opacity-50">Switch to Instant for a private link</button>}
+              </div>}
+              {canSendPrivateClaim ? <div className="mt-3 rounded-lg border border-[rgba(16,42,67,.12)] bg-[#eef1ff] p-3">
+                <p className="text-sm font-semibold text-ink-navy">Share this private {privateClaimPayloadLabel} link</p>
+                {payloadKind === 'text'
+                  ? <p className="mt-1 text-xs leading-relaxed text-on-surface-variant">The link lasts 7 days.</p>
+                  : <p className="mt-1 text-xs leading-relaxed text-on-surface-variant">The link {getClaimInviteExpiryDuration(payloadKind)}. If unclaimed after 30 days, access ends and Drop queues the attachment for deletion. A paused free project or worker outage can delay removal.</p>}
+                <button ref={privateClaimButtonRef} type="button" onClick={() => void sharePrivateClaimInvite()} disabled={sharingInvite || sending || deleting} className="button-primary mt-3 !min-h-12 w-full !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white disabled:opacity-50">
+                  <Share2 className="h-4 w-4" aria-hidden="true" />{sharingInvite ? 'Preparing private link…' : 'Share private link'}
+                </button>
+              </div> : !canSwitchToInstantClaim && <p className="field-help mt-3" role="status">{privateClaimReadinessMessage}</p>}
+              {privateClaimUrl && <div className="mt-3 rounded-lg border border-[rgba(16,42,67,.12)] bg-white/75 p-3">
+                <p className="text-sm font-semibold text-ink-navy">Your private link is ready, but not shared yet.</p>
+                <code tabIndex={0} aria-label="Select and copy this private claim link" className="mt-2 block select-all break-all rounded-lg bg-white px-2 py-2 font-mono text-[0.68rem] text-ink-navy">{privateClaimUrl}</code>
+                <button type="button" onClick={() => void copyPrivateClaimInvite()} className="button-primary mt-3 !min-h-12 w-full !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white">Copy private link</button>
+              </div>}
+              {inviteNotice && <p className="field-help mt-3 break-words" role="status" aria-live="polite">{inviteNotice}</p>}
+            </div> : <>
             <label htmlFor="drop-recipient" className="field-label mt-1 block">Who should get this drop?</label>
             <div className="mt-2 flex items-center rounded-xl border border-[rgba(16,42,67,.14)] bg-white px-3 focus-within:ring-2 focus-within:ring-[#2b45f7]/35">
               <span className="font-mono text-sm font-bold text-[#2b45f7]">@</span>
-              <input id="drop-recipient" value={recipient.replace(/^@/, '')} onChange={handleRecipientChange} disabled={sending || sharingInvite} className="min-h-12 min-w-0 flex-1 border-0 bg-transparent px-2 text-base text-ink-navy outline-none placeholder:text-on-surface-variant/60 disabled:opacity-60" placeholder="their.username" autoCapitalize="none" autoCorrect="off" spellCheck={false} aria-invalid={recipientHasValue && !recipientUsername} aria-describedby={recipientHasValue && !recipientUsername ? 'drop-recipient-help drop-recipient-error' : 'drop-recipient-help'} />
+              <input ref={recipientInputRef} id="drop-recipient" value={recipient.replace(/^@/, '')} onChange={handleRecipientChange} disabled={sending || sharingInvite} className="min-h-12 min-w-0 flex-1 border-0 bg-transparent px-2 text-base text-ink-navy outline-none placeholder:text-on-surface-variant/60 disabled:opacity-60" placeholder="their.username" autoCapitalize="none" autoCorrect="off" spellCheck={false} aria-invalid={recipientHasValue && !recipientUsername} aria-describedby={recipientHasValue && !recipientUsername ? 'drop-recipient-help drop-recipient-error' : 'drop-recipient-help'} />
             </div>
             <p id="drop-recipient-help" className="field-help mt-2">They need a Drop account to open a drop. If they don’t have one yet, you can share a private claim link. Handles use 2–24 letters, numbers, periods, underscores, or hyphens.</p>
             {pendingInvite && <div className="mt-2 rounded-lg bg-[#f5f1e9] px-3 py-2 text-sm leading-relaxed text-ink-navy">
@@ -742,10 +820,15 @@ function Composer() {
             </div>}
             {recipientHasValue && !recipientUsername && <p id="drop-recipient-error" className="error-notice mt-2" role="status" aria-live="polite">Enter a valid Drop handle to send.</p>}
             <button type="button" onClick={() => void checkRecipient()} disabled={!recipientUsername || recipientCheck.status === 'checking' || accountState !== 'connected' || sending || sharingInvite} className="button-secondary mt-3 !min-h-12 w-full !rounded-xl disabled:opacity-45">{recipientCheck.status === 'checking' ? 'Checking…' : pendingInvite ? `Check @${pendingInvite.username}` : recipientCheck.status === 'found' || recipientCheck.status === 'not-found' ? 'Check again' : recipientCheck.status === 'idle' ? 'Check handle' : 'Try again'}</button>
+            {!recipientUsername && <div className="mt-3 rounded-xl border border-[rgba(16,42,67,.12)] bg-[#fffdf9] p-3">
+              <p className="text-sm font-semibold text-ink-navy">No handle yet?</p>
+              <p className="mt-1 text-xs leading-relaxed text-on-surface-variant">Share a private link; they can choose a Drop handle if they are new.</p>
+              <button type="button" onClick={chooseLinkWithoutHandle} disabled={sharingInvite || sending || deleting} className="button-secondary mt-3 !min-h-12 w-full !rounded-xl disabled:opacity-50">Share without a handle</button>
+            </div>}
             {recipientCheck.status === 'checking' && recipientCheck.username === recipientUsername && <p className="field-help mt-2" role="status" aria-live="polite">Checking @{recipientUsername}…</p>}
             {confirmedRecipient && <p className="mt-2 text-sm font-semibold text-[#26734f]" role="status" aria-live="polite">Recipient confirmed: {confirmedRecipient.displayName} (@{confirmedRecipient.username})</p>}
             {recipientCheck.status === 'not-found' && recipientCheck.username === recipientUsername && <>
-              <p className="error-notice mt-2" role="status" aria-live="polite">No Drop account found for @{recipientUsername}.</p>
+              <p className="mt-2 rounded-lg border border-[#e9d6c7] bg-[#fff6ec] px-3 py-2 text-sm text-ink-navy" role="status" aria-live="polite">No Drop account found for @{recipientUsername} yet.</p>
               <div className="mt-3 rounded-xl border border-[rgba(16,42,67,.12)] bg-white/75 p-3">
                 {!pendingInvite && <p className="text-xs leading-relaxed text-on-surface-variant">{canSendPrivateClaim ? `Send this instant ${privateClaimPayloadLabel} with a private link, or invite them to Drop and check their handle again.` : canSwitchToInstantClaim ? 'Relay needs an existing Drop account. Switch to Instant for a private claim link, or invite them to join and check their handle again.' : 'Your draft stays here. Invite them to Drop, then check their handle again. Private claim links are for instant notes or attached photos and GIFs.'}</p>}
                 {canSwitchToInstantClaim && <div className="mt-3 rounded-lg border border-[rgba(16,42,67,.12)] bg-[#eef1ff] p-3">
@@ -773,6 +856,7 @@ function Composer() {
               </div>
             </>}
             {recipientCheck.status === 'error' && recipientCheck.username === recipientUsername && <p className="error-notice mt-2" role="status" aria-live="polite">Couldn’t check that handle. Try again.</p>}
+            </>}
           </section>
 
           <fieldset>

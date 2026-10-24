@@ -131,6 +131,41 @@ test('offers a private claim send only for the current missing handle and a read
   assert.equal(canOfferPrivateClaimInvite({ ...base, payloadKind: 'text', hasText: false, hasMedia: false }), false);
 });
 
+test('offers a handleless claim link only after the sender explicitly chooses it', () => {
+  const base = {
+    accountConnected: true,
+    recipientStatus: 'idle',
+    recipientUsername: null,
+    checkedUsername: null,
+    shareWithoutHandle: true,
+    deliveryMode: 'instant',
+    payloadKind: 'text',
+    hasText: true,
+    hasMedia: false,
+    attachmentSaved: false,
+    attachmentBusy: false,
+  };
+
+  assert.equal(canOfferPrivateClaimInvite(base), true);
+  assert.equal(canOfferPrivateClaimInvite({ ...base, shareWithoutHandle: false }), false);
+  assert.equal(canOfferPrivateClaimInvite({ ...base, recipientUsername: 'someone' }), false);
+  assert.equal(canOfferPrivateClaimInvite({ ...base, accountConnected: false }), false);
+  assert.equal(canOfferPrivateClaimInvite({ ...base, deliveryMode: 'relay' }), false);
+  assert.equal(canOfferPrivateClaimInvite({ ...base, payloadKind: 'text', hasText: false }), false);
+
+  const savedPhoto = {
+    ...base,
+    payloadKind: 'image',
+    hasText: false,
+    hasMedia: true,
+    attachmentSaved: true,
+  };
+  assert.equal(canOfferPrivateClaimInvite(savedPhoto), true);
+  assert.equal(canOfferPrivateClaimInvite({ ...savedPhoto, attachmentBusy: true }), false);
+  assert.equal(canOfferPrivateClaimInvite({ ...savedPhoto, attachmentSaved: false }), false);
+  assert.equal(canOfferInstantClaimSwitch({ ...savedPhoto, deliveryMode: 'relay' }), true);
+});
+
 test('offers an explicit switch from relay to instant only for a current missing handle and ready payload', () => {
   const base = {
     accountConnected: true,
