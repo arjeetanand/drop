@@ -21,6 +21,7 @@ const LABELS = {
   reveal: 'Reveal demo fragments',
   open: 'Open demo drop',
   senderCopy: 'See your sender copy',
+  makeForFriend: 'Make one for a friend',
   reaction: 'React with heart hands',
 };
 const REACTION_BUTTON_LABELS = [
@@ -450,6 +451,15 @@ async function assertNoFrameworkOverlay(cdp, step) {
   assert.equal(overlayText, '', `${step}: framework error overlay text was visible (${overlayText}).`);
 }
 
+async function waitForPageEnter(cdp, step) {
+  await waitUntil(cdp, `${step} entrance animation`, async () => (
+    await evaluate(cdp, `(() => {
+      const page = document.querySelector('main.page-enter');
+      return Boolean(page) && page.getAnimations().every((animation) => animation.playState === 'finished');
+    })()`)
+  ));
+}
+
 async function activateFlowControl(cdp, { keyboard, name, selector, expectedTag, expectedHref }) {
   if (keyboard) {
     await focusControlWithKeyboard(cdp, { name, selector, expectedTag, expectedHref });
@@ -464,6 +474,7 @@ async function runDemoFlow(cdp, {
   viewport,
   payload,
   keyboard,
+  verifyFreshDraft = false,
   screenshotDir,
   screenshotSteps = new Set(),
   checkResponsive = false,
@@ -483,6 +494,36 @@ async function runDemoFlow(cdp, {
   await waitUntil(cdp, `Home with “${LABELS.homeDemo}”`, async () => (
     await evaluate(cdp, `${normalizedVisibleText(LABELS.homeDemo)} && location.pathname === '/'`)
   ));
+  await waitForPageEnter(cdp, 'Home');
+  if (verifyFreshDraft) {
+    const seeded = await evaluate(cdp, `(async () => {
+      const draft = ${JSON.stringify(PROMPT_ACTIVE_DRAFT)};
+      localStorage.setItem('dear-exe:active-letter:v1', JSON.stringify(draft));
+      localStorage.setItem('dear-exe:letter-drafts:v1', JSON.stringify([draft]));
+      const response = await fetch('/demo-cat.png');
+      if (!response.ok) throw new Error('Could not load the local photo fixture.');
+      const blob = await response.blob();
+      const database = await new Promise((resolve, reject) => {
+        const request = indexedDB.open('dear-exe-draft-media', 1);
+        request.onupgradeneeded = () => request.result.createObjectStore('attachments');
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      try {
+        await new Promise((resolve, reject) => {
+          const transaction = database.transaction('attachments', 'readwrite');
+          transaction.objectStore('attachments').put({ blob, name: 'demo-cat.png', type: blob.type, lastModified: 1 }, draft.id);
+          transaction.oncomplete = resolve;
+          transaction.onerror = () => reject(transaction.error);
+          transaction.onabort = () => reject(transaction.error);
+        });
+      } finally {
+        database.close();
+      }
+      return localStorage.getItem('dear-exe:active-letter:v1') === JSON.stringify(draft);
+    })()`);
+    assert.equal(seeded, true, 'The in-progress media draft and its local attachment should be saved before the demo starts.');
+  }
   await assertNoFrameworkOverlay(cdp, 'Home');
   await checkWidth('Home');
   await capture('home');
@@ -522,40 +563,124 @@ async function runDemoFlow(cdp, {
   assert.deepEqual(reactionLabels, REACTION_BUTTON_LABELS, 'Every reaction button should expose a descriptive spoken name.');
   await assertNoFrameworkOverlay(cdp, `Opened ${payloadLabel} drop`);
   await assertNoHorizontalOverflow(cdp, `Opened ${payloadLabel} drop`, viewport.width);
-  await activateFlowControl(cdp, { keyboard, selector: `[aria-label="${LABELS.reaction}"]`, expectedTag: 'BUTTON' });
-  await waitUntil(cdp, 'the saved reaction state', async () => (
-    await evaluate(cdp, `document.querySelector(${JSON.stringify(`[aria-label="${LABELS.reaction}"]`)})?.getAttribute('aria-pressed') === 'true' && ${normalizedVisibleText('Saved on this device. Open the sender view to see it.')}`)
-  ));
-  await assertNoFrameworkOverlay(cdp, 'Reaction saved');
-  await assertNoHorizontalOverflow(cdp, 'Reaction saved', viewport.width);
-  await capture('reaction-saved');
+  if (verifyFreshDraft) {
+    await activateFlowControl(cdp, { keyboard, name: 'Skip to sender copy', expectedTag: 'A' });
+  } else {
+    await activateFlowControl(cdp, { keyboard, selector: `[aria-label="${LABELS.reaction}"]`, expectedTag: 'BUTTON' });
+    await waitUntil(cdp, 'the saved reaction state', async () => (
+      await evaluate(cdp, `document.querySelector(${JSON.stringify(`[aria-label="${LABELS.reaction}"]`)})?.getAttribute('aria-pressed') === 'true' && ${normalizedVisibleText('Saved on this device. Open the sender view to see it.')}`)
+    ));
+    await assertNoFrameworkOverlay(cdp, 'Reaction saved');
+    await assertNoHorizontalOverflow(cdp, 'Reaction saved', viewport.width);
+    await capture('reaction-saved');
 
-  const previousLoadEvents = getPageLoadEvents();
-  await cdp.send('Page.reload', { ignoreCache: true });
-  await waitUntil(cdp, 'a fresh document load after reload', async () => getPageLoadEvents() > previousLoadEvents);
-  await waitUntil(cdp, 'the recipient demo after reload', async () => (
-    await evaluate(cdp, `${normalizedVisibleText('See your drop as the recipient.')} && location.pathname === ${JSON.stringify(recipientPath)}`)
-  ));
-  await assertNoFrameworkOverlay(cdp, 'Recipient demo after reload');
-  await assertNoHorizontalOverflow(cdp, 'Recipient demo after reload', viewport.width);
-  await activateFlowControl(cdp, { keyboard, name: LABELS.reveal, expectedTag: 'BUTTON' });
-  await waitUntil(cdp, `“${LABELS.open}” after reload`, async () => (
-    await evaluate(cdp, `${normalizedVisibleText(LABELS.open)} && !document.querySelector('#letter-fragments')?.innerText.includes('confidential fragment')`)
-  ));
-  await activateFlowControl(cdp, { keyboard, name: LABELS.open, expectedTag: 'BUTTON' });
-  await waitUntil(cdp, 'the persisted reaction after reload', async () => (
-    await evaluate(cdp, `document.querySelector(${JSON.stringify(`[aria-label="${LABELS.reaction}"]`)})?.getAttribute('aria-pressed') === 'true'`)
-  ));
-  await assertNoHorizontalOverflow(cdp, 'Reaction persisted after reload', viewport.width);
-  await activateFlowControl(cdp, { keyboard, name: 'See your sender copy', expectedTag: 'A' });
+    const previousLoadEvents = getPageLoadEvents();
+    await cdp.send('Page.reload', { ignoreCache: true });
+    await waitUntil(cdp, 'a fresh document load after reload', async () => getPageLoadEvents() > previousLoadEvents);
+    await waitUntil(cdp, 'the recipient demo after reload', async () => (
+      await evaluate(cdp, `${normalizedVisibleText('See your drop as the recipient.')} && location.pathname === ${JSON.stringify(recipientPath)}`)
+    ));
+    await assertNoFrameworkOverlay(cdp, 'Recipient demo after reload');
+    await assertNoHorizontalOverflow(cdp, 'Recipient demo after reload', viewport.width);
+    await activateFlowControl(cdp, { keyboard, name: LABELS.reveal, expectedTag: 'BUTTON' });
+    await waitUntil(cdp, `“${LABELS.open}” after reload`, async () => (
+      await evaluate(cdp, `${normalizedVisibleText(LABELS.open)} && !document.querySelector('#letter-fragments')?.innerText.includes('confidential fragment')`)
+    ));
+    await activateFlowControl(cdp, { keyboard, name: LABELS.open, expectedTag: 'BUTTON' });
+    await waitUntil(cdp, 'the persisted reaction after reload', async () => (
+      await evaluate(cdp, `document.querySelector(${JSON.stringify(`[aria-label="${LABELS.reaction}"]`)})?.getAttribute('aria-pressed') === 'true'`)
+    ));
+    await assertNoHorizontalOverflow(cdp, 'Reaction persisted after reload', viewport.width);
+    await activateFlowControl(cdp, { keyboard, name: 'See your sender copy', expectedTag: 'A' });
+  }
 
-  await waitUntil(cdp, 'sender copy with the saved reaction', async () => (
-    await evaluate(cdp, `${normalizedVisibleText('Your demo copy.')} && ${normalizedVisibleText('They reacted 🫶')} && new URL(location.href).searchParams.get('view') === 'sender'`)
+  await waitUntil(cdp, `sender copy${verifyFreshDraft ? '' : ' with the saved reaction'}`, async () => (
+    await evaluate(cdp, `${normalizedVisibleText('Your demo copy.')} && ${verifyFreshDraft ? normalizedVisibleText('Same-device demo · nothing was sent or shared.') : normalizedVisibleText('They reacted 🫶')} && new URL(location.href).searchParams.get('view') === 'sender'`)
   ));
   await assertNoFrameworkOverlay(cdp, 'Sender copy');
   await assertNoHorizontalOverflow(cdp, 'Sender copy', viewport.width);
   await capture('sender-copy');
   assert.equal(await evaluate(cdp, 'location.pathname'), recipientPath, 'Sender copy should keep the same demo drop.');
+
+  if (verifyFreshDraft) {
+    const demoId = await evaluate(cdp, `decodeURIComponent(location.pathname.split('/').pop() || '')`);
+    await waitUntil(cdp, `the “${LABELS.makeForFriend}” action`, async () => (
+      await evaluate(cdp, `${normalizedVisibleText(LABELS.makeForFriend)} && new URL(location.href).searchParams.get('view') === 'sender'`)
+    ));
+    const friendActionScroll = await evaluate(cdp, `(() => {
+      const button = Array.from(document.querySelectorAll('button')).find((node) => (node.innerText || node.textContent || '').toLocaleLowerCase().includes(${JSON.stringify(LABELS.makeForFriend.toLocaleLowerCase())}));
+      if (!button) return null;
+      button.scrollIntoView({ block: 'center', behavior: 'instant' });
+      const bounds = button.getBoundingClientRect();
+      return { scrollY: window.scrollY, top: bounds.top, bottom: bounds.bottom, height: window.innerHeight };
+    })()`);
+    assert.ok(friendActionScroll && friendActionScroll.top >= 0 && friendActionScroll.bottom <= friendActionScroll.height, `The “${LABELS.makeForFriend}” action should be scrolled into view for the screenshot; found ${JSON.stringify(friendActionScroll)}.`);
+    await waitForPageEnter(cdp, 'Sender copy');
+    await captureScreenshot(cdp, screenshotDir, `${viewport.name}-friend-draft-cta`);
+    await activateFlowControl(cdp, { keyboard, name: LABELS.makeForFriend, expectedTag: 'BUTTON' });
+    await waitUntil(cdp, 'a fresh editable composer opened from the demo', async () => (
+      await evaluate(cdp, `location.pathname === '/compose' && Boolean(document.querySelector('#drop-content'))`)
+    ));
+    await waitForPageEnter(cdp, 'Fresh draft from demo');
+    const state = await evaluate(cdp, `(() => {
+      const active = JSON.parse(localStorage.getItem('dear-exe:active-letter:v1') || 'null');
+      const drafts = JSON.parse(localStorage.getItem('dear-exe:letter-drafts:v1') || '[]');
+      const history = JSON.parse(localStorage.getItem('dear-exe:letter-history:v1') || '[]');
+      const editor = document.querySelector('#drop-content');
+      const url = new URL(location.href);
+      return {
+        path: location.pathname,
+        routeId: url.searchParams.get('letter'),
+        active,
+        preserved: drafts.find((draft) => draft.id === ${JSON.stringify(PROMPT_ACTIVE_DRAFT.id)}) || null,
+        demo: history.find((letter) => letter.id === ${JSON.stringify(demoId)}) || null,
+        editorValue: editor?.value ?? null,
+        editorEditable: Boolean(editor && !editor.disabled && !editor.readOnly),
+        scrollY: window.scrollY,
+      };
+    })()`);
+    assert.equal(state.path, '/compose');
+    assert.equal(state.routeId, state.active?.id, 'The composer should open the new draft by its ID.');
+    assert.equal(state.active?.status, 'draft');
+    assert.equal(state.active?.recipient, '');
+    assert.equal(state.active?.subject, '');
+    assert.equal(state.active?.content, '', 'The new draft must not contain demo text.');
+    assert.equal(state.active?.payloadKind, 'text', 'The new draft should start as a text drop.');
+    assert.equal(state.active?.localDemo, undefined, 'The new draft must not carry demo identity.');
+    assert.equal(state.active?.reaction, undefined, 'The new draft must not carry the demo reaction.');
+    assert.equal(state.active?.mediaPath, undefined);
+    assert.equal(state.active?.mediaMimeType, undefined);
+    assert.equal(state.active?.mediaSizeBytes, undefined);
+    assert.equal(state.active?.mediaUploadId, undefined);
+    assert.equal(state.editorValue, '', 'The composer should be blank and ready for the sender’s own words.');
+    assert.equal(state.editorEditable, true);
+    assert.ok(state.scrollY <= 16, `The new composer should start at the top; found scrollY=${state.scrollY}.`);
+    assert.equal(state.preserved?.payloadKind, 'image', 'The existing media draft should remain recoverable.');
+    assert.equal(state.preserved?.mediaUploadId, PROMPT_ACTIVE_DRAFT.mediaUploadId);
+    assert.equal(state.demo?.localDemo, true, 'The completed same-device demo should remain in local history.');
+    const preservedAttachment = await evaluate(cdp, `(async () => {
+      const database = await new Promise((resolve, reject) => {
+        const request = indexedDB.open('dear-exe-draft-media', 1);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      try {
+        return await new Promise((resolve, reject) => {
+          const transaction = database.transaction('attachments', 'readonly');
+          const request = transaction.objectStore('attachments').get(${JSON.stringify(PROMPT_ACTIVE_DRAFT.id)});
+          request.onsuccess = () => resolve({ name: request.result?.name || null, size: request.result?.blob?.size || 0 });
+          request.onerror = () => reject(request.error);
+        });
+      } finally {
+        database.close();
+      }
+    })()`);
+    assert.equal(preservedAttachment.name, 'demo-cat.png', 'The original media attachment should still be available after the fresh draft opens.');
+    assert.ok(preservedAttachment.size > 0, 'The original local attachment bytes should remain intact.');
+    await assertNoFrameworkOverlay(cdp, 'Fresh draft from demo');
+    await assertNoHorizontalOverflow(cdp, 'Fresh draft from demo', viewport.width);
+    await captureScreenshot(cdp, screenshotDir, `${viewport.name}-friend-draft-composer`);
+  }
 }
 
 async function runClaimRecoveryFlow(cdp, {
@@ -770,13 +895,15 @@ async function runRecipientlessClaimChoiceFlow(cdp, { appUrl, viewport, keyboard
 
 async function main() {
   if (process.argv.includes('--help') || process.argv.includes('-h')) {
-    console.log('Usage: node scripts/browser-demo-smoke.mjs [http://127.0.0.1:4004] [--claim-recovery-only|--prompt-only]');
+    console.log('Usage: node scripts/browser-demo-smoke.mjs [http://127.0.0.1:4004] [--claim-recovery-only|--prompt-only|--friend-draft-only]');
     return;
   }
 
   const args = process.argv.slice(2);
   const claimRecoveryOnly = args.includes('--claim-recovery-only');
   const promptOnly = args.includes('--prompt-only');
+  const friendDraftOnly = args.includes('--friend-draft-only');
+  assert.ok([claimRecoveryOnly, promptOnly, friendDraftOnly].filter(Boolean).length <= 1, 'Choose only one focused browser-smoke mode.');
   const appUrl = parseAppUrl(args.find((argument) => !argument.startsWith('--')) || DEFAULT_APP_URL);
   if (typeof WebSocket !== 'function') throw new Error('This smoke check needs a Node runtime with the built-in WebSocket API.');
   const screenshotDir = screenshotDirectoryFromEnv();
@@ -896,10 +1023,26 @@ async function main() {
     await setViewport(pageCdp, MOBILE_VIEWPORTS[1]);
 
     console.log(`[browser-demo-smoke] Chrome: ${chromeExecutable}`);
-    const flowName = claimRecoveryOnly ? 'claim-recovery' : promptOnly ? 'prompt-only' : 'full';
-    console.log(`[browser-demo-smoke] App: ${appUrl.origin}; ${flowName} flow viewports: ${FLOW_VIEWPORTS.map(({ name }) => name).join(', ')}.`);
+    const flowName = claimRecoveryOnly ? 'claim-recovery' : promptOnly ? 'prompt-only' : friendDraftOnly ? 'friend-draft-only' : 'full';
+    const flowViewports = friendDraftOnly ? [MOBILE_VIEWPORTS[1]] : FLOW_VIEWPORTS;
+    console.log(`[browser-demo-smoke] App: ${appUrl.origin}; ${flowName} flow viewports: ${flowViewports.map(({ name }) => name).join(', ')}.`);
 
-    if (!claimRecoveryOnly && !promptOnly) {
+    if (friendDraftOnly) {
+      const viewport = MOBILE_VIEWPORTS[1];
+      await runDemoFlow(pageCdp, {
+        appUrl,
+        viewport,
+        payload: 'gif',
+        keyboard: true,
+        verifyFreshDraft: true,
+        screenshotDir,
+        screenshotSteps: new Set(['home', 'sender-copy']),
+        getPageLoadEvents: () => pageLoadEvents,
+      });
+      console.log(`[browser-demo-smoke] PASS keyboard sender-copy to fresh editable text draft at ${viewport.width}×${viewport.height}; existing media draft and local demo remain preserved.`);
+    }
+
+    if (!friendDraftOnly && !claimRecoveryOnly && !promptOnly) {
       const screenshotSteps = new Set(['home', 'chooser', 'recipient', 'fragments-revealed', 'reaction-saved', 'sender-copy']);
       for (const viewport of FLOW_VIEWPORTS) {
         const keyboard = viewport.width !== 360;
@@ -926,7 +1069,7 @@ async function main() {
       });
     }
 
-    if (!claimRecoveryOnly) {
+    if (!friendDraftOnly && !claimRecoveryOnly) {
       for (const viewport of FLOW_VIEWPORTS) {
         await runWritingPromptFlow(pageCdp, {
           appUrl,
@@ -938,7 +1081,7 @@ async function main() {
       }
     }
 
-    if (!promptOnly) {
+    if (!friendDraftOnly && !promptOnly) {
       for (const viewport of FLOW_VIEWPORTS) {
         await runRecipientlessClaimChoiceFlow(pageCdp, {
           appUrl,
@@ -968,12 +1111,12 @@ async function main() {
     assert.deepEqual(pageExceptions, [], `The browser reported JavaScript exceptions: ${JSON.stringify(pageExceptions)}.`);
     if (firewallFailure) throw new Error(`The browser network gate failed: ${firewallFailure.message}`);
 
-    if (!promptOnly) {
+    if (!friendDraftOnly && !promptOnly) {
       console.log('[browser-demo-smoke] PASS saved-claim recovery after reload, including the encoded detail route and fresh-link action at all mobile and desktop widths.');
       console.log('[browser-demo-smoke] PASS handleless claim disclosure, account readiness gate, and focus recovery at all mobile and desktop widths.');
       console.log('[browser-demo-smoke] PASS no Auth, REST, or Storage request during the saved-claim recovery flow.');
     }
-    if (!claimRecoveryOnly && !promptOnly) {
+    if (!friendDraftOnly && !claimRecoveryOnly && !promptOnly) {
       console.log('[browser-demo-smoke] PASS photo flow at 390×844, including saved reaction, reload persistence, and sender copy.');
       console.log('[browser-demo-smoke] PASS no horizontal overflow on Home and demo chooser at 360, 390, 430px and 1440×900.');
       console.log('[browser-demo-smoke] PASS no Auth, RPC, or Storage write request during the local demo.');

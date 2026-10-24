@@ -3,10 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, ArrowRight, Check, LockKeyhole, MailOpen, Share2, Sparkles } from 'lucide-react';
-import { useParams, useSearchParams } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import type { MockLetter } from '@/data/mockData';
 import { getRemoteDropDirection, getRemoteLetterById, getRemoteLetters, getRemoteReactionSnapshot, getRemoteSenderClaimStatusForDrop, reissueDropClaimInvite, reissueDropMediaClaimInvite, saveRemoteReaction, subscribeToIncomingDropInbox, subscribeToSenderDropReactions } from '@/lib/letterBackend';
-import { getLetterById } from '@/lib/letterStore';
+import { getLetterById, startNewLetter } from '@/lib/letterStore';
 import { getLiveClaimCompletionUpdate } from '@/lib/liveClaimStatus';
 import { getClaimInviteExpiryDuration, getClaimedDropLabel, isEligiblePendingSenderClaim, isEligibleSenderClaim, needsSenderClaimStatusRetry, retainKnownClaimStatus } from '@/lib/claimInviteStatus';
 import { getInitialSenderReactionBaseline, getSenderReactionReadUpdate } from '@/lib/liveReactionState';
@@ -97,6 +97,7 @@ function MissingLetter({ signInHref }: { signInHref?: string }) {
 }
 
 export default function LetterArrivalPage() {
+  const router = useRouter();
   const params = useParams<{ id?: string | string[] }>();
   const searchParams = useSearchParams();
   const letterId = Array.isArray(params.id) ? params.id[0] : params.id;
@@ -758,6 +759,21 @@ export default function LetterArrivalPage() {
                   <div className="mt-3 -mx-1 grid w-[calc(100%+0.5rem)] grid-cols-5 gap-2">{DEMO_REACTION_EMOJIS.map((emoji) => <button key={emoji} type="button" onClick={() => void react(emoji)} disabled={savingReaction} aria-label={`React with ${getReactionName(emoji)}`} aria-pressed={letter.reaction === emoji} className={`flex h-11 min-w-11 items-center justify-center rounded-xl border text-lg transition-colors ${letter.reaction === emoji ? 'border-[#2b45f7] bg-[#2b45f7]/10' : 'border-[rgba(16,42,67,.12)] bg-white hover:bg-[#f5f1e9]'}`}>{emoji}</button>)}</div>
                   {reactionNotice && <p className="mt-3 text-xs text-on-surface-variant" role="status" aria-live="polite">{reactionNotice}</p>}
                 </section>}
+                {letter.localDemo && senderView && <div className="mt-6 rounded-2xl border border-[rgba(16,42,67,.12)] bg-white/70 p-4 sm:p-5">
+                  <p className="eyebrow text-[#2b45f7]">Make it yours</p>
+                  <p className="mt-2 text-sm leading-relaxed text-on-surface-variant">Start with a blank text drop. This demo&apos;s message, reaction, and media stay here.</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const freshDraft = startNewLetter({ forceNew: true });
+                      router.push(`/compose?letter=${encodeURIComponent(freshDraft.id)}`);
+                    }}
+                    className="button-primary mt-4 w-full !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#fcfaf6]"
+                  >
+                    Make one for a friend
+                    <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                </div>}
                 {letter.localDemo && <Link href={senderView ? `/letter/${encodedLetterId}` : `/letter/${encodedLetterId}?view=sender`} className="button-secondary mt-6 w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#fcfaf6]">
                   {senderView ? 'Open recipient demo' : letter.reaction ? 'See your sender copy' : 'Skip to sender copy'}
                   <ArrowRight className="h-4 w-4" aria-hidden="true" />

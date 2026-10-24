@@ -218,6 +218,15 @@ test('a prompt starts a separate draft without replacing an empty media draft', 
     const populated = setActiveLetterDraft({ ...promptedDraft, content: 'Describe a small kindness you still remember.' });
 
     assert.notEqual(populated.id, existing.id);
+    assert.equal(promptedDraft.recipient, '');
+    assert.equal(promptedDraft.subject, '');
+    assert.equal(promptedDraft.content, '');
+    assert.equal(promptedDraft.payloadKind, 'text');
+    assert.equal(promptedDraft.localDemo, undefined);
+    assert.equal(promptedDraft.mediaPath, undefined);
+    assert.equal(promptedDraft.mediaMimeType, undefined);
+    assert.equal(promptedDraft.mediaSizeBytes, undefined);
+    assert.equal(promptedDraft.mediaUploadId, undefined);
     assert.equal(populated.content, 'Describe a small kindness you still remember.');
     assert.equal(recoveredExisting?.subject, 'Keep this attachment');
     assert.equal(recoveredExisting?.payloadKind, 'image');
