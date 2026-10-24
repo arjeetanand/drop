@@ -6,8 +6,9 @@ Tasks are ordered by dependency. Progress is recorded at each tested and pushed 
 
 - [x] Add a PWA share target for supported photo/GIF files, with worker-side validation and a one-hour opaque IndexedDB handoff.
 - [x] Import into an unsent local draft; make retries idempotent, preserve user edits and attachments, and guard all composer exits while import is in progress.
-- [x] Pass 267 unit tests, targeted lint, no-incremental TypeScript, worker/smoke syntax, diff checks, production build, and local HTTP checks for Home, manifest, and worker on port 4004.
-- [x] Push code commit `6d2ed9d` to `origin/feat/demo-relay-preview`; record this checkpoint in a separate documentation commit.
+- [x] Pass 271 unit tests, targeted lint, no-incremental TypeScript, worker/test/smoke syntax, diff checks, production build, and local HTTP checks for Home, manifest, and worker on port 4004.
+- [x] Bound multipart request parsing to 8 MiB + 64 KiB even when `Content-Length` is missing or understated, preserve boundary casing, and cover both with regressions.
+- [x] Push feature commit `6d2ed9d` and follow-up fix `b02196a` to `origin/feat/demo-relay-preview`; record the latest checkpoint in a separate documentation commit.
 - [ ] Retry the share-target browser smoke when Chrome can publish its DevTools port; verify installed PWA and OS share-sheet behavior on a phone.
 - [ ] Verify with a screen reader and physical device; finish hosted two-account delivery and actual Storage deletion after the approved Free project can be accessed.
 

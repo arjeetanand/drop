@@ -12,8 +12,9 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 
 - Added an installed web share target for JPEG, PNG, WebP, and GIF files up to 8 MB. The service worker stores an opaque one-hour IndexedDB handoff; Compose imports it as an unsent local draft.
 - Replay finds the matching account-scoped draft by stable media ID, preserves edits and the saved attachment, and excludes completed drops. Import state disables form actions and guarded navigation, including the claim-pending view.
-- Verification: 267/267 unit tests, targeted ESLint, no-incremental TypeScript, worker/smoke syntax, `git diff --check`, and production build passed. Home, manifest, and worker returned HTTP 200 on port 4004. Chrome did not publish `DevToolsActivePort`, so the share-target browser flow and OS share sheet remain unverified.
-- Code commit `6d2ed9d` is pushed to `feat/demo-relay-preview`; the project-note commit follows separately. Hosted Supabase was not changed, `.env.local` was excluded, and `/letter` was untouched.
+- A follow-up review found multipart parsing could read an oversized body before applying the file limit and Blob MIME normalization could change the case-sensitive boundary. The worker now checks the header, enforces an 8 MiB + 64 KiB streaming cap, and passes the original Content-Type header to the parser.
+- Verification: 271/271 unit tests, targeted ESLint, no-incremental TypeScript, worker/test/smoke syntax, `git diff --check`, and production build passed. Home, manifest, and worker returned HTTP 200 on port 4004. Chrome did not publish `DevToolsActivePort`, so the share-target browser flow and OS share sheet remain unverified.
+- Feature commit `6d2ed9d` and size/boundary fix `b02196a` are pushed to `feat/demo-relay-preview`; this checkpoint's notes follow separately. Hosted Supabase was not changed, `.env.local` was excluded, and `/letter` was untouched.
 - Remaining: verify installed-PWA and share-sheet behavior in a real browser/phone; complete screen-reader and physical-device checks; complete hosted two-account delivery and media cleanup when a Free project is available.
 
 ### Latest checkpoint — fictional Relay demo preview (2026-10-24)

@@ -1057,6 +1057,8 @@ Check the entire visible page for reused sample content before calling a reveal 
 
 Code commit `d218721` (`feat: add sealed Relay preview to demo`) is pushed to `origin/feat/demo-relay-preview`. Project notes are in a separate documentation commit on the same branch; no PR or merge was created. `/letter`, `.env.local`, and hosted Supabase were not changed in this slice. The checkout's local Supabase CLI dependency exists, but the project-list request returns `AccessTokenRequiredError`; the user's browser login does not authenticate the CLI. No hosted Drop project was created. Screen-reader use, physical-device behavior, hosted delivery, and actual Storage cleanup remain open.
 
+## 2026-10-24 — Share-to-Drop handoff and replay safety
+
 ### Issue
 
 Drop needed a mobile-friendly way to begin a photo/GIF draft from another app's system share sheet. A PWA share target posts a multipart body to the app, so a controlled client service worker must intercept and retain the media before routing to Compose. A fallback route cannot promise that the browser did not already submit the body to the website.
@@ -1086,3 +1088,34 @@ For a PWA share target, test the full worker-controlled POST path and state the 
 ### Git and remaining gaps
 
 Code commit `6d2ed9d` (`feat: add installed web share target`) is pushed to `origin/feat/demo-relay-preview`; project notes are committed and pushed separately. No merge to `main` was made. The current candidate was 120 commits ahead and 0 behind `origin/main` before the separate notes commit; use `git log -1 --oneline --decorate` and `git rev-list --left-right --count origin/main...HEAD` after fetch to see the latest tip and divergence. `.env.local` was excluded and unchanged, `/letter` was untouched, and no hosted Supabase project was created. Next verify the worker-controlled share flow in a working browser and test installation/share-sheet behavior on a phone; hosted two-account delivery, storage cleanup, screen-reader use, and physical-device accessibility remain open.
+
+## 2026-10-24 — Bound PWA share request parsing
+
+### Issue
+
+The service worker originally called `request.formData()` before applying the 8 MB file limit. A large submitted body could therefore be fully parsed before Drop rejected its file. Reconstructing the body with `Blob.type` could also change the case of the multipart boundary parameter.
+
+### Cause
+
+File-size validation happened after multipart parsing, and the Blob constructor normalizes its MIME type. `Content-Length` cannot be trusted as the sole body limit because it may be absent or smaller than the actual stream.
+
+### Resolution
+
+- Check a present `Content-Length` against the 8 MiB file allowance plus 64 KiB of multipart overhead before reading.
+- Count streamed bytes and cancel once the total exceeds that bound, including when the header is missing or understated.
+- Rebuild the bounded body as a Blob without a type override, then pass the original `Content-Type` header to `Response.formData()` so its case-sensitive boundary is preserved.
+- Add regressions for a declared oversized body, missing and understated length headers, and an uppercase multipart boundary.
+
+### Learning
+
+Enforce upload limits while reading the request body, not after a multipart parser has buffered it. Treat length headers as an optimization and keep multipart parameters byte-for-byte intact when rebuilding the body.
+
+### Verification
+
+- `npm test` passed 271/271. Targeted ESLint, service-worker/test syntax, and `git diff --check` passed.
+- `npm run build -- --webpack` passed and generated 22 routes, with the existing Browserslist and Tailwind easing warnings. Home, manifest, and service worker returned HTTP 200 on port 4004.
+- The system share-target browser smoke remains unverified because Chrome did not publish `DevToolsActivePort`.
+
+### Git and remaining gaps
+
+Code fix `b02196a` (`fix: bound share target request bodies`) is pushed to `origin/feat/demo-relay-preview`; these notes are committed separately after it. No merge to `main` was made. The candidate was 122 commits ahead and 0 behind `origin/main` before this notes commit. `/letter`, `.env.local`, and hosted Supabase were not changed. The installed PWA, OS share sheet, screen-reader output, physical-device behavior, hosted delivery, and Storage deletion remain unverified.
