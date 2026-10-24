@@ -2,6 +2,32 @@
 
 Append one dated entry for every completed code-change or issue-resolution slice. Keep the record evidence-based: issue, cause, resolution, a reusable learning, verification, Git checkpoint, and remaining gaps. Tie statements to the actual diff, commit history, and test output. Do not store credentials or private content here.
 
+## 2026-10-24 — Reconcile current project status after main merge
+
+### Issue
+
+The project notes still described PR #1 as open and showed multiple feature branches as if they were current, even though the integration had merged to `main`. Some plan checklists also marked implemented local features as incomplete, while other passages could be read as proof that hosted sending was already available.
+
+### Cause
+
+Per-slice notes were written at different points in a multi-branch workflow. The repository kept useful historical evidence but had no current summary that separated merged code, local verification, and hosted acceptance.
+
+### Resolution
+
+- Updated the README, handoff, checklist, and plans to identify merged `main` at `1141cff` as the current code line.
+- Preserved dated feature-branch notes as history and clarified that their no-PR/no-merge statements describe the checkpoint date.
+- Marked hosted provisioning as blocked: the linked organization's plan is unverified, the CLI has no access token, prior project creation returned 403, and no Drop project exists. Listed migrations, cleanup scheduling, two-account acceptance, share-sheet, screen-reader, and device checks as pending.
+
+### Learning
+
+Keep one short, current integration summary separate from append-only feature history. For a hosted product, report implementation, local verification, and live acceptance as separate states so a merged branch is not mistaken for a deployed service.
+
+### Verification
+
+- Checked repository status and HEAD on `docs/drop-main-readiness`, based on merged commit `1141cff493bbda7ef75fbc12af8bb6a3d8d1efb7`.
+- All Markdown local link targets exist and `git diff --check` passed. No spelling checker is installed in this environment; I manually reviewed the added prose.
+- No application source, `.env.local`, hosted project, or `/letter` files were changed.
+
 ## 2026-10-24 — Strengthen saved-claim recovery browser assertions
 
 ### Issue

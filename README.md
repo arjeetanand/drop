@@ -6,7 +6,7 @@ The append-only engineering learning log is in [LEARNINGS.md](./LEARNINGS.md); i
 
 ## Branch status and latest checkpoint
 
-`main` is the integration release line. The current Drop integration is tracked in [PR #1](https://github.com/arjeetanand/drop/pull/1); use its live page for review, checks, and merge state. The branch tip, local verification, and remaining product checks are recorded in [HANDOFF.md](./HANDOFF.md). Check `git status --short --branch` and `git log -1 --oneline --decorate` for the active checkout. After `git fetch origin`, compare `origin/main` and the candidate with `git rev-list --left-right --count origin/main...HEAD` (first number: commits only on `main`; second: commits only on the candidate). Branches whose tips are already ancestors of the candidate are included in it; they are not separate latest versions.
+`main` is the canonical integration line. PR [#1](https://github.com/arjeetanand/drop/pull/1) was merged on 2026-10-24 as `1141cff493bbda7ef75fbc12af8bb6a3d8d1efb7`; use `git fetch origin && git log -1 --oneline origin/main` to check for later shared changes. The feature branches that fed PR #1 are historical work branches, not separate latest builds. The current verification and product gaps are in [HANDOFF.md](./HANDOFF.md); the integration checklist is in [CHECKLIST.md](./CHECKLIST.md).
 
 ## Run locally
 
@@ -15,7 +15,7 @@ npm ci
 ./run.sh
 ```
 
-Open `http://localhost:4004`. Run `./run.sh` again to restart Drop, or `./run.sh stop` to stop it. Without Supabase credentials, the app runs with local demo data. Real account-to-account media delivery needs the Supabase migrations and private storage setup in [SUPABASE_SETUP.md](./SUPABASE_SETUP.md). Hosted Drop provisioning is currently waiting on project-creation access; no Drop project has been created.
+Open `http://localhost:4004`. Run `./run.sh` again to restart Drop, or `./run.sh stop` to stop it. Without a connected Supabase project, the app supports local demo flows but real account-to-account delivery is not available. The Supabase CLI currently has no access token, the Drop project has not been created, and the linked organization's plan has not been verified. Before hosted use, verify that the project is Free, then apply the migrations and private Storage/cleanup setup in [SUPABASE_SETUP.md](./SUPABASE_SETUP.md). Do not add paid compute or add-ons without explicit approval.
 
 ## Try a demo without an account
 

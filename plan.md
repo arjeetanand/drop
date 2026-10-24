@@ -6,6 +6,15 @@ Build Drop as a mobile-first private sharing app where a person can send a photo
 
 The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailbox, and relay foundations. Existing letters continue to work as text drops, and their routes and saved content remain readable. The build covers the end-to-end mobile flow: choose content, attach an image or GIF, choose a recipient, send, open, react, and optionally follow a relay.
 
+## Current implementation and acceptance status — 2026-10-24
+
+- PR [#1](https://github.com/arjeetanand/drop/pull/1) merged the implementation into `main` at `1141cff493bbda7ef75fbc12af8bb6a3d8d1efb7`. Use `main` as the shared latest code line; older task-branch notes below are historical checkpoints.
+- The code implements the one-to-one mobile sharing flow for text, photo, meme, and GIF drops, private claim links, mailbox/reaction updates, optional Relay, local demos, and PWA image import. The latest recorded merged-candidate verification passed 272 tests, lint, TypeScript, the production build, and launcher checks.
+- The hosted backend is not provisioned. The Supabase organization plan is unverified, no Drop project exists, the CLI lacks an access token, and the prior project-create request returned 403. Hosted Auth, migrations, private Storage, live two-account delivery, and scheduled cleanup therefore remain unverified.
+- Remaining product acceptance is to provision only a verified Free project with no paid add-ons, apply migrations and configure the cleanup worker, run two-account hosted checks including actual 30-day deletion, and complete OS share-sheet, screen-reader, and physical-device checks. See [HANDOFF.md](./HANDOFF.md) and [CHECKLIST.md](./CHECKLIST.md) for the current sequence.
+
+The dated implementation notes below preserve evidence from the feature branches at the time each slice was tested. Statements that a branch had no PR or merge describe that checkpoint, not today's integration state.
+
 ## Implementation Status — 2026-10-24 (Demo to first drop)
 
 - The opened local demo’s sender copy now offers **Make one for a friend**. It opens a fresh, blank, editable text draft by ID; the demo’s sample content and reaction stay in the demo, the “nothing was sent or shared” explanation remains visible, and an unfinished image draft plus its IndexedDB bytes stay recoverable.
@@ -69,9 +78,9 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 
 ## Workspace and Delivery
 
-- `/drop` is the new app and the only write target. `/letter` is read-only inspiration; source files and its existing uncommitted work must remain untouched.
-- Use the existing empty private GitHub repository `arjeetanand/drop`. Copy the working app into this folder without `.git`, environment secrets, generated output, or installed dependencies; preserve the plan files already here.
-- Verify each implementation slice before committing and push each passing task-branch commit to `origin`. Merge into `main` only with explicit approval.
+- The Drop app lives in private repository `arjeetanand/drop`; PR #1 integrated the implementation into `main`. `/letter` was read-only inspiration and remains untouched.
+- Use a short-lived task branch and pull request for follow-up source changes.
+- Verify each implementation slice before committing and push each passing task-branch commit to `origin`. Follow the repository's review and explicit approval requirements before merging.
 - The earlier design chat did not record a final selection. Use its playful paper direction as the default: warm paper, cobalt actions, expressive media, small postmark details, and thumb-first navigation.
 
 ## Product Scope and Decisions
@@ -100,51 +109,50 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 ### Phase 1: Data and Media Foundation
 
 - [x] Task 1: Add the mixed-payload model with backward-compatible text defaults.
-- [ ] Task 2: Add private image/GIF upload and recipient-authorized reads.
+- [x] Task 2: Implement private image/GIF upload and recipient-authorized reads. Hosted deployment and two-account acceptance are still pending.
 
 ### Checkpoint: Foundation
 
-- [ ] Existing local and Supabase letters still load as text drops.
-- [ ] An authenticated sender can upload an allowed image/GIF and only the sender or recipient can retrieve it.
-- [ ] No existing stored letter or draft is overwritten by the new fields.
+- [x] Local and fixture letters without a payload kind render as text drops; additive fields preserve old drafts.
+- [ ] Verify legacy hosted rows and sender/recipient media authorization in the new hosted project.
 
 ### Phase 2: Mobile Sharing Flow
 
-- [ ] Task 3: Rework the mobile home, mailbox, and navigation around drops.
-- [ ] Task 4: Turn the composer into a single mobile-first drop flow.
+- [x] Task 3: Rework the mobile home, mailbox, and navigation around drops.
+- [x] Task 4: Turn the composer into a single mobile-first drop flow.
 
 ### Checkpoint: Sending
 
-- [ ] A person can create and send a text, image/meme, or GIF drop to one recipient.
-- [ ] Instant delivery works without showing a map; relay is an intentional choice.
-- [ ] Current writing prompts and seal choices still work where they apply to text drops.
+- [x] The app implements text, image/meme, and GIF sends to one recipient; hosted send acceptance is pending.
+- [x] Instant is the default and Relay is an explicit choice.
+- [x] Writing prompts and seal choices remain available for text drops.
 
 ### Phase 3: Receiving and Relay
 
-- [ ] Task 5: Make received drops open in the right media format and support a private reaction.
-- [ ] Task 6: Keep the existing human relay as an optional mode for any supported drop.
+- [x] Task 5: Make received drops open in the right media format and support a private reaction.
+- [x] Task 6: Keep the existing human relay as an optional mode for supported drops.
 
 ### Checkpoint: End-to-End
 
-- [ ] Sender and recipient can complete the send, open, and react flow on a phone-sized viewport.
-- [ ] Existing letter links and relay history still open correctly.
+- [ ] Complete the send/open/react flow across two hosted accounts on a phone-sized viewport.
+- [x] Existing letter routes and Relay history remain supported in the code; revalidate legacy hosted rows after provisioning.
 
 ### Phase 4: Mobile Polish
 
-- [ ] Task 7: Tune accessibility, motion, responsive behavior, and release checks.
+- [x] Task 7: Implement accessibility, motion, and responsive behavior; final human screen-reader/device acceptance remains pending.
 
 ### Checkpoint: Complete
 
-- [ ] Lint, typecheck, and production build pass.
-- [ ] Manual mobile checks pass at 360px, 390px, and 430px widths, including keyboard and safe-area behavior.
-- [ ] Reduced-motion mode and desktop layout remain usable.
+- [x] The merged candidate passed lint, TypeScript, and production build.
+- [ ] Complete manual device keyboard/safe-area and screen-reader checks.
+- [ ] Verify reduced-motion behavior on a physical device and complete the installed PWA share-sheet check.
 
 ## Risks and Mitigations
 
 | Risk | Impact | Mitigation |
 |---|---|---|
 | Existing data and links are letter-specific. | Old drafts, mailbox cards, or shared links could disappear. | Make payload fields additive, default old records to text, and retain current routes and hydration behavior. |
-| Supabase currently stores letter text but has no media bucket. | Uploads could be inaccessible or leak through public URLs. | Add a private bucket and explicit storage policies for sender/recipient access; verify policies with two different accounts. |
+| No hosted Drop project is provisioned yet. | Hosted sends, reads, and cleanup cannot be accepted end to end. | Verify the Free plan, provision the approved project without paid add-ons, apply migrations and private Storage policies, then test with two disposable accounts. |
 | Large or unsupported uploads can break mobile composition. | Slow uploads, storage waste, or failed sends. | Accept only image formats and GIF for v1, enforce a documented size cap, show upload progress/failure, and keep the draft recoverable. |
 | The local demo has no cross-device backend. | A recipient could mistake a local simulation for a real delivery. | Label each local demo as on-device and not sent; only report real delivery after a persistent account save. |
 | Existing relay screens and their map/location model are more elaborate than instant sharing needs. | The default flow could feel slow or expose unnecessary location. | Keep relay optional and preserve map details only in that mode; request location only when the user starts a relay action. |
@@ -153,4 +161,4 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 ## Open Questions
 
 - Revisit group sharing and GIF search after the one-to-one image/GIF flow is working.
-- Confirm the upload size cap against the configured Supabase plan during implementation; the initial design should surface the limit before upload.
+- Confirm the implemented 8 MB upload cap fits the verified Free project limits before enabling hosted media sends.

@@ -2,6 +2,10 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
+## Current integration status — 2026-10-24
+
+PR [#1](https://github.com/arjeetanand/drop/pull/1) merged the feature work into `main` at `1141cff493bbda7ef75fbc12af8bb6a3d8d1efb7`. The branch names and “no PR or merge” notes in dated checkpoints below describe their state when recorded; they are historical, not a list of current competing versions. For the current acceptance queue, use [HANDOFF.md](../HANDOFF.md) and [CHECKLIST.md](../CHECKLIST.md). The hosted Supabase project is still pending: the organization's plan is unverified, the CLI has no access token, and no Drop project exists.
+
 ## Checkpoint — Share-to-Drop PWA import and replay safety (2026-10-24)
 
 - [x] Add a PWA share target for supported photo/GIF files, with worker-side validation and a one-hour opaque IndexedDB handoff.

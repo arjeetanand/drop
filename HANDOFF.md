@@ -2,16 +2,20 @@
 
 Updated: 2026-10-24
 
-## Latest checkpoint — Main integration PR and Relay invite safety (2026-10-24)
+## Current checkpoint — merged integration and readiness (2026-10-24)
 
-- Current integration candidate: `/Users/arjeetanand/projects/drop`, branch `feat/demo-relay-preview`; GitHub PR [#1](https://github.com/arjeetanand/drop/pull/1) targets `main`. The PR opened at head `1c5870aa362ee3005c59420ca95c410f77b8ccb0` against `main` at `1887ac4c702952f26ebb4a196ae19fd6ac2cb620`; test-fixture cleanup later advanced the code head to `8ecb1a4edff12ce1843a9830d21b1884b6d55a63`. At that code head, `origin/main...HEAD` was `0 126`; this project-note commit adds one more commit. The live PR page records current review, checks, and merge state.
-- Relay bearer tokens are read only from URL fragments. Query-only legacy invites are rejected and the token query is removed from visible browser history; ask the carrier for a fresh invite. A legacy query can still reach the server in the initial request before client-side cleanup.
-- `run.sh` now changes to the project directory before invoking npm, including when started through an absolute path from elsewhere. Test UUID fixtures use deterministic UUIDv4 values in the current tree.
-- Verification: `npm test` passed 272/272; `npm run lint`, `npx tsc --noEmit --incremental false`, `git diff --check`, `bash -n run.sh`, external-working-directory launcher smoke, and `npm run build -- --webpack` passed. Build generated 22 routes and emitted the existing outdated Browserslist data and ambiguous Tailwind easing-class warnings.
-- GitGuardian Security Checks reports three `Generic High Entropy Secret` findings in test files in commits `fd5a327`, `b7483df`, and `fb7bd07`. Inspection traced them to UUID fixtures, not configured credentials. The current tree replaces those fixture values in `8ecb1a4`, but the scanner still examines earlier commits in the PR range. GitHub reports no required branch-protection checks for `main`; the PR page shows the live check result.
-- The installed-PWA/system-share browser smoke remains unverified because Chrome did not publish `DevToolsActivePort`. Screen-reader and physical-device behavior, hosted Supabase two-account delivery, and actual Storage cleanup remain unverified. No hosted Drop project was created. `.env.local` was not staged or changed, and `/letter` was not changed.
+- PR [#1](https://github.com/arjeetanand/drop/pull/1) is merged into `main` at `1141cff493bbda7ef75fbc12af8bb6a3d8d1efb7`. `main` is the current integration line; the feature branches listed in the historical notes below are not competing latest versions.
+- The merged candidate passed `npm test` (272/272), lint, no-incremental TypeScript, `git diff --check`, `bash -n run.sh`, the external-working-directory launcher smoke, and `npm run build -- --webpack`. The production build generated 22 routes, with existing Browserslist freshness and Tailwind easing-class warnings.
+- The local app and its PWA manifest returned HTTP 200 on port 4004 in the merge verification. Use `./run.sh` from the project root to start or restart it.
+- The code includes local/demo journeys for text, photo, GIF, instant sharing, optional Relay, private claim links, reactions, mailbox updates, and PWA image import. Those source and local checks do not prove hosted account-to-account delivery.
+- Hosted setup is blocked. The Supabase organization page is `sofucwhjqdyfensxlltl`, but its plan is unverified and no Drop project exists. The CLI reports `Access token not provided`; the active `.env.local` has no `SUPABASE_ACCESS_TOKEN`, and project creation previously returned 403. No hosted migrations, Storage bucket, worker, or schedule have been configured.
+- GitGuardian flagged three high-entropy values in test fixtures in earlier PR commits. Review traced them to UUID test data, and the merged source contains deterministic UUIDv4 fixtures. This was not evidence of a configured credential. The finding is tied to historical commits in the merged range.
+- Still open: create and verify the approved Free project with no paid add-ons; apply migrations and configure private Storage/Auth and the hourly cleanup worker; test two-account text/media claims and actual 30-day deletion; verify the installed PWA share sheet; complete screen-reader and physical-device checks.
+- This documentation reconciliation is on `docs/drop-main-readiness`, based on `1141cff`. It changes project notes only. `.env.local`, hosted resources, and `/letter` were not changed.
 
-**Follow-up:** complete the system share-sheet and physical-device checks, then validate two-account media delivery and 30-day Storage cleanup against the approved Free Supabase project when hosted access is available.
+## Historical task-branch checkpoints
+
+The checkpoints below record the state when each feature slice was developed. Their branch names and statements such as “no PR or merge” are historical; PR #1 later integrated those commits into `main`.
 
 ## Latest checkpoint — fictional Relay demo preview (2026-10-24)
 
@@ -311,11 +315,13 @@ Updated: 2026-10-24
 - No hosted Supabase project was created. The user approved a distinct Free organization and one Free project; the local Supabase CLI reports that no access token is configured, and no hosted resources were changed. The app's local environment remains loopback-only.
 - Next: rotate the Supabase PAT that was pasted into chat, authenticate the CLI locally, then finish the approved Free Supabase setup with no paid add-ons. Apply both recipient relay migrations in order and verify photo/GIF relay plus sender/recipient reactions across disposable accounts. Rendered browser, screen-reader, and real-device checks remain open.
 
-## Active checkout and Git
+## Historical branch inventory before PR #1
 
-- Active code checkout: /Users/arjeetanand/projects/drop
-- GitHub remote: private repository arjeetanand/drop
-- Current branch: `feat/journey-collection-receipt` is based on pushed commit `4b45809` and includes pushed code commit `d9eeadb`. The documentation and learning-log commit is pending. Earlier commits include `84e5ba2` (persistent sender claim status), `0b11a73` (learning-log setup), `75f8a89` (relay recipient collection), `8493097` (sender reaction race safety), `6f618ed` (invite storage guard), and `41c409e` (profile copy fallback). No pull request has been created.
+The entries in this section describe the pre-merge branch state. PR #1 later integrated the relevant code into `main` at `1141cff493bbda7ef75fbc12af8bb6a3d8d1efb7`; do not use these branch names to identify the latest version.
+
+- Historical code checkout: `/Users/arjeetanand/projects/drop`
+- GitHub remote: private repository `arjeetanand/drop`
+- The earlier task branch was `feat/journey-collection-receipt`, based on pushed commit `4b45809` and including code commit `d9eeadb`. Earlier commits included `84e5ba2` (persistent sender claim status), `0b11a73` (learning-log setup), `75f8a89` (relay recipient collection), `8493097` (sender reaction race safety), `6f618ed` (invite storage guard), and `41c409e` (profile copy fallback).
 - Previous mailbox search-focus branch: `fix/mailbox-search-focus`, code commit `bbf9df8` pushed to origin; no pull request has been created.
 - Mailbox empty-state feature commit: `10efead` (`feat: tailor mailbox empty states to filters`), pushed to `origin/feat/mailbox-filter-empty-states`; the docs update is committed separately.
 - Recipient-first composer commit: `a9049cf` (`feat: put recipient first in drop composer`), pushed to `origin/feat/recipient-first-compose`.
@@ -384,25 +390,14 @@ Updated: 2026-10-24
 
 ## Remaining work
 
-- Apply the media-claim migration and configure the cleanup Edge Function plus Vault secrets on the approved Free project; verify photo/GIF claims, sender status, reissue, and actual Storage deletion across two disposable accounts.
-- Add reconciliation for finalized orphan objects when both cleanup-queue attempts fail, then test the claim/issue/queue/lease ordering with concurrent database sessions.
-- Verify media claim, reissue, and retry behavior in a rendered mobile/desktop browser with keyboard and screen-reader checks. Browser automation is unavailable in this environment.
-- Verify recipient relay collection in a rendered browser at mobile and desktop widths, including keyboard and screen-reader behavior.
-- Apply `20261023000000_relay_recipient_collection.sql` and `20261023010000_legacy_dispatched_relay_compatibility.sql` to the approved Free Drop Supabase project after it is provisioned, then verify two-account collection and sender journey updates.
-- Re-run the production build in an environment that can write the active checkout's `.next` directory and resolve or mock Google Fonts.
+1. **Provision the hosted backend:** verify the linked organization's plan and create one Free Drop project with no paid add-ons. Project creation is currently blocked because the CLI has no access token and prior project creation returned 403.
+2. **Configure the project:** apply all migrations in order; configure Auth redirects, the private media bucket, required Vault values, and the cleanup Edge Function's hourly schedule. Confirm any organization/project billing state before using hosted resources.
+3. **Run hosted acceptance:** use two disposable accounts to cover text and photo/GIF sends, private claims and reissue, recipient access boundaries, reactions, Relay collection, and inbox updates. Exercise retry/recovery paths and confirm actual Storage deletion after the 30-day cutoff.
+4. **Finish human-device checks:** test the installed PWA share target and OS share sheet, screen-reader output, keyboard navigation, safe-area behavior, and reduced motion on supported browsers/devices.
+5. **Track known compatibility limits:** legacy `?d=` Relay QR URLs still include the prior carrier's coordinates; create fresh server-issued invites for future handoffs. The cleanup worker's large-bucket scan cost and concurrent lease behavior need further measurement.
 
-- Legacy `?d=` QR links still put previous-carrier coordinates in the URL and send them to Drop when opened. Use a new server-issued invite for future handoffs; old payloads are not safely convertible.
-- Verify a valid carrier-issued handoff across accounts/devices and against hosted Supabase. No hosted Drop project has been created.
-- Verify refresh recovery after a server-accepted relay request loses its response, using a rendered browser and local Supabase when those tools are available.
-- Apply `20261022100000_drop_inbox_broadcast.sql` to the Free Drop Supabase project and verify real recipient notifications between two disposable accounts.
-- Apply `20261022110000_drop_reaction_broadcast.sql` after the inbox broadcast migration and verify real sender reaction cues between two disposable accounts.
-- Apply `20261022000000_restrict_relay_handoff_column_select.sql` to the Free Drop Supabase project when that project is available; only the disposable local PostgreSQL regression has been run so far.
-- Restart local Supabase after its runtime is available, then verify email-link return to port 4004.
-- Verify Home/Mailbox arrival rendering at phone and desktop sizes, keyboard behavior, and screen-reader status announcements when browser automation is available; check real-device keyboard/safe-area behavior.
-- Verify the recipient-first composer in a rendered browser at 360px, 390px, and 430px, including the account-ready and signed-out states, invite return, keyboard, and safe-area behavior.
-- Verify invite sharing, cancel-and-reopen recovery, and concurrent send edits in a rendered browser and with a screen reader/real device; hosted two-account delivery remains open until the Free Drop Supabase project is available.
-- Continue to keep /letter read-only and do all new Drop work in /Users/arjeetanand/projects/drop.
+The code implementation and local test suite are integrated on `main`; these items are hosted or release-acceptance work, not evidence that all features are already live.
 
 ## Run locally
 
-From /Users/arjeetanand/projects/drop, run npm ci, then ./run.sh. Drop uses http://localhost:4004; ./run.sh stop stops the project-owned process. The local Supabase smoke environment uses port 5004 and browser QA is reserved port 6004. Code commit `88f9b11` is pushed to `origin/feat/media-orphan-reconciliation`; this handoff and learning update are committed separately on that branch. The branch is not merged and has no pull request.
+From the local project root, run `npm ci` and then `./run.sh`. Drop uses `http://localhost:4004`; `./run.sh stop` stops only the project-owned process. The isolated local Supabase smoke environment uses port 5004, and browser QA reserves port 6004. Keep credentials in the ignored `.env.local`; never commit or paste them. No hosted Drop project is configured at this checkpoint.
