@@ -2,6 +2,16 @@
 
 Updated: 2026-10-24
 
+## Latest checkpoint — authenticated first-use claim in browser (2026-10-24)
+
+- The claim-return handle now has native required-field semantics. Added a local-only browser smoke that signs a new recipient in through Mailpit, saves the required handle from the rendered profile form, verifies the drop remains sealed and unreadable before claim, then explicitly claims and opens it.
+- The smoke verifies the active Docker context resolves to Rancher Desktop's local socket or a local Windows named pipe, pins Docker inspection to that context, rejects credentials/query/fragments in the Supabase URL, and disables HTTP redirects for all direct and Supabase-client requests. It records exact test account emails and unique markers before creation, recovers IDs if a response is lost, and confirms Mailpit, drop, and Auth deletion through readback.
+- Verification: local Docker browser smoke passed end to end and confirmed its test mail, drop, accounts, processes, and temporary files were removed. A stubbed remote TCP Docker endpoint was rejected before container or Supabase operations. `npm test` passed 273/273; lint, no-incremental TypeScript, script syntax, and diff checks passed. The main app returned HTTP 200 on port 4004; test port 5004 was free after cleanup. `.env.local` remains ignored.
+- Code commit `aabe941` (`fix: verify first-use private claim in local browser`) is pushed on `fix/claim-first-use-profile` and updates the existing [PR #3](https://github.com/arjeetanand/drop/pull/3). This checkpoint's documentation and learning log are committed separately on the same branch. PR #3 remains unmerged.
+- Hosted two-account behavior, physical 30-day Storage deletion, spoken screen-reader output, and physical-device behavior remain open. This verification used only the local Docker stack; no hosted Supabase resources or `/letter` files changed.
+
+**Next:** complete hosted and device checks when their environments are available; merge PR #3 only after explicit approval.
+
 ## Latest checkpoint — Handle-first private-claim setup (2026-10-24)
 
 - Claim-return profile setup now asks for the Drop handle first and marks it required. Display name and bio are optional, collapsed behind a native keyboard-operable disclosure, and existing values stay available. The normal profile editor keeps its previous field order. The explicit claim action and claim privacy gate are unchanged.

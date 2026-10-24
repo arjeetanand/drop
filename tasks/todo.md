@@ -7,7 +7,9 @@ Tasks are ordered by dependency. Progress is recorded at each tested and pushed 
 - [x] Put the required handle first for first-use claim return; make display name and bio optional behind a native, keyboard-operable disclosure.
 - [x] Verify handle-only profile persistence and the local Supabase text/image/GIF claim flow with blank optional profile fields.
 - [x] Run the isolated browser flow at 360×844, 390×844, 430×844, 844×390, and 1440×900; check keyboard disclosure and horizontal overflow.
-- [x] Pass unit tests, lint, no-incremental TypeScript, production build, syntax checks, and diff checks; push the code commit and open [PR #3](https://github.com/arjeetanand/drop/pull/3).
+- [x] Run the rendered email-link sign-in → profile save → sealed pre-claim state → explicit claim/open journey against local Docker Supabase; verify cleanup of the test message, drop, accounts, and temp files.
+- [x] Guard the runner against non-local Docker endpoints, reject credentials/query/fragment in the local Supabase URL, and recover a test account by exact email plus marker after a lost creation response.
+- [x] Pass 273 unit tests, lint, no-incremental TypeScript, smoke-script syntax, and diff checks; pass the full local Docker browser-to-claim smoke and confirm HTTP 200 on port 4004. Push code commit `aabe941` to the existing [PR #3](https://github.com/arjeetanand/drop/pull/3).
 - [ ] Review and merge PR #3 after explicit approval.
 - [ ] Verify hosted two-account behavior, actual 30-day media cleanup, physical-device behavior, and spoken screen-reader output.
 

@@ -12,11 +12,12 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 
 - First-time recipients returning from a private claim now see the required Drop handle first. Display name and bio remain optional behind a keyboard-operable disclosure; existing values are preserved and the ordinary profile-editing order is unchanged.
 - Added handle-only profile persistence coverage. The local Supabase flow now claims with blank optional profile fields, and isolated Chrome checks disclosure semantics, keyboard operation, retained values, and layout at mobile portrait/landscape and desktop sizes.
-- Verification: 273/273 unit tests, lint, no-incremental TypeScript, five-viewport browser smoke, local Docker Supabase smoke across five disposable accounts, production build, syntax checks, `git diff --check`, and HTTP 200 on port 4004 passed. The build reports existing Browserslist freshness and Tailwind easing-class ambiguity warnings.
-- Review: code commit `2b53bcd` is pushed on `fix/claim-first-use-profile` and tracked by [PR #3](https://github.com/arjeetanand/drop/pull/3). The PR is not merged.
-- Hosted two-account behavior, actual aged-object cleanup, physical-device behavior, and spoken screen-reader output remain open. The browser smoke does not submit the form or save a remote profile.
+- Added native required-field semantics and an authenticated browser smoke for email-link sign-in → profile save → sealed pre-claim state → explicit claim/open. The smoke verifies Rancher Desktop’s local Docker socket, checks cleanup by exact resource readback, and recovers account creation by its pre-registered email and marker.
+- Verification: 273/273 unit tests, lint, no-incremental TypeScript, five-viewport profile smoke, local Supabase smoke across five disposable accounts, and the new full browser-to-claim smoke passed. A TCP Docker endpoint was rejected before container or Supabase operations. The app returned HTTP 200 on port 4004. The production build from the preceding checkpoint passed with existing Browserslist and Tailwind easing-class ambiguity warnings.
+- Review: profile setup commit `2b53bcd` and browser-to-claim follow-up `aabe941` are pushed on `fix/claim-first-use-profile` and tracked by [PR #3](https://github.com/arjeetanand/drop/pull/3). No merge was performed.
+- Hosted two-account behavior, actual aged-object cleanup, physical-device behavior, and spoken screen-reader output remain open. The new browser flow uses disposable local accounts and does not establish hosted behavior.
 
-**Next:** complete full authenticated browser-to-claim coverage and the remaining hosted/device checks as those environments are available; merge PR #3 only after approval.
+**Next:** complete hosted and device checks as those environments are available; merge PR #3 only after approval.
 
 ### Latest checkpoint — Share-to-Drop PWA import and replay safety (2026-10-24)
 
