@@ -3,7 +3,8 @@
 import { Suspense, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { AlignCenter, AlignLeft, AlignRight, ArrowLeft, Check, Eye, FileImage, ImagePlus, Minus, Plus, Send, Share2, Trash2, Type, X } from 'lucide-react';
+import { AlignCenter, AlignLeft, AlignRight, ArrowLeft, Check, Eye, FileImage, ImagePlus, Minus, Plus, QrCode, Send, Share2, Trash2, Type, X } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { getSealInfo, mockSeals, waxColors, writingPrompts, type DropDeliveryMode, type DropPayloadKind } from '@/data/mockData';
 import { canDeleteLocalDraft, clearRecipientInviteProgressForDraft, completeSuccessfulSend, deleteLocalDraft, ensureLetterDraftMediaUploadId, getLetterDraft, getLetterDraftById, getLetterDraftByMediaUploadId, isLetterDraftPersisted, recordRecipientInviteProgress, restoreDeletedDraft, saveLetterDraft, setActiveLetterDraft, startNewLetter, type LetterDraftState, type LetterAlignment } from '@/lib/letterStore';
 import { getRemoteRecentDropRecipients, issueDropClaimInvite, issueDropMediaClaimInvite, lookupDropRecipient, syncDropToBackend } from '@/lib/letterBackend';
@@ -84,6 +85,8 @@ function Composer() {
   const recipientlessPanelRef = useRef<HTMLDivElement>(null);
   const focusRecipientlessPanel = useRef(false);
   const focusRecipientInput = useRef(false);
+  const privateClaimQrRef = useRef<HTMLDivElement>(null);
+  const focusPrivateClaimQrOnRender = useRef(false);
   const privateClaimButtonRef = useRef<HTMLButtonElement>(null);
   const focusPrivateClaimButtonAfterModeSwitch = useRef(false);
   const [subject, setSubject] = useState('');
@@ -107,8 +110,19 @@ function Composer() {
   const [inviteNotice, setInviteNotice] = useState('');
   const [manualInviteUrl, setManualInviteUrl] = useState('');
   const [privateClaimUrl, setPrivateClaimUrl] = useState('');
+  const [showPrivateClaimQr, setShowPrivateClaimQr] = useState(false);
+  const [privateClaimAction, setPrivateClaimAction] = useState<'share' | 'qr' | null>(null);
   const [mediaExpiresAt, setMediaExpiresAt] = useState<string | null>(null);
   const [sharingInvite, setSharingInvite] = useState(false);
+  const privateClaimContextRef = useRef<{ accountId: string | null; draftId: string | null; url: string }>({ accountId: null, draftId: null, url: '' });
+  const currentAccountId = getLocalAccountId();
+
+  const clearPrivateClaimInvite = () => {
+    setPrivateClaimUrl('');
+    setShowPrivateClaimQr(false);
+    setPrivateClaimAction(null);
+    focusPrivateClaimQrOnRender.current = false;
+  };
 
   useEffect(() => {
     let active = true;
@@ -130,6 +144,9 @@ function Composer() {
     setInviteNotice('');
     setManualInviteUrl(current.recipientInviteProgress?.manualLinkAvailable ? `${window.location.origin}/invite` : '');
     setPrivateClaimUrl('');
+    setShowPrivateClaimQr(false);
+    setPrivateClaimAction(null);
+    focusPrivateClaimQrOnRender.current = false;
     setMediaExpiresAt(null);
     setContent(current.content);
     setRecipient(requestedRecipient);
@@ -362,6 +379,10 @@ function Composer() {
     return () => { active = false; };
   }, [ready, router, searchParams]);
 
+  useEffect(() => {
+    privateClaimContextRef.current = { accountId: currentAccountId, draftId: draft?.id ?? null, url: privateClaimUrl };
+  }, [currentAccountId, draft?.id, privateClaimUrl]);
+
   const wordCount = content.trim() ? content.trim().split(/\s+/).length : 0;
   const recipientUsername = normalizeDropRecipient(recipient);
   const confirmedRecipient = recipientCheck.status === 'found' && isDropRecipientConfirmed(recipientCheck, recipient) ? recipientCheck : null;
@@ -399,6 +420,12 @@ function Composer() {
     focusPrivateClaimButtonAfterModeSwitch.current = false;
     privateClaimButtonRef.current?.focus();
   }, [canSendPrivateClaim]);
+
+  useEffect(() => {
+    if (!focusPrivateClaimQrOnRender.current || !privateClaimUrl || !showPrivateClaimQr) return;
+    focusPrivateClaimQrOnRender.current = false;
+    privateClaimQrRef.current?.focus();
+  }, [privateClaimUrl, showPrivateClaimQr]);
 
   useEffect(() => {
     if (shareWithoutHandle && focusRecipientlessPanel.current) {
@@ -537,7 +564,7 @@ function Composer() {
     setError('');
     setInviteNotice('');
     setManualInviteUrl('');
-    setPrivateClaimUrl('');
+    clearPrivateClaimInvite();
   };
 
   const checkRecipient = async (value = recipientUsername) => {
@@ -575,7 +602,7 @@ function Composer() {
     setError('');
     setInviteNotice('');
     setManualInviteUrl('');
-    setPrivateClaimUrl('');
+    clearPrivateClaimInvite();
     void checkRecipient(username);
   };
 
@@ -589,7 +616,7 @@ function Composer() {
     setShareWithoutHandle(true);
     setInviteNotice('');
     setManualInviteUrl('');
-    setPrivateClaimUrl('');
+    clearPrivateClaimInvite();
   };
 
   const chooseHandleInstead = () => {
@@ -599,10 +626,10 @@ function Composer() {
     setRecipient('');
     setRecipientCheck({ status: 'idle', username: null });
     setInviteNotice('');
-    setPrivateClaimUrl('');
+    clearPrivateClaimInvite();
   };
 
-  const sharePrivateClaimInvite = async () => {
+  const sharePrivateClaimInvite = async (action: 'share' | 'qr' = 'share') => {
     if (!draft || !canSendPrivateClaim || sharingInvite || sending || deletingRef.current) return;
     const request = recipientCheckRequest.current;
     let next = makeDraft();
@@ -629,7 +656,8 @@ function Composer() {
     setError('');
     setInviteNotice('');
     setManualInviteUrl('');
-    setPrivateClaimUrl('');
+    clearPrivateClaimInvite();
+    setPrivateClaimAction(action);
     try {
       const token = createDropClaimToken();
       let issued: PrivateClaimInviteReceipt;
@@ -678,6 +706,13 @@ function Composer() {
         setInviteNotice('Your drop is saved in Sent, but this browser could not prepare its private link. Open it in Sent and try again.');
         return;
       }
+      setPrivateClaimUrl(inviteUrl);
+      if (action === 'qr') {
+        focusPrivateClaimQrOnRender.current = true;
+        setShowPrivateClaimQr(true);
+        setInviteNotice('Your private claim scan code is ready. Anyone who scans it can claim this drop.');
+        return;
+      }
       const payload = createDropClaimSharePayload(inviteUrl);
       const result = await shareInviteLink(
         inviteUrl,
@@ -693,7 +728,6 @@ function Composer() {
         router.push(buildSentReceiptPath({ kind: 'claim', letterId: issued.letterId, shareOutcome: result }));
         return;
       }
-      setPrivateClaimUrl(inviteUrl);
       setInviteNotice(result === 'cancelled'
         ? 'Nothing was shared yet. Copy this private link when you’re ready.'
         : 'Sharing is unavailable. Copy this private link to send it yourself.');
@@ -701,7 +735,46 @@ function Composer() {
       if (isCurrentLocalAccount(accountId)) setInviteNotice('The private link could not be prepared. Your draft is still here—try again.');
     } finally {
       setSharingInvite(false);
+      setPrivateClaimAction(null);
       setSending(false);
+    }
+  };
+
+  const sharePreparedPrivateClaimInvite = async () => {
+    if (!privateClaimUrl || !draft || sharingInvite || sending || deletingRef.current) return;
+    const accountId = getLocalAccountId();
+    const draftId = draft.id;
+    const isCurrentInviteContext = () => {
+      const current = privateClaimContextRef.current;
+      return isCurrentLocalAccount(accountId)
+        && current.accountId === accountId
+        && current.draftId === draftId
+        && current.url === privateClaimUrl;
+    };
+    setSharingInvite(true);
+    setInviteNotice('');
+    try {
+      const result = await shareInviteLink(
+        privateClaimUrl,
+        navigator.share ? (details) => navigator.share(details) : undefined,
+        async (url) => {
+          if (!navigator.clipboard) throw new Error('Clipboard unavailable');
+          await navigator.clipboard.writeText(url);
+        },
+        createDropClaimSharePayload(privateClaimUrl),
+      );
+      if (!isCurrentInviteContext()) return;
+      if (result === 'shared' || result === 'copied') {
+        router.push(buildSentReceiptPath({ kind: 'claim', letterId: draftId, shareOutcome: result }));
+        return;
+      }
+      setInviteNotice(result === 'cancelled'
+        ? 'Nothing was shared yet. The same private link is still ready below.'
+        : 'Sharing is unavailable. Copy the private link below instead.');
+    } catch {
+      if (isCurrentInviteContext()) setInviteNotice('The share sheet is unavailable. The same private link is still ready to copy.');
+    } finally {
+      setSharingInvite(false);
     }
   };
 
@@ -927,7 +1000,19 @@ function Composer() {
             <p className="text-sm font-semibold text-ink-navy">Anyone holding this link can claim the drop.</p>
             <p className="mt-1 text-xs leading-relaxed text-on-surface-variant">Share it directly with the person you had in mind.</p>
             <code tabIndex={0} aria-label="Select and copy this private claim link" className="mt-3 block select-all break-all rounded-lg bg-white/80 px-2 py-2 font-mono text-[0.68rem] text-ink-navy">{privateClaimUrl}</code>
-            <button type="button" onClick={() => void copyPrivateClaimInvite()} className="button-primary mt-3 !min-h-12 w-full !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white">Copy private link</button>
+            <div id="private-claim-qr" ref={privateClaimQrRef} tabIndex={showPrivateClaimQr ? -1 : undefined} role={showPrivateClaimQr ? 'region' : undefined} aria-label={showPrivateClaimQr ? 'Private claim scan code' : undefined} hidden={!showPrivateClaimQr} className={showPrivateClaimQr ? 'mt-4 flex flex-col items-center rounded-xl border border-[rgba(16,42,67,.12)] bg-white/80 p-4 focus:outline-none focus:ring-2 focus:ring-[#2b45f7] focus:ring-offset-2' : 'hidden'}>
+              {showPrivateClaimQr && <>
+                <div className="max-w-full rounded-lg bg-white p-3" role="img" aria-label="QR code for the private claim link">
+                  <QRCodeSVG value={privateClaimUrl} size={216} level="M" includeMargin />
+                </div>
+                <p className="mt-3 max-w-sm text-center text-xs leading-relaxed text-ink-navy">Anyone who scans this code can claim the drop. The code expires with the private link.</p>
+              </>}
+            </div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <button type="button" onClick={() => setShowPrivateClaimQr((visible) => !visible)} disabled={sharingInvite || sending} aria-expanded={showPrivateClaimQr} aria-controls="private-claim-qr" className="button-secondary !min-h-12 !rounded-xl disabled:opacity-50">{showPrivateClaimQr ? 'Hide scan code' : 'Show scan code'}</button>
+              <button type="button" onClick={() => void copyPrivateClaimInvite()} disabled={sharingInvite || sending} className="button-primary !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white disabled:opacity-50">Copy private link</button>
+            </div>
+            <button type="button" onClick={() => void sharePreparedPrivateClaimInvite()} disabled={sharingInvite || sending} className="button-secondary mt-2 !min-h-12 w-full !rounded-xl disabled:opacity-50">{sharingInvite ? 'Opening share…' : 'Share private link'}</button>
           </div>}
           {inviteNotice && <p className="field-help mt-3" role="status" aria-live="polite">{inviteNotice}</p>}
           <Link href={privateClaimDetailsHref} onClick={saveBeforeLeaving} aria-disabled={shareImporting} className="button-secondary mt-5 !min-h-12 !rounded-xl aria-disabled:cursor-wait">Open saved drop <ArrowRightIcon /></Link>
@@ -950,7 +1035,11 @@ function Composer() {
                   ? <p className="mt-1 text-xs leading-relaxed text-on-surface-variant">The link lasts 7 days.</p>
                   : <p className="mt-1 text-xs leading-relaxed text-on-surface-variant">The link {getClaimInviteExpiryDuration(payloadKind)}. If unclaimed after 30 days, access ends and Drop queues the attachment for deletion. A paused free project or worker outage can delay removal.</p>}
                 <button ref={privateClaimButtonRef} type="button" onClick={() => void sharePrivateClaimInvite()} disabled={sharingInvite || sending || deleting} className="button-primary mt-3 !min-h-12 w-full !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white disabled:opacity-50">
-                  <Share2 className="h-4 w-4" aria-hidden="true" />{sharingInvite ? 'Preparing private link…' : 'Share private link'}
+                  <Share2 className="h-4 w-4" aria-hidden="true" />{privateClaimAction === 'share' ? 'Preparing private link…' : 'Share private link'}
+                </button>
+                <p className="mt-3 text-xs leading-relaxed text-on-surface-variant">A scan code contains this same private link. Anyone who scans it can claim the drop.</p>
+                <button type="button" onClick={() => void sharePrivateClaimInvite('qr')} disabled={sharingInvite || sending || deleting} className="button-secondary mt-2 !min-h-12 w-full !rounded-xl disabled:opacity-50">
+                  <QrCode className="h-4 w-4" aria-hidden="true" />{privateClaimAction === 'qr' ? 'Creating scan code…' : 'Show scan code'}
                 </button>
               </div> : !canSwitchToInstantClaim && <p className="field-help mt-3" role="status">{privateClaimReadinessMessage}</p>}
               {privateClaimUrl && <div className="mt-3 rounded-lg border border-[rgba(16,42,67,.12)] bg-white/75 p-3">
@@ -1014,7 +1103,11 @@ function Composer() {
                     ? <p className="mt-2 text-xs leading-relaxed text-on-surface-variant">The link lasts 7 days.</p>
                     : <p className="mt-2 text-xs leading-relaxed text-on-surface-variant">The link {getClaimInviteExpiryDuration(payloadKind)}. If unclaimed after 30 days, the claim and media access end and Drop queues the attachment for deletion. Cleanup can be delayed if the free project is paused or unavailable. A fresh link won’t extend the cutoff.</p>}
                   <button ref={privateClaimButtonRef} type="button" onClick={() => void sharePrivateClaimInvite()} disabled={sharingInvite || sending || deleting} className="button-primary mt-3 !min-h-12 w-full !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white disabled:opacity-50">
-                    <Share2 className="h-4 w-4" aria-hidden="true" />{sharingInvite ? 'Preparing private link…' : `Send a private ${privateClaimPayloadLabel} link`}
+                    <Share2 className="h-4 w-4" aria-hidden="true" />{privateClaimAction === 'share' ? 'Preparing private link…' : `Send a private ${privateClaimPayloadLabel} link`}
+                  </button>
+                  <p className="mt-3 text-xs leading-relaxed text-on-surface-variant">A scan code contains this same private link. Anyone who scans it can claim the drop.</p>
+                  <button type="button" onClick={() => void sharePrivateClaimInvite('qr')} disabled={sharingInvite || sending || deleting} className="button-secondary mt-2 !min-h-12 w-full !rounded-xl disabled:opacity-50">
+                    <QrCode className="h-4 w-4" aria-hidden="true" />{privateClaimAction === 'qr' ? 'Creating scan code…' : 'Show scan code'}
                   </button>
                 </div>}
                 <button type="button" onClick={() => void inviteRecipient()} disabled={sharingInvite || sending || deleting} className="button-secondary mt-3 !min-h-12 w-full !rounded-xl disabled:opacity-50">
