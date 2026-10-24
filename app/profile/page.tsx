@@ -566,6 +566,64 @@ function ProfileContent() {
     return saved ? 'Saved on this device' : 'Save identity';
   })();
 
+  const profileFieldsDisabled = saving || accountStatus === 'checking' || identityUnverified || !canEditProfile;
+  const displayNameField = (
+    <div>
+      <label htmlFor="display-name" className="field-label">Display name</label>
+      <input
+        id="display-name"
+        value={profile.displayName}
+        onChange={(event) => update('displayName', event.target.value)}
+        className="input-field mt-2"
+        placeholder="Eleanor Vance"
+        autoComplete="name"
+        disabled={profileFieldsDisabled}
+      />
+    </div>
+  );
+  const handleField = (
+    <div>
+      <label htmlFor="username" className="field-label">
+        Drop handle
+        {claimReturn && <span className="ml-2 text-xs font-normal text-slate-700">Required</span>}
+      </label>
+      <input
+        id="username"
+        value={profile.username}
+        onChange={(event) => update('username', event.target.value)}
+        className="input-field mt-2"
+        placeholder="eleanor"
+        autoComplete="username"
+        spellCheck={false}
+        disabled={profileFieldsDisabled}
+        required={claimReturn}
+        aria-required={claimReturn}
+        aria-describedby={profileError ? 'username-help username-error' : 'username-help'}
+        aria-invalid={Boolean(profileError)}
+      />
+      <p id="username-help" className="field-help mt-2">
+        {claimReturn
+          ? 'Needed to claim this drop. Use lowercase letters, numbers, periods, underscores, or hyphens; 2–24 characters.'
+          : 'Your handle is editable. Use lowercase letters, numbers, periods, underscores, or hyphens; 2–24 characters.'}
+      </p>
+      {profileError && <p id="username-error" className="error-notice mt-2" role="alert">{profileError}</p>}
+    </div>
+  );
+  const bioField = (
+    <div>
+      <label htmlFor="bio" className="field-label">One-line bio</label>
+      <textarea
+        id="bio"
+        value={profile.bio}
+        onChange={(event) => update('bio', event.target.value)}
+        className="textarea-field mt-2"
+        placeholder="Collecting small moments and sending them forward."
+        rows={4}
+        disabled={profileFieldsDisabled}
+      />
+    </div>
+  );
+
   const restorePendingProfile = (source: 'current' | 'legacy' = 'current') => {
     const pendingSnapshot = remoteUserId ? getPendingRemoteProfileSnapshot(remoteUserId) : null;
     const selectedSnapshot = source === 'legacy' ? pendingSnapshot?.legacyConflict : pendingSnapshot;
@@ -640,7 +698,7 @@ function ProfileContent() {
               <p className="eyebrow">{claimReturn ? 'One quick setup' : 'Make it yours'}</p>
               <h1 className="display-title mt-4 max-w-[11ch]">{claimReturn ? 'Set your handle, then claim.' : 'Pick your Drop handle.'}</h1>
               <p className="body-copy mt-5 max-w-2xl text-lg">
-                {claimReturn ? 'Choose how you’ll show up on Drop. Your friend’s contents stay private until you claim them.' : 'Make it easy for friends to find you and send a little something your way.'}
+                {claimReturn ? 'Choose a handle so your friend can find you. Add a display name or bio later. Their drop stays sealed until you claim it.' : 'Make it easy for friends to find you and send a little something your way.'}
               </p>
             </div>
 
@@ -661,49 +719,27 @@ function ProfileContent() {
                 void save();
               }}
             >
-              <div>
-                <label htmlFor="display-name" className="field-label">Display name</label>
-                <input
-                  id="display-name"
-                  value={profile.displayName}
-                  onChange={(event) => update('displayName', event.target.value)}
-                  className="input-field mt-2"
-                  placeholder="Eleanor Vance"
-                  autoComplete="name"
-                  disabled={saving || accountStatus === 'checking' || identityUnverified || !canEditProfile}
-                />
-              </div>
-
-              <div>
-                <label htmlFor="username" className="field-label">Drop handle</label>
-                <input
-                  id="username"
-                  value={profile.username}
-                  onChange={(event) => update('username', event.target.value)}
-                  className="input-field mt-2"
-                  placeholder="eleanor"
-                  autoComplete="username"
-                  spellCheck={false}
-                  disabled={saving || accountStatus === 'checking' || identityUnverified || !canEditProfile}
-                  aria-describedby={profileError ? 'username-help username-error' : 'username-help'}
-                  aria-invalid={Boolean(profileError)}
-                />
-                <p id="username-help" className="field-help mt-2">Your handle is editable. Use lowercase letters, numbers, periods, underscores, or hyphens; 2–24 characters.</p>
-                {profileError && <p id="username-error" className="error-notice mt-2" role="alert">{profileError}</p>}
-              </div>
-
-              <div>
-                <label htmlFor="bio" className="field-label">One-line bio</label>
-                <textarea
-                  id="bio"
-                  value={profile.bio}
-                  onChange={(event) => update('bio', event.target.value)}
-                  className="textarea-field mt-2"
-                  placeholder="Collecting small moments and sending them forward."
-                  rows={4}
-                  disabled={saving || accountStatus === 'checking' || identityUnverified || !canEditProfile}
-                />
-              </div>
+              {claimReturn ? (
+                <>
+                  {handleField}
+                  <details className="overflow-hidden rounded-xl border border-[rgba(16,42,67,0.13)] bg-[#f7f4ee]/70">
+                    <summary className="flex min-h-12 cursor-pointer items-center gap-3 px-4 py-3 font-medium text-ink-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-inset">
+                      <span>Add profile details</span>
+                      <span className="ml-auto rounded-full border border-[rgba(16,42,67,0.18)] px-2.5 py-1 text-xs font-normal text-slate-700">Optional</span>
+                    </summary>
+                    <div className="space-y-5 border-t border-[rgba(16,42,67,0.1)] px-4 py-4">
+                      {displayNameField}
+                      {bioField}
+                    </div>
+                  </details>
+                </>
+              ) : (
+                <>
+                  {displayNameField}
+                  {handleField}
+                  {bioField}
+                </>
+              )}
 
               <div className="flex flex-wrap items-center gap-3 border-t border-[rgba(16,42,67,0.1)] pt-6">
                 <button

@@ -1236,3 +1236,63 @@ Test bearer-link access at two distinct states: invalid credentials before first
 ### Git and remaining gaps
 
 Code commit `8115a58` (`test: align claim smoke with bearer semantics`) is pushed to `origin/fix/local-bearer-claim-smoke` and tracked by [PR #2](https://github.com/arjeetanand/drop/pull/2). This learning entry and the setup/checklist/handoff updates are in a follow-up documentation commit on the same branch. No hosted Supabase project or resource was changed. Real aged-object deletion, hosted two-account delivery, and device/screen-reader behavior remain unverified.
+
+## 2026-10-24 — Reduce first-use private-claim profile friction
+
+### Issue
+
+New recipients saw display name and bio alongside the handle during claim setup, so the minimum needed to claim was not obvious.
+
+### Cause
+
+The claim-return form gave all three fields similar prominence without calling the latter two optional, and the local claim smoke used a nonblank display name so it did not exercise a handle-only profile.
+
+### Resolution
+
+- Put the Drop handle first and identify it as required only during claim-return setup.
+- Move display name and bio into a collapsed native disclosure labeled optional. Preserve existing values and keep the ordinary profile editor unchanged.
+- Add handle-only profile persistence coverage, use blank optional fields in the local Supabase claim flow, and add an isolated keyboard/responsive browser smoke mode.
+
+### Learning
+
+When first-run setup has one genuine prerequisite, put that field first and disclose other identity details as optional. Test the minimum valid profile through both persistence and the dependent claim flow.
+
+### Verification
+
+- `npm test` passed 273/273; lint, no-incremental TypeScript, `node --check` for both changed smoke scripts, and `git diff --check` passed.
+- Isolated Chrome verified collapsed optional fields, required-handle semantics, keyboard toggling, retained values, and responsive layout at 360×844, 390×844, 430×844, 844×390, and 1440×900.
+- `npm run test:local-supabase` passed across five disposable accounts with blank display name and bio on the claimant profile, followed by text/image/GIF claim flows. The production build passed with existing Browserslist freshness and Tailwind easing-class ambiguity warnings. The app root returned HTTP 200 on port 4004.
+
+### Git and remaining gaps
+
+Code commit `2b53bcd` (`fix: simplify private claim profile setup`) is pushed to `fix/claim-first-use-profile` and tracked by [PR #3](https://github.com/arjeetanand/drop/pull/3). The PR is open and not merged. The browser smoke does not save a remote profile; authenticated browser-to-claim coverage, hosted two-account behavior, actual aged-object cleanup, spoken screen-reader output, and physical-device behavior remain open. `.env.local`, `/letter`, and hosted Supabase resources were not changed.
+
+## 2026-10-24 — Verify first-use private claim in the rendered browser
+
+### Issue
+
+The profile and claim stages had separate coverage, but no rendered test signed in a new recipient, saved their profile through the UI, and continued to the explicit claim action.
+
+### Cause
+
+The browser smoke covered disclosure and responsive behavior without signing in or submitting the profile form. The local Supabase smoke created the recipient profile directly, bypassing the browser-to-backend handoff. The new local runner also needed a stronger guarantee that its service-role client targeted the local Docker daemon and robust cleanup after interrupted create/delete responses.
+
+### Resolution
+
+- Mark the claim-return handle as natively required while keeping optional profile details collapsed and optional.
+- Add a browser smoke for email-link sign-in, required-handle sync, sealed pre-claim state, explicit claim, and opening the received drop.
+- Verify the Rancher Desktop Docker endpoint resolves to its local socket, pin Docker inspection to that context, reject non-local Supabase URL components, and verify removal of exact test resources. Register a test account's unique email and marker before creation so cleanup can recover it if the response is lost.
+
+### Learning
+
+For admin-backed local browser tests, validate the daemon endpoint, not only its context label. Register unique cleanup identity before mutations and confirm the final absence of each resource even if the mutation response is interrupted. Test the complete UI-to-claim transition so direct backend fixtures do not hide a broken auth-return path.
+
+### Verification
+
+- The local Docker browser smoke passed: email sign-in, required-handle profile sync with optional details untouched, sealed state before claim, explicit claim, and post-claim open. Cleanup confirmed the test Mailpit message, drop, accounts, processes, and temporary files were removed.
+- A stubbed remote TCP Docker endpoint was rejected before any container or Supabase operation.
+- `npm test` passed 273/273; lint, TypeScript, smoke-script syntax, and whitespace checks passed. The main app returned HTTP 200 on port 4004.
+
+### Git and remaining gaps
+
+Code commit `aabe941` (`fix: verify first-use private claim in local browser`) is pushed to `fix/claim-first-use-profile`; the documentation update is committed separately on the same branch. PR #3 remains unmerged. This verifies the local journey only; hosted two-account delivery, actual aged-object cleanup, screen-reader output, and physical-device behavior remain open. `.env.local`, `/letter`, and hosted Supabase resources were not changed.
