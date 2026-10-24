@@ -2,6 +2,14 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
+## Current Checkpoint — 2026-10-24 (Hosted Supabase provisioning)
+
+- [x] Create the distinct `Drop App Free` organization requested by the user. Its billing plan remains unverified because the details request returned 403.
+- [x] Attempt to create one `Drop` project in `ap-south-1` without selecting paid compute or add-ons; Supabase returned 403 and the project list confirms no Drop project was created. The existing project was not modified.
+- [x] Leave `.env.local` unchanged and remove the generated password from the rejected project attempt.
+- [ ] Continue with a scoped token that grants `organization_admin_read` and `organization_projects_create` on `Drop App Free`, plus `database_migrations_write`, `edge_functions_write`, `edge_functions_secrets_write`, and `api_gateway_keys_read` and `api_gateway_keys_secret_read` for the new project; alternatively create the Free project in the dashboard. Verify the plan before configuring the app.
+- [ ] Apply migrations and configure the cleanup worker/Vault values on the verified Free project; then test disposable-account delivery, claim, and Storage cleanup. Screen-reader, physical-device, and production-build checks also remain open.
+
 ## Current Checkpoint — 2026-10-24 (Share without a handle)
 
 - [x] Add an explicit handleless Instant private-claim route with a clear bearer-link warning, connected-account and saved-payload gates, and a return to handle entry.

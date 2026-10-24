@@ -2,6 +2,12 @@
 
 Drop needs Supabase Auth, the existing `profiles` and `letters` schema, and the new private `drop-media` bucket for real account-to-account sends.
 
+## Hosted project provisioning status — 2026-10-24
+
+The CLI created the distinct `Drop App Free` organization, but could not verify its plan or create the `Drop` project: both organization details and project creation returned 403. The read-only project list contains only the existing `arjeetanand's Project`; it was not changed. No Drop project or paid compute/add-on was created, and `.env.local` was left unchanged. Continue only after verifying the new organization/project is Free.
+
+The supplied token appears to lack the required fine-grained permissions. Supabase documents `organization_admin_read` for reading organization details and `organization_projects_create` for creating a project. For the remaining setup, also grant `database_migrations_write`, `edge_functions_write`, `edge_functions_secrets_write`, and `api_gateway_keys_read` and `api_gateway_keys_secret_read` on the new project. Store a new scoped token in the ignored local `.env.local`; do not paste it into chat. Revoke the token pasted into chat after replacing it.
+
 1. Add `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` from the Supabase project to `.env.local`, plus `SUPABASE_SERVICE_ROLE_KEY` as a server-only secret in local and deployed environments. Never expose the service-role key with a `NEXT_PUBLIC_` name.
 2. Apply every migration in `supabase/migrations/` in filename order. The validated-media migration restricts browser uploads to private staging paths; a Node route validates image bytes and writes final media using the service-role key. Apply it together with the matching app deployment so the older direct-upload client is not left active.
 3. Local Supabase uses `http://localhost:4004` as its site URL and allows callbacks on the documented app ports `4004`, `5004`, and `6004`, for both `localhost` and `127.0.0.1`; the previous port-3000 callback remains allowed. If you change `supabase/config.toml`, restart the local stack with `npm run supabase:stop` and `npm run supabase:start`. The profile offers a passwordless email link; local messages are visible in Supabase Inbucket at `http://127.0.0.1:54324`. Configure the deployed site's Auth URL settings and SMTP separately for hosted sign-in. Google sign-in is also available when its OAuth provider is configured.

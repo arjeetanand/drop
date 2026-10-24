@@ -863,3 +863,34 @@ Model the saved claim record and the share-sheet outcome as separate states: `cl
 ### Git and remaining gaps
 
 Code commit `a6f8de7` (`feat: add handleless private claim route`) is pushed to `origin/fix-private-claim-share-cancel-copy`. The README, plan, checklist, handoff, and learning entry are committed separately on the same branch. No PR or merge was created. The user's 30-day abandoned-staging deletion choice matches the existing migration; this slice changed no retention code. `/letter`, `.env.local`, and hosted resources were not changed. Next: verify two-account claims and actual Storage cleanup against the approved Free project, then complete screen-reader and physical-device checks.
+
+
+## 2026-10-24 — Supabase project provisioning blocked by token permissions
+
+### Issue
+
+The user approved one distinct Free Supabase organization and one Free Drop project, with no paid add-ons, for hosted account-to-account and Storage verification. The supplied token created an organization but could not read its plan or create the project.
+
+### Cause
+
+The Management API returned 403 for organization details and project creation. The read-only CLI organization list was empty, while project listing succeeded and showed only the existing `arjeetanand's Project`. Supabase documents `organization_admin_read` for organization detail reads and `organization_projects_create` for project creation. The available evidence points to missing fine-grained permissions, but the 403 does not rule out another account or billing restriction.
+
+### Resolution
+
+- Created the distinct organization `Drop App Free` (ref `sofucwhjqdyfensxlltl`) through the Supabase CLI. The create response did not expose its plan, and the plan check was denied; Free status is still unverified.
+- Attempted exactly one `Drop` project in `ap-south-1`, without a compute-size override or paid add-on. The API returned 403; the follow-up project list confirmed no Drop project was created.
+- Left `.env.local` and the existing project untouched, removed the generated database password for the rejected request, and documented the required scoped token permissions and dashboard fallback.
+
+### Learning
+
+A successful organization-create response is not proof that the token can inspect or provision projects in that organization, and it does not verify the billing plan. Check read and create permissions before configuring an app or applying migrations; treat a 403 as unresolved until the account and token scopes are confirmed.
+
+### Verification
+
+- Supabase CLI organization creation returned the new organization reference. The organization-details request returned HTTP 403.
+- Project creation returned `ProjectsCreateUnexpectedStatusError` with `Forbidden`. The read-only project list contained the existing project only; no Drop project appeared.
+- `.env.local` remained unchanged and ignored; the temporary database-password file was removed. No migrations, Edge Functions, Vault values, or project API keys were changed.
+
+### Git and remaining gaps
+
+This is a hosted-setup and documentation checkpoint; no application code changed. The 30-day cleanup policy remains unchanged. A new scoped PAT or a manually created, verified Free project is needed before applying migrations, configuring cleanup, testing two-account claims, and verifying actual Storage deletion. Screen-reader, physical-device, and production-build checks remain open.

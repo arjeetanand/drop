@@ -2,6 +2,16 @@
 
 Updated: 2026-10-24
 
+## Latest checkpoint — Supabase Free provisioning access (2026-10-24)
+
+- The user authorized one distinct Free organization and one Free project, with no paid add-ons. Supabase CLI created the organization `Drop App Free` (ref `sofucwhjqdyfensxlltl`). The API response did not include a plan, and the organization-details request returned 403, so Free status is not yet verified.
+- Project creation for `Drop` in `ap-south-1`, without a compute-size override, returned 403. A follow-up read-only project list showed only the existing `arjeetanand's Project`; no Drop project was created. No paid compute/add-on was selected, the existing project was not changed, and the generated database password was removed.
+- The current `.env.local` is ignored and mode 600; its existing values were not displayed or changed. The hosted setup needs a new scoped PAT with organization admin read and project create on `Drop App Free`, plus database migration write, Edge Function deploy, Edge secrets write, and `api_gateway_keys_read` and `api_gateway_keys_secret_read` for setup. A dashboard-created Free project is an alternative.
+- The PAT supplied in chat was used for the organization and read-only/project-create attempts. Revoke it after replacing it with a new scoped token stored locally; do not paste the replacement into chat.
+- No code or hosted database migration changed. The approved 30-day deletion rule remains as implemented.
+
+**Next:** verify the organization plan and provision the single Free project using a correctly scoped token or the dashboard. Then apply migrations in order, configure the cleanup worker/Vault values, and run hosted two-account delivery and Storage checks.
+
 ## Latest checkpoint — handleless private claim links
 
 - The composer now offers **Share without a handle** from an empty recipient step. The sender must choose this route explicitly; the panel explains that anyone holding the bearer link can claim, and it keeps the connected-account, saved-payload, and Instant-delivery gates. Switching back restores focus to the handle field.

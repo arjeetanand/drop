@@ -6,6 +6,13 @@ Build Drop as a mobile-first private sharing app where a person can send a photo
 
 The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailbox, and relay foundations. Existing letters continue to work as text drops, and their routes and saved content remain readable. The build covers the end-to-end mobile flow: choose content, attach an image or GIF, choose a recipient, send, open, react, and optionally follow a relay.
 
+## Implementation Status — 2026-10-24 (Hosted Supabase provisioning)
+
+- The approved distinct organization `Drop App Free` was created. Its plan could not be verified because the organization-details request returned 403. No paid compute or add-on was selected; do not treat the Free plan as verified yet.
+- Creating the `Drop` project in `ap-south-1` without a compute-size override returned 403. The read-only project list still shows only the existing `arjeetanand's Project`; no Drop project was created or configured.
+- The supplied PAT can create the organization and list projects, but organization details and project creation return 403. Supabase documents `organization_admin_read` and `organization_projects_create` for those operations. Hosted setup awaits a newly scoped token or manual project creation, with the plan verified before migrations or app configuration.
+- `.env.local` was not changed; the generated password for the rejected project request was removed. The user-approved 30-day cleanup policy remains implemented in the existing migration.
+
 ## Implementation Status — 2026-10-24 (Share without a handle)
 
 - The composer offers an explicit handleless private-claim path from the blank recipient step. It discloses that anyone holding the bearer link can claim, keeps the account/payload-save gates, limits this route to Instant, and lets the sender return to handle entry with keyboard focus restored.
