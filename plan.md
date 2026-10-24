@@ -6,6 +6,13 @@ Build Drop as a mobile-first private sharing app where a person can send a photo
 
 The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailbox, and relay foundations. Existing letters continue to work as text drops, and their routes and saved content remain readable. The build covers the end-to-end mobile flow: choose content, attach an image or GIF, choose a recipient, send, open, react, and optionally follow a relay.
 
+## Implementation Status — 2026-10-24 (Home writing spark)
+
+- Home’s **Use this thought** action now creates a fresh text drop and seeds it with the currently displayed writing prompt. The composer remains editable and receives only the draft ID in its route.
+- Starting this draft does not replace an unfinished photo/GIF draft or its saved local attachment. The store regression test covers draft identity, prompt content, and existing attachment recovery.
+- Code commit `2a29ffa` (`fix: seed home thought into fresh drop draft`) is pushed to `origin/fix-private-claim-share-cancel-copy`. The requested learning log and product notes are appended in the docs checkpoint.
+- The user reports being signed in to Supabase, but this task exposes no authenticated dashboard control. No project or billing changes were made; the approved Free plan, hosted sends, and real 30-day Storage deletion remain unverified.
+
 ## Implementation Status — 2026-10-24 (Hosted Supabase provisioning)
 
 - The approved distinct organization `Drop App Free` was created. Its plan could not be verified because the organization-details request returned 403. No paid compute or add-on was selected; do not treat the Free plan as verified yet.

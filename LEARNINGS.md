@@ -900,3 +900,35 @@ This is a hosted-setup and documentation checkpoint; no application code changed
 - `npm run build -- --webpack` passed, including TypeScript and static page generation. The only warnings were outdated Browserslist data and the existing ambiguous Tailwind easing class.
 - `./run.sh` restarted Drop on its owned port 4004; the listener was in the local checkout and the Home route returned HTTP 200.
 - This resolves the production-build and local startup checks listed in the preceding handoff. Hosted project provisioning, two-account/Storage checks, screen-reader use, and physical-device checks remain open.
+
+## 2026-10-24 — Start a fresh drop from a Home writing prompt
+
+### Issue
+
+The Home writing spark showed a prompt, but choosing **Use this thought** navigated to an empty composer. Reusing the current blank draft could also make the new writing activity collide with an unfinished media draft.
+
+### Cause
+
+The Home action did not seed a new draft before navigation. The store intentionally reuses a blank active draft during React development remounts, so the prompt path needed an explicit fresh-draft option and a stable route identifier.
+
+### Resolution
+
+- Create a separate draft ID, seed its editable content with the currently displayed prompt, and navigate with that ID; keep prompt text out of the URL.
+- Preserve the previous draft and its attachment under the original ID, with a store regression test for recovery.
+- Add a focused browser-smoke mode and document the feature and invocation in README, plan, checklist, and handoff.
+- The user reports being signed in to Supabase. This task has no authenticated dashboard control, so no project or billing change was made. Keep the approved Free project and plan verification as a separate pending item.
+
+### Learning
+
+When an action starts a new writing flow from existing context, persist that context into a new entity before routing. Carry an opaque stable ID in navigation and keep the source text in the editable draft; this preserves both the user's work and the app's privacy boundary.
+
+### Verification
+
+- `npm test` passed 248/248; `npm run lint`, `./node_modules/.bin/tsc --noEmit --incremental false`, and `node --check scripts/browser-demo-smoke.mjs` passed.
+- Isolated Chrome passed the prompt-to-editable-draft flow at 360×844, 390×844, 430×844, and 1440×900. It verified the prompt is absent from the route, the prior photo draft and attachment remain recoverable, and no cross-origin request was made.
+- Chrome could not publish its DevTools port in the default sandbox run. The authorized local run started Chrome and completed the full viewport matrix.
+- The production build passed after the code change in the preceding verification. The user-approved 30-day cutoff remains encoded in the existing cleanup migration; this slice changed no retention logic, and hosted deletion is not verified.
+
+### Git and remaining gaps
+
+Code commit `2a29ffa` (`fix: seed home thought into fresh drop draft`) is pushed to `origin/fix-private-claim-share-cancel-copy`; the accompanying plan, README, checklist, handoff, and learning update are committed separately on the same branch. No PR or merge was created. `/letter`, `.env.local`, and hosted Supabase resources were not changed. The user reports an active Supabase login, but no dashboard control is available in this task; the approved Free plan/project, hosted two-account sends, and physical Storage cleanup remain unverified. Screen-reader and physical-device checks also remain open.

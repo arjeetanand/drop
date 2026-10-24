@@ -2,6 +2,16 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
+## Current Checkpoint — 2026-10-24 (Home writing spark)
+
+- [x] Make **Use this thought** open a fresh editable text-drop draft seeded with the displayed Home prompt; navigate by draft ID rather than putting prompt text in the URL.
+- [x] Preserve an unfinished photo/GIF draft and its local attachment when starting the new prompted draft; add a store regression test.
+- [x] `npm test` passes 248/248; lint, no-incremental TypeScript, and browser smoke script syntax pass.
+- [x] Isolated Chrome prompt smoke passes at 360×844, 390×844, 430×844, and 1440×900. Each viewport verifies editable prompt content, no prompt in the URL, and recovery of the original photo draft/attachment; no cross-origin requests were observed.
+- [x] Code commit `2a29ffa` is pushed to `origin/fix-private-claim-share-cancel-copy`; this checkpoint’s docs are committed separately.
+- [ ] Provision the approved Free Supabase project and verify its plan before configuring hosted services. The user reports being signed in, but this task has no authenticated dashboard control; no project or billing changes were made.
+- [ ] Verify hosted account-to-account sends and physical 30-day Storage deletion; screen-reader and physical-device checks also remain open.
+
 ## Current Checkpoint — 2026-10-24 (Hosted Supabase provisioning)
 
 - [x] Create the distinct `Drop App Free` organization requested by the user. Its billing plan remains unverified because the details request returned 403.

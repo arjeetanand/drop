@@ -2,6 +2,16 @@
 
 Updated: 2026-10-24
 
+## Latest checkpoint — Home writing spark (2026-10-24)
+
+- Home’s **Use this thought** now opens a new editable text-drop draft seeded with the displayed prompt. The route carries the draft ID only; prompt text remains in draft content.
+- The action forces a new draft instead of reusing the blank-draft optimization. Regression coverage confirms the prior photo draft and attachment can still be recovered by their original ID.
+- Verification: `npm test` passed 248/248; `npm run lint`, `./node_modules/.bin/tsc --noEmit --incremental false`, and `node --check scripts/browser-demo-smoke.mjs` passed. The isolated Chrome prompt smoke passed at 360×844, 390×844, 430×844, and 1440×900, verifying an editable seeded draft, a clean URL, and preserved photo-draft attachment recovery. No cross-origin requests were observed. Chrome did not publish its DevTools port in the default sandbox; the authorized local run completed successfully.
+- Active checkout: `/Users/arjeetanand/projects/drop`; branch `fix-private-claim-share-cancel-copy`. Code commit `2a29ffa` (`fix: seed home thought into fresh drop draft`) is pushed to origin. This handoff, checklist, plan, README, and learning entry are in a separate docs commit. No PR or merge was created; `/letter` and hosted Supabase were not changed.
+- The user says they are signed in to Supabase, but this task has no authenticated dashboard control. No new project or billing plan was verified. The approved 30-day unclaimed-media and abandoned-staging cutoff remains implemented in the existing migration; actual hosted deletion is unverified.
+
+**Next:** provision and verify the approved Free project through an accessible dashboard or scoped local credential, then apply migrations and configure the cleanup worker. Validate two-account claims and actual Storage deletion; complete screen-reader and physical-device checks.
+
 ## Latest checkpoint — Supabase Free provisioning access (2026-10-24)
 
 - The user authorized one distinct Free organization and one Free project, with no paid add-ons. Supabase CLI created the organization `Drop App Free` (ref `sofucwhjqdyfensxlltl`). The API response did not include a plan, and the organization-details request returned 403, so Free status is not yet verified.
