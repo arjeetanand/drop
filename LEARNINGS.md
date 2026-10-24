@@ -1324,4 +1324,4 @@ When browser failures move across viewport sizes, compare a fresh-page render an
 
 ### Git and remaining gaps
 
-Code commit `ee844cb` (`fix: stabilize claim profile browser smoke`) is pushed to `fix/claim-first-use-profile` and updates PR #3; the documentation update is being committed separately. PR #3 remains unmerged. The browser smoke checks local layout and keyboard behavior only; hosted delivery, physical Storage deletion, screen-reader output, and device behavior remain open. `.env.local`, `/letter`, and hosted Supabase resources were not changed.
+Code commit `ee844cb` (`fix: stabilize claim profile browser smoke`) is pushed to `fix/claim-first-use-profile` and updates PR #3. Documentation commit `bc3bcf1` records this checkpoint separately. PR #3 remains unmerged. The browser smoke checks local layout and keyboard behavior only; hosted delivery, physical Storage deletion, screen-reader output, and device behavior remain open. `.env.local`, `/letter`, and hosted Supabase resources were not changed.
