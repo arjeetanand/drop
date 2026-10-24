@@ -12,6 +12,7 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 - Creating the `Drop` project in `ap-south-1` without a compute-size override returned 403. The read-only project list still shows only the existing `arjeetanand's Project`; no Drop project was created or configured.
 - The supplied PAT can create the organization and list projects, but organization details and project creation return 403. Supabase documents `organization_admin_read` and `organization_projects_create` for those operations. Hosted setup awaits a newly scoped token or manual project creation, with the plan verified before migrations or app configuration.
 - `.env.local` was not changed; the generated password for the rejected project request was removed. The user-approved 30-day cleanup policy remains implemented in the existing migration.
+- `npm run build -- --webpack` now passes. `./run.sh` restarted the app on port 4004 and Home returned HTTP 200. The build reports only outdated Browserslist data and an ambiguous Tailwind easing class. Hosted behavior remains unverified.
 
 ## Implementation Status — 2026-10-24 (Share without a handle)
 

@@ -894,3 +894,9 @@ A successful organization-create response is not proof that the token can inspec
 ### Git and remaining gaps
 
 This is a hosted-setup and documentation checkpoint; no application code changed. The 30-day cleanup policy remains unchanged. A new scoped PAT or a manually created, verified Free project is needed before applying migrations, configuring cleanup, testing two-account claims, and verifying actual Storage deletion. Screen-reader, physical-device, and production-build checks remain open.
+
+### Follow-up verification — 2026-10-24
+
+- `npm run build -- --webpack` passed, including TypeScript and static page generation. The only warnings were outdated Browserslist data and the existing ambiguous Tailwind easing class.
+- `./run.sh` restarted Drop on its owned port 4004; the listener was in the local checkout and the Home route returned HTTP 200.
+- This resolves the production-build and local startup checks listed in the preceding handoff. Hosted project provisioning, two-account/Storage checks, screen-reader use, and physical-device checks remain open.
