@@ -6,7 +6,7 @@ The append-only engineering learning log is in [LEARNINGS.md](./LEARNINGS.md); i
 
 ## Branch status and latest checkpoint
 
-`main` is the integration release line. [PR #1](https://github.com/arjeetanand/drop/pull/1) is merged; the latest verified follow-up is tracked in [PR #2](https://github.com/arjeetanand/drop/pull/2). Use the live PR page for its current checks and merge state. The branch tip, local verification, and remaining product checks are recorded in [HANDOFF.md](./HANDOFF.md). Check `git status --short --branch` and `git log -1 --oneline --decorate` for the active checkout. After `git fetch origin`, compare `origin/main` and the candidate with `git rev-list --left-right --count origin/main...HEAD` (first number: commits only on `main`; second: commits only on the candidate). Branches whose tips are already ancestors of the candidate are included in it; they are not separate latest versions.
+`main` is the integration release line. [PR #1](https://github.com/arjeetanand/drop/pull/1) is merged and [PR #2](https://github.com/arjeetanand/drop/pull/2) tracks the local Supabase smoke repair. The newest code candidate is `fix/drop-back-fresh-draft` at `a71612b`, pushed but not merged; its handoff and verification are recorded in [HANDOFF.md](./HANDOFF.md). Use each live PR page for current checks and merge state. Check `git status --short --branch` and `git log -1 --oneline --decorate` for the active checkout. After `git fetch origin`, compare `origin/main` and the candidate with `git rev-list --left-right --count origin/main...HEAD` (first number: commits only on `main`; second: commits only on the candidate). Branches whose tips are already ancestors of the candidate are included in it; they are not separate latest versions.
 
 ## Run locally
 
@@ -22,6 +22,8 @@ Open `http://localhost:4004`. Run `./run.sh` again to restart Drop, or `./run.sh
 Choose **Try a demo drop** on Home, then pick the bundled photo or GIF. The sample uses the existing recipient reveal, reaction, and sender-copy screens; it is saved in this browser only, does not upload or send anything, and leaves the active draft untouched. Demo reactions persist on this device.
 
 After opening the sender copy, **Make one for a friend** starts a new blank, editable text drop. The sample message, reaction, media, and demo identity stay local; an unfinished draft and its attachment remain available. Sending still follows the normal account and recipient steps.
+
+On a received drop with a sender handle, **Drop back** opens a fresh text draft addressed to that sender. It preserves an unfinished photo/GIF draft and its stored attachment. Run `node scripts/browser-demo-smoke.mjs http://127.0.0.1:4004 --drop-back-only` for the focused 390×844 keyboard regression; it uses an isolated local fixture and does not test a hosted send.
 
 The demo chooser also includes a fictional three-stop Relay preview. Follow Ari, Jo, and Sol, then choose **Collect this drop** to reveal its separate illustrated sample. This preview uses local component state only: it does not use GPS, sign-in, backend services, or sharing. The route marks upcoming, current, and completed stops for assistive technology.
 

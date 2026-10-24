@@ -8,6 +8,12 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 
 ## Implementation Status — 2026-10-24
 
+### Latest checkpoint — received-drop Drop back draft isolation (2026-10-24)
+
+- Drop back now starts a persisted new text draft by stable ID and pre-fills the sender's normalized handle. It does not reuse an empty-caption photo/GIF draft, and storage failures stop navigation with a recovery message.
+- Verification passed: 274 unit tests, lint, no-incremental TypeScript, browser-script syntax, diff checks, Webpack production build, and isolated mobile Chrome at 390×844. The browser fixture confirmed the old attachment bytes stay intact and no send or cross-origin request occurs.
+- Code commit `a71612b` is pushed to `origin/fix/drop-back-fresh-draft`; this branch has no PR or merge yet. Hosted account-to-account, screen-reader, and physical-device checks remain open.
+
 ### Latest checkpoint — Share-to-Drop PWA import and replay safety (2026-10-24)
 
 - Added an installed web share target for JPEG, PNG, WebP, and GIF files up to 8 MB. The service worker stores an opaque one-hour IndexedDB handoff; Compose imports it as an unsent local draft.

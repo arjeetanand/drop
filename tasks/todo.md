@@ -2,6 +2,14 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
+## Checkpoint — received-drop Drop back draft isolation (2026-10-24)
+
+- [x] Start Drop back from a received drop using a persisted fresh draft ID and the sender's normalized handle.
+- [x] Preserve the existing empty-caption photo draft and exact IndexedDB attachment; reject invalid handles without replacing the active draft.
+- [x] Pass 274 unit tests, lint, no-incremental TypeScript, browser-script syntax, diff checks, Webpack build, and isolated Chrome keyboard flow at 390×844. Confirm no send, overflow, or cross-origin requests.
+- [x] Push code commit `a71612b` to `origin/fix/drop-back-fresh-draft`.
+- [ ] Open a PR after review; verify the real received-drop flow with disposable accounts, a screen reader, and a physical device.
+
 ## Checkpoint — Share-to-Drop PWA import and replay safety (2026-10-24)
 
 - [x] Add a PWA share target for supported photo/GIF files, with worker-side validation and a one-hour opaque IndexedDB handoff.

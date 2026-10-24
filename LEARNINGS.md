@@ -1236,3 +1236,34 @@ Test bearer-link access at two distinct states: invalid credentials before first
 ### Git and remaining gaps
 
 Code commit `8115a58` (`test: align claim smoke with bearer semantics`) is pushed to `origin/fix/local-bearer-claim-smoke` and tracked by [PR #2](https://github.com/arjeetanand/drop/pull/2). This learning entry and the setup/checklist/handoff updates are in a follow-up documentation commit on the same branch. No hosted Supabase project or resource was changed. Real aged-object deletion, hosted two-account delivery, and device/screen-reader behavior remain unverified.
+
+## 2026-10-24 — Keep Drop back separate from an unfinished draft
+
+### Issue
+
+Choosing **Drop back** from a received drop could reopen the current empty-caption draft. If that draft already held a photo or GIF, the reply started with the wrong attachment and the unfinished work was no longer isolated from the new reply.
+
+### Cause
+
+The action navigated with `new=1`, while Compose calls `startNewLetter()` without `forceNew`. That helper deliberately reuses a draft whenever its text is empty, regardless of its subject, recipient, payload kind, or saved media.
+
+### Resolution
+
+- Add `startDropBackDraft` to validate and normalize the sender handle, force a new draft, require the prior draft to be saved and the new draft to be verified, and return a URL keyed by the new draft ID.
+- Turn Drop back into a guarded button action. If the local draft-preservation write fails, stay on the received drop and explain that the old draft is unchanged.
+- Add unit coverage for the exact photo attachment bytes and old draft fields, plus an isolated mobile browser flow covering route identity, prefill, no send, and no overflow.
+
+### Learning
+
+When an action means “start a new thing,” do not rely on a generic new-route parameter if the draft store intentionally reuses blank text. Force a new persisted identity and preserve the current state before navigation; test metadata and stored media, not just the visible text.
+
+### Verification
+
+- `npm test`: 274/274 passed. Lint, no-incremental TypeScript, `node --check scripts/browser-demo-smoke.mjs`, and `git diff --check` passed.
+- `npm run build -- --webpack` passed with the existing outdated Browserslist data and ambiguous Tailwind easing-class warnings.
+- Isolated Chrome passed `--drop-back-only` at 390×844 with keyboard input. The route points to the new draft, the sender is prefilled, the original photo fields and exact IndexedDB bytes remain unchanged, the account gate remains explicit, no send occurs, and no overflow/cross-origin request was observed. This uses a local received-demo fixture, not a hosted account-to-account drop.
+- Local Home returned HTTP 200 on port 4004; the project server remains running.
+
+### Git and remaining gaps
+
+Code commit `a71612b` (`fix: start fresh draft from received drop`) is pushed to `origin/fix/drop-back-fresh-draft`. This learning entry and project-note updates are in a separate documentation commit. No PR or merge has been created. Hosted account-to-account behavior, screen-reader output, and physical-device behavior remain unverified. No hosted resources, credentials, or `/letter` files were changed.
