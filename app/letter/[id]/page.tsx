@@ -7,6 +7,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import type { MockLetter } from '@/data/mockData';
 import { getRemoteDropDirection, getRemoteLetterById, getRemoteLetters, getRemoteReactionSnapshot, getRemoteSenderClaimStatusForDrop, reissueDropClaimInvite, reissueDropMediaClaimInvite, saveRemoteReaction, subscribeToIncomingDropInbox, subscribeToSenderDropReactions } from '@/lib/letterBackend';
 import { getLetterById, startNewLetter } from '@/lib/letterStore';
+import { startDropBackDraft } from '@/lib/dropBackDraft';
 import { getLiveClaimCompletionUpdate } from '@/lib/liveClaimStatus';
 import { getClaimInviteExpiryDuration, getClaimedDropLabel, isEligiblePendingSenderClaim, isEligibleSenderClaim, needsSenderClaimStatusRetry, retainKnownClaimStatus } from '@/lib/claimInviteStatus';
 import { getInitialSenderReactionBaseline, getSenderReactionReadUpdate } from '@/lib/liveReactionState';
@@ -118,6 +119,9 @@ export default function LetterArrivalPage() {
   const [sharingClaimLink, setSharingClaimLink] = useState(false);
   const [claimLinkUrl, setClaimLinkUrl] = useState('');
   const [claimLinkNotice, setClaimLinkNotice] = useState('');
+  const [dropBackNotice, setDropBackNotice] = useState('');
+  const [dropBackStarting, setDropBackStarting] = useState(false);
+  const dropBackStartingRef = useRef(false);
   const currentLetterRef = useRef<MockLetter | null>(null);
   const currentReactionRef = useRef<string | undefined>(undefined);
   const baselineReactionOnDirectReadRef = useRef(false);
@@ -583,9 +587,24 @@ export default function LetterArrivalPage() {
     && letter.status === 'dispatched';
   const encodedLetterId = encodeURIComponent(letter.id);
   const mediaExpiryLabel = formatMediaExpiryDate(letter.mediaExpiresAt);
-  const dropBackHref = isReceived && !letter.sample && letter.senderUsername
-    ? `/compose?new=1&recipient=${encodeURIComponent(`@${letter.senderUsername}`)}`
+  const dropBackUsername = isReceived && !letter.sample && letter.senderUsername
+    ? letter.senderUsername
     : null;
+
+  const startDropBack = () => {
+    if (!dropBackUsername || dropBackStartingRef.current) return;
+    dropBackStartingRef.current = true;
+    setDropBackStarting(true);
+    setDropBackNotice('');
+    try {
+      const { composeHref } = startDropBackDraft(dropBackUsername);
+      router.push(composeHref);
+    } catch {
+      dropBackStartingRef.current = false;
+      setDropBackStarting(false);
+      setDropBackNotice('Drop back could not open because this device could not preserve your current draft. Your draft is unchanged. Try again.');
+    }
+  };
 
   if (relayInTransit) {
     const refreshCollectedRelay = async () => {
@@ -778,12 +797,13 @@ export default function LetterArrivalPage() {
                   {senderView ? 'Open recipient demo' : letter.reaction ? 'See your sender copy' : 'Skip to sender copy'}
                   <ArrowRight className="h-4 w-4" aria-hidden="true" />
                 </Link>}
-                {dropBackHref && <div className="mt-6">
+                {dropBackUsername && <div className="mt-6">
                   <p className="meta mb-3">No rush — start a fresh drop back to {sender} whenever you want.</p>
-                  <Link href={dropBackHref} className="button-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#fcfaf6]">
-                    Drop back
+                  <button type="button" onClick={startDropBack} disabled={dropBackStarting} className="button-secondary disabled:cursor-wait disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#fcfaf6]">
+                    {dropBackStarting ? 'Opening your fresh drop…' : 'Drop back'}
                     <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                  </Link>
+                  </button>
+                  {dropBackNotice && <p className="notice error-notice mt-3" role="status" aria-live="polite">{dropBackNotice}</p>}
                 </div>}
                 {!isReceived && letter.reaction && <p className="mt-5 inline-flex items-center gap-2 rounded-full bg-[#f2eee5] px-4 py-2 text-sm text-ink-navy"><Sparkles className="h-4 w-4 text-[#2b45f7]" aria-hidden="true" /> They reacted {letter.reaction}</p>}
                 {(letter.deliveryMode === 'relay' || letter.status === 'dispatched') && <Link
