@@ -1056,3 +1056,33 @@ Check the entire visible page for reused sample content before calling a reveal 
 ### Git and remaining gaps
 
 Code commit `d218721` (`feat: add sealed Relay preview to demo`) is pushed to `origin/feat/demo-relay-preview`. Project notes are in a separate documentation commit on the same branch; no PR or merge was created. `/letter`, `.env.local`, and hosted Supabase were not changed in this slice. The checkout's local Supabase CLI dependency exists, but the project-list request returns `AccessTokenRequiredError`; the user's browser login does not authenticate the CLI. No hosted Drop project was created. Screen-reader use, physical-device behavior, hosted delivery, and actual Storage cleanup remain open.
+
+### Issue
+
+Drop needed a mobile-friendly way to begin a photo/GIF draft from another app's system share sheet. A PWA share target posts a multipart body to the app, so a controlled client service worker must intercept and retain the media before routing to Compose. A fallback route cannot promise that the browser did not already submit the body to the website.
+
+### Cause
+
+There was no PWA manifest share target or handoff store. The composer also needed protection against retries, async navigation, and a currently active claim-pending screen: a repeated handoff could otherwise overwrite user edits, restore a completed drop, or navigate away before the import result appeared.
+
+### Resolution
+
+- Added the manifest share target and a same-origin service worker handler for one supported image up to 8 MB. It validates media, stores a one-hour IndexedDB handoff, and routes using an opaque UUID; the URL does not contain captions or media.
+- Compose restores a handoff into an unsent local draft. The stable ID makes retries reuse the account-scoped draft and saved attachment; sent/claimed records are excluded, and existing text/recipient edits are preserved.
+- Disabled composer submission and guarded navigation for the duration of the async import. The claim-pending view also announces progress and guards its saved-drop link.
+- Kept fallback copy accurate: if the page is not controlled by the worker, use the in-app picker when avoiding the browser's POST to the site matters.
+
+### Learning
+
+For a PWA share target, test the full worker-controlled POST path and state the fallback's actual data flow plainly. Use one opaque id across browser handoff and draft identity so retries can be safe, then guard every route exit while asynchronous persistence is incomplete, including special states that replace the main form.
+
+### Verification
+
+- `npm test` passed 267/267; targeted `npx eslint app/compose/page.tsx`, `npx tsc --noEmit --incremental false`, `node --check public/service-worker.js`, `node --check scripts/browser-demo-smoke.mjs`, and `git diff --check` passed.
+- `npm run build -- --webpack` passed and generated 22 routes. It reported the existing outdated Browserslist data and ambiguous Tailwind easing warnings.
+- Home, `/manifest.webmanifest`, and `/service-worker.js` returned HTTP 200 at port 4004. Review confirmed all Composer navigation links are guarded during import.
+- The focused browser smoke did not run: Chrome failed to publish `DevToolsActivePort` within 15 seconds. The installed PWA, OS share sheet, actual screen-reader speech, and physical-device behavior remain unverified.
+
+### Git and remaining gaps
+
+Code commit `6d2ed9d` (`feat: add installed web share target`) is pushed to `origin/feat/demo-relay-preview`; project notes are committed and pushed separately. No merge to `main` was made. The current candidate was 120 commits ahead and 0 behind `origin/main` before the separate notes commit; use `git log -1 --oneline --decorate` and `git rev-list --left-right --count origin/main...HEAD` after fetch to see the latest tip and divergence. `.env.local` was excluded and unchanged, `/letter` was untouched, and no hosted Supabase project was created. Next verify the worker-controlled share flow in a working browser and test installation/share-sheet behavior on a phone; hosted two-account delivery, storage cleanup, screen-reader use, and physical-device accessibility remain open.

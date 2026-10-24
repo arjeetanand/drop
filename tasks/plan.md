@@ -8,6 +8,14 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 
 ## Implementation Status — 2026-10-24
 
+### Latest checkpoint — Share-to-Drop PWA import and replay safety (2026-10-24)
+
+- Added an installed web share target for JPEG, PNG, WebP, and GIF files up to 8 MB. The service worker stores an opaque one-hour IndexedDB handoff; Compose imports it as an unsent local draft.
+- Replay finds the matching account-scoped draft by stable media ID, preserves edits and the saved attachment, and excludes completed drops. Import state disables form actions and guarded navigation, including the claim-pending view.
+- Verification: 267/267 unit tests, targeted ESLint, no-incremental TypeScript, worker/smoke syntax, `git diff --check`, and production build passed. Home, manifest, and worker returned HTTP 200 on port 4004. Chrome did not publish `DevToolsActivePort`, so the share-target browser flow and OS share sheet remain unverified.
+- Code commit `6d2ed9d` is pushed to `feat/demo-relay-preview`; the project-note commit follows separately. Hosted Supabase was not changed, `.env.local` was excluded, and `/letter` was untouched.
+- Remaining: verify installed-PWA and share-sheet behavior in a real browser/phone; complete screen-reader and physical-device checks; complete hosted two-account delivery and media cleanup when a Free project is available.
+
 ### Latest checkpoint — fictional Relay demo preview (2026-10-24)
 
 - `/demo` now includes an interactive, fictional three-carrier journey with explicit collection. Its distinct blue-hour illustration and sample text render only after collection; the visible photo/GIF chooser does not reveal this preview's content.

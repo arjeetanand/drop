@@ -4,6 +4,10 @@ Drop is a mobile-first way to send a friend a photo, meme, GIF, or personal note
 
 The append-only engineering learning log is in [LEARNINGS.md](./LEARNINGS.md); it records solved issues, causes, verification evidence, and Git checkpoints.
 
+## Branch status and latest checkpoint
+
+`main` is the merged release line. The current integration candidate is `feat/demo-relay-preview`; its exact local/remote commit, verification, and remaining gaps are recorded at the top of [HANDOFF.md](./HANDOFF.md). Check `git status --short --branch` and `git log -1 --oneline --decorate` for the active checkout. After `git fetch origin`, compare `origin/main` with the candidate using `git rev-list --left-right --count origin/main...HEAD` (first number: commits only on `main`; second: commits only on the candidate). Branches whose tips are already ancestors of the candidate are included in it; they are not separate latest versions.
+
 ## Run locally
 
 ```bash
@@ -20,6 +24,10 @@ Choose **Try a demo drop** on Home, then pick the bundled photo or GIF. The samp
 After opening the sender copy, **Make one for a friend** starts a new blank, editable text drop. The sample message, reaction, media, and demo identity stay local; an unfinished draft and its attachment remain available. Sending still follows the normal account and recipient steps.
 
 The demo chooser also includes a fictional three-stop Relay preview. Follow Ari, Jo, and Sol, then choose **Collect this drop** to reveal its separate illustrated sample. This preview uses local component state only: it does not use GPS, sign-in, backend services, or sharing. The route marks upcoming, current, and completed stops for assistive technology.
+
+## Share an image to Drop
+
+On a compatible browser where Drop is installed, choose Drop from the system share sheet to start a draft from one JPEG, PNG, WebP, or GIF (up to 8 MB) and an optional caption. The service worker stores the handoff in browser IndexedDB for up to one hour; opening it creates an unsent local draft. Nothing is sent until the sender uses the normal send flow. If the service worker is not controlling the page, the browser has already submitted the share request to the site before the fallback can explain the problem; use the in-app photo picker when you need to avoid that fallback.
 
 Relay passports count carrier handoffs only; the metric is labeled consistently as **Carriers**, and its actions and headline wrap for narrow screens.
 
