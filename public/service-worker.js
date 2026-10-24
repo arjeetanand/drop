@@ -5,6 +5,7 @@ const HANDOFF_DB_VERSION = 1;
 const HANDOFF_STORE = 'handoffs';
 const HANDOFF_TTL_MS = 60 * 60 * 1000;
 const MAX_MEDIA_BYTES = 8 * 1024 * 1024;
+const MAX_MULTIPART_BYTES = MAX_MEDIA_BYTES + 64 * 1024;
 const MAX_CAPTION_LENGTH = 5000;
 const ALLOWED_MEDIA_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 const HANDOFF_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -42,12 +43,9 @@ self.addEventListener('fetch', (event) => {
 });
 
 async function handleShareTarget(request) {
-  let formData;
-  try {
-    formData = await request.formData();
-  } catch {
-    return redirectToCompose({ shareError: 'invalid-share' });
-  }
+  const parsed = await readShareFormData(request);
+  if (parsed.error) return redirectToCompose({ shareError: parsed.error });
+  const formData = parsed.formData;
 
   const mediaEntries = formData.getAll('media');
   if (mediaEntries.length !== 1 || !(mediaEntries[0] instanceof File)) {
@@ -90,6 +88,48 @@ async function handleShareTarget(request) {
   }
 
   return redirectToCompose({ shareImport: id });
+}
+
+async function readShareFormData(request) {
+  const contentType = request.headers.get('content-type') || '';
+  if (!/^multipart\/form-data\b/i.test(contentType)) return { error: 'invalid-share' };
+
+  const contentLengthHeader = request.headers.get('content-length');
+  if (contentLengthHeader !== null) {
+    const contentLength = Number(contentLengthHeader);
+    if (!Number.isSafeInteger(contentLength) || contentLength < 0) return { error: 'invalid-share' };
+    if (contentLength > MAX_MULTIPART_BYTES) return { error: 'too-large' };
+  }
+
+  if (!request.body || typeof request.body.getReader !== 'function') return { error: 'invalid-share' };
+
+  const reader = request.body.getReader();
+  const chunks = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      totalBytes += value.byteLength;
+      if (totalBytes > MAX_MULTIPART_BYTES) {
+        await reader.cancel().catch(() => undefined);
+        return { error: 'too-large' };
+      }
+      chunks.push(value);
+    }
+
+    const body = new Blob(chunks);
+    return { formData: await new Response(body, { headers: { 'Content-Type': contentType } }).formData() };
+  } catch {
+    return { error: 'invalid-share' };
+  } finally {
+    try {
+      reader.releaseLock();
+    } catch {
+      // Cancellation or parsing already stopped the body reader.
+    }
+  }
 }
 
 function sanitizeFileName(value) {
