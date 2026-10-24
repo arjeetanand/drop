@@ -10,6 +10,7 @@ import { createLocalDemoDrop, type LetterDraftState } from '@/lib/letterStore';
 import { deleteDraftAttachment, saveDraftAttachment } from '@/lib/letterMediaStore';
 import { validateDropMedia } from '@/lib/dropValidation';
 import { getLocalAccountId } from '@/lib/localAccountScope';
+import { RelayDemoPreview } from '@/components/RelayDemoPreview';
 
 const demoOptions: Array<{
   kind: Exclude<DropPayloadKind, 'text'>;
@@ -154,6 +155,7 @@ export default function DemoPage() {
               </article>
             ))}
           </div>
+          <RelayDemoPreview />
           {startingKind && <p className="mt-5 text-center text-sm text-on-surface-variant" role="status" aria-live="polite">Saving this sample only in your browser…</p>}
         </section>
 
