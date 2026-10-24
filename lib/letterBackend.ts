@@ -14,7 +14,7 @@ import { uniqueRecentDropRecipients, type RecentDropRecipient, type RecentDropRe
 import { subscribeToDropInbox } from '@/lib/dropInboxRealtime';
 import { subscribeToDropReactions } from '@/lib/dropReactionRealtime';
 import { isDropClaimToken, resolveDropClaimInviteResult } from '@/lib/dropClaim';
-import { markSenderClaimedDrops } from '@/lib/claimInviteStatus';
+import { isEligibleSenderClaim, markSenderClaimedDrops } from '@/lib/claimInviteStatus';
 import { withFallbackTimeout } from '@/lib/withFallbackTimeout';
 import { resolveSenderClaimReceiptResult, type SenderClaimReceiptRow } from '@/lib/claimReceipt';
 
@@ -586,10 +586,7 @@ export async function getRemoteLetterById(letterId: string): Promise<MockLetter 
 
   if (error || !data) return null;
   let letter = rowToLetter(data, context.user.id, true);
-  if (letter.direction === 'sent'
-    && letter.status === 'delivered'
-    && letter.deliveryMode === 'instant'
-    && letter.payloadKind === 'text') {
+  if (isEligibleSenderClaim(letter)) {
     letter = markSenderClaimedDrops([letter], await readSenderClaimedDropIdsWithTimeout(context))[0];
   }
   if (data.media_path) {

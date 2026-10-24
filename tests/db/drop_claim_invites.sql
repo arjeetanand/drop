@@ -1013,7 +1013,10 @@ do $$ begin
   ) or not exists (
     select 1 from public.get_sender_claimed_drop_ids()
     where letter_id = current_setting('test.media_gif_letter')
-  ) or (select count(*) from public.get_sender_claimed_drop_ids()) <> 3 then
+  ) or not exists (
+    select 1 from public.get_sender_claimed_drop_ids()
+    where letter_id = 'claim-expired'
+  ) or (select count(*) from public.get_sender_claimed_drop_ids()) <> 4 then
     raise exception 'sender claim status omitted an explicitly claimed photo or GIF';
   end if;
   begin
@@ -1220,7 +1223,7 @@ end $$;
 reset role;
 do $$ begin
   if not exists (select 1 from public.letters where id = current_setting('test.media_image_letter')
-      and recipient_id = current_setting('test.recipient')::uuid and status = 'delivered') then
+      and recipient_id = current_setting('test.unprofiled')::uuid and status = 'delivered') then
     raise exception 'claim did not win over an expired media cleanup candidate';
   end if;
 end $$;
@@ -1241,7 +1244,7 @@ select public.finish_expired_drop_media_cleanup_job(
 );
 reset role;
 do $$ begin
-  if not exists (select 1 from public.letters where id = current_setting('test.media_image_letter') and recipient_id = current_setting('test.recipient')::uuid)
+  if not exists (select 1 from public.letters where id = current_setting('test.media_image_letter') and recipient_id = current_setting('test.unprofiled')::uuid)
     or not exists (select 1 from private.drop_media_cleanup_jobs j where j.id = current_setting('test.claimed_cleanup_job_id')::bigint and j.completed_at is not null) then
     raise exception 'cleanup removed an already-claimed media letter';
   end if;
@@ -1285,7 +1288,7 @@ begin
 end
 $$;
 
--- The scheduled scan advances through an indexed page of old Storage objects.
+-- The scheduled scan advances through an ordered page of old Storage objects.
 -- It queues only finalized, valid, unlinked drop-media paths after 30 days;
 -- linked media, pending uploads, malformed paths, recent objects, and other
 -- buckets stay out of the queue.
