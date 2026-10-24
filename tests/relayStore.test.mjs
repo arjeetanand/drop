@@ -5,7 +5,28 @@ import { setLocalAccountId } from '../lib/localAccountScope.ts';
 
 register(new URL('./dropMediaFinalizeLoader.mjs', import.meta.url));
 
-const { confirmHandoff, confirmHandoffFromQR } = await import('../lib/relayStore.ts');
+const { confirmHandoff, confirmHandoffFromQR, getInitialRelayState, getRelayStats } = await import('../lib/relayStore.ts');
+
+test('relay carrier count excludes the sender and recipient', () => {
+  const seeded = getInitialRelayState();
+  assert.equal(getRelayStats(seeded).carriers, 2);
+
+  const senderOnly = {
+    ...seeded,
+    handoffs: seeded.handoffs.filter((handoff) => handoff.role === 'sender'),
+  };
+  assert.equal(getRelayStats(senderOnly).carriers, 0);
+
+  const oneCarrier = {
+    ...seeded,
+    handoffs: [
+      ...seeded.handoffs.filter((handoff) => handoff.role === 'sender'),
+      ...seeded.handoffs.filter((handoff) => handoff.role === 'carrier').slice(0, 1),
+      ...seeded.handoffs.filter((handoff) => handoff.role === 'recipient'),
+    ],
+  };
+  assert.equal(getRelayStats(oneCarrier).carriers, 1);
+});
 
 test('manual and QR handoffs can be recorded without inventing a GPS waypoint', (t) => {
   const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');

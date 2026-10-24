@@ -373,7 +373,7 @@ export function addRelayHandoff(
 }
 
 export function getRelayStats(relay: RelayState): RelayStats {
-  const carriers = relay.handoffs.filter((handoff) => handoff.role !== 'recipient').length;
+  const carriers = relay.handoffs.filter((handoff) => handoff.role === 'carrier').length;
   const cities = new Set(
     relay.handoffs
       .map((handoff) => handoff.location.trim().toLowerCase())

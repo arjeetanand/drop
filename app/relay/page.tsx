@@ -235,12 +235,12 @@ function RelayContent() {
     <main className="page-shell page-enter">
       <div className="page-container">
         <header className="page-header flex-col gap-5">
-          <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
             <Link href="/" className="button-quiet -ml-2">
               <ArrowLeft className="h-4 w-4" aria-hidden="true" />
               Back to desk
             </Link>
-            <p className="meta">Relay passport / {relay.passcode}</p>
+            <p className="meta max-w-full break-words text-xs sm:text-sm">Relay passport / {relay.passcode}</p>
           </div>
 
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -250,14 +250,14 @@ function RelayContent() {
                 Follow a drop you sent, or open a carrier invite someone shared with you.
               </p>
             </div>
-            <div className="grid w-full grid-cols-2 gap-2 sm:w-auto" role="group" aria-label="Relay view">
+            <div className="grid w-full grid-cols-1 gap-2 sm:w-auto sm:grid-cols-2" role="group" aria-label="Relay view">
               <button
                 type="button"
                 onClick={() => setViewMode('sender')}
                 aria-pressed={viewMode === 'sender'}
                 className={viewMode === 'sender'
-                  ? 'button-primary !min-h-11 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white'
-                  : 'button-secondary !min-h-11 !rounded-xl'}
+                  ? 'button-primary !min-h-11 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white w-full min-w-0 sm:w-auto'
+                  : 'button-secondary !min-h-11 !rounded-xl w-full min-w-0 sm:w-auto'}
               >
                 <Package className="h-4 w-4" aria-hidden="true" />
                 Follow my drop
@@ -267,8 +267,8 @@ function RelayContent() {
                 onClick={() => setViewMode('carrier')}
                 aria-pressed={viewMode === 'carrier'}
                 className={viewMode === 'carrier'
-                  ? 'button-primary !min-h-11 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white'
-                  : 'button-secondary !min-h-11 !rounded-xl'}
+                  ? 'button-primary !min-h-11 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white w-full min-w-0 sm:w-auto'
+                  : 'button-secondary !min-h-11 !rounded-xl w-full min-w-0 sm:w-auto'}
               >
                 <Navigation className="h-4 w-4" aria-hidden="true" />
                 Carry a drop
@@ -285,7 +285,7 @@ function RelayContent() {
             <section className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
               <div className="min-w-0 rounded-3xl bg-[#2b45f7] p-5 text-white shadow-[0_20px_50px_rgba(43,69,247,.18)] sm:p-8">
                 <p className="font-mono text-[0.66rem] font-bold uppercase tracking-[0.18em] text-white/80">{isCollected ? 'Human relay · collected' : hasCarrier ? 'Human relay · in progress' : 'Human relay · waiting for its first carrier'}</p>
-                <h1 className="mt-4 max-w-3xl font-headline-md text-4xl font-semibold leading-[1.02] tracking-[-0.045em] sm:text-5xl">
+                <h1 className="mt-4 max-w-[15ch] break-words font-headline-md text-4xl font-semibold leading-[1.02] tracking-[-0.045em] sm:max-w-3xl sm:text-5xl">
                   {isCollected ? 'Your drop reached its recipient.' : hasCarrier ? 'Your drop is on a journey.' : 'Your drop is ready to travel.'}
                 </h1>
                 <p className="mt-4 max-w-2xl text-base leading-relaxed text-white/85 sm:text-lg">
@@ -299,7 +299,7 @@ function RelayContent() {
                 <div className="mt-7 grid grid-cols-3 border-y border-white/20 py-4">
                   <div>
                     <p className="font-headline-md text-2xl sm:text-3xl">{stats.carriers}</p>
-                    <p className="mt-1 text-[0.65rem] text-white/80 sm:text-xs">People</p>
+                    <p className="mt-1 text-[0.65rem] text-white/80 sm:text-xs">Carriers</p>
                   </div>
                   <div className="border-l border-white/20 pl-3 sm:pl-5">
                     <p className="font-headline-md text-2xl sm:text-3xl">{stats.cities}</p>
