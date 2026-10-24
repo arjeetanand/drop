@@ -1236,3 +1236,33 @@ Test bearer-link access at two distinct states: invalid credentials before first
 ### Git and remaining gaps
 
 Code commit `8115a58` (`test: align claim smoke with bearer semantics`) is pushed to `origin/fix/local-bearer-claim-smoke` and tracked by [PR #2](https://github.com/arjeetanand/drop/pull/2). This learning entry and the setup/checklist/handoff updates are in a follow-up documentation commit on the same branch. No hosted Supabase project or resource was changed. Real aged-object deletion, hosted two-account delivery, and device/screen-reader behavior remain unverified.
+
+## 2026-10-24 — Reduce first-use private-claim profile friction
+
+### Issue
+
+New recipients saw display name and bio alongside the handle during claim setup, so the minimum needed to claim was not obvious.
+
+### Cause
+
+The claim-return form gave all three fields similar prominence without calling the latter two optional, and the local claim smoke used a nonblank display name so it did not exercise a handle-only profile.
+
+### Resolution
+
+- Put the Drop handle first and identify it as required only during claim-return setup.
+- Move display name and bio into a collapsed native disclosure labeled optional. Preserve existing values and keep the ordinary profile editor unchanged.
+- Add handle-only profile persistence coverage, use blank optional fields in the local Supabase claim flow, and add an isolated keyboard/responsive browser smoke mode.
+
+### Learning
+
+When first-run setup has one genuine prerequisite, put that field first and disclose other identity details as optional. Test the minimum valid profile through both persistence and the dependent claim flow.
+
+### Verification
+
+- `npm test` passed 273/273; lint, no-incremental TypeScript, `node --check` for both changed smoke scripts, and `git diff --check` passed.
+- Isolated Chrome verified collapsed optional fields, required-handle semantics, keyboard toggling, retained values, and responsive layout at 360×844, 390×844, 430×844, 844×390, and 1440×900.
+- `npm run test:local-supabase` passed across five disposable accounts with blank display name and bio on the claimant profile, followed by text/image/GIF claim flows. The production build passed with existing Browserslist freshness and Tailwind easing-class ambiguity warnings. The app root returned HTTP 200 on port 4004.
+
+### Git and remaining gaps
+
+Code commit `2b53bcd` (`fix: simplify private claim profile setup`) is pushed to `fix/claim-first-use-profile` and tracked by [PR #3](https://github.com/arjeetanand/drop/pull/3). The PR is open and not merged. The browser smoke does not save a remote profile; authenticated browser-to-claim coverage, hosted two-account behavior, actual aged-object cleanup, spoken screen-reader output, and physical-device behavior remain open. `.env.local`, `/letter`, and hosted Supabase resources were not changed.
