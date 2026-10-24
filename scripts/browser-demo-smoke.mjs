@@ -30,6 +30,24 @@ const REACTION_BUTTON_LABELS = [
   'React with a face holding back tears',
   'React with heart hands',
 ];
+const CLAIM_RECOVERY_DRAFT = {
+  id: '8e1e470c-6f99-47bb-b4c8-2abd9d7dc2f8',
+  recipient: 'new.friend',
+  subject: 'A note waiting to be claimed',
+  content: 'A little note for a friend.',
+  fontSize: 18,
+  alignment: 'left',
+  address: { name: 'A new friend', street: '', city: '', postcode: '', country: '' },
+  sealId: 'fern',
+  sealColor: '#991b1b',
+  sealMonogram: 'D',
+  payloadKind: 'text',
+  deliveryMode: 'instant',
+  status: 'claim_pending',
+  updatedAt: '2026-10-24T00:00:00.000Z',
+  dispatchedAt: '2026-10-24T00:00:00.000Z',
+};
+const CLAIM_DETAILS_PATH = `/letter/${encodeURIComponent(CLAIM_RECOVERY_DRAFT.id)}`;
 
 const interrupted = new AbortController();
 const onSignal = (signal) => interrupted.abort(new Error(`Received ${signal}; stopping the smoke check.`));
@@ -374,7 +392,7 @@ async function activateFocusedControl(cdp, key) {
 }
 
 function normalizedVisibleText(text) {
-  return `document.body?.innerText.replace(/\\s+/g, ' ').toLocaleLowerCase().includes(${JSON.stringify(text.toLocaleLowerCase())}) || false`;
+  return `(document.body?.innerText.replace(/\\s+/g, ' ').toLocaleLowerCase().includes(${JSON.stringify(text.toLocaleLowerCase())}) || false)`;
 }
 
 function screenshotDirectoryFromEnv() {
@@ -512,13 +530,80 @@ async function runDemoFlow(cdp, {
   assert.equal(await evaluate(cdp, 'location.pathname'), recipientPath, 'Sender copy should keep the same demo drop.');
 }
 
+async function runClaimRecoveryFlow(cdp, {
+  appUrl,
+  viewport,
+  keyboard,
+  screenshotDir,
+  getPageLoadEvents,
+}) {
+  await setViewport(cdp, viewport);
+  await cdp.send('Page.navigate', { url: new URL('/compose', appUrl).href });
+  await waitUntil(cdp, 'Compose before seeding the saved claim fixture', async () => (
+    await evaluate(cdp, `${normalizedVisibleText('Send a little moment.')} && location.pathname === '/compose'`)
+  ));
+
+  const seeded = await evaluate(cdp, `(() => {
+    const draft = ${JSON.stringify(CLAIM_RECOVERY_DRAFT)};
+    localStorage.setItem('dear-exe:active-letter:v1', JSON.stringify(draft));
+    localStorage.setItem('dear-exe:letter-drafts:v1', JSON.stringify([draft]));
+    return localStorage.getItem('dear-exe:active-letter:v1') === JSON.stringify(draft)
+      && JSON.parse(localStorage.getItem('dear-exe:letter-drafts:v1') || '[]')[0]?.id === draft.id;
+  })()`);
+  assert.equal(seeded, true, 'The synthetic pending claim should be saved in this isolated browser profile.');
+
+  const composeUrl = new URL('/compose', appUrl);
+  composeUrl.searchParams.set('letter', CLAIM_RECOVERY_DRAFT.id);
+  await cdp.send('Page.navigate', { url: composeUrl.href });
+  const assertComposeRecovery = async (step) => {
+    await waitUntil(cdp, `${step}: recovered saved-drop message`, async () => (
+      await evaluate(cdp, `${normalizedVisibleText('Your drop is saved.')} && ${normalizedVisibleText('Open saved drop')} && location.pathname === '/compose'`)
+    ));
+    const copyControlPresent = await evaluate(cdp, `Array.from(document.querySelectorAll('button,a,[role="button"]')).some(node => (node.innerText || node.textContent || '').replace(/\\s+/g, ' ').trim().toLocaleLowerCase() === 'copy private link')`);
+    assert.equal(copyControlPresent, false, `${step}: recovery after reload must not show a link that is no longer in memory.`);
+    await assertNoFrameworkOverlay(cdp, step);
+    await assertNoHorizontalOverflow(cdp, step, viewport.width);
+  };
+
+  await assertComposeRecovery('Compose recovered claim');
+  const previousLoadEvents = getPageLoadEvents();
+  await cdp.send('Page.reload', { ignoreCache: true });
+  await waitUntil(cdp, 'a fresh Compose document load after recovery reload', async () => getPageLoadEvents() > previousLoadEvents);
+  await assertComposeRecovery('Compose claim after reload');
+  if (screenshotDir && (viewport.width === 390 || !viewport.mobile)) {
+    await captureScreenshot(cdp, screenshotDir, `${viewport.name}-claim-compose`);
+  }
+
+  const linkHref = await evaluate(cdp, `Array.from(document.querySelectorAll('a')).find(node => (node.innerText || node.textContent || '').replace(/\\s+/g, ' ').trim().toLocaleLowerCase().includes('open saved drop'))?.getAttribute('href') || null`);
+  assert.equal(linkHref, CLAIM_DETAILS_PATH, 'Open saved drop should target the exact encoded detail route.');
+  await activateFlowControl(cdp, {
+    keyboard,
+    name: 'Open saved drop',
+    expectedTag: 'A',
+    expectedHref: CLAIM_DETAILS_PATH,
+  });
+
+  await waitUntil(cdp, 'the saved pending claim detail and fresh-link action', async () => (
+    await evaluate(cdp, `${normalizedVisibleText('Waiting for them to claim.')} && ${normalizedVisibleText('Share a fresh private link')} && location.pathname === ${JSON.stringify(CLAIM_DETAILS_PATH)}`)
+  ));
+  const freshLinkButtonEnabled = await evaluate(cdp, `Array.from(document.querySelectorAll('button')).some(node => (node.innerText || node.textContent || '').replace(/\\s+/g, ' ').trim().toLocaleLowerCase() === 'share a fresh private link' && !node.disabled && node.getAttribute('aria-disabled') !== 'true')`);
+  assert.equal(freshLinkButtonEnabled, true, 'The saved claim detail should expose an enabled fresh-link button.');
+  await assertNoFrameworkOverlay(cdp, 'Saved claim detail');
+  await assertNoHorizontalOverflow(cdp, 'Saved claim detail', viewport.width);
+  if (screenshotDir && (viewport.width === 390 || !viewport.mobile)) {
+    await captureScreenshot(cdp, screenshotDir, `${viewport.name}-claim-detail`);
+  }
+}
+
 async function main() {
   if (process.argv.includes('--help') || process.argv.includes('-h')) {
-    console.log('Usage: node scripts/browser-demo-smoke.mjs [http://127.0.0.1:4004]');
+    console.log('Usage: node scripts/browser-demo-smoke.mjs [http://127.0.0.1:4004] [--claim-recovery-only]');
     return;
   }
 
-  const appUrl = parseAppUrl(process.argv[2] || DEFAULT_APP_URL);
+  const args = process.argv.slice(2);
+  const claimRecoveryOnly = args.includes('--claim-recovery-only');
+  const appUrl = parseAppUrl(args.find((argument) => !argument.startsWith('--')) || DEFAULT_APP_URL);
   if (typeof WebSocket !== 'function') throw new Error('This smoke check needs a Node runtime with the built-in WebSocket API.');
   const screenshotDir = screenshotDirectoryFromEnv();
   if (screenshotDir) await mkdir(screenshotDir, { recursive: true });
@@ -529,8 +614,11 @@ async function main() {
   let browserCdp;
   let pageCdp;
   let firewallFailure;
+  let capturingRecoveryBackendRequests = false;
   const blockedOrigins = new Set();
   const forbiddenRequests = [];
+  const recoveryBackendRequests = [];
+  const pageConsoleErrors = [];
   const pageExceptions = [];
   let blockedRequestCount = 0;
   let browserStderr = '';
@@ -579,6 +667,10 @@ async function main() {
     pageCdp.on('Runtime.exceptionThrown', ({ exceptionDetails }) => {
       pageExceptions.push(exceptionDetails.exception?.description || exceptionDetails.text || 'Unknown browser exception');
     });
+    pageCdp.on('Runtime.consoleAPICalled', ({ type, args = [] }) => {
+      if (type !== 'error') return;
+      pageConsoleErrors.push(args.map((argument) => argument.value ?? argument.description ?? '').filter(Boolean).join(' '));
+    });
 
     pageCdp.on('Network.requestWillBeSent', ({ request }) => {
       let requestUrl;
@@ -589,6 +681,9 @@ async function main() {
       }
       const method = (request.method || 'GET').toUpperCase();
       const path = requestUrl.pathname;
+      if (capturingRecoveryBackendRequests && /\/(?:auth|rest|storage)\/v1\//i.test(path)) {
+        recoveryBackendRequests.push({ method, path });
+      }
       if (/\/auth\/v1\//i.test(path)
         || /\/rest\/v1\/rpc\//i.test(path)
         || (/\/storage\/v1\//i.test(path) && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method))) {
@@ -624,39 +719,61 @@ async function main() {
     await setViewport(pageCdp, MOBILE_VIEWPORTS[1]);
 
     console.log(`[browser-demo-smoke] Chrome: ${chromeExecutable}`);
-    console.log(`[browser-demo-smoke] App: ${appUrl.origin}; full-flow viewports: ${FLOW_VIEWPORTS.map(({ name }) => name).join(', ')}.`);
+    console.log(`[browser-demo-smoke] App: ${appUrl.origin}; ${claimRecoveryOnly ? 'claim-recovery' : 'full'} flow viewports: ${FLOW_VIEWPORTS.map(({ name }) => name).join(', ')}.`);
 
-    const screenshotSteps = new Set(['home', 'chooser', 'recipient', 'fragments-revealed', 'reaction-saved', 'sender-copy']);
-    for (const viewport of FLOW_VIEWPORTS) {
-      const keyboard = viewport.width !== 360;
+    if (!claimRecoveryOnly) {
+      const screenshotSteps = new Set(['home', 'chooser', 'recipient', 'fragments-revealed', 'reaction-saved', 'sender-copy']);
+      for (const viewport of FLOW_VIEWPORTS) {
+        const keyboard = viewport.width !== 360;
+        await runDemoFlow(pageCdp, {
+          appUrl,
+          viewport,
+          payload: 'gif',
+          keyboard,
+          screenshotDir: viewport.width === 390 || !viewport.mobile ? screenshotDir : null,
+          screenshotSteps: screenshotDir && (viewport.width === 390 || !viewport.mobile) ? screenshotSteps : new Set(),
+          checkResponsive: viewport.width === 360,
+          getPageLoadEvents: () => pageLoadEvents,
+        });
+        console.log(`[browser-demo-smoke] PASS ${keyboard ? 'keyboard' : 'touch'} GIF flow at ${viewport.width}×${viewport.height}${viewport.mobile ? '' : ' desktop'}.`);
+      }
+
       await runDemoFlow(pageCdp, {
         appUrl,
-        viewport,
-        payload: 'gif',
-        keyboard,
-        screenshotDir: viewport.width === 390 || !viewport.mobile ? screenshotDir : null,
-        screenshotSteps: screenshotDir && (viewport.width === 390 || !viewport.mobile) ? screenshotSteps : new Set(),
-        checkResponsive: viewport.width === 360,
+        viewport: MOBILE_VIEWPORTS[1],
+        payload: 'photo',
+        keyboard: true,
+        screenshotDir: null,
         getPageLoadEvents: () => pageLoadEvents,
       });
-      console.log(`[browser-demo-smoke] PASS ${keyboard ? 'keyboard' : 'touch'} GIF flow at ${viewport.width}×${viewport.height}${viewport.mobile ? '' : ' desktop'}.`);
     }
 
-    await runDemoFlow(pageCdp, {
-      appUrl,
-      viewport: MOBILE_VIEWPORTS[1],
-      payload: 'photo',
-      keyboard: true,
-      screenshotDir: null,
-      getPageLoadEvents: () => pageLoadEvents,
-    });
-    assert.deepEqual(forbiddenRequests, [], `The local demo made forbidden auth, RPC, or Storage write requests: ${JSON.stringify(forbiddenRequests)}.`);
+    capturingRecoveryBackendRequests = true;
+    for (const viewport of FLOW_VIEWPORTS) {
+      await runClaimRecoveryFlow(pageCdp, {
+        appUrl,
+        viewport,
+        keyboard: viewport.width !== 360,
+        screenshotDir: viewport.width === 390 || !viewport.mobile ? screenshotDir : null,
+        getPageLoadEvents: () => pageLoadEvents,
+      });
+      console.log(`[browser-demo-smoke] PASS ${viewport.width === 360 ? 'touch' : 'keyboard'} saved-claim recovery at ${viewport.width}×${viewport.height}${viewport.mobile ? '' : ' desktop'}.`);
+    }
+    capturingRecoveryBackendRequests = false;
+
+    assert.deepEqual(forbiddenRequests, [], `The local browser flow made forbidden auth, RPC, or Storage write requests: ${JSON.stringify(forbiddenRequests)}.`);
+    assert.deepEqual(recoveryBackendRequests, [], `The saved-claim recovery flow made Auth, REST, or Storage requests without a configured backend: ${JSON.stringify(recoveryBackendRequests)}.`);
+    assert.deepEqual(pageConsoleErrors, [], `The browser reported console errors: ${JSON.stringify(pageConsoleErrors)}.`);
     assert.deepEqual(pageExceptions, [], `The browser reported JavaScript exceptions: ${JSON.stringify(pageExceptions)}.`);
     if (firewallFailure) throw new Error(`The browser network gate failed: ${firewallFailure.message}`);
 
-    console.log('[browser-demo-smoke] PASS photo flow at 390×844, including saved reaction, reload persistence, and sender copy.');
-    console.log('[browser-demo-smoke] PASS no horizontal overflow on Home and demo chooser at 360, 390, 430px and 1440×900.');
-    console.log('[browser-demo-smoke] PASS no Auth, RPC, or Storage write request during the local demo.');
+    console.log('[browser-demo-smoke] PASS saved-claim recovery after reload, including the encoded detail route and fresh-link action at all mobile and desktop widths.');
+    console.log('[browser-demo-smoke] PASS no Auth, REST, or Storage request during the saved-claim recovery flow.');
+    if (!claimRecoveryOnly) {
+      console.log('[browser-demo-smoke] PASS photo flow at 390×844, including saved reaction, reload persistence, and sender copy.');
+      console.log('[browser-demo-smoke] PASS no horizontal overflow on Home and demo chooser at 360, 390, 430px and 1440×900.');
+      console.log('[browser-demo-smoke] PASS no Auth, RPC, or Storage write request during the local demo.');
+    }
     console.log(`[browser-demo-smoke] Blocked cross-origin requests: ${blockedRequestCount}${blockedOrigins.size ? ` (${[...blockedOrigins].sort().join(', ')})` : ''}.`);
   } finally {
     pageCdp?.close();
