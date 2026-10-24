@@ -991,3 +991,34 @@ When a safe product demo is meant to lead into real use, put the next action whe
 ### Git and remaining gaps
 
 Code commit `df710fd` (`feat: start a fresh drop from the demo`) is pushed to `origin/feat/demo-to-first-drop`; the project notes are committed separately on the same branch. No PR or merge was created. `/letter` and `.env.local` were not changed. The user reports being signed in to Supabase, but this task has no authenticated dashboard control. The read-only CLI attempt stopped before a Supabase API request because the sandbox blocked its telemetry-file write under `~/.supabase`; no project or billing change was made. Verify the approved Free project before hosted migrations, two-account delivery, or physical 30-day Storage cleanup. First-use usability, screen-reader, and physical-device checks also remain open.
+
+## 2026-10-24 — Fix local cleanup migration and sender claim recovery
+
+### Issue
+
+The orphan-media migration could not apply to the local Supabase database. The SQL regression fixture also stopped on stale expectations, and opening a claimed photo/GIF detail page did not restore the sender's durable claim status.
+
+### Cause
+
+The migration attempted to create an index on Supabase-managed `storage.objects`, whose ownership and schema restrictions reject that change. The fixture had not accounted for an additional previously claimed text drop and still expected the recipient account instead of the unprofiled account that claimed the media. The detail loader duplicated an eligibility check that only allowed text drops.
+
+### Resolution
+
+- Removed the custom index from `20261023160000_reconcile_orphan_drop_media.sql` and documented the resulting large-bucket scan/sort risk. The cleanup still uses ordered cursor pages and deletes through the Storage API.
+- Changed sender detail hydration to use the shared eligibility helper, aligning text/photo/GIF detail pages with mailbox status hydration.
+- Corrected the fixture to count the already-claimed expired text invite and to expect the actual unprofiled media claimant.
+- Applied the finalized orphan and staging-retention migrations to the existing local Supabase database. No hosted project or resources changed.
+
+### Learning
+
+Treat managed Supabase schemas as platform-owned. When a migration fails, verify ownership and use the supported app schema or API instead of escalating ownership. When a regression assertion fails, check test setup and event order before changing a secure RPC; the stored media-claim RPC already returned all supported kinds.
+
+### Verification
+
+- `npm test` passed 249/249; lint, no-incremental TypeScript, and `git diff --check` passed.
+- Local `supabase migration up --local` applied `20261023160000` and `20261023170000`; the ledger recorded both, and a read-only query confirmed no index was created on `storage.objects`.
+- The rollback-only claim/media SQL fixture passed in a fresh disposable database inside the local Supabase Postgres container, then that database was dropped. Its role declarations were omitted from the temporary input because the container already provides those cluster roles. Hosted worker scheduling and physical Storage deletion were not tested.
+
+### Git and remaining gaps
+
+Code commits `8605dbf` (`fix: avoid indexing managed storage metadata`) and `2807ea4` (`fix: restore media claim status on detail pages`) are pushed to `origin/fix/storage-objects-index-role`. The project-note update is committed separately. No PR or merge was created. `/letter`, `.env.local`, and hosted resources were not changed. No Supabase CLI access token or authenticated dashboard control is available in this task; hosted Free-plan verification, two-account delivery, cleanup scheduling, actual Storage deletion, screen-reader use, and physical-device behavior remain open. Large-bucket scan cost and concurrent database interleavings are also unmeasured.

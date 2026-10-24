@@ -2,6 +2,17 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
+## Current Checkpoint — 2026-10-24 (Local cleanup migration and media claim recovery)
+
+- [x] Remove the unsupported index on managed `storage.objects`; keep the cleanup scan ordered and cursor-based.
+- [x] Apply migrations `20261023160000` and `20261023170000` locally; verify both are recorded and the managed-table index is absent.
+- [x] Restore claimed photo/GIF status on sender detail pages with the shared eligibility helper.
+- [x] Correct the SQL fixture's stale total (the expired text claim is already claimed by this point) and expect the unprofiled account that actually claimed the media.
+- [x] `npm test` passes 249/249; lint and no-incremental TypeScript pass. The rollback-only SQL fixture passes in a fresh disposable local database, then the database is dropped.
+- [x] Code commits `8605dbf` and `2807ea4` are pushed to `origin/fix/storage-objects-index-role`.
+- [ ] Verify the hosted Free project, configure its cleanup schedule/Vault/Edge Function, and exercise two-account media claim plus actual Storage deletion. The authenticated dashboard is unavailable to this task and no CLI access token is configured.
+- [ ] Complete screen-reader and physical-device checks; measure cleanup-scan cost before large-bucket use.
+
 ## Current Checkpoint — 2026-10-24 (Demo to first drop)
 
 - [x] Add **Make one for a friend** to the local demo sender-copy screen, with the unsent/same-device explanation still visible.

@@ -8,6 +8,15 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 
 ## Implementation Status — 2026-10-24
 
+### Latest checkpoint — local cleanup migration and media claim recovery (2026-10-24)
+
+- Removed the reconciliation index from `storage.objects` after the local Supabase migration role rejected it. The cleanup RPC still walks ordered cursor pages; database scan/sort cost may grow with the bucket.
+- Applied `20261023160000_reconcile_orphan_drop_media.sql` and `20261023170000_drop_pending_media_retention.sql` to the local database. Both are recorded as applied, and no custom index exists on the managed Storage table.
+- Sender detail reads now use the shared eligibility check for text, image, and GIF claim status. Corrected the SQL fixture's stale claimed-drop count and recipient expectations.
+- Verification: `npm test` passed 249/249; lint and no-incremental TypeScript passed. The rollback-only SQL claim/media fixture passed in a fresh disposable local database, which was then dropped. Browser, hosted two-account delivery, cleanup scheduling, and physical Storage deletion were not exercised in this slice.
+- Code commits `8605dbf` and `2807ea4` are pushed to `origin/fix/storage-objects-index-role`. No PR or merge was created.
+- Next: verify the Free hosted project and run two-account send/claim plus worker/Storage deletion checks; finish screen-reader and physical-device validation.
+
 ### Latest checkpoint — saved private-claim recovery browser assertions (2026-10-24)
 
 - The isolated browser smoke seeds a synthetic pending claim, reloads Compose, checks the durable saved-drop message without exposing the lost in-memory copy link, and verifies the encoded detail route plus an enabled **Share a fresh private link** button.
@@ -91,14 +100,14 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 - Claim links last up to 7 days. An unclaimed media claim and its access expire 30 days after the first send; rotating the link does not extend the cutoff. An hourly worker revokes expired claims and retries object deletion through the Supabase Storage API. Physical deletion can be delayed when the Free project is paused or the worker/Storage service is unavailable.
 - Ambiguous finalization and issue responses use a delayed cleanup queue, same-path locks, and revalidation before deletion. The composer keeps the attachment for retry and only rotates its upload path after cleanup is confirmed.
 - Verification: unit tests, the disposable PostgreSQL policy/transition fixture, lint, TypeScript, production build, and local route smoke checks pass. A real local account-to-account smoke passed for known-recipient text/GIF and relay flows; the unknown-handle private claim journey, hosted migration/worker, and rendered browser flow remain unverified.
-- Orphan reconciliation now covers finalized unlinked media when both enqueue attempts fail. Hosted compatibility/query-plan checks for its `storage.objects` index and concurrent database interleavings remain open.
+- Orphan reconciliation now covers finalized unlinked media when both enqueue attempts fail. Its scan reads managed Storage metadata in ordered cursor pages without creating an index on `storage.objects`; large-bucket scan cost and concurrent database interleavings remain unmeasured.
 
 ### Reliability follow-up — orphan media reconciliation (2026-10-23)
 
 - Added a service-role-only cursor scan for valid finalized objects in the private `drop-media` bucket that are unlinked and older than 30 days. It queues jobs into the existing Storage API deletion worker, with a 25-object page and cursor reset after each pass.
 - The worker treats discovery as best-effort: a reconciliation error is reported after it continues leasing and processing already-queued jobs, so the optional scan cannot pause existing cleanup.
 - Unit and disposable PostgreSQL coverage exercise worker ordering/error recovery, grants, invalid batch sizes, 25+1 pages, cursor wrap, an object inserted behind the cursor, near-cutoff eligibility, exclusions, and duplicate prevention.
-- Remaining verification: no hosted migration, worker schedule, real Storage deletion, or browser test ran. The migration adds a custom partial index on managed `storage.objects`; check hosted compatibility and the query plan before rollout. Concurrent database interleavings remain untested.
+- Remaining verification: local migrations now apply, but the hosted worker schedule, real Storage deletion, and rendered browser behavior have not been verified. Supabase restricts index creation on existing managed-schema tables, so the scan has no custom `storage.objects` index; query cost at production scale and concurrent database interleavings remain untested.
 
 - Task 1 is complete. The mixed-payload model, default text behavior for older drafts, and compatible recipient routes are in place.
 - The core mobile sharing, receive, reaction, and optional relay flows have local implementations. Relay remains in progress until the acceptance checks in `todo.md` are verified.

@@ -2,6 +2,17 @@
 
 Updated: 2026-10-24
 
+## Latest checkpoint — local cleanup migration and media claim recovery (2026-10-24)
+
+- Removed the reconciliation index on Supabase-managed `storage.objects` after the local migration role rejected it. The cleanup keeps its age-ordered cursor pages; scan/sort cost at large bucket sizes is unmeasured.
+- Applied migrations `20261023160000` and `20261023170000` to the existing local database. Both are recorded as applied, and there is no custom index on the managed Storage table.
+- Sender detail reads now use the shared claim eligibility check for text, image, and GIF. Corrected stale cleanup fixture assertions for claimed-drop count and the account that claimed the media.
+- Verification: `npm test` passed 249/249; lint, no-incremental TypeScript, and `git diff --check` passed. The rollback SQL fixture passed in a fresh disposable local database, which was dropped afterward. The hosted worker, two-account delivery, physical Storage deletion, and browser flow were not exercised in this slice.
+- Active checkout: `/Users/arjeetanand/projects/drop`; branch `fix/storage-objects-index-role`. Code commits `8605dbf` and `2807ea4` are pushed. No PR or merge was created. `/letter`, `.env.local`, and hosted resources were not changed.
+- The user reports being signed in to Supabase, but no authenticated dashboard control or CLI access token is connected to this task. No hosted Free project, Vault value, schedule, or Edge Function was verified or changed. Screen-reader and physical-device checks remain open.
+
+**Next:** verify the approved Free project through an accessible dashboard or scoped CLI session, then configure the cleanup worker and complete two-account media claims plus actual Storage deletion. Measure scan cost before scaling storage volume.
+
 ## Latest checkpoint — demo to first drop (2026-10-24)
 
 - The local demo sender copy now offers **Make one for a friend** and opens a forced-new blank, editable text draft by its ID. The sample message, reaction, media, and demo identity stay in the local demo; the “nothing was sent or shared” notice remains visible. The prior draft and its local photo attachment remain recoverable, and the composer lands at the top.
@@ -148,7 +159,7 @@ Updated: 2026-10-24
 - Verification: `npm test` passed 218/218; lint, no-incremental TypeScript, and `git diff --check` passed. `tests/db/drop_claim_invites.sql` passed against an isolated PostgreSQL 16 cluster. The SQL fixture transaction rolled back and the temporary server stopped cleanly.
 - Branch `feat/claim-invite-journey`; code commits `d71c4e3` (`feat: expire abandoned staged media after 30 days`), `41247b6` (`fix: persist media ID for legacy claim retries`), and `5bf4df3` (`test: cover authenticated five-part staging paths`) are pushed. The documentation/checklist/learning update is a separate commit. `/letter` and hosted Supabase resources were not changed.
 - Production build did not complete because this environment could not resolve `fonts.googleapis.com` for existing Google Fonts; it was not rerun after the small retry-ID fix. Deno Edge bundling, hosted migration/worker configuration, real Storage deletion, two-account claims, and concurrent DB behavior remain unverified. Rendered claim/retry, accessibility, and device checks remain open.
-- Next: provision/configure only the approved Free Supabase project, apply the migrations in order through `20261023170000`, deploy the updated worker, then verify two disposable accounts and actual Storage cleanup. Before hosted reliance, check the managed `storage.objects` index and concurrent DB interleavings.
+- Next (superseded by the current checkpoint): verify the approved Free project, configure the cleanup worker, and validate two disposable accounts plus actual Storage cleanup. The earlier custom index was removed in commit `8605dbf`; large-bucket scan cost and concurrent DB interleavings remain open.
 
 ## Latest fix — safe guest draft auth recovery (2026-10-23)
 
@@ -199,7 +210,7 @@ Updated: 2026-10-24
 - `npm test` passed 175/175; `npm run lint`, `npx tsc --noEmit --incremental false`, `npm run build -- --webpack`, and `git diff --check` passed. The production build emitted only the existing Browserslist freshness and Tailwind easing warnings.
 - Local HTTP checks returned 200 for `/`, `/sent`, `/relay`, `/claim`, and `/compose` at `http://localhost:4004`. `./run.sh` leaves Drop running on the main port; local Supabase verification uses 5004 and browser QA reserves 6004.
 - Code commit `d842811` (`fix: improve contrast on Drop blue cards`) is pushed to `origin/fix/drop-card-contrast`. Plan, README, checklist, and learning entry are included in a separate documentation commit on the same branch. No PR or merge was created.
-- This was local verification for known-recipient flows. Unknown-handle photo/GIF claims, rendered browser/device/accessibility behavior, hosted migrations/scheduling, actual hosted Storage deletion, managed `storage.objects` index compatibility, and concurrent DB interleavings remain unverified. No hosted resources were changed.
+- This was local verification for known-recipient flows. Unknown-handle photo/GIF claims, rendered browser/device/accessibility behavior, hosted migrations/scheduling, actual hosted Storage deletion, large-bucket scan performance, and concurrent DB interleavings remain unverified. No hosted resources were changed.
 - Next: use secure local Supabase CLI authentication for the approved Free setup, then verify the unknown-handle two-account claim journey and cleanup behavior in the hosted project; finish rendered mobile/desktop browser checks when a browser runtime is available.
 
 ## Previous checkpoint — media orphan reconciliation
@@ -208,8 +219,8 @@ Updated: 2026-10-24
 - The worker now runs orphan discovery before leasing. Discovery is best-effort: if it fails, existing cleanup jobs still lease and process, then the worker reports a partial failure for the next scheduled run.
 - Verification: `npm test` passed 175/175; lint, no-incremental TypeScript, `git diff --check`, and `bash -n run.sh` passed. The rollback-only `tests/db/drop_claim_invites.sql` fixture passed against disposable local PostgreSQL 16, including page continuation, cursor reset/wrap, an older object behind the cursor, a near-cutoff object, exclusions, invalid limits, grants, and idempotency. `/`, `/compose`, and `/claim` returned HTTP 200 on port 4004.
 - Code commit `ae33ab2` (`feat: reconcile orphaned media cleanup`) is pushed to `origin/feat/media-orphan-reconciliation`. This handoff, setup notes, checklist, plan, README, and learning entry are in a separate documentation commit. No PR or merge was created.
-- No hosted migration, scheduled Edge Function, actual Storage deletion, two-account flow, or rendered browser check ran. Deno is not installed in this environment. The hosted project is not provisioned, so compatibility/query-plan validation for the custom partial index on managed `storage.objects` is still open; concurrent database interleavings also remain untested. Supabase recommends treating its Storage schema as read-only and documents custom indexes for RLS policy performance ([Storage schema guidance](https://supabase.com/docs/guides/storage/schema/design)).
-- The existing Drop development server is healthy at `http://localhost:4004`. Next: validate the `storage.objects` index/migration against the approved Free project, then deploy the new migration before the updated Edge Function and verify two-account claims plus real Storage deletion.
+- At the time of this earlier checkpoint, no hosted migration, scheduled Edge Function, actual Storage deletion, two-account flow, or rendered browser check had run. The managed-table index concern was later resolved by removing that index; see the latest checkpoint above. Concurrent database interleavings remain untested.
+- The existing Drop development server is healthy at `http://localhost:4004`. Next: verify the approved Free project, configure the cleanup worker, and validate two-account claims plus real Storage deletion.
 
 ## Previous checkpoint — Realtime fixture topic scoping
 
