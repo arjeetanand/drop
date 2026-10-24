@@ -2,6 +2,15 @@
 
 Updated: 2026-10-24
 
+## Latest checkpoint — PR #5 merged into main (2026-10-24)
+
+- PR #5, **fix: preserve unfinished drafts when replying**, merged into `main` at `e098388` (`Merge pull request #5 from arjeetanand/fix/drop-back-fresh-draft`). The reviewed PR head was `37afbda`, including code commit `a71612b` and the Docker runtime recovery record.
+- Verification before merge: GitGuardian passed; the independent code review found no actionable issues; `npm test` passed 274/274; lint and no-incremental TypeScript passed; local Docker-backed Supabase smoke passed all eight groups; Drop, Auth, and Mailpit returned HTTP 200.
+- The remote PR source branch and Docker recovery task branch remain available. Automatic review declined the extra source-branch deletion request, so no branch deletion was performed.
+- The merged change contains no hosted Supabase resource changes. Hosted two-account behavior, actual 30-day media deletion, screen-reader behavior, and physical-device checks remain open.
+
+**Next:** continue the remaining hosted, aged-object cleanup, accessibility, and device checks; use `main` as the current branch and `e098388` as the latest code-bearing merge.
+
 ## Latest checkpoint — Restore the local Docker-backed runtime (2026-10-24)
 
 - The app initially refused connections on port 4004 because its Next.js process was stopped. The Docker client and Rancher Desktop daemon were already installed/running; the default sandboxed command could not access the Docker socket, while the approved local runtime context could. No Docker permissions or global settings were changed.
