@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { createClient } from '@supabase/supabase-js';
 import {
   assertLocalSupabasePortsAreSafe,
+  createLocalSmokeAppEnvironment,
   loadExpectedLocalSupabaseProjectId,
   loadLocalSupabaseValues,
   validateLocalSupabaseUrl,
@@ -135,7 +136,10 @@ async function startApp(port) {
   const projectRoot = await createIsolatedProject();
   app = spawn(process.execPath, [resolve(root, 'node_modules/next/dist/bin/next'), 'dev', '--webpack', '--hostname', '127.0.0.1', '--port', String(port)], {
     cwd: projectRoot,
-    env: { ...process.env, ...localEnv, WATCHPACK_POLLING: 'true' },
+    env: createLocalSmokeAppEnvironment({
+      supabaseValues: localEnv,
+      temporaryDirectory: tmpdir(),
+    }),
     stdio: 'ignore',
   });
   app.on('error', (error) => { appSpawnError = error; });

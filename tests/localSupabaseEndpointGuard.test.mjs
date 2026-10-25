@@ -4,6 +4,7 @@ import {
   DEFAULT_LOCAL_SUPABASE_PORTS,
   assertLocalSupabasePortsAreSafe,
   createBrowserSmokeEnvironment,
+  createLocalSmokeAppEnvironment,
   loadExpectedLocalSupabaseProjectId,
   loadLocalSupabaseValues,
   parseLocalSupabaseKongInspection,
@@ -15,11 +16,14 @@ import {
 } from '../scripts/localSupabaseEndpointGuard.mjs';
 
 test('parses synthetic lsof process records without exposing command arguments', () => {
-  assert.deepEqual(parseLsofOwners('p120\ncssh\np120\ncssh\np121\nccom.docker.backend\n'), [
+  assert.deepEqual(parseLsofOwners('p16815\ncssh\nf27\np120\ncssh\nf3u\np120\ncssh\np121\nccom.docker.backend\n'), [
+    { pid: '16815', processName: 'ssh' },
     { pid: '120', processName: 'ssh' },
     { pid: '121', processName: 'com.docker.backend' },
   ]);
   assert.throws(() => parseLsofOwners('p120\n'), /could not verify/i);
+  assert.throws(() => parseLsofOwners('p120\nf27\n'), /could not verify/i);
+  assert.throws(() => parseLsofOwners('p120\ncssh\nf\n'), /could not verify/i);
 });
 
 test('parses synthetic Windows listener owners', () => {
@@ -188,6 +192,36 @@ test('builds a browser environment without passing Supabase secrets', () => {
   assert.equal(browserEnv.NEXT_PUBLIC_SUPABASE_URL, undefined);
   assert.equal(browserEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY, undefined);
   assert.equal(browserEnv.SUPABASE_SERVICE_ROLE_KEY, undefined);
+});
+
+test('builds the local smoke app environment from runtime and Supabase values only', () => {
+  const appEnv = createLocalSmokeAppEnvironment({
+    environment: {
+      PATH: '/usr/bin',
+      HOME: '/tmp/test-home',
+      TMPDIR: '/tmp',
+      LANG: 'en_US.UTF-8',
+      NODE_ENV: 'production',
+      GITHUB_TOKEN: 'unrelated-secret',
+      AWS_SECRET_ACCESS_KEY: 'unrelated-secret',
+      SUPABASE_SERVICE_ROLE_KEY: 'parent-secret',
+    },
+    temporaryDirectory: '/tmp/drop-smoke',
+    supabaseValues: {
+      NEXT_PUBLIC_SUPABASE_URL: 'http://127.0.0.1:55321',
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: 'local-anon',
+      SUPABASE_SERVICE_ROLE_KEY: 'local-service-role',
+    },
+  });
+  assert.equal(appEnv.PATH, '/usr/bin');
+  assert.equal(appEnv.HOME, '/tmp/test-home');
+  assert.equal(appEnv.TMPDIR, '/tmp/drop-smoke');
+  assert.equal(appEnv.NODE_ENV, 'development');
+  assert.equal(appEnv.NEXT_PUBLIC_SUPABASE_URL, 'http://127.0.0.1:55321');
+  assert.equal(appEnv.SUPABASE_SERVICE_ROLE_KEY, 'local-service-role');
+  assert.equal(appEnv.GITHUB_TOKEN, undefined);
+  assert.equal(appEnv.AWS_SECRET_ACCESS_KEY, undefined);
+  assert.notEqual(appEnv.SUPABASE_SERVICE_ROLE_KEY, 'parent-secret');
 });
 
 test('validates local-only HTTP origins and supports an explicitly remapped API port', () => {

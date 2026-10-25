@@ -81,6 +81,9 @@ export function parseLsofOwners(output) {
     } else if (line.startsWith('c') && current && !current.processName) {
       current.processName = line.slice(1);
       if (!current.processName) throw new Error(OWNER_READ_ERROR);
+    } else if (line.startsWith('f') && current?.processName && /^f[A-Za-z0-9_.-]+$/.test(line)) {
+      // lsof emits file-descriptor rows even when the request asks only for PID and command fields.
+      continue;
     } else {
       throw new Error(OWNER_READ_ERROR);
     }
@@ -336,6 +339,26 @@ export function createBrowserSmokeEnvironment({
     }
   }
   return browserEnv;
+}
+
+export function createLocalSmokeAppEnvironment({
+  environment = process.env,
+  supabaseValues,
+  temporaryDirectory,
+  platform = process.platform,
+} = {}) {
+  if (!supabaseValues || REQUIRED_ENV_NAMES.some((name) => (
+    typeof supabaseValues[name] !== 'string' || !supabaseValues[name].trim()
+  ))) {
+    throw new Error('Local smoke app environment is missing Supabase values.');
+  }
+  return {
+    ...createBrowserSmokeEnvironment({ environment, temporaryDirectory, platform }),
+    NODE_ENV: 'development',
+    NEXT_TELEMETRY_DISABLED: '1',
+    WATCHPACK_POLLING: 'true',
+    ...Object.fromEntries(REQUIRED_ENV_NAMES.map((name) => [name, supabaseValues[name]])),
+  };
 }
 
 export function validateLocalSupabaseUrl(rawValue) {
