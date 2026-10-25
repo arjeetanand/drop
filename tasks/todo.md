@@ -2,6 +2,18 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
+## Checkpoint — share-target rollback ownership and QR verification (2026-10-25)
+
+- [x] Preserve a committed share-target import under its captured account when account switching causes attachment cleanup to be skipped; keep the handoff available for retry.
+- [x] Add a regression for the account switch during the cleanup await and confirm the other account's draft and media remain unchanged.
+- [x] Pass `npm test` 280/280, lint, TypeScript, browser-script syntax, and `git diff --check`; push code commit `f0c6c70` to `origin/feat/pwa-share-acceptance`.
+- [x] Open draft [PR #8](https://github.com/arjeetanand/drop/pull/8) for review; keep it in draft while browser and production-build checks remain open. The last GitHub mergeability query, at head `537dae8`, returned `UNKNOWN`.
+- [x] Verify the separate local private-claim QR flow and exact token decode on PR #7's branch. PR #7 remains open and mergeable; no merge was performed.
+- [ ] Repeat the PWA share-target browser smoke once the standalone Chrome runner can publish `DevToolsActivePort`; the current run reached import/replay/reload but stopped on a cold-start React warning, and two later launches timed out before DevTools.
+- [ ] Restore port 4004 from the canonical Drop checkout after inspecting its existing listener (PID 47239); the feature worktree's `run.sh` refused to replace it and HTTP requests failed.
+- [ ] Retry the Webpack production build after Google Fonts DNS is available.
+- [ ] Verify installed-PWA/OS share-sheet behavior, screen reader, physical device, hosted two-account delivery, and real 30-day Storage cleanup.
+
 ## Checkpoint — received-drop Drop back draft isolation (2026-10-24)
 
 - [x] Start Drop back from a received drop using a persisted fresh draft ID and the sender's normalized handle.

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { copyGuestDraftAttachmentToAccount, deleteDraftAttachment, getDraftAttachment, saveDraftAttachment } from '../lib/letterMediaStore.ts';
+import { AttachmentCommittedAfterAccountSwitchError, copyGuestDraftAttachmentToAccount, deleteDraftAttachmentForCurrentAccount, getDraftAttachment, saveDraftAttachment } from '../lib/letterMediaStore.ts';
 import { setLocalAccountId } from '../lib/localAccountScope.ts';
 
 function memoryIndexedDb(records, beforeTransactionComplete = () => {}) {
@@ -198,7 +198,7 @@ test('does not save an attachment into the newly active account after the sample
   }
 });
 
-test('rolls back a committed attachment only from its original account after a switch', async () => {
+test('identifies a committed attachment when the active account changes', async () => {
   const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
   const records = new Map();
   Object.defineProperty(globalThis, 'window', {
@@ -213,13 +213,17 @@ test('rolls back a committed attachment only from its original account after a s
       name: 'demo.gif',
       lastModified: 1,
       slice: () => new Blob(['x'], { type: 'image/gif' }),
-    }, 'account-one'), /active account changed/);
+    }, 'account-one'), (error) => {
+      assert.ok(error instanceof AttachmentCommittedAfterAccountSwitchError);
+      assert.equal(error.draftId, 'draft-local-demo-committed');
+      assert.equal(error.accountId, 'account-one');
+      assert.match(error.message, /active account changed/);
+      return true;
+    });
 
     const originalAccountRecord = 'account:account-one:draft-local-demo-committed';
     assert.equal(records.has(originalAccountRecord), true);
     assert.equal(records.has('account:account-two:draft-local-demo-committed'), false);
-    await deleteDraftAttachment('draft-local-demo-committed', 'account-one');
-    assert.equal(records.has(originalAccountRecord), false);
   } finally {
     setLocalAccountId(null);
     if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
@@ -234,11 +238,11 @@ test('does not read or delete another account attachment after a switch during d
   try {
     setLocalAccountId('account-one');
     const pending = getDraftAttachment('3');
-    const pendingDelete = deleteDraftAttachment('3');
+    const pendingDelete = deleteDraftAttachmentForCurrentAccount('3');
     setLocalAccountId('account-two');
     indexedDb.releaseOpen();
     assert.equal(await pending, null);
-    await pendingDelete;
+    assert.equal(await pendingDelete, 'account-switched');
     assert.equal(indexedDb.transactionCount(), 0);
   } finally {
     setLocalAccountId(null);

@@ -1328,3 +1328,147 @@ When localhost is unavailable, first check whether the app process is running. A
 ### Git and remaining gaps
 
 No application code or environment file changed. This issue-resolution record is on `chore/docker-runtime-recovery`; see the branch's latest Git commit for the exact SHA and the final task report for push status. Hosted Supabase behavior, real aged-object deletion, screen-reader use, and physical-device checks remain open.
+
+## 2026-10-25 — Keep failed share-target imports reachable across account switches
+
+### Issue
+
+When a PWA share import committed its attachment under account A and then failed, rollback tried to delete the attachment before restoring A's earlier active draft. If the user switched to account B while IndexedDB was opening, deletion correctly skipped the account-A record but returned no outcome. Rollback could not tell that the media still existed, restored the old draft, and left the imported attachment unreachable.
+
+### Cause
+
+The cleanup operation was asynchronous and account-scoped, but its `void` result hid whether it had deleted the record or safely skipped after an account switch. Awaiting cleanup alone did not prove the attachment was gone.
+
+### Resolution
+
+- Added an explicit current-account deletion result (`deleted` or `account-switched`) while keeping the existing `deleteDraftAttachment` API and explicit-account behavior intact.
+- Share-import rollback now restores the previous draft only after confirmed deletion. If the account switches during cleanup or cleanup throws, the import remains active under its captured account so the committed attachment stays reachable and the one-time handoff can be retried.
+- Added a focused helper regression for switching A→B during cleanup and a storage regression proving that a real delayed database open returns `account-switched` without opening a write transaction. The receiving account's draft remains untouched.
+
+### Learning
+
+For async cleanup that protects user data, report the mutation outcome explicitly. A safe skip, a successful delete, and a failed delete require different rollback behavior; preserve a committed record's reachable owner-scoped reference until deletion is confirmed.
+
+### Verification
+
+- `npm test` passed 280/280; lint, TypeScript, `node --check scripts/browser-demo-smoke.mjs`, and `git diff --check` passed.
+- The isolated share-target browser journey completed import, same-ID replay, reload preservation, and 375×844, 390×844, 844×390, and 1440×900 layout checks. Its cold-start run failed the final console assertion on a React development warning; two later standalone Chrome launches timed out before publishing `DevToolsActivePort`. A separate warm-browser agent rerun reported no console warning, but the current session could not repeat it.
+- The separate PR #7 private-claim QR check passed local sign-in, one successful invite issue, sender-owned pending-row checks, accessible QR show/hide, and exact QR-token decoding by Vision and Core Image. No hosted Supabase calls were made.
+- A production Webpack build was previously blocked when `next/font` could not resolve `fonts.googleapis.com` (`ENOTFOUND`); this patch has no confirmed production build.
+
+### Git and remaining gaps
+
+Code commit `f0c6c70` is pushed to `origin/feat/pwa-share-acceptance`. Documentation changes follow in a separate commit on the same branch. PR #7 remains open and mergeable on its separate `feat/private-claim-qr` branch; it was not merged. Port 4004 has PID 47239 from `/Users/arjeetanand/projects/drop`, but local HTTP requests failed; the feature worktree's run script refused to replace it, so inspect/recover the runtime from that canonical checkout. Installed-PWA/OS share-sheet, screen-reader, physical-device, hosted two-account, and real 30-day Storage deletion checks remain open. `/letter`, hosted Supabase, and credential files were not changed.
+
+## 2026-10-25 — Record draft review state
+
+- Opened draft [PR #8](https://github.com/arjeetanand/drop/pull/8) from `feat/pwa-share-acceptance` after verifying the branch push. Its initial head was `a7423e3`; GitHub reported it `OPEN`, `DRAFT`, and `MERGEABLE` at that time.
+- Kept PR #8 in draft because the standalone Chrome runner did not start on the last attempts and the production build could not resolve Google Fonts. PR #7 remains a separate QR branch and open as requested; its local QR check passed.
+- No PR was merged. This follow-up records tracking state only; no app code, credential, hosted Supabase resource, or `/letter` file changed.
+
+## 2026-10-25 — Recheck draft PR merge status
+
+- At head `537dae8`, after pushing the branch-tracking update, GitHub reported PR #8 as `OPEN` and `DRAFT`, with mergeability `UNKNOWN`.
+- Keep PR #8 in draft until GitHub recalculates mergeability and the standalone browser/build checks are complete. PR #7 remains open and unmerged.
+
+## 2026-10-25 — Separate local verification from hosted pilot proof
+
+### Issue
+
+Browser startup and restricted network access had been treated as blockers for the PWA share-target check and production build. The pilot also lacked one concise statement distinguishing successful local flows from hosted acceptance.
+
+### Cause
+
+The local browser smoke was headless and synthetic, while the operating-system share sheet and installed-PWA launch require a supported installed browser/device. The first build attempts ran where DNS to Google Fonts was unavailable; that environment failure did not indicate an application build defect.
+
+### Resolution
+
+- Reran the focused share-target smoke against the isolated app on port 6004 and inspected its screenshots outside the repository.
+- Completed the Webpack production build in an authorized local network context, without changing app code or the other checkout's runtime.
+- Updated the checklist and handoff to report local account-to-account proof and hosted Supabase setup as separate gates.
+
+### Learning
+
+Classify a failed browser launch or blocked network request by its environment before changing product code. A headless local pass proves only the scripted browser path; installed-PWA, operating-system, hosted, screen-reader, and physical-device behavior each need their own evidence.
+
+### Verification
+
+- `npm test`: 280/280; lint, TypeScript, and `npm run build -- --webpack` passed. The build generated 22 routes and reported only the existing Browserslist freshness and Tailwind easing warnings.
+- The share-target smoke passed synthetic image import, same-ID replay, reload preservation, and 375×844, 390×844, 844×390, and 1440×900 layout checks. It reported zero backend writes and zero cross-origin requests.
+- Earlier local pilot branch checks passed nine Supabase smoke groups and the two-account text/unread/open/reaction browser path. Hosted Supabase was not contacted.
+
+### Git and remaining gaps
+
+No application code changed in this documentation follow-up. It is recorded on `feat/pwa-share-acceptance`, based on code commit `a6f6c28`; the working branch and remote tracking state are verified with Git. Hosted project setup, installed-PWA/OS share-sheet, screen-reader, physical-device, and real aged-media deletion checks remain open.
+
+## 2026-10-25 — Refresh pilot branch status from live PRs
+
+### Issue
+
+The checklist still described the PWA browser/build follow-ups as open, and the parallel CI and dependency branches were not visible together.
+
+### Cause
+
+The earlier handoff recorded blocked local browser/build attempts and did not yet include the newly pushed CI and security branches.
+
+### Resolution
+
+- Updated the pilot summary with the current PR heads and remote checks for #7 through #10.
+- Kept the PWA PR draft because the automatic review gate rejected changing review status without explicit authorization; local acceptance evidence is recorded separately from remote GitHub checks.
+- Recorded that PR #9's Actions job is running and PR #10 has no Actions job until CI is available on the base branch.
+
+### Learning
+
+Refresh both local verification and live PR metadata before making readiness claims. A passing local browser/build run does not change the PR review state or prove hosted/device behavior.
+
+### Verification and Git state
+
+Verified GitHub reports PR #7 open/mergeable at `dec1608`; PR #8 open/draft/mergeable at `a6f6c28`; PR #9 open/draft/mergeable at `d27e381` with Actions in progress and GitGuardian success; and PR #10 open/draft/mergeable at `ce924fd` with GitGuardian success only. These docs are pending commit on `feat/pwa-share-acceptance`; no merge was performed.
+
+
+## 2026-10-25 — Keep the PWA head checkpoint aligned with its docs push
+
+### Issue and cause
+
+A docs-only push advanced `feat/pwa-share-acceptance` after the pilot status entry had recorded the previous head. That made the PR head in the handoff stale even though the browser and build evidence still applied to the earlier code commit.
+
+### Resolution
+
+- Record branch head `1603719` for the docs refresh and keep code verification attributed to `f0c6c70`.
+- Keep PR #8 in draft after the automatic review gate rejected the ready-state change because it could notify reviewers.
+- Record PR #9's first Actions pass at code commit `d27e381`, and require a live check after any later push.
+
+### Verification and Git state
+
+The PWA branch is `feat/pwa-share-acceptance`; docs head `1603719` was pushed and GitGuardian passed. No merge was performed. The next live PR query should confirm any head/check changes after the follow-up documentation commit.
+
+## 2026-10-25 — Re-run PWA acceptance without overstating environment failures
+
+### Issue
+
+The PWA share-target pilot needed a fresh local acceptance pass so its status and repeatable command stayed useful to the next developer.
+
+### Cause
+
+The current disposable checkout had no `node_modules`, so its checks needed a temporary symlink to dependencies from another worktree with an identical lockfile. TypeScript also ran at the same time as Next's build and looked for generated `.next/types` files before they existed. The standalone Chrome runner then failed to publish `DevToolsActivePort`, and the production build could not resolve Google Fonts.
+
+### Resolution
+
+- Ran the full test suite and lint successfully; reran TypeScript after Next had generated its type files.
+- Confirmed the app could start on the isolated QA port 6004, then recorded the Chrome startup timeout and Google Fonts DNS failure separately from application behavior.
+- Documented the reproducible share-target command and kept prior successful browser/build evidence separate from this blocked rerun.
+- Stopped the isolated app, removed the temporary dependency symlink before commit, and left the canonical 4004 server alone.
+
+### Learning
+
+When Next owns generated type files, run typecheck after Next has generated them. A blocked browser launcher or font download is environment evidence; it is not a fresh pass or a product regression. Record the earlier successful run separately and keep the OS share-sheet claim open until a compatible installed device is tested.
+
+### Verification
+
+- `npm test`: 280/280 passed; `npm run lint` passed; sequential `npm run typecheck` passed.
+- `npm run build -- --webpack` failed with `ENOTFOUND fonts.googleapis.com` while loading `Courier Prime`, `Inter`, `Literata`, and `Playfair Display` through `next/font`.
+- The focused browser smoke failed before navigation because Chrome did not create `DevToolsActivePort` within 15 seconds. The 6004 server was stopped after the attempt.
+
+### Git and remaining gaps
+
+No app source changed on `feat/pwa-share-acceptance`; this entry records only the current acceptance rerun. The existing logged headless smoke does not prove PWA installation or the system share sheet. Hosted delivery, screen-reader and physical-device checks, actual 30-day deletion, and a clean browser/build rerun remain open.
