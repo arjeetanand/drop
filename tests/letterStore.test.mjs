@@ -130,6 +130,66 @@ test('starts a verified new active draft after preserving the previous draft whe
   }
 });
 
+test('restores a captured account draft after an account switch without replacing the current account', () => {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const values = new Map();
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { localStorage: { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) } },
+  });
+  try {
+    setLocalAccountId('rollback-account-one');
+    const previous = saveLetterDraft({ id: 'draft-rollback-previous', content: 'Keep this account draft.' });
+    setActiveLetterDraft({ ...previous, id: 'draft-rollback-imported', content: 'Temporary shared draft.' });
+
+    setLocalAccountId('rollback-account-two');
+    const current = saveLetterDraft({ id: 'draft-rollback-current', content: 'Do not replace this other account draft.' });
+    const restored = setActiveLetterDraft(previous, 'rollback-account-one');
+
+    assert.equal(restored.id, previous.id);
+    assert.equal(getLetterDraft('rollback-account-one').id, previous.id);
+    assert.equal(getLetterDraft('rollback-account-one').content, previous.content);
+    assert.equal(getLetterDraft('rollback-account-two').id, current.id);
+    assert.equal(getLetterDraft().id, current.id);
+  } finally {
+    setLocalAccountId(null);
+    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
+    else delete globalThis.window;
+  }
+});
+
+test('keeps a committed imported share draft reachable in its captured account after a switch', () => {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const values = new Map();
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { localStorage: { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) } },
+  });
+  try {
+    setLocalAccountId('share-account-one');
+    saveLetterDraft({ id: 'draft-share-previous', content: 'Keep the previous draft.' });
+    const imported = setActiveLetterDraft({
+      ...getLetterDraft('share-account-one'),
+      id: 'draft-share-imported',
+      content: 'Keep this imported share with its committed photo.',
+      payloadKind: 'image',
+      mediaUploadId: 'share-handoff-committed',
+    });
+
+    setLocalAccountId('share-account-two');
+    const otherAccount = saveLetterDraft({ id: 'draft-share-other-account', content: 'Keep this account separate.' });
+
+    assert.equal(getLetterDraft('share-account-one').id, imported.id);
+    assert.equal(getLetterDraftByMediaUploadId('share-handoff-committed', 'share-account-one', 'image')?.id, imported.id);
+    assert.equal(getLetterDraft('share-account-two').id, otherAccount.id);
+    assert.equal(getLetterDraft().id, otherAccount.id);
+  } finally {
+    setLocalAccountId(null);
+    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
+    else delete globalThis.window;
+  }
+});
+
 test('aborts an opted-in new draft if its active record cannot be persisted', () => {
   const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
   const values = new Map();

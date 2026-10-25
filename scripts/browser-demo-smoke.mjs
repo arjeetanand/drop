@@ -1212,6 +1212,8 @@ async function runShareTargetFlow(cdp, { appUrl, screenshotDir, getPageLoadEvent
   assert.equal(previousDraftBeforeShare.active?.id, SHARE_TARGET_PREVIOUS_DRAFT.id, 'The previous local draft should be active before the share import.');
   assert.equal(previousDraftBeforeShare.content, SHARE_TARGET_PREVIOUS_DRAFT.content, 'The previous draft should have saved text before the share import.');
   assert.equal(previousDraftBeforeShare.subject, SHARE_TARGET_PREVIOUS_DRAFT.subject, 'The previous draft should have its original subject before the share import.');
+  const previousActiveSnapshot = JSON.stringify(previousDraftBeforeShare.active);
+  assert.equal(await evaluate(cdp, `sessionStorage.setItem('__dropSharePriorActiveSnapshot', ${JSON.stringify(previousActiveSnapshot)}); true`), true);
   const previousAttachment = await evaluate(cdp, `(async () => {
     const database = await new Promise((resolve, reject) => {
       const request = indexedDB.open('dear-exe-draft-media', 1);
@@ -1232,6 +1234,77 @@ async function runShareTargetFlow(cdp, { appUrl, screenshotDir, getPageLoadEvent
   assert.equal(previousAttachment.name, 'demo-cat.png', 'The pre-existing draft attachment should be available before sharing.');
   assert.ok(previousAttachment.size > 0, 'The pre-existing attachment should contain image bytes.');
   assert.equal(await evaluate(cdp, `navigator.serviceWorker.controller?.state === 'activated'`), true, 'The composer document should remain controlled by the active worker.');
+
+  const failureHookAdded = await cdp.send('Page.addScriptToEvaluateOnNewDocument', {
+    source: `(() => {
+      const failureKey = '__dropShareDraftPersistenceFailureOnce';
+      const attachmentCommitKey = '__dropShareAttachmentCommitBeforeDraftFailure';
+      const activeWriteCountKey = '__dropShareImportedActiveWriteCount';
+      const startFailureKey = '__dropShareStartNewDraftVerificationFailureOnce';
+      const priorActiveKey = '__dropSharePriorActiveSnapshot';
+      const blankDraftKey = '__dropShareBlankDraftWriteObserved';
+      const originalPut = IDBObjectStore.prototype.put;
+      const originalSetItem = Storage.prototype.setItem;
+      const originalGetItem = Storage.prototype.getItem;
+      IDBObjectStore.prototype.put = function (...args) {
+        const handoffId = new URL(location.href).searchParams.get('shareImport');
+        const attachment = args[0];
+        if (sessionStorage.getItem(failureKey) === 'armed'
+          && this.name === 'attachments'
+          && this.transaction?.db?.name === 'dear-exe-draft-media'
+          && attachment?.name === ${JSON.stringify(SHARE_TARGET_FILENAME)}) {
+          this.transaction.addEventListener('complete', () => {
+            Reflect.apply(originalSetItem, sessionStorage, [attachmentCommitKey, handoffId || '']);
+          }, { once: true });
+        }
+        return Reflect.apply(originalPut, this, args);
+      };
+      Storage.prototype.setItem = function (key, value) {
+        if (this === window.localStorage && key === 'dear-exe:active-letter:v1'
+          && sessionStorage.getItem(startFailureKey) === 'armed') {
+          let draft = null;
+          try { draft = JSON.parse(value); } catch { /* Ignore unrelated local values. */ }
+          if (draft?.status === 'draft' && !String(draft.content || '').trim()
+            && !(draft.recipient || '').trim() && !draft.mediaUploadId) {
+            const previousActive = JSON.parse(sessionStorage.getItem(priorActiveKey) || 'null');
+            if (draft.id !== previousActive?.id) {
+              const result = Reflect.apply(originalSetItem, this, [key, value]);
+              Reflect.apply(originalSetItem, sessionStorage, [blankDraftKey, draft.id]);
+              return result;
+            }
+          }
+        }
+        if (this === window.localStorage
+          && key === 'dear-exe:active-letter:v1'
+          && sessionStorage.getItem(failureKey) === 'armed') {
+          const handoffId = new URL(location.href).searchParams.get('shareImport');
+          let draft = null;
+          try { draft = JSON.parse(value); } catch { /* Ignore unrelated local values. */ }
+          if (handoffId && draft?.mediaUploadId === handoffId && draft.payloadKind === 'image') {
+            const count = Number(sessionStorage.getItem(activeWriteCountKey) || '0') + 1;
+            Reflect.apply(originalSetItem, sessionStorage, [activeWriteCountKey, String(count)]);
+            if (count === 2 && sessionStorage.getItem(attachmentCommitKey) === handoffId) {
+              Reflect.apply(originalSetItem, sessionStorage, [failureKey, 'consumed-after-attachment-commit']);
+              throw new Error('Simulated imported draft persistence failure after attachment commit.');
+            }
+          }
+        }
+        return Reflect.apply(originalSetItem, this, [key, value]);
+      };
+      Storage.prototype.getItem = function (key) {
+        if (this === window.localStorage && key === 'dear-exe:active-letter:v1'
+          && sessionStorage.getItem(startFailureKey) === 'armed'
+          && sessionStorage.getItem(blankDraftKey)) {
+          const previousActive = sessionStorage.getItem(priorActiveKey);
+          Reflect.apply(originalSetItem, sessionStorage, [startFailureKey, 'consumed-after-active-write']);
+          return previousActive;
+        }
+        return Reflect.apply(originalGetItem, this, [key]);
+      };
+    })();`,
+  });
+  assert.ok(failureHookAdded.identifier, 'The smoke should install a one-time post-commit draft-persistence failure for the cleanup retry check.');
+  assert.equal(await evaluate(cdp, `sessionStorage.setItem('__dropShareDraftPersistenceFailureOnce', 'armed'); true`), true);
 
   const beforeImportBlockedRequests = getBlockedRequestCount();
   captureShareRequests(true);
@@ -1272,9 +1345,159 @@ async function runShareTargetFlow(cdp, { appUrl, screenshotDir, getPageLoadEvent
   assert.equal(submittedForm.method.toUpperCase(), 'POST');
   assert.equal(submittedForm.enctype, 'multipart/form-data');
   assert.equal(new URL(submittedForm.action).pathname, '/share-target');
-  await waitUntil(cdp, 'the imported share draft and its canonical composer route', async () => (
+  await waitUntil(cdp, 'the share import route after the injected post-commit persistence failure', async () => (
     getPageLoadEvents() > previousLoadEvents
-      && await evaluate(cdp, `location.pathname === '/compose' && Boolean(document.querySelector('#drop-content')) && new URL(location.href).searchParams.has('letter')`)
+      && await evaluate(cdp, `location.pathname === '/compose' && Boolean(document.querySelector('#drop-content')) && new URL(location.href).searchParams.has('shareImport')`)
+  ));
+  await waitUntil(cdp, 'the committed attachment followed by a one-time draft persistence failure', async () => (
+    await evaluate(cdp, `sessionStorage.getItem('__dropShareDraftPersistenceFailureOnce') === 'consumed-after-attachment-commit'
+      && sessionStorage.getItem('__dropShareAttachmentCommitBeforeDraftFailure') === new URL(location.href).searchParams.get('shareImport')
+      && sessionStorage.getItem('__dropShareImportedActiveWriteCount') === '2'
+      && (document.querySelector('[role="alert"]')?.innerText || '').includes('new draft could not be saved')`)
+  ));
+  await sleep(500, interrupted.signal);
+  const failedImportState = await evaluate(cdp, `(async () => {
+    const active = JSON.parse(localStorage.getItem('dear-exe:active-letter:v1') || 'null');
+    const attachments = await new Promise((resolve, reject) => {
+      const request = indexedDB.open('dear-exe-draft-media', 1);
+      request.onsuccess = () => {
+        const database = request.result;
+        const transaction = database.transaction('attachments', 'readonly');
+        const store = transaction.objectStore('attachments');
+        const values = store.getAll();
+        const previous = store.get(${JSON.stringify(SHARE_TARGET_PREVIOUS_DRAFT.id)});
+        transaction.oncomplete = () => {
+          database.close();
+          resolve({
+            values: values.result,
+            previous: previous.result ? { name: previous.result.name, size: previous.result.blob?.size || 0 } : null,
+          });
+        };
+        transaction.onerror = () => { database.close(); reject(transaction.error); };
+      };
+      request.onerror = () => reject(request.error);
+    });
+    const handoffId = new URL(location.href).searchParams.get('shareImport');
+    const handoffDatabase = await new Promise((resolve, reject) => {
+      const request = indexedDB.open('drop-share-target-handoffs', 1);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    let handoffRemains = false;
+    try {
+      handoffRemains = await new Promise((resolve, reject) => {
+        const transaction = handoffDatabase.transaction('handoffs', 'readonly');
+        const request = transaction.objectStore('handoffs').get(handoffId);
+        request.onsuccess = () => resolve(Boolean(request.result));
+        request.onerror = () => reject(request.error);
+      });
+    } finally {
+      handoffDatabase.close();
+    }
+    return {
+      active,
+      content: document.querySelector('#drop-content')?.value || '',
+      alert: document.querySelector('[role="alert"]')?.innerText || '',
+      url: location.href,
+      importedAttachments: attachments.values.filter((attachment) => attachment?.name === ${JSON.stringify(SHARE_TARGET_FILENAME)}).length,
+      previousAttachment: attachments.previous,
+      handoffRemains,
+      fault: sessionStorage.getItem('__dropShareDraftPersistenceFailureOnce'),
+      attachmentCommit: sessionStorage.getItem('__dropShareAttachmentCommitBeforeDraftFailure'),
+      importedActiveWriteCount: sessionStorage.getItem('__dropShareImportedActiveWriteCount'),
+    };
+  })()`);
+  const failedHandoffId = new URL(failedImportState.url).searchParams.get('shareImport');
+  assert.equal(failedImportState.fault, 'consumed-after-attachment-commit', 'The smoke should fail draft persistence only after the attachment transaction commits.');
+  assert.equal(failedImportState.attachmentCommit, failedHandoffId);
+  assert.equal(failedImportState.importedActiveWriteCount, '2', 'The injected failure should target the second imported-draft active write, after attachment save.');
+  assert.match(failedImportState.alert, /new draft could not be saved/);
+  assert.equal(failedImportState.active?.id, SHARE_TARGET_PREVIOUS_DRAFT.id, 'A failed share import must restore the previously active draft.');
+  assert.equal(failedImportState.active?.content, SHARE_TARGET_PREVIOUS_DRAFT.content, 'A failed share import must preserve the prior active draft content.');
+  assert.equal(failedImportState.content, SHARE_TARGET_PREVIOUS_DRAFT.content, 'The visible composer should keep showing the prior draft after import failure.');
+  assert.equal(failedImportState.importedAttachments, 0, 'Rollback should remove the attachment that committed before draft persistence failed.');
+  assert.deepEqual(failedImportState.previousAttachment, { name: 'demo-cat.png', size: previousAttachment.size }, 'Rollback should preserve the earlier draft attachment.');
+  assert.equal(failedImportState.handoffRemains, true, 'The failed import should retain its handoff so the user can retry.');
+  assert.match(failedHandoffId || '', SHARE_IMPORT_ID);
+
+  await evaluate(cdp, `document.querySelector('[role="alert"]')?.scrollIntoView({ block: 'center' }); true`);
+  await captureScreenshot(cdp, screenshotDir, 'mobile-390-share-target-post-commit-rollback');
+  assert.equal(await evaluate(cdp, `sessionStorage.setItem('__dropShareStartNewDraftVerificationFailureOnce', 'armed'); true`), true);
+  const draftCreationFailureLoadEvents = getPageLoadEvents();
+  await cdp.send('Page.reload', { ignoreCache: true });
+  await waitUntil(cdp, 'reload before the active-draft verification failure check', async () => (
+    getPageLoadEvents() > draftCreationFailureLoadEvents
+      && await evaluate(cdp, `location.pathname === '/compose' && new URL(location.href).searchParams.get('shareImport') === ${JSON.stringify(failedHandoffId)}`)
+  ));
+  await waitUntil(cdp, 'the startNewLetter active-draft verification failure and rollback', async () => (
+    await evaluate(cdp, `sessionStorage.getItem('__dropShareStartNewDraftVerificationFailureOnce') === 'consumed-after-active-write'
+      && Boolean(sessionStorage.getItem('__dropShareBlankDraftWriteObserved'))
+      && (document.querySelector('[role="alert"]')?.innerText || '').includes('new draft could not be verified')`)
+  ));
+  const draftCreationFailureState = await evaluate(cdp, `(async () => {
+    const active = JSON.parse(localStorage.getItem('dear-exe:active-letter:v1') || 'null');
+    const handoffId = new URL(location.href).searchParams.get('shareImport');
+    const handoffDatabase = await new Promise((resolve, reject) => {
+      const request = indexedDB.open('drop-share-target-handoffs', 1);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    let handoffRemains = false;
+    try {
+      handoffRemains = await new Promise((resolve, reject) => {
+        const transaction = handoffDatabase.transaction('handoffs', 'readonly');
+        const request = transaction.objectStore('handoffs').get(handoffId);
+        request.onsuccess = () => resolve(Boolean(request.result));
+        request.onerror = () => reject(request.error);
+      });
+    } finally {
+      handoffDatabase.close();
+    }
+    const mediaDatabase = await new Promise((resolve, reject) => {
+      const request = indexedDB.open('dear-exe-draft-media', 1);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    let importedAttachments = 0;
+    try {
+      importedAttachments = await new Promise((resolve, reject) => {
+        const transaction = mediaDatabase.transaction('attachments', 'readonly');
+        const request = transaction.objectStore('attachments').getAll();
+        request.onsuccess = () => resolve(request.result.filter((attachment) => attachment?.name === ${JSON.stringify(SHARE_TARGET_FILENAME)}).length);
+        request.onerror = () => reject(request.error);
+      });
+    } finally {
+      mediaDatabase.close();
+    }
+    return {
+      active,
+      content: document.querySelector('#drop-content')?.value || '',
+      failedBlankDraftId: sessionStorage.getItem('__dropShareBlankDraftWriteObserved'),
+      handoffRemains,
+      importedAttachments,
+    };
+  })()`);
+  assert.equal(draftCreationFailureState.active?.id, SHARE_TARGET_PREVIOUS_DRAFT.id, 'A post-write blank-draft verification failure must restore the previous active draft.');
+  assert.notEqual(draftCreationFailureState.active?.id, draftCreationFailureState.failedBlankDraftId, 'The failed blank draft must not remain active.');
+  assert.equal(draftCreationFailureState.content, SHARE_TARGET_PREVIOUS_DRAFT.content, 'The composer should keep showing the previous draft after blank-draft verification fails.');
+  assert.equal(draftCreationFailureState.handoffRemains, true, 'A failed blank-draft verification must keep the share available to retry.');
+  assert.equal(draftCreationFailureState.importedAttachments, 0, 'The blank-draft failure must not create an imported attachment.');
+  await evaluate(cdp, `document.querySelector('[role="alert"]')?.scrollIntoView({ block: 'center' }); true`);
+  await captureScreenshot(cdp, screenshotDir, 'mobile-390-share-target-start-draft-rollback');
+
+  const retryLoadEvents = getPageLoadEvents();
+  await cdp.send('Page.reload', { ignoreCache: true });
+  await waitUntil(cdp, 'reload before retrying the preserved share handoff', async () => (
+    getPageLoadEvents() > retryLoadEvents
+      && await evaluate(cdp, `(() => {
+        const parameters = new URL(location.href).searchParams;
+        return location.pathname === '/compose'
+          && (parameters.get('shareImport') === ${JSON.stringify(failedHandoffId)}
+            || (parameters.has('letter') && !parameters.has('shareImport')));
+      })()`)
+  ));
+  await waitUntil(cdp, 'the imported share draft and its canonical composer route after retry', async () => (
+    await evaluate(cdp, `location.pathname === '/compose' && Boolean(document.querySelector('#drop-content')) && new URL(location.href).searchParams.has('letter')`)
   ));
   await waitUntil(cdp, 'the shared text and image preview in the fresh composer draft', async () => (
     await evaluate(cdp, `document.querySelector('#drop-content')?.value === ${JSON.stringify(SHARE_TARGET_CAPTION)}
@@ -1488,9 +1711,14 @@ async function runShareTargetFlow(cdp, { appUrl, screenshotDir, getPageLoadEvent
   const replayUrl = new URL('/compose', appUrl);
   replayUrl.searchParams.set('shareImport', handoffId);
   await cdp.send('Page.navigate', { url: replayUrl.href });
-  await waitUntil(cdp, 'a full navigation to the replayed share-import route', async () => (
+  await waitUntil(cdp, 'a full navigation to the replayed share import or its completed canonical draft route', async () => (
     getPageLoadEvents() > replayLoadEvents
-      && await evaluate(cdp, `location.pathname === '/compose' && new URL(location.href).searchParams.get('shareImport') === ${JSON.stringify(handoffId)}`)
+      && await evaluate(cdp, `(() => {
+        const parameters = new URL(location.href).searchParams;
+        return location.pathname === '/compose'
+          && (parameters.get('shareImport') === ${JSON.stringify(handoffId)}
+            || (parameters.has('letter') && !parameters.has('shareImport')));
+      })()`)
   ));
   let lastReplaySnapshot;
   try {
@@ -1855,9 +2083,11 @@ async function main() {
     pageCdp.on('Runtime.exceptionThrown', ({ exceptionDetails }) => {
       pageExceptions.push(exceptionDetails.exception?.description || exceptionDetails.text || 'Unknown browser exception');
     });
-    pageCdp.on('Runtime.consoleAPICalled', ({ type, args = [] }) => {
+    pageCdp.on('Runtime.consoleAPICalled', ({ type, args = [], stackTrace }) => {
       if (type !== 'error') return;
-      pageConsoleErrors.push(args.map((argument) => argument.value ?? argument.description ?? '').filter(Boolean).join(' '));
+      const message = args.map((argument) => argument.value ?? argument.description ?? '').filter(Boolean).join(' ');
+      const frames = stackTrace?.callFrames?.map((frame) => `${frame.url}:${frame.lineNumber + 1}:${frame.columnNumber + 1}`).join(' <- ');
+      pageConsoleErrors.push(frames ? `${message} (${frames})` : message);
     });
 
     pageCdp.on('Network.requestWillBeSent', ({ request, redirectResponse }) => {

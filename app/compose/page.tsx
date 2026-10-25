@@ -9,9 +9,10 @@ import { canDeleteLocalDraft, clearRecipientInviteProgressForDraft, completeSucc
 import { getRemoteRecentDropRecipients, issueDropClaimInvite, issueDropMediaClaimInvite, lookupDropRecipient, syncDropToBackend } from '@/lib/letterBackend';
 import { getSupabaseBrowserClient } from '@/lib/supabaseBrowser';
 import { isDropPayloadKindCompatibleWithMedia, isDropRecipientConfirmed, normalizeDropRecipient, validateDropMedia } from '@/lib/dropValidation';
-import { deleteDraftAttachment, getDraftAttachment, saveDraftAttachment } from '@/lib/letterMediaStore';
+import { AttachmentCommittedAfterAccountSwitchError, deleteDraftAttachment, getDraftAttachment, saveDraftAttachment } from '@/lib/letterMediaStore';
 import { getLocalAccountId, isCurrentLocalAccount } from '@/lib/localAccountScope';
 import { canOfferInstantClaimSwitch, canOfferPrivateClaimInvite, getClaimInviteExpiryDuration, getConfirmedMediaRetryUploadId } from '@/lib/claimInviteStatus';
+import { rollbackShareTargetImport, type ShareTargetImportRollbackContext } from '@/lib/shareTargetImportRollback';
 import { ReducedMotionGif } from '@/components/ReducedMotionGif';
 import { cn } from '@/lib/utils';
 import { shareInviteLink } from '@/lib/shareInvite';
@@ -97,6 +98,8 @@ function Composer() {
   const [shareImporting, setShareImporting] = useState(false);
   const shareImportInProgressRef = useRef(false);
   const shareImportOperationsRef = useRef(new Map<string, Promise<ShareTargetImportResult>>());
+  // Effect replays for one handoff must share rollback state with the deduplicated import promise.
+  const shareImportRollbackContextsRef = useRef(new Map<string, ShareTargetImportRollbackContext>());
   const [saved, setSaved] = useState(false);
   const [accountState, setAccountState] = useState<'checking' | 'connected' | 'signed-out' | 'unavailable'>('checking');
   const [sending, setSending] = useState(false);
@@ -249,6 +252,14 @@ function Composer() {
     setError('');
     setNotice('Adding the shared image to a new draft…');
 
+    const rollbackContext = shareImportRollbackContextsRef.current.get(handoffId) ?? {
+      accountId: undefined,
+      previousActiveDraft: null,
+      activatedDraftIds: new Set<string>(),
+      newlyWrittenAttachmentDraftId: null,
+    };
+    shareImportRollbackContextsRef.current.set(handoffId, rollbackContext);
+
     let operation = shareImportOperationsRef.current.get(handoffId);
     if (!operation) {
       operation = (async (): Promise<ShareTargetImportResult> => {
@@ -259,6 +270,34 @@ function Composer() {
         if (mediaError) throw new Error(mediaError);
 
         const accountId = getLocalAccountId();
+        rollbackContext.accountId = accountId;
+        rollbackContext.previousActiveDraft = getLetterDraft(accountId);
+        const saveShareAttachment = async (draftId: string) => {
+          try {
+            await saveDraftAttachment(draftId, handoff.file, accountId);
+          } catch (error) {
+            if (error instanceof AttachmentCommittedAfterAccountSwitchError
+              && error.draftId === draftId
+              && error.accountId === accountId) {
+              rollbackContext.newlyWrittenAttachmentDraftId = draftId;
+            }
+            throw error;
+          }
+          rollbackContext.newlyWrittenAttachmentDraftId = draftId;
+        };
+        const startNewShareDraft = () => {
+          try {
+            return startNewLetter({ forceNew: true, requirePreserved: true });
+          } catch (error) {
+            if (isCurrentLocalAccount(accountId)) {
+              const activeDraftAfterFailure = getLetterDraft(accountId);
+              if (activeDraftAfterFailure.id !== rollbackContext.previousActiveDraft?.id) {
+                rollbackContext.activatedDraftIds.add(activeDraftAfterFailure.id);
+              }
+            }
+            throw error;
+          }
+        };
         const payloadKind = handoff.file.type === 'image/gif' ? 'gif' : 'image';
         const existingImport = getLetterDraftByMediaUploadId(handoffId, accountId, payloadKind);
         let importedDraft: LetterDraftState;
@@ -266,9 +305,11 @@ function Composer() {
         if (existingImport) {
           const activeDraft = getLetterDraft(accountId);
           if (activeDraft.id !== existingImport.id) {
-            startNewLetter({ forceNew: true, requirePreserved: true });
+            const blank = startNewShareDraft();
+            rollbackContext.activatedDraftIds.add(blank.id);
           }
           importedDraft = setActiveLetterDraft(existingImport);
+          rollbackContext.activatedDraftIds.add(importedDraft.id);
           if (!isLetterDraftPersisted(importedDraft, accountId)) {
             throw new Error('The existing draft could not be restored on this device. Your saved version is still available.');
           }
@@ -280,10 +321,11 @@ function Composer() {
             }
             importedFile = savedAttachment;
           } else {
-            await saveDraftAttachment(importedDraft.id, handoff.file, accountId);
+            await saveShareAttachment(importedDraft.id);
           }
         } else {
-          const blank = startNewLetter({ forceNew: true, requirePreserved: true });
+          const blank = startNewShareDraft();
+          rollbackContext.activatedDraftIds.add(blank.id);
           importedDraft = setActiveLetterDraft({
             ...blank,
             content: handoff.caption,
@@ -294,7 +336,12 @@ function Composer() {
             mediaUploadId: handoffId,
             address: { ...blank.address, name: '' },
           });
-          await saveDraftAttachment(importedDraft.id, handoff.file, accountId);
+          rollbackContext.activatedDraftIds.add(importedDraft.id);
+          const preexistingAttachment = await getDraftAttachment(importedDraft.id);
+          if (preexistingAttachment) {
+            throw new Error('A saved attachment already exists for this draft. Your shared image is still available to reopen.');
+          }
+          await saveShareAttachment(importedDraft.id);
           if (!isCurrentLocalAccount(accountId)) throw new Error('Your active account changed before the share could be saved. Reopen it and try again.');
 
           const persistedDraft = saveLetterDraft({
@@ -320,6 +367,7 @@ function Composer() {
     }
 
     void operation.then((result) => {
+      shareImportRollbackContextsRef.current.delete(handoffId);
       if (!active) return;
       setDraft(result.draft);
       setContent(result.draft.content);
@@ -345,12 +393,21 @@ function Composer() {
         : `${mediaLabel} added to a new draft. Saved on this device; not sent.`);
       shareImportOperationsRef.current.delete(handoffId);
       router.replace(`/compose?letter=${encodeURIComponent(result.draft.id)}`, { scroll: false });
-    }).catch((error: unknown) => {
+    }).catch(async (error: unknown) => {
       shareImportOperationsRef.current.delete(handoffId);
+
+      const rollbackResult = await rollbackShareTargetImport(rollbackContext);
+      shareImportRollbackContextsRef.current.delete(handoffId);
+
       if (!active) return;
       setAttachmentLoading(false);
       setAttachmentSaved(false);
-      setError(error instanceof Error ? error.message : 'This shared image could not be opened. Choose a photo or GIF to try again.');
+      const message = error instanceof Error ? error.message : 'This shared image could not be opened. Choose a photo or GIF to try again.';
+      setError(rollbackResult.activeDraftRestoreFailed
+        ? `${message} Your earlier draft is still saved, but Drop could not make it active again.`
+        : rollbackResult.preserveCommittedImportForCapturedAccount
+          ? `${message} The imported draft remains saved to its original account.`
+        : message);
       setNotice('The shared item has not been sent. You can still choose a photo or GIF below.');
     }).finally(() => {
       if (active) {
