@@ -19,6 +19,7 @@ const APP_TIMEOUT_MS = 60_000;
 const BROWSER_TIMEOUT_MS = 45_000;
 const STEP_TIMEOUT_MS = 30_000;
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
+const BROWSER_HOST_RESOLVER_RULES = 'MAP * ~NOTFOUND, EXCLUDE 127.0.0.1, EXCLUDE localhost, EXCLUDE ::1';
 const active = new AbortController();
 const allowedOrigins = new Set([APP_ORIGIN]);
 
@@ -169,7 +170,7 @@ class BrowserSession {
       '--disable-default-apps',
       '--disable-features=MediaRouter',
       '--no-proxy-server',
-      '--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1, EXCLUDE localhost',
+      `--host-resolver-rules=${BROWSER_HOST_RESOLVER_RULES}`,
       'about:blank',
     ], {
       env: browserEnvironment(),
@@ -346,6 +347,8 @@ function baseAppEnvironment() {
 function guardSelfTest() {
   assert.equal(requireLocalSupabaseUrl('http://127.0.0.1:54321').origin, 'http://127.0.0.1:54321');
   assert.equal(requireLocalSupabaseUrl('http://localhost:54321/').hostname, 'localhost');
+  assert.equal(requireLocalSupabaseUrl('http://[::1]:54321').origin, 'http://[::1]:54321');
+  assert.equal(BROWSER_HOST_RESOLVER_RULES, 'MAP * ~NOTFOUND, EXCLUDE 127.0.0.1, EXCLUDE localhost, EXCLUDE ::1');
   for (const value of [
     'https://127.0.0.1:54321',
     'http://example.test:54321',
@@ -361,7 +364,7 @@ function guardSelfTest() {
   assert.equal(sampleClaimUrl.search, '', 'The claim capability must never appear in query parameters.');
   assert.equal(browserEnvironment().SUPABASE_SERVICE_ROLE_KEY, undefined, 'Browser processes must not receive the service-role key.');
   assert.equal(baseAppEnvironment().SUPABASE_SERVICE_ROLE_KEY, undefined, 'The build receives no service-role key.');
-  console.log('[browser-media-claim-e2e] PASS loopback-only URL and server/browser secret-boundary guard checks.');
+  console.log('[browser-media-claim-e2e] PASS IPv4/IPv6 loopback URL, resolver, and server/browser secret-boundary guard checks.');
 }
 
 function findBrowserExecutable() {
