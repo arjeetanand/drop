@@ -10,6 +10,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
+import { assertTrustedLocalSupabaseListener } from './localSupabaseListener.mjs';
 
 const PROJECT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const APP_PORT = 6004;
@@ -1010,8 +1011,10 @@ async function main() {
   });
   const localValues = parseEnvFile(envText);
   const supabaseUrl = requireLoopbackSupabaseUrl(localValues.NEXT_PUBLIC_SUPABASE_URL || '');
+  assertTrustedLocalSupabaseListener(54321);
   localSupabaseOrigin = supabaseUrl.origin;
   parseLocalMailpitUrl(MAILPIT_ORIGIN);
+  assertTrustedLocalSupabaseListener(54324);
   const anonKey = localValues.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const serviceRoleKey = localValues.SUPABASE_SERVICE_ROLE_KEY;
   assert.ok(anonKey && serviceRoleKey, '.env.local must contain local anon and service-role keys.');

@@ -8,6 +8,7 @@ import { cp, mkdtemp, readFile, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, relative, resolve, sep } from 'node:path';
 import { createClient } from '@supabase/supabase-js';
+import { assertTrustedLocalSupabaseListener } from './localSupabaseListener.mjs';
 
 const PROJECT_ROOT = process.cwd();
 const TEST_PORT = 5004;
@@ -816,6 +817,7 @@ async function main() {
   });
   const localValues = parseEnvFile(envText);
   const supabaseUrl = requireLocalSupabaseUrl(localValues.NEXT_PUBLIC_SUPABASE_URL || '');
+  assertTrustedLocalSupabaseListener(54321);
   const anonKey = localValues.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const serviceRoleKey = localValues.SUPABASE_SERVICE_ROLE_KEY;
   assert.ok(anonKey && serviceRoleKey, '.env.local must contain the local anon and service-role keys.');

@@ -6,6 +6,7 @@ import { createServer } from 'node:net';
 import { join, relative, resolve, sep } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createClient } from '@supabase/supabase-js';
+import { assertTrustedLocalSupabaseListener } from './localSupabaseListener.mjs';
 
 const root = process.cwd();
 const envFile = await readFile(resolve(root, '.env.local'), 'utf8').catch(() => {
@@ -22,6 +23,10 @@ if (!supabaseUrl || !anonKey || !serviceRoleKey) throw new Error('.env.local is 
 if (!['localhost', '127.0.0.1', '::1', '[::1]'].includes(new URL(supabaseUrl).hostname)) {
   throw new Error('This smoke test only runs against a Supabase URL on this machine.');
 }
+if (Number(new URL(supabaseUrl).port) !== 54321) {
+  throw new Error('This smoke test requires the local Supabase API on port 54321.');
+}
+assertTrustedLocalSupabaseListener(54321);
 
 const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } });
 const createdUserIds = [];

@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { join, relative, resolve, sep } from 'node:path';
 import { createClient } from '@supabase/supabase-js';
+import { assertTrustedLocalSupabaseListener } from './localSupabaseListener.mjs';
 
 const PROJECT_ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const APP_PORT = 6004;
@@ -1005,6 +1006,7 @@ async function main() {
   const localConfig = readLocalSupabaseConfig(envText);
   localValues = localConfig.values;
   supabaseUrl = localConfig.supabaseUrl;
+  assertTrustedLocalSupabaseListener(54321);
   assert.ok(resolve(PROJECT_ROOT, 'node_modules/next/dist/bin/next'), 'Use the installed project dependency tree before running this smoke.');
   for (const alias of ['localhost', '127.0.0.1', '[::1]']) allowedOrigins.add(`http://${alias}:54321`);
   allowedOrigins.add(supabaseUrl.origin);
