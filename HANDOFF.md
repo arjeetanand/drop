@@ -476,3 +476,21 @@ From /Users/arjeetanand/projects/drop, run npm ci, then ./run.sh. Drop uses http
 - PR #7 is `OPEN` and `MERGEABLE` on the separate branch `feat/private-claim-qr` at head `dec1608`; its requested QR check passed. It remains open and unmerged.
 - Port 4004 has listener PID 47239 with working directory `/Users/arjeetanand/projects/drop`, but HTTP requests to `localhost:4004` failed. The feature worktree's `./run.sh start` safely refused to stop or replace that out-of-root process; resolve it from the canonical checkout. The isolated browser server on 6004 is stopped.
 - Remaining: cleanly repeat the share-target browser smoke after Chrome startup recovers; verify installed-PWA/OS share sheet, screen reader, physical device, hosted two-account delivery, and actual 30-day Storage cleanup. No credentials, hosted resources, or `/letter` files were changed.
+
+## 2026-10-25 — Pilot acceleration verification
+
+### Verified local paths
+
+- Core account-to-account text path on `feat/recipient-unread-e2e` at `429a629`: local sign-in, known-handle send, unread state on 390×844 and 1440×900, explicit Inbox open, unread clearing, reaction, and sender visibility before and after reload. The isolated browser script cleaned its disposable accounts.
+- The local Supabase rehearsal on the same branch passed all nine groups: profile setup, text/photo/GIF claims, pre-claim privacy, participant access, reactions, media finalization, relay collection, and legacy relay handling. Temporary accounts and media were removed; the database was not reset.
+- PWA branch `feat/pwa-share-acceptance` at `a6f6c28`: 280/280 tests, lint, TypeScript, and Webpack production build passed. Build output generated 22 routes with only existing Browserslist and Tailwind easing warnings.
+- `node scripts/browser-demo-smoke.mjs http://127.0.0.1:6004 --share-target-only` passed synthetic image import, replay, reload preservation, and layout checks at 375×844, 390×844, 844×390, and 1440×900. It made no Auth/REST/Storage/app API writes and no cross-origin requests. Screenshots were saved outside the repository and inspected.
+
+### Pilot gate and next actions
+
+- Local testing is not hosted acceptance. There is still no configured Drop hosted Supabase project, so hosted migrations, Auth, Edge Functions, cleanup schedule, and two-account sends remain unverified. Use only the previously approved Free plan and no paid add-ons.
+- Draft PR #9 adds secret-free CI; its GitHub Actions job is currently in progress. Draft PR #10 updates Next.js dependencies and removes the critical findings, while leaving 5 high and 1 moderate audit findings for separate review.
+- Verify installed-PWA/OS share-sheet behavior, screen-reader output, and physical-device keyboard/safe-area behavior. Verify actual 30-day Storage deletion separately from policy/unit coverage.
+- PR #7 is `OPEN` and `MERGEABLE` at `dec1608`; the QR browser check passed locally and no merge was performed. PR #8 is `OPEN`, `DRAFT`, and `MERGEABLE` at `a6f6c28`; GitGuardian passed, and local browser/build checks passed. The request to mark PR #8 ready was blocked by the automatic review gate because it could notify reviewers; no workaround was attempted.
+- PR #9 is `OPEN` and `DRAFT` at `d27e381`; its GitHub Actions job is in progress and GitGuardian passed. PR #10 is `OPEN` and `DRAFT` at `ce924fd`; GitGuardian passed, but no Actions job is attached yet.
+- Port 4004 remains owned by the canonical checkout. The 6004 test server started for this run was stopped gracefully; temporary `.env.local` and `node_modules` symlinks in this worktree were removed. No hosted credentials, `/letter` files, or canonical checkout files were changed.

@@ -42,13 +42,22 @@ Updated: 2026-10-25
 - [x] Add regression coverage for a switch during attachment cleanup and make current-account deletion return an explicit `deleted` or `account-switched` result while preserving the existing public delete API.
 - [x] Pass `npm test` (280/280), lint, TypeScript, `node --check scripts/browser-demo-smoke.mjs`, and `git diff --check`.
 - [x] Push code commit `f0c6c70` to `origin/feat/pwa-share-acceptance`.
-- [x] Open draft [PR #8](https://github.com/arjeetanand/drop/pull/8) for the PWA branch; it remains open and in draft while browser/build follow-ups remain.
+- [x] Confirm [PR #8](https://github.com/arjeetanand/drop/pull/8) is `OPEN`, `DRAFT`, and `MERGEABLE` at head `a6f6c28`; GitGuardian passed. Local browser/build checks now pass. The request to mark it ready was blocked by the automatic review gate because it could notify reviewers; leave it draft pending explicit approval.
 - [x] Verify the separate local private-claim QR flow: local email sign-in, one successful invite RPC, correct pending sender row, accessible QR show/hide, and exact QR-token decode using Vision and Core Image. No hosted project was contacted.
-- [ ] Repeat the share-target browser smoke with a clean Chrome startup. One run exercised import, replay, reload, and responsive behavior but failed its final console check on a cold-start React warning; two later attempts timed out before DevTools started.
-- [ ] Retry the production build when `fonts.googleapis.com` resolves; the latest Webpack build attempt stopped on DNS `ENOTFOUND` during `next/font`.
-- [ ] Resolve the port-4004 runtime conflict from the canonical Drop checkout. The feature worktree's `./run.sh start` detected PID 47239 from `/Users/arjeetanand/projects/drop` and refused to stop it; HTTP requests to `localhost:4004` failed, so that process was left untouched.
+- [x] Pass `node scripts/browser-demo-smoke.mjs http://127.0.0.1:6004 --share-target-only` with a synthetic image: import, same-ID replay, reload preservation, and 375×844, 390×844, 844×390, and 1440×900 layouts; no cross-origin or backend writes.
+- [x] Pass `npm run build -- --webpack` in the authorized local build context; Next generated 22 routes. Only existing Browserslist freshness and Tailwind easing warnings remain.
+- [x] Leave the canonical app on port 4004 untouched; run the isolated browser check on port 6004 and stop only that test server afterward.
 - [ ] Verify installed-PWA/OS share-sheet behavior, screen-reader output, physical-device behavior, hosted two-account delivery, and actual 30-day Storage cleanup.
-- [ ] Keep [PR #7](https://github.com/arjeetanand/drop/pull/7) open. Its QR browser check passed; do not merge without the user's go-ahead.
+- [x] Pass the requested local QR browser check for PR #7. Keep the PR unmerged pending the user's merge approval.
+
+## Pilot acceleration checkpoint (2026-10-25)
+
+- [x] Verify the core local text pilot on `feat/recipient-unread-e2e` at `429a629`: two disposable accounts complete send, unread receipt on mobile and desktop, explicit open/read-state clearing, reaction, and sender-visible reaction after reload.
+- [x] Pass the latest local Supabase rehearsal on that branch across nine groups covering auth/profile setup, text/photo/GIF claims, privacy, reactions, media finalization, relay collection, and legacy relay handling; disposable data cleanup completed.
+- [x] Pass PWA branch tests (280/280), lint, TypeScript, Webpack production build, and the focused share-target browser smoke.
+- [ ] Complete the secret-free GitHub Actions gate on `chore/pilot-ci`; draft PR #9 is open, GitGuardian passed, and its Actions job is in progress.
+- [ ] Review draft PR #10's dependency patch; it has zero critical audit findings but still has 5 high and 1 moderate audit findings, and no Actions run yet.
+- [ ] Create/configure the approved Free hosted Supabase project, deploy migrations/functions/secrets, then run hosted disposable-account checks. No hosted end-to-end pilot proof exists yet.
 
 ## Product checks still open
 

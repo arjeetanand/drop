@@ -1370,3 +1370,57 @@ Code commit `f0c6c70` is pushed to `origin/feat/pwa-share-acceptance`. Documenta
 
 - At head `537dae8`, after pushing the branch-tracking update, GitHub reported PR #8 as `OPEN` and `DRAFT`, with mergeability `UNKNOWN`.
 - Keep PR #8 in draft until GitHub recalculates mergeability and the standalone browser/build checks are complete. PR #7 remains open and unmerged.
+
+## 2026-10-25 — Separate local verification from hosted pilot proof
+
+### Issue
+
+Browser startup and restricted network access had been treated as blockers for the PWA share-target check and production build. The pilot also lacked one concise statement distinguishing successful local flows from hosted acceptance.
+
+### Cause
+
+The local browser smoke was headless and synthetic, while the operating-system share sheet and installed-PWA launch require a supported installed browser/device. The first build attempts ran where DNS to Google Fonts was unavailable; that environment failure did not indicate an application build defect.
+
+### Resolution
+
+- Reran the focused share-target smoke against the isolated app on port 6004 and inspected its screenshots outside the repository.
+- Completed the Webpack production build in an authorized local network context, without changing app code or the other checkout's runtime.
+- Updated the checklist and handoff to report local account-to-account proof and hosted Supabase setup as separate gates.
+
+### Learning
+
+Classify a failed browser launch or blocked network request by its environment before changing product code. A headless local pass proves only the scripted browser path; installed-PWA, operating-system, hosted, screen-reader, and physical-device behavior each need their own evidence.
+
+### Verification
+
+- `npm test`: 280/280; lint, TypeScript, and `npm run build -- --webpack` passed. The build generated 22 routes and reported only the existing Browserslist freshness and Tailwind easing warnings.
+- The share-target smoke passed synthetic image import, same-ID replay, reload preservation, and 375×844, 390×844, 844×390, and 1440×900 layout checks. It reported zero backend writes and zero cross-origin requests.
+- Earlier local pilot branch checks passed nine Supabase smoke groups and the two-account text/unread/open/reaction browser path. Hosted Supabase was not contacted.
+
+### Git and remaining gaps
+
+No application code changed in this documentation follow-up. It is recorded on `feat/pwa-share-acceptance`, based on code commit `a6f6c28`; the working branch and remote tracking state are verified with Git. Hosted project setup, installed-PWA/OS share-sheet, screen-reader, physical-device, and real aged-media deletion checks remain open.
+
+## 2026-10-25 — Refresh pilot branch status from live PRs
+
+### Issue
+
+The checklist still described the PWA browser/build follow-ups as open, and the parallel CI and dependency branches were not visible together.
+
+### Cause
+
+The earlier handoff recorded blocked local browser/build attempts and did not yet include the newly pushed CI and security branches.
+
+### Resolution
+
+- Updated the pilot summary with the current PR heads and remote checks for #7 through #10.
+- Kept the PWA PR draft because the automatic review gate rejected changing review status without explicit authorization; local acceptance evidence is recorded separately from remote GitHub checks.
+- Recorded that PR #9's Actions job is running and PR #10 has no Actions job until CI is available on the base branch.
+
+### Learning
+
+Refresh both local verification and live PR metadata before making readiness claims. A passing local browser/build run does not change the PR review state or prove hosted/device behavior.
+
+### Verification and Git state
+
+Verified GitHub reports PR #7 open/mergeable at `dec1608`; PR #8 open/draft/mergeable at `a6f6c28`; PR #9 open/draft/mergeable at `d27e381` with Actions in progress and GitGuardian success; and PR #10 open/draft/mergeable at `ce924fd` with GitGuardian success only. These docs are pending commit on `feat/pwa-share-acceptance`; no merge was performed.
