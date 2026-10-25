@@ -47,6 +47,8 @@ Updated: 2026-10-25
 - [x] Pass `node scripts/browser-demo-smoke.mjs http://127.0.0.1:6004 --share-target-only` with a synthetic image: import, same-ID replay, reload preservation, and 375×844, 390×844, 844×390, and 1440×900 layouts; no cross-origin or backend writes.
 - [x] Pass `npm run build -- --webpack` in the authorized local build context; Next generated 22 routes. Only existing Browserslist freshness and Tailwind easing warnings remain.
 - [x] Leave the canonical app on port 4004 untouched; run the isolated browser check on port 6004 and stop only that test server afterward.
+- [x] Refresh unit, lint, and type checks from the current branch in a disposable checkout; `npm test` passed 280/280, lint passed, and the sequential TypeScript rerun passed.
+- [ ] Repeat the focused browser and build checks in this environment: Chrome did not publish `DevToolsActivePort` within 15 seconds, and the Webpack build could not resolve `fonts.googleapis.com`. Earlier passing smoke/build evidence remains recorded above; neither failure identifies an application-code regression.
 - [ ] Verify installed-PWA/OS share-sheet behavior, screen-reader output, physical-device behavior, hosted two-account delivery, and actual 30-day Storage cleanup.
 - [x] Pass the requested local QR browser check for PR #7. Keep the PR unmerged pending the user's merge approval.
 

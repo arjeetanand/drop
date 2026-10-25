@@ -1441,3 +1441,34 @@ A docs-only push advanced `feat/pwa-share-acceptance` after the pilot status ent
 ### Verification and Git state
 
 The PWA branch is `feat/pwa-share-acceptance`; docs head `1603719` was pushed and GitGuardian passed. No merge was performed. The next live PR query should confirm any head/check changes after the follow-up documentation commit.
+
+## 2026-10-25 — Re-run PWA acceptance without overstating environment failures
+
+### Issue
+
+The PWA share-target pilot needed a fresh local acceptance pass so its status and repeatable command stayed useful to the next developer.
+
+### Cause
+
+The current disposable checkout had no `node_modules`, so its checks needed a temporary symlink to dependencies from another worktree with an identical lockfile. TypeScript also ran at the same time as Next's build and looked for generated `.next/types` files before they existed. The standalone Chrome runner then failed to publish `DevToolsActivePort`, and the production build could not resolve Google Fonts.
+
+### Resolution
+
+- Ran the full test suite and lint successfully; reran TypeScript after Next had generated its type files.
+- Confirmed the app could start on the isolated QA port 6004, then recorded the Chrome startup timeout and Google Fonts DNS failure separately from application behavior.
+- Documented the reproducible share-target command and kept prior successful browser/build evidence separate from this blocked rerun.
+- Stopped the isolated app, removed the temporary dependency symlink before commit, and left the canonical 4004 server alone.
+
+### Learning
+
+When Next owns generated type files, run typecheck after Next has generated them. A blocked browser launcher or font download is environment evidence; it is not a fresh pass or a product regression. Record the earlier successful run separately and keep the OS share-sheet claim open until a compatible installed device is tested.
+
+### Verification
+
+- `npm test`: 280/280 passed; `npm run lint` passed; sequential `npm run typecheck` passed.
+- `npm run build -- --webpack` failed with `ENOTFOUND fonts.googleapis.com` while loading `Courier Prime`, `Inter`, `Literata`, and `Playfair Display` through `next/font`.
+- The focused browser smoke failed before navigation because Chrome did not create `DevToolsActivePort` within 15 seconds. The 6004 server was stopped after the attempt.
+
+### Git and remaining gaps
+
+No app source changed on `feat/pwa-share-acceptance`; this entry records only the current acceptance rerun. The existing logged headless smoke does not prove PWA installation or the system share sheet. Hosted delivery, screen-reader and physical-device checks, actual 30-day deletion, and a clean browser/build rerun remain open.

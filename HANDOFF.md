@@ -502,3 +502,18 @@ From /Users/arjeetanand/projects/drop, run npm ci, then ./run.sh. Drop uses http
 - PR #8 remains a draft. The request to change it to ready was rejected by the automatic review gate because the change could notify reviewers; no state change was made.
 - PR #9's first Actions run passed on code commit `d27e381`; a later docs push may create a newer head/run. Check the live PR pages before relying on current remote status.
 - No merge was performed. Hosted Supabase delivery, installed-PWA/OS share sheet, screen-reader, physical-device, and actual 30-day Storage deletion remain unverified.
+
+## 2026-10-25 — Repeat local PWA acceptance checks
+
+### Verification
+
+- In `/private/tmp/drop-pwa-share` on `feat/pwa-share-acceptance`, `npm test` passed 280/280 and `npm run lint` passed.
+- `npm run typecheck` first ran concurrently with the production build and reported missing generated `.next/types` files. After Next generated those files, the sequential typecheck passed.
+- The focused Webpack build stopped in `next/font` because this environment could not resolve `fonts.googleapis.com` (`ENOTFOUND`). No application source was changed to work around this network failure.
+- The isolated app started on port 6004, but `node scripts/browser-demo-smoke.mjs http://127.0.0.1:6004 --share-target-only` timed out after 15 seconds because Chrome did not publish `DevToolsActivePort`. The test server was stopped and port 6004 is clear; port 4004 remained owned by the canonical checkout and was left untouched.
+- The previous passing share-target smoke and Webpack build remain documented at the earlier code checkpoint above. This rerun did not verify the OS share sheet or installed-PWA launch.
+
+### Git and remaining gaps
+
+- No application code changed. These acceptance notes are on `feat/pwa-share-acceptance`; no merge or PR review-state change was made. The previously recorded local smoke/build pass is distinct from this environment's blocked rerun.
+- Still open: rerun browser/build checks in a context where Chrome DevTools starts and Google Fonts resolve; verify installed-PWA/OS sharing, screen reader and physical device behavior, hosted two-account delivery, and actual 30-day Storage deletion.
