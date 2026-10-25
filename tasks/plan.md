@@ -8,7 +8,14 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 
 ## Implementation Status — 2026-10-25
 
-### Latest checkpoint — QR pilot and retention verification (2026-10-26)
+### Latest checkpoint — repeatable QR browser smoke (2026-10-26)
+
+- Added `npm run test:browser-qr` in commits `9e764e8` and `2a9cf49`. It drives the handleless text-claim path in an isolated 390×844 browser and verifies pending-row privacy, anonymous denial, the labeled/focused QR, fragment-only link shape, hide/show reuse, draft reset, and exact cleanup.
+- The browser keeps the regular macOS `HOME` required for loopback navigation while its `--user-data-dir` and `TMPDIR` remain disposable. Node-side Supabase requests are restricted to the configured loopback origin and fail on redirects.
+- Verification passed: QR browser smoke, 288/288 tests, lint, typecheck, `node --check`, and diff check. The browser did not support QR pixel decoding; the earlier manual decode result is distinct. No production build rerun was needed because app source is unchanged.
+- Pushed to `origin/feat/pilot-integrated-preview`; PR #11 remains open/draft at `2a9cf49`, and remote `main` remains `5138f88`. Hosted delivery/retention, camera/device, OS share, and actual screen-reader checks remain open.
+
+### Combined QR pilot and retention verification (2026-10-26)
 
 - The combined verification branch `pilot/combined-verification` starts from the integrated candidate at `f0c015a`; it contains reviewed code commits `2eb4071`, `98cb6aa`, and `f8cbde3` for handoff expiry pruning and private-claim QR sharing/reset.
 - The branch passes 288/288 unit tests, lint, typecheck, diff check, and a Webpack production build with 22 routes. The authenticated local QR flow passed at 390×844, and a local 31-day staged-media cleanup proof removed the aged test object while retaining the recent object.

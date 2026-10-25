@@ -10,7 +10,7 @@ Updated: 2026-10-26
 - [x] Pass the combined `npm test` suite (288/288), `npm run lint`, `npm run typecheck`, and `git diff --check`.
 - [x] Pass `npm run build -- --webpack`; Next.js compiled and generated all 22 routes. Existing Browserslist freshness and ambiguous Tailwind easing warnings remain.
 - [x] Pass the authenticated local QR browser flow at 390×844 on `pilot/qr-integration`: private link issuance, QR render, keyboard focus, hide/show stability, bearer fragment placement, screenshot decode matching the displayed link, no console/page errors, and exact fixture cleanup. Details: [QR browser verification](./docs/pilot-qr-verification.md).
-- [ ] Add a committed repeatable QR browser smoke so same-link rendering, hide/show, token placement, and cleanup are guarded in future runs.
+- [x] Add `npm run test:browser-qr` as a repeatable local QR browser smoke (code commits `9e764e8` and `2a9cf49`, pushed to the existing pilot branch); it checks 390×844 issue/privacy/accessibility, fragment-only link shape, stable hide/show, draft reset, redirect-denying loopback Supabase requests, and exact cleanup. Browser QR decoding was unavailable, and the earlier manual pixel-decode result remains separate.
 - [x] Pass the local 31-day staged-media deletion check through the cleanup worker; retain a recent object and remove only the exact test fixtures. Details: [retention verification](./docs/pilot-retention-verification.md).
 - [x] Append issue/cause/resolution and evidence to `LEARNINGS.md`.
 - [x] Transfer the tested commits and docs into canonical `feat/pilot-integrated-preview` at `d9d9823`; verify the canonical branch is clean and the app, local Auth, and Mailpit return HTTP 200.

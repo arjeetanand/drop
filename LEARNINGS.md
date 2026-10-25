@@ -1964,3 +1964,57 @@ A successful push confirms the branch update, but not PR checks or merge readine
 ### Git and remaining gaps
 
 No merge occurred. The candidate still needs the repeatable QR browser smoke and hosted/device acceptance; the updated status docs are a follow-up commit on the same feature branch.
+
+## 2026-10-26 — Add repeatable private-claim QR browser smoke
+
+### Issue
+
+The QR UI had a prior manual browser proof, but there was no committed command to repeat the sender journey, accessibility checks, privacy assertions, and exact cleanup.
+
+### Cause
+
+The new isolated browser timed out before finishing local Auth navigation. A diagnostic run showed its local health request never got a response and the page target closed when the browser child used a temporary `HOME` directory.
+
+### Resolution
+
+Keep the browser's normal macOS process `HOME`, while retaining a dedicated temporary `--user-data-dir` and `TMPDIR`. Add a browser-side loopback health preflight and serialize navigation before polling the rendered route. The repeatable script now issues one handleless text claim, checks the pending row and anonymous denial, verifies the accessible focused QR and same-link hide/show behavior, clears state on a new draft, and verifies exact cleanup.
+
+### Learning
+
+On this macOS browser runtime, changing `HOME` can break loopback navigation even when the browser profile is explicitly isolated. Keep the user-data profile disposable, but preserve the process environment required by the browser. A health preflight makes the network prerequisite visible before creating fixtures.
+
+### Verification
+
+- `npm run test:browser-qr` passed at 390×844; the pending row had no recipient, anonymous read was denied, the labeled QR received focus, hide/show reused the same link/SVG, and a new draft cleared old state.
+- Cleanup verified the exact test drop, profile, Auth user, owned process groups, and temporary directory were removed. Port 4004 and hosted Supabase were untouched.
+- `npm test` passed 288/288; lint, typecheck, `node --check`, and `git diff --check` passed. QR pixel decoding was unavailable in this browser; the earlier manual decode is separate evidence. The app source was unchanged, so no new production build was run.
+
+### Git and remaining gaps
+
+Code commit `9e764e8` and security follow-up `2a9cf49` are pushed to `origin/feat/pilot-integrated-preview`. PR #11 remains open/draft at `2a9cf49`; remote `main` remains `5138f88`; no merge occurred. Hosted claim delivery/retention, camera/device behavior, installed-PWA OS sharing, and spoken screen-reader output remain open.
+
+## 2026-10-26 — Close the QR smoke's Supabase redirect boundary
+
+### Issue
+
+The first code review found that the local Supabase base URL was checked for loopback, but Node's health fetch and Supabase clients still followed HTTP redirects by default. A local Auth endpoint redirect could have sent a service-role request away from the configured loopback origin.
+
+### Cause
+
+The smoke relied on the configured URL without constraining every request made by the Supabase SDK or preventing redirect following.
+
+### Resolution
+
+Use one fetch wrapper for the health request and all three Supabase clients. It rejects any URL outside the exact validated loopback origin and sets `redirect: 'error'` before dispatch, keeping the service-role request on the local endpoint.
+
+### Learning
+
+Validate the destination for each privileged request, not only the configured base URL. Disable redirects when a test promises it will not contact hosted services.
+
+### Verification
+
+The QR browser smoke passed after the wrapper was applied; exact disposable cleanup was verified. The independent code review confirmed that the health fetch plus admin, anonymous, and password sign-in clients all use the wrapper. No hosted Supabase request was made.
+
+### Git and remaining gaps
+
+The fix is code commit `2a9cf49`, pushed with the smoke to `origin/feat/pilot-integrated-preview`. PR #11 remains open/draft, and `main` remains unchanged. Hosted delivery and physical/device acceptance remain open.

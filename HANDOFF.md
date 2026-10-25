@@ -2,7 +2,17 @@
 
 Updated: 2026-10-26
 
-## Latest checkpoint — tested pilot branch pushed (2026-10-26)
+## Latest checkpoint — repeatable QR browser smoke pushed (2026-10-26)
+
+- Pushed code commits `9e764e8` (repeatable QR smoke) and `2a9cf49` (loopback-only Supabase requests with redirects denied) to `origin/feat/pilot-integrated-preview`. GitHub confirmed draft PR #11 open at `2a9cf49`; remote `main` remains `5138f88`. No merge occurred.
+- `npm run test:browser-qr` passed on local Supabase at 390×844. It verified pending private text-drop state, anonymous read denial, accessible focused QR/link, stable hide/show, and new-draft reset. Cleanup verified the exact drop/profile/Auth user were removed, app/browser process groups exited, and the temporary directory was deleted. Port 6004 was released; port 4004 remains owned by the canonical app.
+- `npm test` passed 288/288; `npm run lint`, `npm run typecheck`, `node --check`, and `git diff --check` passed. No application source changed, so the Webpack build was not rerun in this slice. QR decoding was unavailable (`BarcodeDetector` absent); the earlier manual pixel-decode result is separate evidence.
+- The QR browser initially stalled because setting its `HOME` to a temporary folder prevented macOS loopback navigation. Keeping the regular process `HOME` while using a disposable `--user-data-dir` restored the flow. Every Node-side Supabase request now enforces the exact configured loopback origin and rejects redirects; the service-role key is not passed to child processes.
+- This run did not contact hosted Supabase. Hosted account-to-account delivery and physical retention remain open, along with spoken screen-reader, installed-PWA OS sharing, and physical camera/device checks.
+
+**Next:** provision the approved Free hosted project when a Management API token is available to the task, then run hosted two-account and scheduled-retention checks. Keep PR #11 unmerged until remaining gates pass and the user approves merging.
+
+## Previous checkpoint — tested pilot branch pushed before repeatable QR automation (2026-10-26)
 
 - Pushed the tested canonical candidate to `origin/feat/pilot-integrated-preview` through code checkpoint `9781ed6`. GitHub confirmed draft PR #11 open at that head, PR #7 open and unchanged at `dec1608`, and `main` at `5138f88`.
 - PR #11 currently reports GitGuardian Security Checks as passing. No additional CI checks were reported. Local validation passed 288/288 unit tests, lint, no-incremental TypeScript, diff check, and Webpack build with 22 routes.

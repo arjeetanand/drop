@@ -8,9 +8,10 @@ Tasks are ordered by dependency. Progress is recorded at each tested and pushed 
 - [x] Prune expired claim handoffs at app startup and on page restore/focus; code commit `2eb4071`.
 - [x] Pass combined 288 unit tests, lint, typecheck, `git diff --check`, and Webpack production build (22 routes).
 - [x] Pass authenticated local QR browser verification at 390×844 and local aged staged-media deletion/recent-object retention proof.
+- [x] Add and pass `npm run test:browser-qr`; verify accessible issue/privacy/hide/show/reset and exact cleanup. Push code commits `9e764e8` and `2a9cf49` to the existing pilot branch; PR #11 remains open/draft and `main` is unchanged. Pixel decoding is still browser/physical-device dependent.
 - [x] Transfer the verified commits and task docs into canonical `feat/pilot-integrated-preview` at `d9d9823`; restart and verify the app at `http://localhost:4004`, local Auth, and Mailpit.
 - [x] Push the tested candidate through code checkpoint `9781ed6`; verify draft PR #11 stays open, PR #7 stays unchanged, and `main` is untouched. Keep PR #11 unmerged.
-- [ ] Add a repeatable QR browser smoke; complete hosted account-to-account delivery and scheduled deletion, installed-PWA OS share, spoken screen-reader, and physical device/QR-camera checks.
+- [ ] Complete hosted account-to-account delivery and scheduled deletion, installed-PWA OS share, spoken screen-reader, and physical device/QR-camera checks.
 
 
 ## Checkpoint — local same-recipient unread sync and reaction browser flow (2026-10-25)

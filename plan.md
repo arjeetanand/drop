@@ -6,6 +6,16 @@ Build Drop as a mobile-first private sharing app where a person can send a photo
 
 The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailbox, and relay foundations. Existing letters continue to work as text drops, and their routes and saved content remain readable. The build covers the end-to-end mobile flow: choose content, attach an image or GIF, choose a recipient, send, open, react, and optionally follow a relay.
 
+## Implementation Status — 2026-10-26 (Repeatable QR browser smoke)
+
+- Added `npm run test:browser-qr` to verify a handleless text claim in an isolated 390×844 browser: pending-row privacy, anonymous denial, labeled/focused QR, fragment-only link shape, stable hide/show, and clearing stale QR state on a new draft. Exact Auth/profile/drop and process/temp cleanup passed.
+- Fixed the macOS browser startup issue by keeping the normal process `HOME` while using a disposable browser `--user-data-dir` and temporary `TMPDIR`. Added a Node-side Supabase fetch guard that enforces the configured loopback origin and rejects redirects, including for service-role calls.
+- Verification: QR browser smoke passed; `npm test` passed 288/288; lint, typecheck, `node --check`, and `git diff --check` passed. The app source did not change, so the Webpack build was not rerun in this slice. QR pixel decoding was unavailable in this browser; the earlier manual decode remains separate evidence.
+- Code commits `9e764e8` and `2a9cf49` are pushed to `origin/feat/pilot-integrated-preview`. PR #11 remains open/draft at `2a9cf49`; remote `main` remains `5138f88`. The app remains on port 4004; the smoke released port 6004.
+- Hosted two-account delivery/retention, spoken screen-reader output, installed-PWA system sharing, and physical-device/camera scanning remain open.
+
+**Next:** provision the approved Free hosted project when access is available, then complete hosted and device acceptance. Keep PR #11 unmerged until those gates pass and the user approves merging.
+
 ## Implementation Status — 2026-10-24 (Demo to first drop)
 
 - The opened local demo’s sender copy now offers **Make one for a friend**. It opens a fresh, blank, editable text draft by ID; the demo’s sample content and reaction stay in the demo, the “nothing was sent or shared” explanation remains visible, and an unfinished image draft plus its IndexedDB bytes stay recoverable.
