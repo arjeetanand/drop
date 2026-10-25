@@ -1424,3 +1424,20 @@ Refresh both local verification and live PR metadata before making readiness cla
 ### Verification and Git state
 
 Verified GitHub reports PR #7 open/mergeable at `dec1608`; PR #8 open/draft/mergeable at `a6f6c28`; PR #9 open/draft/mergeable at `d27e381` with Actions in progress and GitGuardian success; and PR #10 open/draft/mergeable at `ce924fd` with GitGuardian success only. These docs are pending commit on `feat/pwa-share-acceptance`; no merge was performed.
+
+
+## 2026-10-25 — Keep the PWA head checkpoint aligned with its docs push
+
+### Issue and cause
+
+A docs-only push advanced `feat/pwa-share-acceptance` after the pilot status entry had recorded the previous head. That made the PR head in the handoff stale even though the browser and build evidence still applied to the earlier code commit.
+
+### Resolution
+
+- Record branch head `1603719` for the docs refresh and keep code verification attributed to `f0c6c70`.
+- Keep PR #8 in draft after the automatic review gate rejected the ready-state change because it could notify reviewers.
+- Record PR #9's first Actions pass at code commit `d27e381`, and require a live check after any later push.
+
+### Verification and Git state
+
+The PWA branch is `feat/pwa-share-acceptance`; docs head `1603719` was pushed and GitGuardian passed. No merge was performed. The next live PR query should confirm any head/check changes after the follow-up documentation commit.

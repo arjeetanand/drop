@@ -494,3 +494,11 @@ From /Users/arjeetanand/projects/drop, run npm ci, then ./run.sh. Drop uses http
 - PR #7 is `OPEN` and `MERGEABLE` at `dec1608`; the QR browser check passed locally and no merge was performed. PR #8 is `OPEN`, `DRAFT`, and `MERGEABLE` at `a6f6c28`; GitGuardian passed, and local browser/build checks passed. The request to mark PR #8 ready was blocked by the automatic review gate because it could notify reviewers; no workaround was attempted.
 - PR #9 is `OPEN` and `DRAFT` at `d27e381`; its GitHub Actions job is in progress and GitGuardian passed. PR #10 is `OPEN` and `DRAFT` at `ce924fd`; GitGuardian passed, but no Actions job is attached yet.
 - Port 4004 remains owned by the canonical checkout. The 6004 test server started for this run was stopped gracefully; temporary `.env.local` and `node_modules` symlinks in this worktree were removed. No hosted credentials, `/letter` files, or canonical checkout files were changed.
+
+
+## 2026-10-25 — Refresh PWA branch head and pilot checks
+
+- The PWA docs are pushed through branch head `1603719`; GitGuardian passed on that head. PWA code verification remains tied to `f0c6c70`: 280/280 tests, lint, TypeScript, Webpack build, and the focused local share-target browser smoke passed.
+- PR #8 remains a draft. The request to change it to ready was rejected by the automatic review gate because the change could notify reviewers; no state change was made.
+- PR #9's first Actions run passed on code commit `d27e381`; a later docs push may create a newer head/run. Check the live PR pages before relying on current remote status.
+- No merge was performed. Hosted Supabase delivery, installed-PWA/OS share sheet, screen-reader, physical-device, and actual 30-day Storage deletion remain unverified.
