@@ -453,3 +453,25 @@ Updated: 2026-10-24
 ## Run locally
 
 From /Users/arjeetanand/projects/drop, run npm ci, then ./run.sh. Drop uses http://localhost:4004; ./run.sh stop stops the project-owned process. The local Supabase smoke environment uses port 5004 and browser QA is reserved port 6004. Code commit `88f9b11` is pushed to `origin/feat/media-orphan-reconciliation`; this handoff and learning update are committed separately on that branch. The branch is not merged and has no pull request.
+
+## 2026-10-25 — Share-target rollback and private-claim QR verification
+
+### Changes
+
+- Share-target import rollback tracks the account that began the import, drafts activated during the import, and any committed attachment. It keeps the imported draft reachable if account switching skips cleanup or if cleanup cannot confirm deletion.
+- Current-account attachment deletion now reports `deleted` or `account-switched` through an additive helper; existing `deleteDraftAttachment` callers keep the same `Promise<void>` contract.
+- Added a regression for switching from account A to B during cleanup and assertions that A's media stays attached to its draft while B's draft is unchanged.
+
+### Verification
+
+- `npm test`: 280/280 passed. `npm run lint`, `npm run typecheck`, `node --check scripts/browser-demo-smoke.mjs`, and `git diff --check` passed.
+- The share-target browser journey exercised import, same-ID replay, reload, and responsive layouts at 375×844, 390×844, 844×390, and 1440×900. A cold run stopped at the final console assertion on a React development warning; two later standalone runs timed out before Chrome published `DevToolsActivePort`. A separate warm-browser review reported a clean run, but the current session could not repeat it.
+- The separate PR #7 local QR check passed local sign-in, one invite RPC, pending sender-row assertions, accessible QR visibility/focus behavior, and exact decoding with both Vision and Core Image. Only local loopback services were used; hosted Supabase was not contacted.
+- The latest Webpack production-build attempt remains blocked by DNS `ENOTFOUND` resolving `fonts.googleapis.com` from `next/font`.
+
+### Git state and next actions
+
+- Code commit `f0c6c70` (`fix: preserve shared media on account switch`) is pushed to `origin/feat/pwa-share-acceptance`. These notes and the checklist/README updates are a separate documentation commit on that branch.
+- PR #7 is `OPEN` and `MERGEABLE` on the separate branch `feat/private-claim-qr` at head `dec1608`; its requested QR check passed. It remains open and unmerged.
+- Port 4004 has listener PID 47239 with working directory `/Users/arjeetanand/projects/drop`, but HTTP requests to `localhost:4004` failed. The feature worktree's `./run.sh start` safely refused to stop or replace that out-of-root process; resolve it from the canonical checkout. The isolated browser server on 6004 is stopped.
+- Remaining: cleanly repeat the share-target browser smoke after Chrome startup recovers; verify installed-PWA/OS share sheet, screen reader, physical device, hosted two-account delivery, and actual 30-day Storage cleanup. No credentials, hosted resources, or `/letter` files were changed.

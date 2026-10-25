@@ -1,6 +1,6 @@
 # Drop integration checklist
 
-Updated: 2026-10-24
+Updated: 2026-10-25
 
 ## Candidate and PR
 
@@ -35,6 +35,19 @@ Updated: 2026-10-24
 - [x] Restart Drop with `./run.sh start` and verify HTTP 200 on port 4004; verify local Auth and Mailpit return HTTP 200.
 - [x] Pass `npm run test:local-supabase` across eight groups; the test script removes its five disposable accounts and temporary media.
 - [x] Leave Drop running on port 4004 for local use.
+
+## Share-target rollback and private-claim QR check (2026-10-25)
+
+- [x] Roll back failed PWA imports by their captured account and preserve a committed draft/attachment when cleanup is skipped during an account switch or cannot confirm deletion.
+- [x] Add regression coverage for a switch during attachment cleanup and make current-account deletion return an explicit `deleted` or `account-switched` result while preserving the existing public delete API.
+- [x] Pass `npm test` (280/280), lint, TypeScript, `node --check scripts/browser-demo-smoke.mjs`, and `git diff --check`.
+- [x] Push code commit `f0c6c70` to `origin/feat/pwa-share-acceptance`.
+- [x] Verify the separate local private-claim QR flow: local email sign-in, one successful invite RPC, correct pending sender row, accessible QR show/hide, and exact QR-token decode using Vision and Core Image. No hosted project was contacted.
+- [ ] Repeat the share-target browser smoke with a clean Chrome startup. One run exercised import, replay, reload, and responsive behavior but failed its final console check on a cold-start React warning; two later attempts timed out before DevTools started.
+- [ ] Retry the production build when `fonts.googleapis.com` resolves; the latest Webpack build attempt stopped on DNS `ENOTFOUND` during `next/font`.
+- [ ] Resolve the port-4004 runtime conflict from the canonical Drop checkout. The feature worktree's `./run.sh start` detected PID 47239 from `/Users/arjeetanand/projects/drop` and refused to stop it; HTTP requests to `localhost:4004` failed, so that process was left untouched.
+- [ ] Verify installed-PWA/OS share-sheet behavior, screen-reader output, physical-device behavior, hosted two-account delivery, and actual 30-day Storage cleanup.
+- [ ] Keep [PR #7](https://github.com/arjeetanand/drop/pull/7) open. Its QR browser check passed; do not merge without the user's go-ahead.
 
 ## Product checks still open
 

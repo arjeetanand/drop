@@ -1328,3 +1328,34 @@ When localhost is unavailable, first check whether the app process is running. A
 ### Git and remaining gaps
 
 No application code or environment file changed. This issue-resolution record is on `chore/docker-runtime-recovery`; see the branch's latest Git commit for the exact SHA and the final task report for push status. Hosted Supabase behavior, real aged-object deletion, screen-reader use, and physical-device checks remain open.
+
+## 2026-10-25 — Keep failed share-target imports reachable across account switches
+
+### Issue
+
+When a PWA share import committed its attachment under account A and then failed, rollback tried to delete the attachment before restoring A's earlier active draft. If the user switched to account B while IndexedDB was opening, deletion correctly skipped the account-A record but returned no outcome. Rollback could not tell that the media still existed, restored the old draft, and left the imported attachment unreachable.
+
+### Cause
+
+The cleanup operation was asynchronous and account-scoped, but its `void` result hid whether it had deleted the record or safely skipped after an account switch. Awaiting cleanup alone did not prove the attachment was gone.
+
+### Resolution
+
+- Added an explicit current-account deletion result (`deleted` or `account-switched`) while keeping the existing `deleteDraftAttachment` API and explicit-account behavior intact.
+- Share-import rollback now restores the previous draft only after confirmed deletion. If the account switches during cleanup or cleanup throws, the import remains active under its captured account so the committed attachment stays reachable and the one-time handoff can be retried.
+- Added a focused helper regression for switching A→B during cleanup and a storage regression proving that a real delayed database open returns `account-switched` without opening a write transaction. The receiving account's draft remains untouched.
+
+### Learning
+
+For async cleanup that protects user data, report the mutation outcome explicitly. A safe skip, a successful delete, and a failed delete require different rollback behavior; preserve a committed record's reachable owner-scoped reference until deletion is confirmed.
+
+### Verification
+
+- `npm test` passed 280/280; lint, TypeScript, `node --check scripts/browser-demo-smoke.mjs`, and `git diff --check` passed.
+- The isolated share-target browser journey completed import, same-ID replay, reload preservation, and 375×844, 390×844, 844×390, and 1440×900 layout checks. Its cold-start run failed the final console assertion on a React development warning; two later standalone Chrome launches timed out before publishing `DevToolsActivePort`. A separate warm-browser agent rerun reported no console warning, but the current session could not repeat it.
+- The separate PR #7 private-claim QR check passed local sign-in, one successful invite issue, sender-owned pending-row checks, accessible QR show/hide, and exact QR-token decoding by Vision and Core Image. No hosted Supabase calls were made.
+- A production Webpack build was previously blocked when `next/font` could not resolve `fonts.googleapis.com` (`ENOTFOUND`); this patch has no confirmed production build.
+
+### Git and remaining gaps
+
+Code commit `f0c6c70` is pushed to `origin/feat/pwa-share-acceptance`. Documentation changes follow in a separate commit on the same branch. PR #7 remains open and mergeable on its separate `feat/private-claim-qr` branch; it was not merged. Port 4004 has PID 47239 from `/Users/arjeetanand/projects/drop`, but local HTTP requests failed; the feature worktree's run script refused to replace it, so inspect/recover the runtime from that canonical checkout. Installed-PWA/OS share-sheet, screen-reader, physical-device, hosted two-account, and real 30-day Storage deletion checks remain open. `/letter`, hosted Supabase, and credential files were not changed.

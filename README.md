@@ -6,7 +6,7 @@ The append-only engineering learning log is in [LEARNINGS.md](./LEARNINGS.md); i
 
 ## Branch status and latest checkpoint
 
-`main` is the integration release line. [PR #1](https://github.com/arjeetanand/drop/pull/1), [PR #2](https://github.com/arjeetanand/drop/pull/2), and [PR #5](https://github.com/arjeetanand/drop/pull/5) are merged. PR #5 delivered code commit `a71612b` and Docker runtime notes in head `37afbda`; its merge commit is `e098388`. That is the latest code-bearing merge. Its handoff and verification are recorded in [HANDOFF.md](./HANDOFF.md). Use each live PR page for current checks and merge state. Check `git status --short --branch` and `git log -1 --oneline --decorate` for the active checkout. After `git fetch origin`, compare `origin/main` and your branch with `git rev-list --left-right --count origin/main...HEAD` (first number: commits only on `main`; second: commits only on your branch). Branches whose tips are already ancestors of `main` are included in it; they are not separate latest versions.
+`main` is the integration release line. [PR #1](https://github.com/arjeetanand/drop/pull/1), [PR #2](https://github.com/arjeetanand/drop/pull/2), and [PR #5](https://github.com/arjeetanand/drop/pull/5) are merged. PR #5 delivered code commit `a71612b` and Docker runtime notes in head `37afbda`; its merge commit is `e098388`. That remains the latest code-bearing merge. The current PWA share-target rollback work is on `feat/pwa-share-acceptance` at pushed commit `f0c6c70`, not yet merged. [PR #7](https://github.com/arjeetanand/drop/pull/7) is a separate open, mergeable QR branch; its local QR browser check passed, and it remains unmerged. Handoff and verification notes are in [HANDOFF.md](./HANDOFF.md). Use each live PR page for current checks and merge state. Check `git status --short --branch` and `git log -1 --oneline --decorate` for the active checkout. After `git fetch origin`, compare `origin/main` and your branch with `git rev-list --left-right --count origin/main...HEAD` (first number: commits only on `main`; second: commits only on your branch). Branches whose tips are already ancestors of `main` are included in it; they are not separate latest versions.
 
 ## Run locally
 
@@ -32,6 +32,8 @@ The demo chooser also includes a fictional three-stop Relay preview. Follow Ari,
 ## Share an image to Drop
 
 On a compatible browser where Drop is installed, choose Drop from the system share sheet to start a draft from one JPEG, PNG, WebP, or GIF (up to 8 MB) and an optional caption. The service worker stores the handoff in browser IndexedDB for up to one hour; opening it creates an unsent local draft. Nothing is sent until the sender uses the normal send flow. If the service worker is not controlling the page, the browser has already submitted the share request to the site before the fallback can explain the problem; use the in-app photo picker when you need to avoid that fallback.
+
+If an import fails after the attachment is committed, rollback keeps the media draft reachable under the account that started the import when cleanup is skipped or cannot confirm deletion. The original share handoff remains available for retry. The account-switch race has a unit regression; the current isolated browser runner still needs a clean Chrome startup to finish its console-clean assertion.
 
 Relay passports count carrier handoffs only; the metric is labeled consistently as **Carriers**, and its actions and headline wrap for narrow screens.
 

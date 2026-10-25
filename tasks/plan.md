@@ -8,6 +8,16 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 
 ## Implementation Status — 2026-10-24
 
+### Latest checkpoint — share-target rollback ownership and private-claim QR verification (2026-10-25)
+
+- A failed share-target import now tracks its captured account, activated drafts, and newly committed attachment. Rollback only restores the earlier draft after deletion is confirmed; if account ownership changes during cleanup or deletion fails, the imported draft remains reachable in its original account.
+- Added regressions for the switch-during-cleanup race and explicit cleanup outcomes while preserving the existing `deleteDraftAttachment` API.
+- Verification passed: `npm test` 280/280, lint, TypeScript, browser-script syntax, and `git diff --check`. Code commit `f0c6c70` is pushed to `origin/feat/pwa-share-acceptance`.
+- The separate PR #7 local QR check passed with a disposable account and local loopback services. PR #7 is still open and mergeable on `feat/private-claim-qr`; no merge was performed.
+- Browser evidence for the PWA share flow is partial: an isolated run completed import/replay/reload and responsive checks but failed its final console assertion on a cold-start React warning. Two subsequent attempts could not start Chrome DevTools. The production build also remains unverified because Google Fonts DNS returned `ENOTFOUND`.
+- The feature worktree's run script refused to replace PID 47239 on port 4004 because it belongs to `/Users/arjeetanand/projects/drop`; HTTP requests to that listener failed. The existing process was left untouched.
+- Remaining: repeat the share-target smoke after Chrome startup is healthy; test installed PWA and OS share sheet, screen reader, physical device, hosted two-account delivery, and actual 30-day media cleanup.
+
 ### Latest checkpoint — received-drop Drop back draft isolation (2026-10-24)
 
 - Drop back now starts a persisted new text draft by stable ID and pre-fills the sender's normalized handle. It does not reuse an empty-caption photo/GIF draft, and storage failures stop navigation with a recovery message.
