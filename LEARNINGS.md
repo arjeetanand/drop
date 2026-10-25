@@ -2075,3 +2075,31 @@ Test contracts should match the rendered UI: the Relay capability is UUIDv4, CSS
 ### Git and remaining gaps
 
 Code commit `57ce03a` is pushed to `origin/feat/pilot-integrated-preview`. GitHub verified PR #11 open/draft at `57ce03a`; remote `main` remains `5138f88`. The documentation update is committed separately. Hosted Free-project provisioning is still waiting on a Management API token in the task environment; hosted two-account delivery/retention, screen-reader output, installed-PWA sharing, and physical-device/camera acceptance remain open.
+
+## 2026-10-26 — Create Relay drops through Compose in the browser journey
+
+### Issue
+
+The Relay browser journey started from a database-seeded drop, so it skipped the sender's real Compose flow.
+
+### Cause
+
+The smoke used its service client to insert a pre-dispatched Relay row before any browser session opened. That proved handoff behavior but did not prove a signed-in sender could compose and send the drop.
+
+### Resolution
+
+Create the unique text Relay drop through the sender's 390×844 Compose UI. Assert the Relay option is selected, confirm the generated recipient handle, capture the UI draft ID for exact cleanup, and inspect only that row to verify sender, recipient, subject, body, text payload, dispatched status, and Relay mode before continuing the existing carrier and recipient journey.
+
+### Learning
+
+Seed disposable accounts and profiles, but drive the feature under test through its user interface. Use privileged reads only to verify the exact disposable row and privileged cleanup only for the test-owned records.
+
+### Verification
+
+- `npm run test:browser-relay` passed the isolated production build and full 390×844 Compose-to-invite-to-carrier-to-Journey-to-collection/reveal flow. No horizontal overflow, browser console/runtime errors, cross-origin browser requests, or cleanup failures were reported.
+- `npm test` passed 298/298; `npm run lint`, `npx tsc --noEmit --incremental false`, runner syntax, guard self-test, runner ESLint, and `git diff --check` passed.
+- The test used only the verified local Supabase stack and test port `6004`; it did not reset the database or contact hosted Supabase. The main app on `4004` was left running.
+
+### Git and remaining gaps
+
+Code commit `f92a78c` (`test: create Relay drops through sender Compose`) was created on `feat/pilot-relay-compose-e2e` and pushed to the existing remote branch `feat/pilot-integrated-preview`. No merge to `main` occurred. GitHub API DNS failed during the post-push status refresh; the last observed PR #11 state was open/draft at `5f9562a`, and `main` was last verified at `5138f88`. No usable Supabase Management API token was available in this task, so no hosted project or billing/resource change occurred. Hosted delivery/retention and screen-reader, installed-PWA sharing, physical camera, and device acceptance remain open.
