@@ -1360,3 +1360,34 @@ For account-scoped asynchronous state, capture the active account when work star
 ### Git and remaining gaps
 
 Code commit `a416d81` is pushed to `origin/feat/recipient-unread-state`. Project notes are being recorded in a separate follow-up commit on the same branch. No PR was opened for this branch; PR #7 remains open for its QR browser check. A second authenticated recipient session, hosted migration/API, screen-reader, and physical-device checks remain pending.
+
+## 2026-10-25 — Verify local send, unread state, and reactions across two accounts
+
+### Issue
+
+The unread indicator had been checked in an authenticated browser flow, but the local app still needed one end-to-end check that starts with a sender composing and ends with the sender seeing a recipient's reaction.
+
+### Cause
+
+Unit and database checks could validate each operation without proving that two signed-in browser sessions could complete the same send, open, read, and reaction journey through the rendered app.
+
+### Resolution
+
+- Added a guarded browser smoke that signs in two disposable local accounts, sends a text drop from Compose, checks unread Home state at mobile and desktop sizes, opens it from Inbox, and submits 🫶.
+- Confirmed the sender mailbox receives the live reaction and still displays it after reload.
+- Tightened exact read-RPC response correlation and cleanup assertions; stopped only the harness-owned browser process group, avoiding an inherited Edge updater pipe that had kept the runner alive.
+- Added failure diagnostics for unread-state checks that report fixture visibility and card state without printing private drop content.
+
+### Learning
+
+An end-to-end feature check should follow one exact fixture identifier through the UI and backend, then prove the fixture is gone. Correlating a read response to the expected drop and asserting cleanup absence catches false positives that a successful click or generic HTTP status cannot.
+
+### Verification
+
+- `npm test`: 281/281 passed. `npm run lint`, `npm run typecheck`, both browser-smoke syntax checks, the harness guard self-test, and `git diff --check` passed.
+- The full isolated browser smoke passed on mobile 390×844 and desktop 1440×900: sender sign-in and Compose send; recipient sign-in, unread Home, Inbox open, read-marker clearing, and 🫶 reaction; sender live update and persisted reaction after reload. Both browser sessions had no console errors, runtime exceptions, failed local requests, or non-loopback requests.
+- Cleanup verified the exact disposable drop, reaction, auth users, and profiles were absent and removed the temporary project and browser profiles. Local Supabase Auth and the main app returned HTTP 200. The production build was not rerun because app source did not change.
+
+### Git and remaining gaps
+
+Code commit `5fd64f7` is pushed to `origin/feat/recipient-unread-e2e`; this log and the README, checklist, plan, and handoff are recorded in a separate documentation commit on the same branch. No PR was opened. PR #7 remains open for its separate QR browser check. Same-recipient synchronization in a second browser session, hosted migration/API behavior, screen-reader output, and physical-device behavior remain unverified. No hosted Supabase resource was used or changed; the local-only `.env.local` values were used for the smoke and were not modified or committed.

@@ -8,6 +8,14 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 
 ## Implementation Status — 2026-10-25
 
+### Latest checkpoint — local two-account send, unread, and reaction browser flow (2026-10-25)
+
+- Added a local authenticated Edge smoke that sends one text drop through Compose from a disposable sender to a disposable recipient, verifies unread Home state at 390×844 and 1440×900, opens it through Inbox, reacts with 🫶, and confirms the sender sees the live reaction and the persisted reaction after reload.
+- The runner uses an isolated app on port 6004, accepts only loopback Supabase, keeps the service-role key out of browser code, checks local network/error signals, and verifies exact cleanup of created rows, auth users, profiles, app process, and browser profiles.
+- Verification passed: 281/281 unit tests, lint, typecheck, both smoke-script syntax checks, harness guard self-test, `git diff --check`, and the full two-account browser run with exit code 0. Local app and Supabase Auth returned HTTP 200. A production build was not rerun because application source did not change.
+- Code commit `5fd64f7` is pushed to `origin/feat/recipient-unread-e2e`; this checkpoint's notes are a separate documentation commit. PR #7 remains open for the private-claim QR browser check.
+- Remaining: test synchronization in a second recipient session, hosted behavior, screen-reader output, and physical-device behavior. No hosted Supabase resource was used or modified.
+
 ### Latest checkpoint — private, durable unread state (2026-10-25)
 
 - Added recipient-only server read markers for delivered drops, with narrow authenticated RPCs, idempotent server timestamps, and private table access. Senders and outsiders cannot read or create markers.

@@ -2,6 +2,16 @@
 
 Updated: 2026-10-25
 
+## Latest checkpoint — local two-account send, unread, and reaction flow (2026-10-25)
+
+- Added a repeatable authenticated browser smoke that sends one local text drop from Compose between two disposable accounts, verifies unread Home state on mobile and desktop, opens it from Inbox, reacts with 🫶, confirms the sender sees the live reaction and sees it after reload, and checks browser errors and network destinations.
+- The harness accepts only loopback Supabase, uses an isolated app on port 6004 and isolated Edge profiles, keeps the service-role key out of browser environment, and verifies exact cleanup of the test drop, reaction, auth users, profiles, app process, and browser profiles.
+- Verification: `npm test` passed 281/281; lint and typecheck passed; both smoke scripts passed `node --check`; the new harness guard self-test and `git diff --check` passed. The complete two-account browser run passed at 390×844 and 1440×900 and exited 0 after cleanup. Local Supabase Auth and the app returned HTTP 200. The production build was not rerun because app source did not change in this slice.
+- Code commit `5fd64f7` is pushed to `origin/feat/recipient-unread-e2e`; the project-note update is committed separately on the same branch. No PR was opened. PR #7 remains open for its separate private-claim QR browser check.
+- Restarted Drop with `./run.sh start` and the local Supabase Docker stack with `npm run supabase:start`. The app, Supabase Auth, and Mailpit returned HTTP 200; Drop is running at `http://localhost:4004`. No hosted Supabase resource was used or changed, `.env.local` was not committed, and /letter was not changed.
+
+**Next:** verify unread synchronization in a second browser session for the same recipient, then perform hosted migration/API, screen-reader, and physical-device checks when the approved hosted project is available. Continue the separate QR browser check for PR #7 before merging that PR.
+
 ## Latest checkpoint — private, durable unread state (2026-10-25)
 
 - Added private server-side read markers for actual delivered recipient drops, recipient-scoped RPCs, unread card/navigation indicators on desktop and mobile, and account-safe handling of asynchronous read events. Read markers are not exposed to senders.

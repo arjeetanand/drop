@@ -2,6 +2,15 @@
 
 Updated: 2026-10-25
 
+## Local send, unread, and reaction browser flow (2026-10-25)
+
+- [x] Add a guarded, two-account browser smoke for sender Compose, recipient unread Home at 390×844 and 1440×900, Inbox open/read, recipient 🫶 reaction, and sender live plus reloaded reaction.
+- [x] Verify exact local cleanup of the drop, reaction, auth users, profiles, app process, and temporary browser profiles; reject non-loopback Supabase and keep the service-role key out of browser environment.
+- [x] Pass `npm test` (281/281), lint, typecheck, both browser-script syntax checks, harness guard self-test, `git diff --check`, and the full authenticated local browser run.
+- [x] Start the documented local Docker/Supabase stack; verify the app, Auth, and Mailpit return HTTP 200; leave Drop running on port 4004.
+- [x] Push code commit `5fd64f7` to `origin/feat/recipient-unread-e2e`.
+- [ ] Verify same-recipient synchronization in a second browser session; finish hosted, screen-reader, and physical-device checks. Keep PR #7 open for its separate QR browser check.
+
 ## Private unread state (2026-10-25)
 
 - [x] Add private recipient read markers and authenticated, recipient-scoped mark/read RPCs for delivered drops.
