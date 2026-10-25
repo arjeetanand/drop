@@ -5,6 +5,7 @@ import {
   canUseDropClaimSessionToken,
   dropClaimReturnPath,
   DROP_CLAIM_HANDOFF_TTL_MS,
+  installDropClaimHandoffPruning,
   isDropClaimHandoffId,
   takeDropClaimHandoff,
   storeDropClaimHandoff,
@@ -22,6 +23,24 @@ class MemoryStorage {
   getItem(key) { return this.values.get(key) ?? null; }
   setItem(key, value) { this.values.set(key, String(value)); }
   removeItem(key) { this.values.delete(key); }
+}
+
+class MemoryLifecycle {
+  listeners = new Map();
+
+  addEventListener(type, listener) {
+    const listeners = this.listeners.get(type) || new Set();
+    listeners.add(listener);
+    this.listeners.set(type, listeners);
+  }
+
+  removeEventListener(type, listener) {
+    this.listeners.get(type)?.delete(listener);
+  }
+
+  dispatch(type) {
+    for (const listener of this.listeners.get(type) || []) listener();
+  }
 }
 
 test('shares only an opaque handoff ID, moves the token into the receiving tab, and consumes the shared copy', () => {
@@ -71,6 +90,29 @@ test('expires cross-tab handoffs and removes their stored token', () => {
 
   assert.equal(takeDropClaimHandoff(handoffId, storage, 1000 + DROP_CLAIM_HANDOFF_TTL_MS), null);
   assert.equal(storage.length, 0);
+});
+
+test('prunes expired handoffs at any app startup and when the app regains focus', () => {
+  const storage = new MemoryStorage();
+  const expiredId = handoffId;
+  const liveId = '00000000-0000-4000-8000-000000000002';
+  storeDropClaimHandoff(token, storage, 1000, () => expiredId);
+  storeDropClaimHandoff('b'.repeat(64), storage, 400_000, () => liveId);
+  let now = 700_000;
+  const lifecycle = new MemoryLifecycle();
+
+  const dispose = installDropClaimHandoffPruning(storage, lifecycle, () => now);
+
+  assert.equal(storage.getItem(`drop:claim-handoff:v1:${expiredId}`), null, 'startup removes an expired token without a claim route being visited');
+  assert.notEqual(storage.getItem(`drop:claim-handoff:v1:${liveId}`), null, 'startup preserves a handoff within its 10-minute TTL');
+
+  now = 1_100_000;
+  lifecycle.dispatch('focus');
+  assert.equal(storage.getItem(`drop:claim-handoff:v1:${liveId}`), null, 'returning to an open app removes handoffs that expired while it was backgrounded');
+
+  dispose();
+  assert.equal(lifecycle.listeners.get('focus')?.size, 0, 'unmount removes the focus listener');
+  assert.equal(lifecycle.listeners.get('pageshow')?.size, 0, 'unmount removes the page restore listener');
 });
 
 test('rejects malformed IDs and corrupt or overlong records', () => {
