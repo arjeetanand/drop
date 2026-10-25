@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "test:browser-first-signup": "node scripts/browser-first-signup-smoke.mjs",
     "supabase:start": "supabase start",
     "supabase:reset": "supabase db reset --local",
     "supabase:stop": "supabase stop",
