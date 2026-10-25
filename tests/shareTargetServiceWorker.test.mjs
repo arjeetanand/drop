@@ -5,7 +5,9 @@ import test from 'node:test';
 
 const source = readFileSync(new URL('../public/service-worker.js', import.meta.url), 'utf8');
 
-function loadFetchHandler() {
+function loadFetchHandler(indexedDB = {
+  open: () => { throw new Error('IndexedDB is unavailable in this parser test.'); },
+}) {
   const listeners = new Map();
   runInNewContext(source, {
     self: {
@@ -17,14 +19,14 @@ function loadFetchHandler() {
     Blob,
     File,
     crypto: { randomUUID: () => '123e4567-e89b-42d3-a456-426614174000' },
-    indexedDB: { open: () => { throw new Error('IndexedDB is unavailable in this parser test.'); } },
+    indexedDB,
   });
   return listeners.get('fetch');
 }
 
-async function dispatchShareRequest(request) {
+async function dispatchShareRequest(request, indexedDB) {
   let responsePromise;
-  loadFetchHandler()({
+  loadFetchHandler(indexedDB)({
     request,
     respondWith: (response) => { responsePromise = Promise.resolve(response); },
   });
@@ -44,6 +46,42 @@ function shareRequest({ contentLength, contentType = 'multipart/form-data; bound
       },
     },
     body,
+  };
+}
+
+function indexedDBWithEmptyHandoffStore(onPut) {
+  return {
+    open: () => {
+      const request = { result: null, error: null };
+      const database = {
+        objectStoreNames: { contains: () => false },
+        createObjectStore: () => undefined,
+        close: () => undefined,
+        transaction: () => {
+          const transaction = { error: null };
+          const store = {
+            openCursor: () => {
+              const cursorRequest = { result: null };
+              queueMicrotask(() => cursorRequest.onsuccess?.());
+              return cursorRequest;
+            },
+            put: (value, key) => {
+              onPut(value, key);
+              queueMicrotask(() => transaction.oncomplete?.());
+            },
+          };
+          transaction.objectStore = () => store;
+          return transaction;
+        },
+      };
+
+      request.result = database;
+      queueMicrotask(() => {
+        request.onupgradeneeded?.();
+        queueMicrotask(() => request.onsuccess?.());
+      });
+      return request;
+    },
   };
 }
 
@@ -116,4 +154,51 @@ test('preserves the original case-sensitive multipart boundary while parsing', a
 
   assert.equal(response.status, 303);
   assert.equal(new URL(response.headers.get('Location')).searchParams.get('shareError'), 'storage-unavailable');
+});
+
+test('stores a valid shared file in IndexedDB and redirects with an opaque handoff id', async () => {
+  const boundary = 'DropShareBoundary';
+  const bytes = new Uint8Array([0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x00, 0xff]);
+  const body = new Blob([
+    `--${boundary}\r\n`,
+    'Content-Disposition: form-data; name="text"\r\n\r\n',
+    'Caption from shared text\r\n',
+    `--${boundary}\r\n`,
+    'Content-Disposition: form-data; name="title"\r\n\r\n',
+    'Fallback title should not replace text\r\n',
+    `--${boundary}\r\n`,
+    'Content-Disposition: form-data; name="url"\r\n\r\n',
+    'https://shared.example/private-link\r\n',
+    `--${boundary}\r\n`,
+    'Content-Disposition: form-data; name="media"; filename="celebration.gif"\r\n',
+    'Content-Type: image/gif\r\n\r\n',
+    bytes,
+    `\r\n--${boundary}--\r\n`,
+  ]);
+  let stored;
+  const indexedDB = indexedDBWithEmptyHandoffStore((value, key) => {
+    stored = { value, key };
+  });
+  const response = await dispatchShareRequest(shareRequest({
+    contentLength: String(body.size),
+    contentType: `multipart/form-data; boundary=${boundary}`,
+    body: body.stream(),
+  }), indexedDB);
+
+  assert.equal(response.status, 303);
+  const location = new URL(response.headers.get('Location'));
+  assert.equal(location.origin, 'https://drop.test');
+  assert.equal(location.pathname, '/compose');
+  assert.deepEqual([...location.searchParams.keys()], ['shareImport']);
+  assert.equal(location.searchParams.get('shareImport'), '123e4567-e89b-42d3-a456-426614174000');
+  assert.doesNotMatch(location.href, /Caption from shared text|private-link|celebration\.gif/);
+
+  assert.ok(stored, 'the handoff should be persisted before redirecting');
+  assert.equal(stored.key, '123e4567-e89b-42d3-a456-426614174000');
+  assert.equal(stored.value.id, stored.key);
+  assert.equal(stored.value.name, 'celebration.gif');
+  assert.equal(stored.value.type, 'image/gif');
+  assert.equal(stored.value.caption, 'Caption from shared text');
+  assert.doesNotMatch(stored.value.caption, /Fallback title|private-link/);
+  assert.deepEqual([...new Uint8Array(await stored.value.blob.arrayBuffer())], [...bytes]);
 });
