@@ -587,7 +587,19 @@ async function assertHomeUnreadFeatured(viewport) {
         : null;
     }, `Home’s unread featured drop at ${viewport.name}`);
   } catch (error) {
-    const diagnostic = await evaluate(pageCdp, `({ pathname: location.pathname, links: Array.from(document.querySelectorAll('a[href^="/letter/"]')).map((element) => ({ href: element.getAttribute('href'), text: element.innerText, aria: element.getAttribute('aria-label') })), body: document.body.innerText.slice(0, 1200) })`);
+    const diagnostic = await evaluate(pageCdp, `(() => {
+      const card = Array.from(document.querySelectorAll('a[href^="/letter/"]')).find((element) => element.innerText.includes(${JSON.stringify(SUBJECT)}));
+      const text = card?.innerText.replace(/\\s+/g, ' ').trim().toLowerCase() || '';
+      const accessibleLabel = card?.getAttribute('aria-label') || '';
+      return {
+        pathname: location.pathname,
+        fixtureVisible: document.body.innerText.includes(${JSON.stringify(SUBJECT)}),
+        featuredCardFound: Boolean(card),
+        featuredCardNew: text.split(/\\s+/).includes('new'),
+        featuredCardInbox: text.includes('in your inbox'),
+        accessibleNewName: accessibleLabel.startsWith('Open new drop'),
+      };
+    })()`);
     throw new Error(`${error.message}; Home state=${JSON.stringify(diagnostic)}`);
   }
   assert.equal(state.cardInbox, false, 'Home showed the read-state label for an unread featured drop.');
