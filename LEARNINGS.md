@@ -1908,3 +1908,31 @@ A worker unit test does not prove object deletion. Test age selection and the ac
 ### Git and remaining gaps
 
 Evidence is recorded in `docs/pilot-retention-verification.md`. This verifies local Supabase Storage and Edge Function behavior only. Hosted migrations, worker deployment/secrets, hourly schedule, and real hosted deletion remain unverified.
+
+## 2026-10-26 — Move the verified pilot into the canonical checkout
+
+### Issue
+
+The QR and expired-handoff fixes passed in an isolated branch, while the canonical app checkout and stable local URL were still on the earlier pilot commit.
+
+### Cause
+
+The tests and build were intentionally isolated under `/private/tmp` because the canonical checkout and its Git metadata are outside the normal writable workspace.
+
+### Resolution
+
+Fast-forward the exact tested branch into canonical `feat/pilot-integrated-preview`, keep the previous main branch untouched, then start Drop with its existing ownership-checking `run.sh` and verify the listener cwd and local service endpoints.
+
+### Learning
+
+Use an isolated writable checkout for development, then transfer by fast-forward only after code review and combined checks. Verify the stable URL is served by the canonical path before telling the user the candidate is ready locally.
+
+### Verification
+
+- Canonical branch is clean at `d9d9823`; `npm test` passed 288/288, lint passed, `npx tsc --noEmit --incremental false` passed, and the commit diff check is clean.
+- The identical code tree passed `npm run build -- --webpack` and generated 22 routes. The normal canonical TypeScript command could not write `tsconfig.tsbuildinfo` under the restricted path, so the no-incremental check was used.
+- Canonical `./run.sh start` serves port 4004 with HTTP 200; process cwd is `/Users/arjeetanand/projects/drop`. Local Auth and Mailpit returned HTTP 200. The local Supabase Docker stack is running; no reset was performed.
+
+### Git and remaining gaps
+
+Local `feat/pilot-integrated-preview` is four commits ahead of the cached origin ref and has not been pushed; GitHub could not be refreshed. The candidate remains unmerged from `main`. Hosted Free project setup and two-account behavior, scheduled hosted deletion, QR smoke automation, screen-reader output, installed-PWA system share, and physical-device/camera scans remain open.

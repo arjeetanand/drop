@@ -2,6 +2,17 @@
 
 Updated: 2026-10-26
 
+## Latest checkpoint — canonical pilot candidate running locally (2026-10-26)
+
+- Fast-forwarded the verified local branch into canonical `feat/pilot-integrated-preview` at `d9d9823`. Its four commits ahead of the cached `origin` ref are `2eb4071` (expired claim handoff sweep), `98cb6aa`/`f8cbde3` (QR issue and stale-state reset), and this pilot evidence/docs update.
+- Canonical verification: 288/288 unit tests, lint, `npx tsc --noEmit --incremental false`, and diff checks passed. The equivalent tested source tree built successfully with Webpack into 22 routes after the existing Google Fonts fetch was allowed. The standard typecheck command was rerun without incremental output because the restricted canonical checkout denied writing `tsconfig.tsbuildinfo`.
+- The canonical `./run.sh start` process owns port 4004 and serves `http://localhost:4004` with HTTP 200; local Auth at 54321 and Mailpit at 54324 also return HTTP 200. The project Docker stack is running. No database reset was run.
+- The authenticated QR browser proof and 31-day local staged-media worker proof are recorded in `docs/pilot-qr-verification.md` and `docs/pilot-retention-verification.md`. A committed repeatable QR browser smoke is still pending.
+- The update has not been pushed. GitHub could not be refreshed; PR #11 was last observed open/draft at `f0c015a`, and PR #7 was not changed. No merge to `main`, hosted Supabase access, or `.env.local` read occurred.
+- Hosted Free project setup and two-account verification, hosted cleanup scheduling/deletion, physical QR/camera/device behavior, installed-PWA system sharing, and spoken screen-reader output remain open.
+
+**Next:** push the tested branch update to the existing draft PR when GitHub is reachable, then complete hosted and device acceptance before asking for any merge.
+
 ## Latest checkpoint — QR pilot and cleanup verification (2026-10-26)
 
 - Combined three reviewed code commits on `pilot/combined-verification` from candidate base `f0c015a`: `2eb4071` prunes expired claim handoffs at app startup and on `pageshow`/focus; `98cb6aa` adds QR display for private claim links; `f8cbde3` clears stale QR state when the active draft or account changes.

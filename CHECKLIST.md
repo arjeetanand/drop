@@ -13,7 +13,8 @@ Updated: 2026-10-26
 - [ ] Add a committed repeatable QR browser smoke so same-link rendering, hide/show, token placement, and cleanup are guarded in future runs.
 - [x] Pass the local 31-day staged-media deletion check through the cleanup worker; retain a recent object and remove only the exact test fixtures. Details: [retention verification](./docs/pilot-retention-verification.md).
 - [x] Append issue/cause/resolution and evidence to `LEARNINGS.md`.
-- [ ] Transfer the tested commits and docs into the canonical `feat/pilot-integrated-preview` checkout and update the existing draft PR after final review. Do not merge to `main` without approval.
+- [x] Transfer the tested commits and docs into canonical `feat/pilot-integrated-preview` at `d9d9823`; verify the canonical branch is clean and the app, local Auth, and Mailpit return HTTP 200.
+- [ ] Push the tested update to the existing draft PR when GitHub is reachable; leave it unmerged pending hosted/device gates and explicit merge approval.
 - [ ] Verify hosted account-to-account delivery and scheduled physical deletion, actual screen-reader output, installed-PWA/OS sharing, and physical-device/camera scanning.
 
 ## Pilot accessibility follow-up (2026-10-25)
