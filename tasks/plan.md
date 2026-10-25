@@ -10,7 +10,7 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 
 ### Latest checkpoint — local pilot candidate with PWA import recovery (2026-10-25)
 
-- The pilot candidate combines Home's account requirement, the locally verified send/read/reaction journey, and account-safe PWA photo/GIF import with retry. `fix/pilot-send-account-disclosure` and `feat/pilot-pwa-share` point to documentation commit `43ea3d6`; the latest code commit is `ff9c2ff`.
+- The pilot candidate combines Home's account requirement, the locally verified send/read/reaction journey, and account-safe PWA photo/GIF import with retry. `fix/pilot-send-account-disclosure` and `feat/pilot-pwa-share` identify the same current candidate tip; the latest code commit is `ff9c2ff`, followed by PWA and pilot-status documentation commits.
 - Verification passed: 286/286 unit tests, lint, no-incremental TypeScript, smoke-script checks, production Webpack build, local authenticated Supabase browser flow, and focused production share-target browser smoke. The share smoke covered import, persistence-failure rollback/retry, prior draft/media preservation, replay, and responsive sizes. The app remains on port 4004.
 - This is a local pilot candidate, not hosted acceptance. Hosted account-to-account checks, PWA installation/system share sheet, screen-reader and physical-device checks, and PR #7's QR browser check remain pending. The unmocked Google Fonts fetch can fail when DNS cannot resolve `fonts.googleapis.com`.
 
