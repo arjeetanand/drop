@@ -989,7 +989,7 @@ function Composer() {
           </div>}
           {inviteNotice && <p className="field-help mt-3" role="status" aria-live="polite">{inviteNotice}</p>}
           <Link href={privateClaimDetailsHref} onClick={saveBeforeLeaving} aria-disabled={shareImporting} className="button-secondary mt-5 !min-h-12 !rounded-xl aria-disabled:cursor-wait">Open saved drop <ArrowRightIcon /></Link>
-        </section> : <form onSubmit={handleSend} aria-busy={deleting || shareImporting} className="composer-form mt-6 sm:mt-8">
+        </section> : <form onSubmit={handleSend} aria-busy={deleting || sending || shareImporting} className="composer-form mt-6 sm:mt-8">
           <fieldset disabled={deleting || sending || shareImporting} aria-label="Compose drop" className="m-0 min-w-0 space-y-4 border-0 p-0 sm:space-y-5">
           <section className="rounded-2xl border border-[rgba(16,42,67,.12)] bg-white/55 p-4 sm:p-6">
             <p className="eyebrow">First · your person</p>
