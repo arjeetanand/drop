@@ -1151,6 +1151,165 @@ async function runWritingPromptFlow(cdp, { appUrl, viewport, keyboard, screensho
   await assertNoHorizontalOverflow(cdp, 'Prompt draft after reload', viewport.width);
 }
 
+function parseCssColor(value) {
+  const parts = value.match(/rgba?\(([^)]+)\)/i)?.[1]?.split(',').map((part) => Number.parseFloat(part.trim()));
+  assert.ok(parts && parts.length >= 3 && parts.slice(0, 3).every(Number.isFinite), `Could not parse rendered color ${value}.`);
+  return [parts[0], parts[1], parts[2], parts[3] ?? 1];
+}
+
+function getContrastRatio(foregroundCss, backgroundCss) {
+  const [fr, fg, fb, alpha] = parseCssColor(foregroundCss);
+  const [br, bg, bb] = parseCssColor(backgroundCss);
+  const foreground = [fr, fg, fb].map((channel, index) => channel * alpha + [br, bg, bb][index] * (1 - alpha));
+  const luminance = (channels) => channels
+    .map((channel) => {
+      const normalized = channel / 255;
+      return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+    })
+    .reduce((sum, channel, index) => sum + channel * [0.2126, 0.7152, 0.0722][index], 0);
+  const first = luminance(foreground);
+  const second = luminance([br, bg, bb]);
+  return (Math.max(first, second) + 0.05) / (Math.min(first, second) + 0.05);
+}
+
+async function setInputFile(cdp, selector, filePath) {
+  const { root } = await cdp.send('DOM.getDocument', { depth: -1, pierce: true });
+  const { nodeId } = await cdp.send('DOM.querySelector', { nodeId: root.nodeId, selector });
+  assert.ok(nodeId, `Could not find file input ${selector}.`);
+  await cdp.send('DOM.setFileInputFiles', { nodeId, files: [filePath] });
+}
+
+async function assertAccessibleMedia(cdp, expectedName, step) {
+  const rendered = await evaluate(cdp, `(() => {
+    const image = [...document.querySelectorAll('img[alt]')].find((item) => item.getAttribute('alt') === ${JSON.stringify(expectedName)});
+    return image ? { alt: image.getAttribute('alt'), visible: image.getBoundingClientRect().width > 0 && image.getBoundingClientRect().height > 0 } : null;
+  })()`);
+  assert.ok(rendered?.visible, `${step}: expected a rendered img with alt="${expectedName}".`);
+  const { nodes } = await cdp.send('Accessibility.getFullAXTree');
+  const imageNode = nodes.find((node) => !node.ignored && node.role?.value === 'image' && node.name?.value === expectedName);
+  assert.ok(imageNode, `${step}: the accessibility tree should expose an image named “${expectedName}”.`);
+}
+
+async function runAccessibilityFlow(cdp, { appUrl, screenshotDir }) {
+  await cdp.send('Accessibility.enable');
+  const viewports = [320, 390].map((width) => ({ name: `mobile-${width}`, width, height: width === 320 ? 740 : 844, deviceScaleFactor: 1, mobile: true }));
+  const noteText = 'A small note to send with this attachment.';
+  const mediaCases = [
+    { kind: 'image', button: 'A photo', file: join(PROJECT_ROOT, 'public/demo-cat.png'), name: 'Attached photo' },
+    { kind: 'gif', button: 'A GIF', file: join(PROJECT_ROOT, 'public/demo-cat.gif'), name: 'Attached GIF' },
+  ];
+
+  for (const viewport of viewports) {
+    await setViewport(cdp, viewport);
+    await cdp.send('Page.navigate', { url: appUrl.href });
+    await waitUntil(cdp, 'Home account requirement at the requested mobile width', async () => (
+      await evaluate(cdp, `${normalizedVisibleText(LABELS.homeSendAccountDisclosure)} && location.pathname === '/'`)
+    ));
+    await waitForPageShell(cdp, 'Home contrast check');
+    const colors = await evaluate(cdp, `(() => {
+      const note = [...document.querySelectorAll('p')].find((item) => item.textContent.replace(/\\s+/g, ' ').trim() === ${JSON.stringify(LABELS.homeSendAccountDisclosure)});
+      const background = note?.parentElement;
+      return note && background ? {
+        foreground: getComputedStyle(note).color,
+        background: getComputedStyle(background).backgroundColor,
+        fontSize: getComputedStyle(note).fontSize,
+        viewportWidth: window.innerWidth,
+      } : null;
+    })()`);
+    assert.ok(colors, `Home send requirement should render at ${viewport.width}px.`);
+    const ratio = getContrastRatio(colors.foreground, colors.background);
+    assert.ok(ratio >= 4.5, `Home send requirement contrast should be at least 4.5:1, got ${ratio.toFixed(3)}:1 from ${JSON.stringify(colors)}.`);
+    await assertNoHorizontalOverflow(cdp, `Home at ${viewport.width}px`, viewport.width);
+    if (screenshotDir) await captureScreenshot(cdp, screenshotDir, `${viewport.name}-home-contrast`);
+    console.log(`[browser-accessibility] PASS Home send requirement has ${ratio.toFixed(2)}:1 rendered contrast at ${viewport.width}px (${colors.foreground} over ${colors.background}).`);
+
+    for (const media of mediaCases) {
+      await cdp.send('Page.navigate', { url: new URL('/compose?new=1', appUrl).href });
+      await waitUntil(cdp, `${media.button} composer`, async () => (
+        await evaluate(cdp, `location.pathname === '/compose' && Boolean(document.querySelector('#drop-content')) && Boolean([...document.querySelectorAll('button')].find((button) => button.textContent.replace(/\\s+/g, ' ').trim() === ${JSON.stringify(media.button)}))`)
+      ));
+      await waitForPageShell(cdp, `${media.button} composer`);
+      await focusControlWithKeyboard(cdp, { selector: '#drop-content', expectedTag: 'TEXTAREA' });
+      await cdp.send('Input.insertText', { text: noteText });
+      await waitUntil(cdp, 'nonempty composer note', async () => (
+        await evaluate(cdp, `document.querySelector('#drop-content')?.value === ${JSON.stringify(noteText)}`)
+      ));
+      await activateFlowControl(cdp, { keyboard: true, name: media.button, expectedTag: 'BUTTON' });
+      await waitUntil(cdp, `${media.button} file input`, async () => await evaluate(cdp, 'Boolean(document.querySelector("#drop-media"))'));
+      let fileInputFocused = false;
+      for (let tabCount = 0; tabCount < 8 && !fileInputFocused; tabCount += 1) {
+        await cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9, nativeVirtualKeyCode: 9 });
+        await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9, nativeVirtualKeyCode: 9 });
+        fileInputFocused = await evaluate(cdp, 'document.activeElement === document.querySelector("#drop-media")');
+      }
+      const focus = await evaluate(cdp, `(() => {
+        const input = document.querySelector('#drop-media');
+        const surface = document.querySelector('.media-picker-surface');
+        const style = surface ? getComputedStyle(surface) : null;
+        const rect = surface?.getBoundingClientRect();
+        const actionTray = document.querySelector('.composer-action-tray')?.getBoundingClientRect();
+        return {
+          inputFocused: document.activeElement === input,
+          keyboardFocusVisible: Boolean(input?.matches(':focus-visible')),
+          outlineStyle: style?.outlineStyle || '',
+          outlineWidth: style?.outlineWidth || '',
+          outlineColor: style?.outlineColor || '',
+          surfaceVisible: Boolean(rect && rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.top < window.innerHeight),
+          surfaceObscuredByActions: Boolean(rect && actionTray && rect.bottom > actionTray.top && rect.top < actionTray.bottom),
+        };
+      })()`);
+      console.log(`[browser-accessibility] Focus state ${media.button} at ${viewport.width}px: ${JSON.stringify(focus)}.`);
+      assert.equal(focus.inputFocused, true, `${media.button}: Tab should focus the clipped file input.`);
+      assert.equal(focus.keyboardFocusVisible, true, `${media.button}: keyboard focus should match :focus-visible.`);
+      assert.equal(focus.outlineStyle, 'solid', `${media.button}: the visible picker surface should show an outline.`);
+      assert.equal(focus.outlineWidth, '3px', `${media.button}: the picker outline should be 3px wide.`);
+      assert.equal(focus.surfaceVisible, true, `${media.button}: the focused picker surface should remain visible in the viewport.`);
+      assert.equal(focus.surfaceObscuredByActions, false, `${media.button}: the focused picker surface should stay clear of the fixed composer actions.`);
+      if (screenshotDir) await captureScreenshot(cdp, screenshotDir, `${viewport.name}-${media.kind}-picker-keyboard-focus`);
+      console.log(`[browser-accessibility] PASS ${media.button} clipped input has a visible ${focus.outlineWidth} keyboard focus outline at ${viewport.width}px.`);
+
+      await setInputFile(cdp, '#drop-media', media.file);
+      await waitUntil(cdp, `${media.name} in composer`, async () => await evaluate(cdp, `Boolean(document.querySelector('img[alt=${JSON.stringify(media.name)}]'))`));
+      await waitUntil(cdp, 'saved composer attachment state', async () => await evaluate(cdp, normalizedVisibleText('Saved privately on this device')));
+      await assertAccessibleMedia(cdp, media.name, `${media.kind} in composer`);
+      const composerState = await evaluate(cdp, `({ note: document.querySelector('#drop-content')?.value || '', href: document.querySelector('a[aria-label="Preview as recipient"]')?.href || '' })`);
+      assert.equal(composerState.note, noteText, `${media.kind}: nonempty composer text should remain alongside the attachment.`);
+      assert.ok(composerState.href.includes('/compose/preview?letter='), `${media.kind}: preview link should identify the current draft.`);
+      if (screenshotDir) await captureScreenshot(cdp, screenshotDir, `${viewport.name}-${media.kind}-composer-media`);
+
+      await focusControlWithKeyboard(cdp, { selector: 'a[aria-label="Preview as recipient"]', expectedTag: 'A' });
+      await activateFocusedControl(cdp, 'Enter');
+      await waitUntil(cdp, `${media.name} in recipient preview`, async () => await evaluate(cdp, `location.pathname === '/compose/preview' && Boolean(document.querySelector('img[alt=${JSON.stringify(media.name)}]'))`));
+      await assertNoHorizontalOverflow(cdp, `${media.kind} recipient preview at ${viewport.width}px`, viewport.width);
+      await assertAccessibleMedia(cdp, media.name, `${media.kind} in recipient preview with a note`);
+      const previewNote = await evaluate(cdp, `Boolean(document.body.innerText.includes(${JSON.stringify(noteText)}))`);
+      assert.equal(previewNote, true, `${media.kind}: the recipient preview should render the nonempty note beside the attachment.`);
+      await evaluate(cdp, `document.querySelector('img[alt=${JSON.stringify(media.name)}]')?.scrollIntoView({ behavior: 'instant', block: 'center' }); true`);
+      if (screenshotDir) await captureScreenshot(cdp, screenshotDir, `${viewport.name}-${media.kind}-recipient-preview`);
+      console.log(`[browser-accessibility] PASS ${media.name} remains exposed in composer and recipient preview with nonempty note at ${viewport.width}px.`);
+    }
+
+    for (const letter of [
+      { id: 'incoming-1', name: 'Attached photo' },
+      { id: 'incoming-gif', name: 'Attached GIF' },
+    ]) {
+      await cdp.send('Page.navigate', { url: new URL(`/letter/${letter.id}`, appUrl).href });
+      await waitUntil(cdp, `sample received drop ${letter.id}`, async () => await evaluate(cdp, `location.pathname === ${JSON.stringify(`/letter/${letter.id}`)} && ${normalizedVisibleText('Reveal sample fragments')}`));
+      await activateFlowControl(cdp, { keyboard: true, name: 'Reveal sample fragments', expectedTag: 'BUTTON' });
+      await waitUntil(cdp, 'sample drop open action', async () => await evaluate(cdp, normalizedVisibleText('Open sample drop')));
+      await activateFlowControl(cdp, { keyboard: true, name: 'Open sample drop', expectedTag: 'BUTTON' });
+      await waitUntil(cdp, `${letter.name} in received drop`, async () => await evaluate(cdp, `Boolean(document.querySelector('img[alt=${JSON.stringify(letter.name)}]'))`));
+      await assertNoHorizontalOverflow(cdp, `${letter.id} received view at ${viewport.width}px`, viewport.width);
+      await assertAccessibleMedia(cdp, letter.name, `${letter.name} in received sample with nonempty message`);
+      const receivedMessage = await evaluate(cdp, `Boolean(document.body.innerText.includes(${JSON.stringify(letter.id === 'incoming-1' ? 'I kept the blue hour for you.' : 'A tiny loop from the walk home.')}))`);
+      assert.equal(receivedMessage, true, `${letter.id}: the received view should render its nonempty message beside the attachment.`);
+      await evaluate(cdp, `document.querySelector('img[alt=${JSON.stringify(letter.name)}]')?.scrollIntoView({ behavior: 'instant', block: 'center' }); true`);
+      if (screenshotDir) await captureScreenshot(cdp, screenshotDir, `${viewport.name}-${letter.id}-received-media`);
+      console.log(`[browser-accessibility] PASS ${letter.name} is exposed in the received drop with a nonempty message at ${viewport.width}px.`);
+    }
+  }
+}
+
 async function runRecipientlessClaimChoiceFlow(cdp, { appUrl, viewport, keyboard }) {
   await setViewport(cdp, viewport);
   const composeUrl = new URL('/compose', appUrl);
@@ -1714,6 +1873,16 @@ async function runShareTargetFlow(cdp, { appUrl, screenshotDir, getPageLoadEvent
   assert.deepEqual(importedState.queryKeys, ['letter'], 'Only the stable draft ID should remain in the URL query.');
   assert.equal(importedState.url.includes(SHARE_TARGET_CAPTION), false, 'Shared text should not appear in the URL.');
   assert.equal(importedState.url.includes(SHARE_TARGET_FILENAME), false, 'The shared filename should not appear in the URL.');
+  const importedComposerInteractivity = await evaluate(cdp, `(() => {
+    const form = document.querySelector('form.composer-form');
+    const editor = document.querySelector('#drop-content');
+    return {
+      ariaBusy: form?.getAttribute('aria-busy') ?? null,
+      editorEnabled: Boolean(editor && !editor.disabled && !editor.readOnly),
+    };
+  })()`);
+  assert.equal(importedComposerInteractivity.ariaBusy, 'false', `The canonical share-import composer should stop reporting busy before replay: ${JSON.stringify(importedComposerInteractivity)}.`);
+  assert.equal(importedComposerInteractivity.editorEnabled, true, `The canonical share-import composer should leave the normal text control enabled before replay: ${JSON.stringify(importedComposerInteractivity)}.`);
   await assertNoFrameworkOverlay(cdp, 'Share-target imported composer');
   await assertNoHorizontalOverflow(cdp, 'Share-target composer at 390px', 390);
   await setViewport(cdp, { name: 'mobile-375', width: 375, height: 844, deviceScaleFactor: 1, mobile: true });
@@ -2097,7 +2266,7 @@ async function runShareTargetFlow(cdp, { appUrl, screenshotDir, getPageLoadEvent
 
 async function main() {
   if (process.argv.includes('--help') || process.argv.includes('-h')) {
-    console.log('Usage: node scripts/browser-demo-smoke.mjs [http://127.0.0.1:4004] [--claim-recovery-only|--prompt-only|--friend-draft-only|--share-target-only|--drop-back-only]');
+    console.log('Usage: node scripts/browser-demo-smoke.mjs [http://127.0.0.1:4004] [--claim-recovery-only|--prompt-only|--friend-draft-only|--share-target-only|--drop-back-only|--accessibility-only]');
     console.log('Set DROP_BROWSER_EXECUTABLE to select an installed Chrome, Edge, or Chromium executable.');
     return;
   }
@@ -2108,7 +2277,8 @@ async function main() {
   const friendDraftOnly = args.includes('--friend-draft-only');
   const shareTargetOnly = args.includes('--share-target-only');
   const dropBackOnly = args.includes('--drop-back-only');
-  assert.ok([claimRecoveryOnly, promptOnly, friendDraftOnly, shareTargetOnly, dropBackOnly].filter(Boolean).length <= 1, 'Choose only one focused browser-smoke mode.');
+  const accessibilityOnly = args.includes('--accessibility-only');
+  assert.ok([claimRecoveryOnly, promptOnly, friendDraftOnly, shareTargetOnly, dropBackOnly, accessibilityOnly].filter(Boolean).length <= 1, 'Choose only one focused browser-smoke mode.');
   const appUrl = parseAppUrl(args.find((argument) => !argument.startsWith('--')) || DEFAULT_APP_URL);
   if (typeof WebSocket !== 'function') throw new Error('This smoke check needs a Node runtime with the built-in WebSocket API.');
   const screenshotDir = screenshotDirectoryFromEnv();
@@ -2272,9 +2442,13 @@ async function main() {
     await setViewport(pageCdp, MOBILE_VIEWPORTS[1]);
 
     console.log(`[browser-demo-smoke] Browser: ${chromeExecutable}`);
-    const flowName = dropBackOnly ? 'drop-back-only' : shareTargetOnly ? 'share-target-only' : claimRecoveryOnly ? 'claim-recovery' : promptOnly ? 'prompt-only' : friendDraftOnly ? 'friend-draft-only' : 'full';
-    const flowViewports = friendDraftOnly || shareTargetOnly || dropBackOnly ? [MOBILE_VIEWPORTS[1]] : FLOW_VIEWPORTS;
+    const flowName = accessibilityOnly ? 'accessibility-only' : dropBackOnly ? 'drop-back-only' : shareTargetOnly ? 'share-target-only' : claimRecoveryOnly ? 'claim-recovery' : promptOnly ? 'prompt-only' : friendDraftOnly ? 'friend-draft-only' : 'full';
+    const flowViewports = accessibilityOnly ? ['mobile-320', 'mobile-390'].map((name) => ({ name })) : friendDraftOnly || shareTargetOnly || dropBackOnly ? [MOBILE_VIEWPORTS[1]] : FLOW_VIEWPORTS;
     console.log(`[browser-demo-smoke] App: ${appUrl.origin}; ${flowName} flow viewports: ${flowViewports.map(({ name }) => name).join(', ')}.`);
+
+    if (accessibilityOnly) {
+      await runAccessibilityFlow(pageCdp, { appUrl, screenshotDir });
+    }
 
     if (dropBackOnly) {
       await runDropBackFlow(pageCdp, { appUrl, screenshotDir });
@@ -2316,7 +2490,7 @@ async function main() {
       console.log(`[browser-demo-smoke] PASS keyboard sender-copy to fresh editable text draft at ${viewport.width}×${viewport.height}; existing media draft and local demo remain preserved.`);
     }
 
-    if (!friendDraftOnly && !claimRecoveryOnly && !promptOnly && !shareTargetOnly && !dropBackOnly) {
+    if (!friendDraftOnly && !claimRecoveryOnly && !promptOnly && !shareTargetOnly && !dropBackOnly && !accessibilityOnly) {
       const screenshotSteps = new Set(['home', 'chooser', 'recipient', 'fragments-revealed', 'reaction-saved', 'sender-copy']);
       for (const viewport of FLOW_VIEWPORTS) {
         const keyboard = viewport.width !== 360;
@@ -2343,7 +2517,7 @@ async function main() {
       });
     }
 
-    if (!friendDraftOnly && !claimRecoveryOnly && !shareTargetOnly && !dropBackOnly) {
+    if (!friendDraftOnly && !claimRecoveryOnly && !shareTargetOnly && !dropBackOnly && !accessibilityOnly) {
       for (const viewport of FLOW_VIEWPORTS) {
         await runWritingPromptFlow(pageCdp, {
           appUrl,
@@ -2366,7 +2540,7 @@ async function main() {
       console.log('[browser-demo-smoke] PASS readable 44px actions fit at 320×740 without horizontal overflow.');
     }
 
-    if (!friendDraftOnly && !promptOnly && !shareTargetOnly && !dropBackOnly) {
+    if (!friendDraftOnly && !promptOnly && !shareTargetOnly && !dropBackOnly && !accessibilityOnly) {
       for (const viewport of FLOW_VIEWPORTS) {
         await runRecipientlessClaimChoiceFlow(pageCdp, {
           appUrl,
@@ -2396,12 +2570,12 @@ async function main() {
     assert.deepEqual(pageExceptions, [], `The browser reported JavaScript exceptions: ${JSON.stringify(pageExceptions)}.`);
     if (firewallFailure) throw new Error(`The browser network gate failed: ${firewallFailure.message}`);
 
-    if (!friendDraftOnly && !promptOnly && !shareTargetOnly && !dropBackOnly) {
+    if (!friendDraftOnly && !promptOnly && !shareTargetOnly && !dropBackOnly && !accessibilityOnly) {
       console.log('[browser-demo-smoke] PASS saved-claim recovery after reload, including the encoded detail route and fresh-link action at all mobile and desktop widths.');
       console.log('[browser-demo-smoke] PASS handleless claim disclosure, account readiness gate, and focus recovery at all mobile and desktop widths.');
       console.log('[browser-demo-smoke] PASS no Auth, REST, or Storage request during the saved-claim recovery flow.');
     }
-    if (!friendDraftOnly && !claimRecoveryOnly && !promptOnly && !shareTargetOnly && !dropBackOnly) {
+    if (!friendDraftOnly && !claimRecoveryOnly && !promptOnly && !shareTargetOnly && !dropBackOnly && !accessibilityOnly) {
       console.log('[browser-demo-smoke] PASS photo flow at 390×844, including saved reaction, reload persistence, and sender copy.');
       console.log('[browser-demo-smoke] PASS no horizontal overflow on Home and demo chooser at 360, 390, 430px and 1440×900.');
       console.log('[browser-demo-smoke] PASS no Auth, RPC, or Storage write request during the local demo.');

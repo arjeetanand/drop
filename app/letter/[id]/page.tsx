@@ -15,6 +15,7 @@ import { DEMO_REACTION_EMOJIS, saveDemoReaction } from '@/lib/demoReactionStore'
 import { getDraftAttachment } from '@/lib/letterMediaStore';
 import { withFallbackTimeout } from '@/lib/withFallbackTimeout';
 import { ReducedMotionGif } from '@/components/ReducedMotionGif';
+import { getDropMediaAccessibleName } from '@/lib/dropMediaAccessibility';
 import { getReactionName } from '@/lib/reactionNames';
 import { RelayRecipientCard } from '@/components/RelayRecipientCard';
 import { startVisibleDataRefresh, type VisibleDataRefreshController } from '@/lib/relayRouteRefresh';
@@ -788,7 +789,7 @@ export default function LetterArrivalPage() {
                 <p className="eyebrow text-[#b84b3a]">Unsealed</p>
                 <div className="mt-4 border-l-2 border-[#b84b3a] bg-white px-6 py-7 sm:px-8">
                   {letter.mediaUrl && <div className="relative mb-5 aspect-[4/3] overflow-hidden rounded-xl bg-[#f1ede5]">
-                    <ReducedMotionGif src={letter.mediaUrl} alt={fullContentAvailable && letter.excerpt.trim() ? '' : letter.subject ? `${letter.subject}, sent by ${sender}` : `Drop from ${sender}`} animated={letter.payloadKind === 'gif'} sizes="(max-width: 760px) 100vw, 700px" className="object-contain" />
+                    <ReducedMotionGif src={letter.mediaUrl} alt={getDropMediaAccessibleName(letter.payloadKind === 'gif' ? 'gif' : 'image')} animated={letter.payloadKind === 'gif'} sizes="(max-width: 760px) 100vw, 700px" className="object-contain" />
                     <span className="absolute left-3 top-3 rounded-full bg-[#fffaf2]/90 px-3 py-1 font-mono text-[0.62rem] font-bold uppercase tracking-[0.12em] text-ink-navy">{letter.payloadKind === 'gif' ? 'GIF' : 'Photo'}</span>
                   </div>}
                   {letter.localDemo && letter.payloadKind !== 'text' && !letter.mediaUrl && <p className="notice error-notice mb-5" role="status">The attachment is unavailable on this device. The rest of the demo is still available.</p>}

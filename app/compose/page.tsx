@@ -14,6 +14,7 @@ import { getLocalAccountId, isCurrentLocalAccount } from '@/lib/localAccountScop
 import { canOfferInstantClaimSwitch, canOfferPrivateClaimInvite, getClaimInviteExpiryDuration, getConfirmedMediaRetryUploadId } from '@/lib/claimInviteStatus';
 import { rollbackShareTargetImport, type ShareTargetImportRollbackContext } from '@/lib/shareTargetImportRollback';
 import { ReducedMotionGif } from '@/components/ReducedMotionGif';
+import { getDropMediaAccessibleName } from '@/lib/dropMediaAccessibility';
 import { cn } from '@/lib/utils';
 import { shareInviteLink } from '@/lib/shareInvite';
 import { buildDropClaimUrl, createDropClaimSharePayload, createDropClaimToken } from '@/lib/dropClaim';
@@ -1103,10 +1104,10 @@ function Composer() {
           </fieldset>
 
           {!isText && (
-            <section className="overflow-hidden rounded-2xl border border-[rgba(16,42,67,.14)] bg-white/60">
+            <section className="media-picker-surface overflow-hidden rounded-2xl border border-[rgba(16,42,67,.14)] bg-white/60">
               {previewUrl ? (
                 <div className="relative aspect-[4/3] max-h-[430px] overflow-hidden bg-[#ede8df]">
-                  <ReducedMotionGif src={previewUrl} alt={content.trim() ? '' : `Preview of your ${payloadKind === 'gif' ? 'GIF' : 'photo'}`} animated={payloadKind === 'gif'} sizes="(max-width: 760px) 100vw, 760px" className="object-contain" />
+                  <ReducedMotionGif src={previewUrl} alt={getDropMediaAccessibleName(payloadKind === 'gif' ? 'gif' : 'image')} animated={payloadKind === 'gif'} sizes="(max-width: 760px) 100vw, 760px" className="object-contain" />
                   <button type="button" aria-label="Remove attachment" disabled={attachmentSaving} onClick={() => { setFile(null); setAttachmentSaved(false); setAttachmentFormatError(''); attachmentChosenRef.current = true; if (draft) void deleteDraftAttachment(draft.id).catch(() => undefined); if (fileInputRef.current) fileInputRef.current.value = ''; }} className="absolute right-3 top-3 flex h-11 w-11 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/75 disabled:opacity-50"><X className="h-4 w-4" aria-hidden="true" /></button>
                 </div>
               ) : (
@@ -1115,7 +1116,7 @@ function Composer() {
                   <span><span className="block text-sm font-bold text-ink-navy">Tap to add a {payloadKind === 'gif' ? 'GIF' : 'photo or meme'}</span><span className="mt-1 block text-xs text-on-surface-variant">JPG, PNG, WebP, or GIF · up to 8 MB</span></span>
                 </label>
               )}
-              <input ref={fileInputRef} id="drop-media" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleFile} className="sr-only" aria-label={`Choose a ${payloadKind === 'gif' ? 'GIF' : 'photo'}`} />
+              <input ref={fileInputRef} id="drop-media" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleFile} onFocus={(event) => { if (event.currentTarget.matches(':focus-visible')) event.currentTarget.closest('.media-picker-surface')?.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'nearest' }); }} className="sr-only" aria-label={`Choose a ${payloadKind === 'gif' ? 'GIF' : 'photo'}`} />
               {previewUrl && <p className="px-4 pb-3 text-center font-mono text-[0.62rem] text-on-surface-variant">{attachmentSaving ? 'Saving attachment on this device…' : attachmentSaved ? 'Saved privately on this device · uploads only when sent' : 'Local preview · keep this screen open while sending'}</p>}
             </section>
           )}

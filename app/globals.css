@@ -84,6 +84,11 @@
 }
 
 @layer components {
+  .media-picker-surface:has(input:focus-visible) {
+    outline: 3px solid #4f9d7a;
+    outline-offset: 3px;
+  }
+
   .page-enter {
     animation: page-enter 380ms ease-out both;
   }
