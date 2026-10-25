@@ -2,6 +2,16 @@
 
 Updated: 2026-10-25
 
+## PWA share-target rollback reliability (2026-10-25)
+
+- [x] Confirm the pilot candidate already contains the installable share manifest, service-worker target, and bounded multipart import handler.
+- [x] Add account-captured rollback for in-flight imports, preserving the staged handoff and prior draft/media for retry after account or persistence failures.
+- [x] Add unit coverage and make browser-smoke retry/replay assertions verify the final `letter` route and imported content.
+- [x] Pass focused unit tests (46/46), full `npm test` (286/286), lint, no-incremental TypeScript, browser-smoke syntax/ESLint, and `git diff --check`.
+- [x] Pass the isolated production share-target browser smoke at 375×844, 390×844, 844×390, and 1440×900. Production build passed with a temporary local-font response fixture; the unmocked build could not resolve Google Fonts DNS.
+- [x] Push code commit `ff9c2ff` to `origin/feat/pilot-pwa-share`; keep the task notes in a separate commit.
+- [ ] Verify PWA installation and the operating-system share sheet on a supported browser/device; complete screen-reader, physical-device, and hosted account checks.
+
 ## Production browser smoke stability and pilot candidate (2026-10-25)
 
 - [x] Replace the headless animation-state wait with a page-shell check and a 420ms settle; include animation state in failure diagnostics.

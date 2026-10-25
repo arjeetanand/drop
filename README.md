@@ -8,7 +8,7 @@ The append-only engineering learning log is in [LEARNINGS.md](./LEARNINGS.md); i
 
 `main` is the integration release line at `5138f88`, the PR #6 merge. [PR #1](https://github.com/arjeetanand/drop/pull/1), [PR #2](https://github.com/arjeetanand/drop/pull/2), [PR #5](https://github.com/arjeetanand/drop/pull/5), and [PR #6](https://github.com/arjeetanand/drop/pull/6) are merged. [PR #7](https://github.com/arjeetanand/drop/pull/7) remains open for its separate private-claim QR browser check. The latest local send/read/reaction check, including same-recipient unread sync across two browser sessions, is pushed on `feat/recipient-unread-e2e` at code commit `0e672f3`; this branch has no PR yet. The unread-state implementation is also recorded on `feat/recipient-unread-state` at code commit `a416d81` and documentation commit `e53c0d0`. See [HANDOFF.md](./HANDOFF.md) for the latest checkpoint. Check `git status --short --branch` and `git log -1 --oneline --decorate` for the active checkout. After `git fetch origin`, compare `origin/main` and your branch with `git rev-list --left-right --count origin/main...HEAD` (first number: commits only on `main`; second: commits only on your branch). Branches whose tips are already ancestors of `main` are included in it; they are not separate latest versions.
 
-**Current pilot candidate:** `fix/pilot-send-account-disclosure`, code commit `36f557d`. It includes the Home account requirement and builds on the locally verified send, unread-sync, and reaction journey. It is the newest pushed candidate; no PR has been opened for it. PR #7 remains open for its separate QR check.
+**Current pilot candidate:** `fix/pilot-send-account-disclosure`, code commit `36f557d`. It includes the Home account requirement and builds on the locally verified send, unread-sync, and reaction journey. The share-target rollback follow-up is on `feat/pilot-pwa-share`, code commit `ff9c2ff`, based on that candidate. PR #7 remains open for its separate QR check.
 
 ## Run locally
 
@@ -42,6 +42,8 @@ The demo chooser also includes a fictional three-stop Relay preview. Follow Ari,
 ## Share an image to Drop
 
 On a compatible browser where Drop is installed, choose Drop from the system share sheet to start a draft from one JPEG, PNG, WebP, or GIF (up to 8 MB) and an optional caption. The service worker stores the handoff in browser IndexedDB for up to one hour; opening it creates an unsent local draft. Nothing is sent until the sender uses the normal send flow. If the service worker is not controlling the page, the browser has already submitted the share request to the site before the fallback can explain the problem; use the in-app photo picker when you need to avoid that fallback.
+
+An import captures the account and draft that started it. If the account changes or draft persistence fails, rollback is scoped to that captured account and the handoff remains available for retry. Run `node scripts/browser-demo-smoke.mjs http://127.0.0.1:6004 --share-target-only` against the isolated production server for the focused local import/retry check. This browser smoke does not verify PWA installation or the operating-system share sheet.
 
 Relay passports count carrier handoffs only; the metric is labeled consistently as **Carriers**, and its actions and headline wrap for narrow screens.
 

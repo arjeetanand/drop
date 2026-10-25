@@ -2,6 +2,15 @@
 
 Updated: 2026-10-25
 
+## Latest checkpoint — PWA share-target account-switch recovery (2026-10-25)
+
+- The pilot candidate already had the installable manifest, service-worker share target, and bounded multipart import handler. This branch adds the relevant follow-up from `feat/pwa-share-acceptance`: imports capture their account/draft context, rollback is scoped to that captured owner, and failed persistence keeps the staged handoff available for retry. The smoke now checks the canonical `letter` route and expected content even if navigation completes before it observes the intermediate handoff URL.
+- Verification: focused unit tests passed 46/46; full `npm test` passed 286/286; lint, no-incremental TypeScript, browser-smoke syntax and ESLint, and `git diff --check` passed. The isolated production share-target smoke passed synthetic PNG import, caption/recipient state, retry after injected persistence failures, prior draft/media preservation, same-ID replay, and widths 375×844, 390×844, 844×390, and 1440×900. The production build passed using a temporary test-only local-font fixture; the unmocked build could not resolve Google Fonts DNS. No fixture or `node_modules` symlink is committed.
+- Code commit `ff9c2ff` is pushed to `origin/feat/pilot-pwa-share`; this handoff, checklist, README, and learning update are recorded separately on that branch. No main merge, new PR, or PR #7 change was made.
+- The local browser run used port 6004 and was stopped after verification. It does not verify installation or the operating-system share sheet. Hosted account-to-account behavior, screen-reader output, and physical-device checks remain open. `/letter` and `.env.local` were not changed.
+
+**Next:** verify Drop installation and inbound sharing from a supported OS share sheet on a physical device, then finish screen-reader and hosted account checks.
+
 ## Latest checkpoint — production browser smoke stability and pilot candidate (2026-10-25)
 
 - Stabilized the full browser smoke after headless Chrome stalled on `page-enter` animation state during viewport changes. The runner now waits for route content and the page shell, settles for 420ms (the CSS animation is 380ms), and includes animation details in timeout snapshots. Reveal, open, and sender-copy actions after reload use keyboard input; the initial 360px flow still exercises touch.

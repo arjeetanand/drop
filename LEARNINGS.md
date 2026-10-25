@@ -1479,3 +1479,35 @@ Browser acceptance should wait for route-specific content and a bounded visual s
 ### Git and remaining gaps
 
 Code commit `36f557d` is pushed to `fix/pilot-send-account-disclosure`; this log and the README, checklist, plan, and handoff are in the following documentation commit on that branch. Nothing was merged; PR #7 remains open for its QR browser check. Hosted account-to-account behavior, screen-reader output, physical-device behavior, and the system share sheet remain unverified. No hosted resource changed, and `/letter` was not modified.
+
+## 2026-10-25 — Preserve PWA share imports across account switches
+
+### Issue
+
+An account switch during an in-flight share-target import could make rollback act on the newly active account or lose the staged handoff before a retry. The browser smoke also required observing an intermediate shareImport URL even when a successful import had already navigated to its canonical letter route.
+
+### Cause
+
+The async composer import outlives the account state that began it. Rollback must use the captured account and draft identity, and browser assertions must verify the completed import state instead of assuming a specific transition timing.
+
+### Resolution
+
+- Capture the importing account and existing draft/media context; scope rollback operations to those identities, preserve the handoff when persistence fails, and return a typed retry-safe error when attachment cleanup cannot be confirmed.
+- Add regression coverage for account switches, persistence failures, and preserving the previous draft/media.
+- Update the production browser smoke to accept either the still-pending handoff URL or an already-completed canonical route, then require the expected letter route and content.
+- The candidate already contained the manifest, service-worker share target, and multipart handler. Integrated only the relevant account-switch rollback follow-up from feat/pwa-share-acceptance; skipped unrelated stale changes.
+
+### Learning
+
+For async work that writes user-scoped data, capture the owner at operation start and use that owner for every commit and rollback step. A browser smoke may accommodate route timing, but it must assert the final route and imported content so a failed import cannot pass.
+
+### Verification
+
+- Focused unit tests passed 46/46; full npm test passed 286/286. npm run lint, no-incremental TypeScript, browser-smoke syntax and targeted ESLint, and git diff --check passed.
+- Production build passed with npm run build -- --webpack using a temporary, test-only local-font response fixture because Google Fonts DNS was unavailable in the sandbox. The fixture was removed and is not part of the product branch. The unmocked build was blocked by fonts.googleapis.com DNS resolution.
+- The production share-target browser smoke passed on 127.0.0.1:6004: synthetic PNG multipart import, opaque redirect, new local draft, caption and empty recipient, retry after injected persistence failures, existing-draft preservation, same-ID replay, and responsive widths 375×844, 390×844, 844×390, and 1440×900. It reported no cross-origin requests or overflow.
+- The smoke did not verify PWA installation or the operating-system share sheet. No hosted project was used.
+
+### Git and remaining gaps
+
+Code commit ff9c2ff is pushed to origin/feat/pilot-pwa-share; this learning and project notes are being committed separately on that branch. The temporary font fixture and node_modules symlink were removed and are not committed. No main merge, PR creation, or PR #7 change was made. OS share-sheet/install behavior, screen-reader output, physical-device checks, and hosted account-to-account behavior remain open. /letter and .env.local were not changed.
