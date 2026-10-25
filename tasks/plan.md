@@ -13,6 +13,7 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 - Added a thumb-reachable action tray for Preview, Save, Delete, and Send/Connect on mobile, with safe-area and bottom-navigation clearance. Desktop keeps the actions in normal flow. Removed the local Next.js dev badge that overlapped navigation and made smoke logs browser-neutral.
 - Verification passed: `npm test` (286/286), lint, no-incremental TypeScript, browser-smoke syntax, and `git diff --check`. Real Edge checks passed at 320×740, 360×844, 390×844, 430×844, 768×1024, and 1440×900 for scroll behavior, navigation clearance, touch sizing, focus, account gating, and overflow.
 - Commits `4ca8900` and `b404014` are pushed on `feat/pilot-mobile-composer-actions`; the branch is separate from the candidate baseline and `main`. The isolated authenticated QR browser check passed at 390×844; PR #7 remains open as requested. A real phone scan is still pending.
+- The QR screenshot's apparent nav overlap was checked at maximum scroll: the explanatory copy ends above the bottom nav with 88px of bottom padding. It was an intermediate scroll position, so no QR UI change was required.
 - The local photo/GIF claim browser E2E is running on the separate `feat/pilot-media-claim-e2e` branch. Hosted project acceptance, PWA installation/system share, screen-reader output, and physical-device checks remain pilot gates.
 
 ### Latest checkpoint — local pilot candidate with PWA import recovery (2026-10-25)

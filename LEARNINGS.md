@@ -1541,3 +1541,30 @@ When a mobile screen has both a fixed tab bar and a primary action tray, test th
 ### Git and remaining gaps
 
 Code commits `4ca8900` and `b404014` are pushed to `origin/feat/pilot-mobile-composer-actions`. The branch remains separate from the pilot candidate and `main`; no merge was made. The production build was not rerun for this UI slice. Hosted account-to-account behavior, PWA installation/system sharing, screen-reader and physical-device checks, and a physical QR scan remain open. PR #7 was left open as requested. `/letter` and credentials were not changed.
+
+## 2026-10-25 — Verify QR copy below fixed navigation
+
+### Issue
+
+The QR browser screenshot showed explanatory text partially behind the fixed bottom navigation, raising a concern that the copy was clipped on mobile.
+
+### Cause
+
+The screenshot captured an intermediate scroll position. The page has bottom padding for the fixed navigation, so the content moves fully above it at the document end.
+
+### Resolution
+
+No code change was needed. Verified the authenticated QR page at 390×844 by scrolling to its maximum position and comparing the explanation and nav bounds.
+
+### Learning
+
+For fixed-navigation layouts, check a suspected overlap at maximum scroll before changing padding. An intermediate screenshot can look clipped even when the page has enough trailing space.
+
+### Verification
+
+- The isolated local browser reported `scrollY=maxScrollY=596`, explanation bottom `413.09375px`, fixed-nav top `783.8125px`, and computed page bottom padding `88px`.
+- The authenticated QR/link decoder check passed and its disposable account, profile, and drop were removed. The test app released port 5004; no request went to port 4004 or a hosted service.
+
+### Git and remaining gaps
+
+This was a verification-only issue; no source or feature branch was changed. PR #7 remains open as requested. Physical camera scan, hosted claim behavior, screen-reader output, and real-device checks remain open.

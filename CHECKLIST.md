@@ -10,6 +10,7 @@ Updated: 2026-10-25
 - [x] Verify real Edge behavior at 320×740, 360×844, 390×844, 430×844, 768×1024, and 1440×900: fixed tray while scrolling, navigation clearance, 44px+ touch targets, no horizontal overflow, keyboard focus, and send/account gating.
 - [x] Push code commits `4ca8900` and `b404014` to `origin/feat/pilot-mobile-composer-actions`; keep this review branch separate from the pilot candidate and `main`.
 - [x] Pass PR #7's isolated local authenticated QR browser check at 390×844; leave PR #7 open as requested.
+- [x] Confirm the QR explanatory text is reachable at the page's maximum scroll: at 390×844 it ends above the fixed nav with 88px bottom padding. The screenshot overlap was at an intermediate scroll position; no UI change was needed.
 - [ ] Finish and review the local photo/GIF claim browser E2E on `feat/pilot-media-claim-e2e`; verify exact disposable-data cleanup before pushing.
 - [ ] Verify hosted account-to-account delivery, PWA installation/system sharing, screen-reader behavior, physical-device keyboard/safe-area behavior, and a physical QR scan.
 
