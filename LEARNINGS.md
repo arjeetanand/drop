@@ -1511,3 +1511,33 @@ For async work that writes user-scoped data, capture the owner at operation star
 ### Git and remaining gaps
 
 Code commit ff9c2ff is pushed to origin/feat/pilot-pwa-share; this learning and project notes are being committed separately on that branch. The temporary font fixture and node_modules symlink were removed and are not committed. No main merge, PR creation, or PR #7 change was made. OS share-sheet/install behavior, screen-reader output, physical-device checks, and hosted account-to-account behavior remain open. /letter and .env.local were not changed.
+
+## 2026-10-25 — Keep composer actions reachable on mobile
+
+### Issue
+
+On short phone viewports, the Compose actions competed with the bottom navigation and could require extra scrolling. The Next.js development badge also obscured part of the local mobile navigation.
+
+### Cause
+
+The action controls were in the normal page flow, while the app navigation occupied a fixed bottom region. The dev-only indicator was an additional overlay in the same area. A transformed page entrance can also change how fixed descendants attach to the viewport.
+
+### Resolution
+
+- Place Preview, Save, Delete, and Send/Connect in a compact fixed action tray on mobile, offset for the safe area and navigation; retain normal document flow on desktop and the existing account/send gate.
+- Keep the mobile entry animation opacity-only so the tray remains viewport-fixed; disable the Next.js dev indicator that obscured navigation.
+- Make the browser smoke identify its selected executable as a browser, since the same isolated harness can run Edge.
+
+### Learning
+
+When a mobile screen has both a fixed tab bar and a primary action tray, test the tray while the page scrolls and reserve space for the tab bar plus safe area. Avoid transformed ancestors around viewport-fixed controls.
+
+### Verification
+
+- `npm test` passed 286/286; `npm run lint`, `npx tsc --noEmit --incremental false`, browser-smoke syntax, and `git diff --check` passed.
+- Real Edge checks passed at 320×740, 360×844, 390×844, 430×844, 768×1024, and 1440×900. The run covered scroll stability, nav clearance, 44px+ controls, no overflow, keyboard focus, and the account gate. Final 390px screenshot: `/private/tmp/drop-composer-action-tray-qa-final/mobile-390-prompt-composer.png`.
+- An independent local authenticated QR browser check passed at 390×844 and cleaned its disposable drop/account/profile. It did not test a physical phone scan or hosted claim.
+
+### Git and remaining gaps
+
+Code commits `4ca8900` and `b404014` are pushed to `origin/feat/pilot-mobile-composer-actions`. The branch remains separate from the pilot candidate and `main`; no merge was made. The production build was not rerun for this UI slice. Hosted account-to-account behavior, PWA installation/system sharing, screen-reader and physical-device checks, and a physical QR scan remain open. PR #7 was left open as requested. `/letter` and credentials were not changed.

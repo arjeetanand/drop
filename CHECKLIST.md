@@ -2,6 +2,17 @@
 
 Updated: 2026-10-25
 
+## Pilot acceleration: mobile actions and QR browser check (2026-10-25)
+
+- [x] Put Preview, Save, Delete, and the primary Send/Connect action in a fixed, safe-area-aware mobile tray; keep desktop actions in normal document flow and preserve the existing account gate.
+- [x] Remove the Next.js development badge that covered mobile navigation and make browser-smoke output identify the selected browser generically.
+- [x] Pass `npm test` (286/286), `npm run lint`, `npx tsc --noEmit --incremental false`, browser-smoke syntax, and `git diff --check`.
+- [x] Verify real Edge behavior at 320×740, 360×844, 390×844, 430×844, 768×1024, and 1440×900: fixed tray while scrolling, navigation clearance, 44px+ touch targets, no horizontal overflow, keyboard focus, and send/account gating.
+- [x] Push code commits `4ca8900` and `b404014` to `origin/feat/pilot-mobile-composer-actions`; keep this review branch separate from the pilot candidate and `main`.
+- [x] Pass PR #7's isolated local authenticated QR browser check at 390×844; leave PR #7 open as requested.
+- [ ] Finish and review the local photo/GIF claim browser E2E on `feat/pilot-media-claim-e2e`; verify exact disposable-data cleanup before pushing.
+- [ ] Verify hosted account-to-account delivery, PWA installation/system sharing, screen-reader behavior, physical-device keyboard/safe-area behavior, and a physical QR scan.
+
 ## PWA share-target rollback reliability (2026-10-25)
 
 - [x] Confirm the pilot candidate already contains the installable share manifest, service-worker target, and bounded multipart import handler.
@@ -51,7 +62,7 @@ Updated: 2026-10-25
 
 ## Current branch state
 
-- [x] Keep PR #7 open for the private-claim QR browser check; unread-state work remains on its own pushed branch without a PR.
+- [x] Leave PR #7 open as requested after its isolated local QR browser check passed at 390×844; a physical camera scan and hosted claim remain open. Unread-state work remains on its own pushed branch without a PR.
 - [ ] Review and merge branches only through their PRs after the remaining checks pass.
 
 ## Candidate and PR

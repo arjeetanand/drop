@@ -2,6 +2,17 @@
 
 Updated: 2026-10-25
 
+## Latest checkpoint — mobile composer action tray and parallel pilot checks (2026-10-25)
+
+- Put Preview, Save, Delete, and Send/Connect in a fixed mobile action tray above the bottom navigation and safe area; keep desktop actions in normal flow, preserve the current sign-in/send gate, and keep the mobile entrance animation from creating a fixed-position containing block. Turned off the Next.js dev indicator that overlapped the nav and changed harness status text to say browser for Edge runs.
+- Verification: `npm test` passed 286/286; lint, `npx tsc --noEmit --incremental false`, browser-smoke syntax, and `git diff --check` passed. Real Edge checks passed at 320×740, 360×844, 390×844, 430×844, 768×1024, and 1440×900. The test checked fixed-position stability while scrolling, visible-nav clearance, 44px+ targets, no horizontal overflow, keyboard focus, and the existing account gate. Screenshot: `/private/tmp/drop-composer-action-tray-qa-final/mobile-390-prompt-composer.png`. This slice did not rerun a production build; the preceding candidate's build check is recorded below.
+- Commits `4ca8900` and `b404014` are pushed to `origin/feat/pilot-mobile-composer-actions`. This is a separate review branch based on the local pilot candidate; it has not been merged into the candidate or `main`. Drop remains available at `http://localhost:4004`.
+- The PR #7 QR browser check passed in an isolated local authenticated flow at 390×844, including exact QR/link decoding and account/drop cleanup. PR #7 was left open as requested. A physical camera scan and hosted claim still remain. GitHub status could not be refreshed in this run because DNS lookup failed; the successful `git push` response confirmed the feature-branch update.
+- The parallel `feat/pilot-media-claim-e2e` run passed its isolated production build and local authenticated privacy setup, but its first browser attempt timed out at the recipient-profile prompt because new label assertions compared text case-sensitively while the UI uppercases button labels. The agent is normalizing the assertions and rerunning. The runner's `finally` cleanup emitted no errors, but exact absence verification is not yet recorded. The branch has not been pushed.
+- No hosted Supabase project was accessed or changed. No secrets were committed. `/letter` was not changed.
+
+**Next:** resolve and rerun the media-claim browser flow, verify exact test-data cleanup, then push that branch only after review. Keep each feature branch separate for review; hosted account-to-account acceptance, PWA installation/system sharing, screen-reader behavior, physical-device keyboard/safe-area checks, and a physical QR scan remain pilot gates.
+
 ## Latest checkpoint — PWA share-target account-switch recovery (2026-10-25)
 
 - The pilot candidate already had the installable manifest, service-worker share target, and bounded multipart import handler. This branch adds the relevant follow-up from `feat/pwa-share-acceptance`: imports capture their account/draft context, rollback is scoped to that captured owner, and failed persistence keeps the staged handoff available for retry. The smoke now checks the canonical `letter` route and expected content even if navigation completes before it observes the intermediate handoff URL.
