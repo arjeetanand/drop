@@ -127,13 +127,13 @@ let temporaryProject;
 const createdUserIds = [];
 const createdLetterIds = new Set();
 const createdStoragePaths = new Set();
-const admin = createClient(supabaseUrl.href, serviceRoleKey, {
+const admin = createClient(supabaseUrl, serviceRoleKey, {
   auth: { autoRefreshToken: false, persistSession: false },
   global: { fetch: loopbackFetch },
 });
 
 function client(key = anonKey) {
-  return createClient(supabaseUrl.href, key, {
+  return createClient(supabaseUrl, key, {
     auth: { autoRefreshToken: false, persistSession: false },
     global: { fetch: loopbackFetch },
   });
@@ -151,7 +151,7 @@ async function startApp() {
     NODE_ENV: 'development',
     NEXT_TELEMETRY_DISABLED: '1',
     WATCHPACK_POLLING: 'true',
-    NEXT_PUBLIC_SUPABASE_URL: supabaseUrl.href,
+    NEXT_PUBLIC_SUPABASE_URL: supabaseUrl,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: anonKey,
     SUPABASE_SERVICE_ROLE_KEY: serviceRoleKey,
   }).filter(([, value]) => typeof value === 'string' && value.length > 0));

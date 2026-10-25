@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { spawnSync } from 'node:child_process';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -28,6 +28,16 @@ function runSmoke(environment) {
     maxBuffer: 64 * 1024,
   });
 }
+
+test('uses the validated loopback origin string directly for Supabase clients and the app environment', async () => {
+  const source = await readFile(scriptPath, 'utf8');
+
+  assert.match(source, /const supabaseUrl = localSupabaseUrl\.origin;/);
+  assert.match(source, /createClient\(supabaseUrl, serviceRoleKey,/);
+  assert.match(source, /createClient\(supabaseUrl, key,/);
+  assert.match(source, /NEXT_PUBLIC_SUPABASE_URL: supabaseUrl,/);
+  assert.doesNotMatch(source, /supabaseUrl\.href/);
+});
 
 test('local photo/GIF smoke requires dedicated process environment values', () => {
   const result = runSmoke({});
