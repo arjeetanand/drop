@@ -101,6 +101,115 @@
     margin-inline: auto;
   }
 
+  .composer-action-tray {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding-bottom: 0.75rem;
+  }
+
+  .composer-action-preview {
+    width: 100%;
+  }
+
+  .composer-action-footer {
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 0.5rem;
+  }
+
+  .composer-action-secondary {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+  }
+
+  @media (min-width: 640px) {
+    .composer-action-footer {
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .composer-action-secondary {
+      display: flex;
+    }
+  }
+
+  @media (max-width: 1023px) {
+    .page-shell--composer {
+      animation-name: composer-page-enter;
+    }
+
+    .composer-form {
+      padding-bottom: 8rem;
+    }
+
+    .composer-action-tray {
+      position: fixed;
+      z-index: 35;
+      bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+      left: 50%;
+      display: grid;
+      width: min(calc(100% - 2rem), 760px);
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-areas:
+        "preview save"
+        "primary primary";
+      gap: 0.5rem;
+      padding: 0.5rem;
+      transform: translateX(-50%);
+      border: 1px solid rgba(16, 42, 67, 0.14);
+      border-radius: 0.9rem;
+      background: rgba(255, 250, 242, 0.97);
+      box-shadow: 0 -4px 16px rgba(16, 42, 67, 0.1);
+      backdrop-filter: blur(12px);
+    }
+
+    .composer-action-tray--with-delete {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-areas:
+        "preview save delete"
+        "primary primary primary";
+    }
+
+    .composer-action-preview {
+      grid-area: preview;
+    }
+
+    .composer-action-footer,
+    .composer-action-secondary {
+      display: contents;
+    }
+
+    .composer-action-save {
+      grid-area: save;
+    }
+
+    .composer-action-delete {
+      grid-area: delete;
+    }
+
+    .composer-action-primary {
+      grid-area: primary;
+      width: 100%;
+    }
+  }
+
+  @media (max-width: 639px) {
+    .composer-action-tray .button-primary,
+    .composer-action-tray .button-secondary {
+      gap: 0.3rem;
+      padding-inline: 0.25rem;
+      font-size: 0.75rem;
+      letter-spacing: 0.025em;
+    }
+
+    .composer-action-tray .composer-action-primary {
+      font-size: 0.75rem;
+    }
+  }
+
   .page-header {
     display: flex;
     align-items: flex-start;
@@ -389,6 +498,15 @@
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes composer-page-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
   }
 }
 

@@ -234,6 +234,19 @@ function parseAppUrl(rawValue) {
 }
 
 function findChromeExecutable() {
+  const configuredExecutable = process.env.DROP_BROWSER_EXECUTABLE?.trim();
+  if (configuredExecutable) {
+    try {
+      if (configuredExecutable.includes('/') || configuredExecutable.includes('\\')) {
+        execFileSync(process.platform === 'win32' ? 'where.exe' : 'test', process.platform === 'win32' ? [configuredExecutable] : ['-x', configuredExecutable], { stdio: 'ignore' });
+        return configuredExecutable;
+      }
+      return execFileSync(process.platform === 'win32' ? 'where.exe' : 'which', [configuredExecutable], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim().split(/\r?\n/)[0];
+    } catch {
+      throw new Error('DROP_BROWSER_EXECUTABLE must name an installed, executable Chrome, Edge, or Chromium browser.');
+    }
+  }
+
   const candidates = process.platform === 'darwin'
     ? [
       '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -424,6 +437,80 @@ async function assertNoHorizontalOverflow(cdp, step, expectedWidth = activeViewp
     Math.max(dimensions.documentWidth, dimensions.bodyWidth) <= dimensions.layoutWidth,
     `${step}: horizontal overflow detected (layout ${dimensions.layoutWidth}px, document ${dimensions.documentWidth}px, body ${dimensions.bodyWidth}px).`,
   );
+}
+
+async function assertComposerActionTray(cdp, viewport, step) {
+  const state = await evaluate(cdp, `(() => {
+    const tray = document.querySelector('.composer-action-tray');
+    const page = document.querySelector('.page-shell--composer');
+    const nav = Array.from(document.querySelectorAll('nav[aria-label="Primary navigation"]')).find((candidate) => {
+      const navRect = candidate.getBoundingClientRect();
+      return navRect.width > 0 && navRect.height > 0 && getComputedStyle(candidate).visibility !== 'hidden';
+    });
+    if (!tray || !page) return null;
+    const rect = tray.getBoundingClientRect();
+    const navRect = nav?.getBoundingClientRect();
+    const initialScrollY = window.scrollY;
+    const initialTrayTop = rect.top;
+    const initialTrayBottom = rect.bottom;
+    const previousScrollBehavior = document.documentElement.style.scrollBehavior;
+    document.documentElement.style.scrollBehavior = 'auto';
+    window.scrollTo(0, Math.max(0, document.documentElement.scrollHeight - window.innerHeight));
+    const scrolledTray = tray.getBoundingClientRect();
+    const scrolledScrollY = window.scrollY;
+    window.scrollTo(0, initialScrollY);
+    document.documentElement.style.scrollBehavior = previousScrollBehavior;
+    return {
+      position: getComputedStyle(tray).position,
+      pageTransform: getComputedStyle(page).transform,
+      width: rect.width,
+      height: rect.height,
+      top: rect.top,
+      right: rect.right,
+      bottom: rect.bottom,
+      viewportWidth: document.documentElement.clientWidth,
+      viewportHeight: document.documentElement.clientHeight,
+      navTop: navRect?.top ?? null,
+      scrollTest: {
+        scrollY: scrolledScrollY,
+        trayTop: scrolledTray.top,
+        trayBottom: scrolledTray.bottom,
+        initialTrayTop,
+        initialTrayBottom,
+      },
+      controls: Array.from(tray.querySelectorAll('a,button')).map((control) => {
+        const controlRect = control.getBoundingClientRect();
+        return {
+          label: control.getAttribute('aria-label') || control.innerText || control.textContent || '',
+          width: controlRect.width,
+          height: controlRect.height,
+          top: controlRect.top,
+          bottom: controlRect.bottom,
+          disabled: control.disabled === true,
+        };
+      }),
+    };
+  })()`);
+  assert.ok(state, `${step}: the composer action tray was not rendered.`);
+  assert.ok(state.width > 0 && state.height > 0, `${step}: the composer action tray is not visible.`);
+  assert.ok(state.controls.some(({ label }) => label.includes('Preview as recipient')), `${step}: preview should retain its accessible name.`);
+  assert.ok(state.controls.some(({ label }) => /^(Save draft|Saved)$/.test(label)), `${step}: save should retain its accessible name.`);
+  assert.ok(state.controls.some(({ label }) => /^(Send drop|Connect to send|Account options)$/i.test(label)), `${step}: the primary action should remain available under the existing account gate (found: ${state.controls.map(({ label }) => JSON.stringify(label)).join(', ')}).`);
+
+  if (viewport.width <= 1023) {
+    assert.equal(state.position, 'fixed', `${step}: the tray should stay reachable while the form scrolls.`);
+    assert.equal(state.pageTransform, 'none', `${step}: the page shell must not establish a containing block for the fixed tray.`);
+    assert.ok(state.top >= 0 && state.right <= viewport.width && state.bottom <= viewport.height, `${step}: the tray should fit inside the viewport (${JSON.stringify(state)}).`);
+    assert.ok(typeof state.navTop === 'number' && state.bottom < state.navTop, `${step}: the tray should clear the fixed bottom navigation (${JSON.stringify(state)}).`);
+    assert.ok(state.scrollTest.scrollY > 0, `${step}: the browser should have enough page content to verify tray persistence while scrolling.`);
+    assert.ok(Math.abs(state.scrollTest.trayTop - state.scrollTest.initialTrayTop) < 1, `${step}: the tray should stay at the same viewport position after scrolling (${JSON.stringify(state.scrollTest)}).`);
+    assert.ok(state.scrollTest.trayBottom < state.navTop, `${step}: the tray should continue to clear navigation after scrolling.`);
+    for (const control of state.controls) {
+      assert.ok(control.height >= 44, `${step}: ${control.label} should have a 44px or larger touch target (${control.height}px).`);
+    }
+  } else {
+    assert.notEqual(state.position, 'fixed', `${step}: desktop actions should remain in the form layout.`);
+  }
 }
 
 async function assertResponsiveWidths(cdp, step) {
@@ -1040,8 +1127,17 @@ async function runWritingPromptFlow(cdp, { appUrl, viewport, keyboard, screensho
   })()`);
   assert.equal(existingAttachment.name, 'demo-cat.png', 'The unfinished media draft attachment should remain in private local storage.');
   assert.ok(existingAttachment.size > 0, 'The unfinished media draft attachment bytes should remain intact.');
+  await assertComposerActionTray(cdp, viewport, 'Prompt composer');
   if (screenshotDir && (viewport.width === 390 || !viewport.mobile)) {
     await captureScreenshot(cdp, screenshotDir, `${viewport.name}-prompt-composer`);
+  }
+
+  if (viewport.width === 390) {
+    await focusControlWithKeyboard(cdp, {
+      name: 'Preview as recipient',
+      selector: 'a[aria-label="Preview as recipient"]',
+      expectedTag: 'A',
+    });
   }
 
   await cdp.send('Page.reload', { ignoreCache: true });
@@ -2002,6 +2098,7 @@ async function runShareTargetFlow(cdp, { appUrl, screenshotDir, getPageLoadEvent
 async function main() {
   if (process.argv.includes('--help') || process.argv.includes('-h')) {
     console.log('Usage: node scripts/browser-demo-smoke.mjs [http://127.0.0.1:4004] [--claim-recovery-only|--prompt-only|--friend-draft-only|--share-target-only|--drop-back-only]');
+    console.log('Set DROP_BROWSER_EXECUTABLE to select an installed Chrome, Edge, or Chromium executable.');
     return;
   }
 
@@ -2256,6 +2353,17 @@ async function main() {
         });
         console.log(`[browser-demo-smoke] PASS keyboard prompt-to-editable-draft flow and existing attachment preservation at ${viewport.width}×${viewport.height}${viewport.mobile ? '' : ' desktop'}.`);
       }
+
+      const tabletViewport = { name: 'tablet-768', width: 768, height: 1024, deviceScaleFactor: 1, mobile: true };
+      await setViewport(pageCdp, tabletViewport);
+      await assertComposerActionTray(pageCdp, tabletViewport, 'Prompt composer at 768px tablet width');
+      console.log('[browser-demo-smoke] PASS persistent composer actions clear the fixed navigation at 768×1024.');
+
+      const narrowViewport = { name: 'mobile-320', width: 320, height: 740, deviceScaleFactor: 1, mobile: true };
+      await setViewport(pageCdp, narrowViewport);
+      await assertComposerActionTray(pageCdp, narrowViewport, 'Prompt composer at 320px narrow mobile width');
+      await assertNoHorizontalOverflow(pageCdp, 'Prompt composer at 320px narrow mobile width', 320);
+      console.log('[browser-demo-smoke] PASS readable 44px actions fit at 320×740 without horizontal overflow.');
     }
 
     if (!friendDraftOnly && !promptOnly && !shareTargetOnly && !dropBackOnly) {

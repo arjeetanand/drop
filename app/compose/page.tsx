@@ -958,7 +958,7 @@ function Composer() {
   const deletableDraft = draft ? canDeleteLocalDraft(draft.id) : false;
 
   return (
-    <main className="page-shell page-enter !pt-4 sm:!pt-8">
+    <main className="page-shell page-enter page-shell--composer !pt-4 sm:!pt-8">
       <div className="page-container max-w-[760px]">
         <header className="flex items-center justify-between gap-3">
           <Link href="/" onClick={saveBeforeLeaving} aria-disabled={shareImporting} className="inline-flex min-h-11 items-center gap-2 rounded-full px-3 text-sm font-semibold text-ink-navy hover:bg-white/65 aria-disabled:cursor-wait"><ArrowLeft className="h-4 w-4" aria-hidden="true" /> Desk</Link>
@@ -988,7 +988,7 @@ function Composer() {
           </div>}
           {inviteNotice && <p className="field-help mt-3" role="status" aria-live="polite">{inviteNotice}</p>}
           <Link href={privateClaimDetailsHref} onClick={saveBeforeLeaving} aria-disabled={shareImporting} className="button-secondary mt-5 !min-h-12 !rounded-xl aria-disabled:cursor-wait">Open saved drop <ArrowRightIcon /></Link>
-        </section> : <form onSubmit={handleSend} aria-busy={deleting || shareImporting} className="mt-6 sm:mt-8">
+        </section> : <form onSubmit={handleSend} aria-busy={deleting || shareImporting} className="composer-form mt-6 sm:mt-8">
           <fieldset disabled={deleting || sending || shareImporting} aria-label="Compose drop" className="m-0 min-w-0 space-y-4 border-0 p-0 sm:space-y-5">
           <section className="rounded-2xl border border-[rgba(16,42,67,.12)] bg-white/55 p-4 sm:p-6">
             <p className="eyebrow">First · your person</p>
@@ -1164,14 +1164,14 @@ function Composer() {
           {error && <p className="notice error-notice" role="alert">{error}</p>}
           {notice && !error && <p className="notice" role="status">{notice}</p>}
 
-          <div className="flex flex-col gap-2 pb-3">
-            <Link href={draft ? `/compose/preview?letter=${encodeURIComponent(draft.id)}` : '/compose/preview'} onClick={saveBeforeLeaving} aria-disabled={shareImporting} className="button-secondary !min-h-12 !rounded-xl aria-disabled:cursor-wait"><Eye className="h-4 w-4" aria-hidden="true" /> Preview as recipient</Link>
-            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
-              <div className={deletableDraft ? 'grid grid-cols-2 gap-2 sm:flex' : 'flex'}>
-                <button type="button" onClick={handleSave} className="button-secondary !min-h-12 !rounded-xl">{saveLabel}</button>
-                {deletableDraft && <button type="button" onClick={handleDelete} disabled={deleting || sending || attachmentSaving} className="button-secondary !min-h-12 !rounded-xl !border-[#e6c7bd] !text-[#9e4038] disabled:opacity-45"><Trash2 className="h-4 w-4" aria-hidden="true" />{deleting ? 'Deleting…' : 'Delete draft'}</button>}
+          <div className={`composer-action-tray${deletableDraft ? ' composer-action-tray--with-delete' : ''}`} role="group" aria-label="Drop actions">
+            <Link href={draft ? `/compose/preview?letter=${encodeURIComponent(draft.id)}` : '/compose/preview'} onClick={saveBeforeLeaving} aria-label="Preview as recipient" aria-disabled={shareImporting} className="button-secondary composer-action-preview !min-h-12 !rounded-xl aria-disabled:cursor-wait"><Eye className="h-4 w-4" aria-hidden="true" /><span className="hidden sm:inline">Preview as recipient</span><span className="sm:hidden" aria-hidden="true">Preview</span></Link>
+            <div className="composer-action-footer">
+              <div className="composer-action-secondary">
+                <button type="button" onClick={handleSave} aria-label={saveLabel} className="button-secondary composer-action-save !min-h-12 !rounded-xl"><span className="hidden sm:inline">{saveLabel}</span><span className="sm:hidden" aria-hidden="true">{saved ? 'Saved' : 'Save'}</span></button>
+                {deletableDraft && <button type="button" onClick={handleDelete} disabled={deleting || sending || attachmentSaving} aria-label={deleting ? 'Deleting draft' : 'Delete draft'} className="button-secondary composer-action-delete !min-h-12 !rounded-xl !border-[#e6c7bd] !text-[#9e4038] disabled:opacity-45"><Trash2 className="h-4 w-4" aria-hidden="true" /><span className="hidden sm:inline">{deleting ? 'Deleting…' : 'Delete draft'}</span><span className="sm:hidden" aria-hidden="true">{deleting ? 'Deleting…' : 'Delete'}</span></button>}
               </div>
-              {accountState === 'connected' ? <button type="submit" disabled={!complete || sending || deleting || attachmentSaving || shareImporting} className="button-primary !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white disabled:opacity-45"><span aria-live="polite" aria-atomic="true">{sending ? sendProgressLabel : 'Send drop'}</span> <Send className="h-4 w-4" aria-hidden="true" /></button> : <Link href={profileHref} onClick={saveBeforeLeaving} aria-disabled={shareImporting || deleting || attachmentSaving || Boolean(file && !attachmentSaved)} className="button-primary !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white">{accountState === 'unavailable' ? 'Account options' : 'Connect to send'} <Send className="h-4 w-4" aria-hidden="true" /></Link>}
+              {accountState === 'connected' ? <button type="submit" disabled={!complete || sending || deleting || attachmentSaving || shareImporting} className="button-primary composer-action-primary !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white disabled:opacity-45"><span aria-live="polite" aria-atomic="true">{sending ? sendProgressLabel : 'Send drop'}</span> <Send className="h-4 w-4" aria-hidden="true" /></button> : <Link href={profileHref} onClick={saveBeforeLeaving} aria-disabled={shareImporting || deleting || attachmentSaving || Boolean(file && !attachmentSaved)} className="button-primary composer-action-primary !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white">{accountState === 'unavailable' ? 'Account options' : 'Connect to send'} <Send className="h-4 w-4" aria-hidden="true" /></Link>}
             </div>
           </div>
           </fieldset>
