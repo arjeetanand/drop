@@ -8,13 +8,13 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 
 ## Implementation Status — 2026-10-25
 
-### Latest checkpoint — local two-account send, unread, and reaction browser flow (2026-10-25)
+### Latest checkpoint — local same-recipient unread sync and Docker runtime (2026-10-25)
 
-- Added a local authenticated Edge smoke that sends one text drop through Compose from a disposable sender to a disposable recipient, verifies unread Home state at 390×844 and 1440×900, opens it through Inbox, reacts with 🫶, and confirms the sender sees the live reaction and the persisted reaction after reload.
-- The runner uses an isolated app on port 6004, accepts only loopback Supabase, keeps the service-role key out of browser code, checks local network/error signals, and verifies exact cleanup of created rows, auth users, profiles, app process, and browser profiles.
-- Verification passed: 281/281 unit tests, lint, typecheck, both smoke-script syntax checks, harness guard self-test, `git diff --check`, and the full two-account browser run with exit code 0. Local app and Supabase Auth returned HTTP 200. A production build was not rerun because application source did not change.
-- Code commit `5fd64f7` is pushed to `origin/feat/recipient-unread-e2e`; this checkpoint's notes are a separate documentation commit. PR #7 remains open for the private-claim QR browser check.
-- Remaining: test synchronization in a second recipient session, hosted behavior, screen-reader output, and physical-device behavior. No hosted Supabase resource was used or modified.
+- Extended the local authenticated browser smoke to sender plus two sessions for the same recipient. It builds an isolated production app with `next build --webpack` and runs `next start` on port 6004.
+- The smoke verifies unread Home on both recipient sessions at 390×844 and 1440×900, exact read-marker and refresh RPC responses, clearing “New” in the still-open second session without reload, recipient 🫶 reaction, sender live/reloaded reaction, local-only origins, and cleanup of all disposable data and profiles.
+- Verification passed: 281/281 unit tests, changed-harness ESLint and syntax checks, `git diff --check`, and the full authenticated production browser run. Docker server 29.5.2 and the local Supabase stack are running; the app, Auth, and Mailpit return HTTP 200 on the local setup.
+- Code commit `0e672f3` is pushed to `origin/feat/recipient-unread-e2e`; project notes are a separate commit. PR #7 remains open for its private-claim QR browser check.
+- Remaining: hosted behavior, screen-reader output, and physical-device behavior. No hosted Supabase resource was used or modified.
 
 ### Latest checkpoint — private, durable unread state (2026-10-25)
 
@@ -30,7 +30,7 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 - [x] Unit coverage for unread eligibility, account-safe monotonic merges, and excluded item types.
 - [x] Rollback-only SQL fixture for recipient/sender/outsider privacy and idempotence.
 - [x] Authenticated local browser verification at desktop and mobile widths, including persisted state after reload.
-- [ ] Verify that a second authenticated session for the same recipient observes the server-synced state.
+- [x] Verify that a second authenticated session for the same recipient observes the server-synced state without a document reload.
 - [ ] Verify hosted migration/API behavior, screen-reader announcements, and physical-device behavior.
 
 ### Latest checkpoint — received-drop Drop back draft isolation (2026-10-24)

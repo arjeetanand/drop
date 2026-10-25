@@ -2,13 +2,14 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
-## Checkpoint — local two-account send, unread, and reaction browser flow (2026-10-25)
+## Checkpoint — local same-recipient unread sync and reaction browser flow (2026-10-25)
 
-- [x] Add a guarded authenticated browser flow for local Compose send, recipient unread state, Inbox open/read, reaction submit, and sender live/reloaded reaction.
-- [x] Verify mobile 390×844 and desktop 1440×900, local-only network behavior, no console/runtime errors, and exact disposable-data/process/profile cleanup.
-- [x] Pass 281 unit tests, lint, typecheck, both browser-script syntax checks, guard self-test, `git diff --check`, and the complete authenticated local browser run.
-- [x] Push code commit `5fd64f7` to `origin/feat/recipient-unread-e2e`.
-- [ ] Verify the same recipient in a second authenticated session; finish hosted, screen-reader, and physical-device checks. Keep PR #7 open until its separate QR browser check is complete.
+- [x] Verify sender Compose, two independent recipient sessions, unread Home at 390×844 and 1440×900, Inbox open/read, recipient reaction, and sender live/reloaded reaction.
+- [x] Build and run an isolated production app; verify exact read-state RPC correlation and that the second recipient session clears “New” without a document reload.
+- [x] Pass 281 unit tests, changed-harness ESLint and syntax checks, `git diff --check`, and the complete authenticated local production browser run with exact disposable cleanup.
+- [x] Confirm Docker and local Supabase are running; restart Drop on port 4004 and verify app, Auth, and Mailpit HTTP 200.
+- [x] Push code commit `0e672f3` to `origin/feat/recipient-unread-e2e`; keep documentation in a separate follow-on commit.
+- [ ] Finish hosted, screen-reader, and physical-device checks. Keep PR #7 open until its separate QR browser check is complete.
 
 ## Checkpoint — private, durable unread state (2026-10-25)
 

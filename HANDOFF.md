@@ -2,15 +2,15 @@
 
 Updated: 2026-10-25
 
-## Latest checkpoint — local two-account send, unread, and reaction flow (2026-10-25)
+## Latest checkpoint — local same-recipient unread sync and Docker runtime (2026-10-25)
 
-- Added a repeatable authenticated browser smoke that sends one local text drop from Compose between two disposable accounts, verifies unread Home state on mobile and desktop, opens it from Inbox, reacts with 🫶, confirms the sender sees the live reaction and sees it after reload, and checks browser errors and network destinations.
-- The harness accepts only loopback Supabase, uses an isolated app on port 6004 and isolated Edge profiles, keeps the service-role key out of browser environment, and verifies exact cleanup of the test drop, reaction, auth users, profiles, app process, and browser profiles.
-- Verification: `npm test` passed 281/281; lint and typecheck passed; both smoke scripts passed `node --check`; the new harness guard self-test and `git diff --check` passed. The complete two-account browser run passed at 390×844 and 1440×900 and exited 0 after cleanup. Local Supabase Auth and the app returned HTTP 200. The production build was not rerun because app source did not change in this slice.
-- Code commit `5fd64f7` is pushed to `origin/feat/recipient-unread-e2e`; the project-note update is committed separately on the same branch. No PR was opened. PR #7 remains open for its separate private-claim QR browser check.
-- Restarted Drop with `./run.sh start` and the local Supabase Docker stack with `npm run supabase:start`. The app, Supabase Auth, and Mailpit returned HTTP 200; Drop is running at `http://localhost:4004`. No hosted Supabase resource was used or changed, `.env.local` was not committed, and /letter was not changed.
+- Extended the authenticated smoke to three isolated browser profiles: sender plus two sessions for the same recipient. It builds an isolated production app with `next build --webpack`, runs `next start` on port 6004, and verifies that the second recipient session clears “New” after the server read-state refresh while its Home document stays open.
+- The same flow sends from Compose, checks both recipient sessions at 390×844 and 1440×900, opens from Inbox, records the exact successful read marker, reacts with 🫶, verifies sender live and persisted reaction, checks browser errors and origins, and removes the exact disposable rows, accounts, profiles, app, and browser profiles.
+- Verification: `npm test` passed 281/281; browser-smoke syntax, ESLint for the changed harness, and `git diff --check` passed. The full production browser run passed, including exact RPC response correlation and no-reload sync. The local Docker daemon reports server 29.5.2; the Supabase stack is up, and the app, Auth, and Mailpit return HTTP 200.
+- Code commit `0e672f3` is pushed to `origin/feat/recipient-unread-e2e`; this handoff/checklist/plan/README/learning update is a separate commit on the same branch. No PR is open for this branch. PR #7 remains open for its separate QR browser check.
+- Drop is running at `http://localhost:4004`. The Docker socket permissions and global Docker settings were not changed. No hosted Supabase resource was used or changed, `.env.local` was not committed, and `/letter` was not changed.
 
-**Next:** verify unread synchronization in a second browser session for the same recipient, then perform hosted migration/API, screen-reader, and physical-device checks when the approved hosted project is available. Continue the separate QR browser check for PR #7 before merging that PR.
+**Next:** verify hosted migration/API behavior, screen-reader output, and physical-device behavior when the hosted project is available. Complete PR #7's separate QR browser check before merging that PR.
 
 ## Latest checkpoint — private, durable unread state (2026-10-25)
 

@@ -1391,3 +1391,34 @@ An end-to-end feature check should follow one exact fixture identifier through t
 ### Git and remaining gaps
 
 Code commit `5fd64f7` is pushed to `origin/feat/recipient-unread-e2e`; this log and the README, checklist, plan, and handoff are recorded in a separate documentation commit on the same branch. No PR was opened. PR #7 remains open for its separate QR browser check. Same-recipient synchronization in a second browser session, hosted migration/API behavior, screen-reader output, and physical-device behavior remain unverified. No hosted Supabase resource was used or changed; the local-only `.env.local` values were used for the smoke and were not modified or committed.
+
+## 2026-10-25 — Verify recipient unread sync in a second browser session
+
+### Issue
+
+The read marker worked in the recipient's active browser, but the same account's already-open second session also needed to clear its unread badge from server state without reloading.
+
+### Cause
+
+The first cross-session browser attempt used Next's development server. Its HMR document replacement during dynamic-route compilation looked like a product reload and made the no-reload assertion ambiguous. The isolated production build also needed Webpack because Turbopack rejects the temporary project's symlinked `node_modules` path.
+
+### Resolution
+
+- Build the isolated smoke app with `next build --webpack` and serve it with `next start` on port 6004.
+- Add a third isolated browser profile for the same recipient. Correlate the refresh request to the exact disposable drop, require a successful response containing its parseable `read_at`, then verify the still-open Home UI clears “New” without document replacement.
+- Remove the development-route warmup; retain only a short stable Home baseline after recipient sign-in.
+- Restart Drop with the ownership-checked `./run.sh start` command and verify Docker and local Supabase through the approved local runtime context. No socket permission or global Docker setting changed.
+
+### Learning
+
+Use a production server for checks that depend on document identity. For account synchronization, prove the same fixture ID appears in the post-write server response and then verify the UI changes in the already-open second session.
+
+### Verification
+
+- `npm test`: 281/281 passed. `node --check scripts/browser-send-react-smoke.mjs`, `npx eslint scripts/browser-send-react-smoke.mjs`, and `git diff --check` passed.
+- The full authenticated production browser smoke passed: sender Compose send; the same recipient unread in two separate sessions at 390×844 and 1440×900; exact read marker and subsequent read-state response; no-reload badge clearing; recipient 🫶 reaction; sender live and reloaded reaction; loopback-only browser requests; and exact disposable-data cleanup.
+- Docker server version 29.5.2 and local Supabase containers were running. After `./run.sh start`, Drop, Supabase Auth, and Mailpit returned HTTP 200 on ports 4004, 54321, and 54324.
+
+### Git and remaining gaps
+
+Code commit `0e672f3` is pushed to `origin/feat/recipient-unread-e2e`; this learning and its README, checklist, plan, and handoff updates are recorded separately on the same branch. No PR is open for this branch. PR #7 remains open for its separate QR browser check. Hosted migration/API behavior, screen-reader output, and physical-device checks remain open. No hosted Supabase resource changed; `.env.local` was not committed, and `/letter` was not changed.

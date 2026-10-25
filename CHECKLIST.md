@@ -2,14 +2,15 @@
 
 Updated: 2026-10-25
 
-## Local send, unread, and reaction browser flow (2026-10-25)
+## Local send, same-recipient unread sync, and reaction browser flow (2026-10-25)
 
-- [x] Add a guarded, two-account browser smoke for sender Compose, recipient unread Home at 390×844 and 1440×900, Inbox open/read, recipient 🫶 reaction, and sender live plus reloaded reaction.
+- [x] Verify Compose send, unread Home in two independent sessions for the same recipient at 390×844 and 1440×900, Inbox open/read, recipient 🫶 reaction, and sender live plus reloaded reaction.
+- [x] Build an isolated production app with Webpack, then verify the second recipient session clears “New” from its server refresh without a document reload.
 - [x] Verify exact local cleanup of the drop, reaction, auth users, profiles, app process, and temporary browser profiles; reject non-loopback Supabase and keep the service-role key out of browser environment.
-- [x] Pass `npm test` (281/281), lint, typecheck, both browser-script syntax checks, harness guard self-test, `git diff --check`, and the full authenticated local browser run.
-- [x] Start the documented local Docker/Supabase stack; verify the app, Auth, and Mailpit return HTTP 200; leave Drop running on port 4004.
-- [x] Push code commit `5fd64f7` to `origin/feat/recipient-unread-e2e`.
-- [ ] Verify same-recipient synchronization in a second browser session; finish hosted, screen-reader, and physical-device checks. Keep PR #7 open for its separate QR browser check.
+- [x] Pass `npm test` (281/281), smoke-script syntax, harness ESLint, `git diff --check`, and the full authenticated local production browser run.
+- [x] Confirm the Rancher Desktop Docker daemon and local Supabase stack are running; start Drop on port 4004 and verify the app, Auth, and Mailpit return HTTP 200.
+- [x] Push code commit `0e672f3` to `origin/feat/recipient-unread-e2e`; record the project notes in a separate commit on the same branch.
+- [ ] Verify hosted behavior, screen-reader output, and physical-device behavior. Keep PR #7 open for its separate QR browser check.
 
 ## Private unread state (2026-10-25)
 
