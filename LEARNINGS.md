@@ -1422,3 +1422,32 @@ Use a production server for checks that depend on document identity. For account
 ### Git and remaining gaps
 
 Code commit `0e672f3` is pushed to `origin/feat/recipient-unread-e2e`; this learning and its README, checklist, plan, and handoff updates are recorded separately on the same branch. No PR is open for this branch. PR #7 remains open for its separate QR browser check. Hosted migration/API behavior, screen-reader output, and physical-device checks remain open. No hosted Supabase resource changed; `.env.local` was not committed, and `/letter` was not changed.
+
+
+## 2026-10-25 — Clarify Home account requirement for sending
+
+### Issue
+
+Home placed “No sign-in” beneath the local demo action without stating that account-backed sending needs a Drop account. A first-time user could mistake the demo for the normal send path.
+
+### Cause
+
+The Home helper described only the demo's local behavior; the account requirement appeared later in Compose.
+
+### Resolution
+
+Changed the Home helper to “Demo stays on this device · a Drop account is needed to send.” Added a browser assertion on the Home demo and prompt entry paths.
+
+### Learning
+
+When a local demo and a real account-backed action share the same entry screen, explain the boundary beside the demo CTA before the user enters the flow.
+
+### Verification
+
+- `npm test`: 281/281 passed; `npm run lint`, `npx tsc --noEmit --incremental false`, `node --check scripts/browser-demo-smoke.mjs`, and `git diff --check` passed.
+- The isolated Chrome prompt smoke passed at 360×844, 390×844, 430×844, and 1440×900, including the new disclosure assertion, keyboard prompt-to-draft behavior, and attachment preservation. It reported zero cross-origin requests.
+- The full GIF flow passed at 360×844 and 390×844. A later viewport timed out waiting for the Home entrance animation although the page content, including the disclosure, was rendered. The test runner diagnosis remains pending.
+
+### Git and remaining gaps
+
+Code commit `64f29b5` is on branch `fix/pilot-send-account-disclosure`; this record and the README, checklist, and handoff updates are in a separate commit on the same branch. Hosted Supabase sending, screen-reader output, physical-device behavior, and the full-flow animation wait remain unverified. No secret was read or recorded, no hosted resource changed, and `/letter` was not modified.

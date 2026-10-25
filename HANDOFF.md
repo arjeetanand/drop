@@ -2,6 +2,15 @@
 
 Updated: 2026-10-25
 
+## Latest checkpoint — Home send-account clarity (2026-10-25)
+
+- Home now says the demo stays on this device and a Drop account is needed to send. The browser smoke asserts this copy before starting the Home prompt flow and before the demo flow.
+- Verification: `npm test` passed 281/281; lint, no-incremental TypeScript, browser-script syntax, and `git diff --check` passed. The focused Chrome prompt flow passed keyboard entry and draft/attachment preservation at 360×844, 390×844, 430×844, and 1440×900; the browser gate recorded zero cross-origin requests. The full GIF smoke passed at 360×844 and 390×844, then timed out waiting for the Home entrance animation at the next viewport even though Home rendered with the new copy.
+- Code commit `64f29b5` is on `fix/pilot-send-account-disclosure`; documentation is in a separate commit on that branch. The isolated Next dev server used port 5004 and is stopped after testing. The canonical app remains on port 4004.
+- Hosted send, screen-reader output, physical-device behavior, and PR #7’s separate QR browser check remain open. No hosted Supabase resource changed; `/letter` and `.env.local` were not changed.
+
+**Next:** resolve or isolate the flaky page-animation wait in the full browser smoke, then continue hosted and device acceptance when the approved Free project and physical-device access are available.
+
 ## Latest checkpoint — local same-recipient unread sync and Docker runtime (2026-10-25)
 
 - Extended the authenticated smoke to three isolated browser profiles: sender plus two sessions for the same recipient. It builds an isolated production app with `next build --webpack`, runs `next start` on port 6004, and verifies that the second recipient session clears “New” after the server read-state refresh while its Home document stays open.

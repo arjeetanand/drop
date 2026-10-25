@@ -2,6 +2,12 @@
 
 Updated: 2026-10-25
 
+## Home send-account clarity (2026-10-25)
+
+- [x] Explain on Home that the no-sign-in demo stays on this device and sending needs a Drop account.
+- [x] Add a browser assertion and pass the Home prompt flow at 360×844, 390×844, 430×844, and 1440×900.
+- [ ] Hosted send, screen-reader output, physical-device behavior, and the QR browser check remain open.
+
 ## Local send, same-recipient unread sync, and reaction browser flow (2026-10-25)
 
 - [x] Verify Compose send, unread Home in two independent sessions for the same recipient at 390×844 and 1440×900, Inbox open/read, recipient 🫶 reaction, and sender live plus reloaded reaction.

@@ -29,7 +29,7 @@ To verify the complete local text-drop loop, run `node scripts/browser-send-reac
 
 ## Try a demo without an account
 
-Choose **Try a demo drop** on Home, then pick the bundled photo or GIF. The sample uses the existing recipient reveal, reaction, and sender-copy screens; it is saved in this browser only, does not upload or send anything, and leaves the active draft untouched. Demo reactions persist on this device.
+Choose **Try a demo drop** on Home, then pick the bundled photo or GIF. Home clarifies that the demo stays on this device and a Drop account is needed to send. The sample uses the existing recipient reveal, reaction, and sender-copy screens; it does not upload or send anything, and leaves the active draft untouched. Demo reactions persist on this device.
 
 After opening the sender copy, **Make one for a friend** starts a new blank, editable text drop. The sample message, reaction, media, and demo identity stay local; an unfinished draft and its attachment remain available. Sending still follows the normal account and recipient steps.
 
