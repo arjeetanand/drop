@@ -6,9 +6,9 @@ Tasks are ordered by dependency. Progress is recorded at each tested and pushed 
 
 - [x] Integrate the mobile composer/accessibility, send/read/reaction, private media claim, PWA import/retry, and first-time signup work on `feat/pilot-integrated-preview`.
 - [x] Pass 287 unit tests, lint, typecheck, browser-script syntax, diff check, and Webpack production build (22 routes); prior local authenticated send/read/reaction, media-claim, and PWA flows passed.
-- [x] Push candidate at `b82f5e0` and open [draft PR #11](https://github.com/arjeetanand/drop/pull/11); keep it unmerged. PR #7 remains open separately.
+- [x] Push the integrated candidate and open [draft PR #11](https://github.com/arjeetanand/drop/pull/11); latest tested harness checkpoint `7dad439` is pushed. Keep it unmerged. PR #7 remains open separately.
 - [x] Pass new-recipient signup-to-private-claim browser journey: signed-out invite, email sign-in, Mailpit callback, handle setup/profile sync, same-claim return, explicit reveal/open, and outsider/replay denial. Exact local fixtures were cleaned. Harness follows intended callback routing and normalizes CSS-uppercase button labels.
-- [ ] Move canonical checkout to this candidate and verify `http://localhost:4004`.
+- [x] Move canonical checkout to this candidate and verify `http://localhost:4004` returns HTTP 200.
 - [ ] Verify hosted delivery/30-day cleanup, installed-PWA system sharing, spoken screen-reader output, and physical-device/QR-camera behavior when those environments are available.
 
 

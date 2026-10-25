@@ -1796,3 +1796,31 @@ When parallel feature work is ready for review, publish one integration branch a
 ### Git and remaining gaps
 
 Before this note is committed, `feat/pilot-integrated-preview` is pushed and tracked at `b82f5e0`, with draft PR #11 open and unmerged. The canonical app checkout still serves the prior branch on port 4004. Hosted delivery and actual 30-day cleanup, installed-PWA/system sharing, spoken screen-reader output, and physical-device/QR-camera checks remain unverified; no hosted Drop project exists.
+
+## 2026-10-25 — Run the integrated pilot from the canonical checkout
+
+### Issue
+
+The review branch was ready, but the stable local URL still ran the older composer branch, so the pilot was not yet available from the user's normal project directory.
+
+### Cause
+
+The integrated branch was checked out in a preview worktree while `/Users/arjeetanand/projects/drop` remained on `feat/pilot-mobile-composer-actions`.
+
+### Resolution
+
+Preserve the previous branch and preview worktree, detach the clean preview at the tested commit, and check out `feat/pilot-integrated-preview` in the canonical folder. Keep the existing ignored `.env.local` there; verify its presence without reading or copying values. Start only the project-owned server through `./run.sh`.
+
+### Learning
+
+For a local handoff, move the verified branch into the canonical checkout and keep the preview worktree recoverable. When the sandbox blocks the known local port, use the existing ownership-checking run script with the needed runtime permission, then verify the HTTP response and listener's project directory.
+
+### Verification
+
+- Before switching, listener PID 91892 had cwd `/Users/arjeetanand/projects/drop` and the expected Node executable. The canonical checkout was clean on the old feature branch.
+- The integrated branch was pushed at `7dad439`; the preview worktree was detached at that commit and preserved. The canonical checkout now reports `feat/pilot-integrated-preview`, and `.env.local` is present and ignored.
+- An ordinary sandboxed start failed with `listen EPERM` on 4004. The same `./run.sh start` succeeded with local runtime permission. Listener PID 33831 has cwd `/Users/arjeetanand/projects/drop`; a loopback request returned HTTP 200.
+
+### Git and remaining gaps
+
+This documentation follow-up is being added on the pushed `feat/pilot-integrated-preview` branch; PR #11 remains open and draft. The hosted Free project is not configured, so hosted delivery and actual 30-day Storage deletion remain unverified. Spoken screen-reader output, installed-PWA/OS sharing, physical-device behavior, and physical camera QR scanning also remain open.

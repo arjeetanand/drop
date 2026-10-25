@@ -15,8 +15,8 @@ Updated: 2026-10-25
 - [x] Pass the production PWA share-target flow nine consecutive times in an isolated run, including import/retry/replay, responsive checks, and the strict request guard; each reported zero blocked cross-origin requests. One earlier final-gate `Invalid InterceptionId` did not reproduce, so no guard code was weakened.
 - [x] Add the public first-sign-up browser check: email form → local Mailpit magic link → callback → profile save/readback; clean up the exact test user, profile, and Mailpit message. Source branch `feat/pilot-first-signup-smoke` passed; its test commit is integrated as `d49aaf3`.
 - [x] Verify a brand-new recipient can sign up from a private claim link, return to that claim, and explicitly claim/reveal the drop. Local browser flow passed signup, Mailpit callback, handle setup, handoff preservation, claim, reveal/open, and outsider/replay denial. The harness follows the app's claim-page-to-profile step and normalizes CSS-uppercase button labels. Exact disposable users/profiles, claim, and Mailpit message were removed.
-- [x] Push the integrated candidate and open [draft PR #11](https://github.com/arjeetanand/drop/pull/11) at `b82f5e0`; keep it unmerged and leave `main` and PR #7 unchanged.
-- [ ] Switch the canonical checkout to `feat/pilot-integrated-preview` and verify the app on port 4004.
+- [x] Open [draft PR #11](https://github.com/arjeetanand/drop/pull/11) from the integrated branch, then push the verified end-to-end harness and handoff update at `7dad439`; keep it unmerged and leave `main` and PR #7 unchanged.
+- [x] Switch the canonical checkout to `feat/pilot-integrated-preview`; `./run.sh start` serves the pilot at `http://localhost:4004` with HTTP 200.
 - [ ] Verify hosted account-to-account behavior and real Storage deletion, screen-reader output, physical-device behavior, installed-PWA/OS share sheet, and a physical camera scan. PR #7's isolated local QR browser check passed and the PR remains open as requested.
 
 ## Pilot accessibility follow-up (2026-10-25)

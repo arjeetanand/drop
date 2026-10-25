@@ -5,13 +5,13 @@ Updated: 2026-10-25
 ## Latest checkpoint — integrated pilot candidate published for review (2026-10-25)
 
 - The current candidate is `feat/pilot-integrated-preview`, tracked by [draft PR #11](https://github.com/arjeetanand/drop/pull/11). It is not merged. PR #7 remains open and unchanged; `git log -1 --oneline --decorate` shows the exact current branch tip.
-- Candidate code commit `723d45f` integrates the first-signup browser test commit `d49aaf3`. Scope includes mobile composer actions/accessibility, send/read/reaction, private photo/GIF claims, PWA share-target recovery, and first-time email signup/profile setup.
+- Candidate app code commit `723d45f` integrates the standalone signup test `d49aaf3`; full first-use claim coverage and its documentation are integrated in the pushed checkpoint `7dad439`. Scope includes mobile composer actions/accessibility, send/read/reaction, private photo/GIF claims, PWA share-target recovery, and first-time email signup/profile setup.
 - Verification on the candidate: 287/287 unit tests, lint, TypeScript, smoke-script syntax, diff check, and Webpack production build (22 routes) passed. Local authenticated text, private-media, and PWA browser flows passed on the candidate application code; the public signup browser flow passed on its source branch and is integrated. Default Turbopack rerun was blocked by font-fetch and worker-port environment restrictions; Webpack build passed.
 - The combined new-recipient signup-to-private-claim test now passes locally: fresh claim, signed-out invite page, email request, Mailpit magic-link callback, handle setup, profile sync, return to the same claim, explicit claim and reveal/open, plus outsider and replay denial. Exact cleanup removed the claim, three disposable Auth users/profiles, and Mailpit message. The harness was corrected to follow the app's claim-page-to-profile step and normalize CSS-uppercase button labels; app source did not need a change.
-- The canonical checkout still serves the previous branch on port 4004; moving the published candidate into the canonical path and verifying the URL is the next local-use step.
+- The canonical `/Users/arjeetanand/projects/drop` checkout is now on `feat/pilot-integrated-preview`. `./run.sh start` serves the pilot at `http://localhost:4004`; the loopback request returned HTTP 200. The previous branch and detached preview worktree were preserved.
 - Hosted email/delivery, storage policy and 30-day cleanup remain unverified because there is no hosted Drop project. Physical camera/phone behavior, installed-PWA system sharing, and spoken screen-reader output remain open. PR #7's local QR browser check passed, but its feature is not in this candidate.
 
-**Next:** switch the canonical checkout to this integrated branch and verify `http://localhost:4004`; keep PR #11 draft and unmerged until the remaining hosted/device gates and your merge approval.
+**Next:** complete hosted Supabase delivery/retention and physical-device, OS-share, screen-reader, and QR-camera checks when their environments are available; keep PR #11 draft and unmerged until the remaining gates and your merge approval.
 
 ## Latest checkpoint — pilot accessibility follow-up (2026-10-25)
 

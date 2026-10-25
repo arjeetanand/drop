@@ -11,10 +11,10 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 ### Latest checkpoint — integrated candidate published for review (2026-10-25)
 
 - Current branch: `feat/pilot-integrated-preview`, tracked by [draft PR #11](https://github.com/arjeetanand/drop/pull/11). It remains unmerged. PR #7 is separate and unchanged; `git log -1 --oneline --decorate` gives the exact branch tip.
-- Candidate app code is at `723d45f`, including signup coverage from `d49aaf3`: accessible mobile composer, local send/read/reaction, private media claims, PWA import/retry, and first-time signup/profile setup.
+- Candidate app code is at `723d45f`, including standalone signup coverage from `d49aaf3`; the full first-use claim browser harness and verification notes were pushed at `7dad439`. Scope includes accessible mobile composer, local send/read/reaction, private media claims, PWA import/retry, and first-time signup/profile setup.
 - Verification passed: `npm test` (287/287), lint, TypeScript, browser-script syntax, diff check, and Webpack production build with 22 routes. Existing authenticated local send/read/reaction, media-claim and PWA flows passed; the focused first-signup smoke passed on its source branch and is integrated.
 - Full recipient signup-to-private-claim journey now passes locally: signup, Mailpit callback, handle setup, profile sync, return to the same claim, explicit claim and reveal/open, and outsider/replay denial. Exact disposable claim, users/profiles, and mailbox message were removed. Harness fixes follow the intended claim-to-profile route and compare CSS-uppercase button labels consistently; app source is unchanged.
-- Next local step is to switch the canonical checkout to this candidate and verify the app at port 4004. Hosted delivery/retention, physical device/QR camera, system share sheet, and spoken screen-reader checks remain open; no hosted Drop project is configured.
+- The canonical checkout now runs this candidate at `http://localhost:4004` (HTTP 200). Hosted delivery/retention, physical device/QR camera, system share sheet, and spoken screen-reader checks remain open; no hosted Drop project is configured.
 
 ### Latest checkpoint — pilot accessibility follow-up (2026-10-25)
 
