@@ -2,6 +2,16 @@
 
 Updated: 2026-10-26
 
+## Local Supabase fixture-target guard (2026-10-26)
+
+- [x] Add a fail-closed listener, Docker endpoint, and matching-container preflight to all six fixture-writing Supabase smoke scripts.
+- [x] Recognize only the exact Rancher Desktop Lima SSH mux socket process title; add regression coverage rejecting a remote SSH tunnel with Rancher markers in unrelated arguments.
+- [x] Pass `npm test` (298/298), lint, no-incremental TypeScript, syntax checks for the helper and six scripts, and `git diff --check`.
+- [x] Pass `npm run test:browser-qr` at 390×844 with exact drop/profile/Auth/process/temp cleanup; QR pixel decoding was unavailable.
+- [x] Pass `npm run test:local-supabase` on the verified local stack, including text/photo/GIF claims, send/read/reaction, relay collection, and cleanup of five disposable accounts and temporary media. No database reset was run.
+- [x] Push code commit `f8c709d` to `origin/feat/pilot-integrated-preview`; PR #11 was verified open/draft at that code head; remote `main` remains `5138f88`.
+- [ ] Provision and verify the hosted Free project after a Management API token is available; then verify hosted two-account delivery, scheduled physical deletion, screen-reader output, installed-PWA sharing, and physical-device/camera behavior.
+
 ## Integrated pilot candidate (2026-10-26)
 
 - [x] Assemble the verified pilot changes on `pilot/combined-verification`, based on `feat/pilot-integrated-preview` at `f0c015a`.

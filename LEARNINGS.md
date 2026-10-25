@@ -2018,3 +2018,32 @@ The QR browser smoke passed after the wrapper was applied; exact disposable clea
 ### Git and remaining gaps
 
 The fix is code commit `2a9cf49`, pushed with the smoke to `origin/feat/pilot-integrated-preview`. PR #11 remains open/draft, and `main` remains unchanged. Hosted delivery and physical/device acceptance remain open.
+
+## 2026-10-26 — Bind fixture smokes to local Supabase containers
+
+### Issue
+
+The fixture-writing smoke scripts treated a loopback Supabase URL as proof that the database was local, even though an SSH process owned the expected ports. A broad Rancher/Lima/socket substring check could also accept a remote SSH tunnel carrying those strings in unrelated arguments.
+
+### Cause
+
+A URL tells the test where it connects, but not who owns the listener or which Docker daemon published it. Process-marker substrings do not prove that an SSH tunnel belongs to Rancher Desktop.
+
+### Resolution
+
+Add one fail-closed preflight that checks the listener owner, active Docker endpoint, and expected `supabase_kong_*` or `supabase_inbucket_*` container before a smoke makes health requests or creates fixtures. Keep the Rancher exception limited to its exact Lima mux socket title. Cover remote-tunnel lookalikes and mismatched Docker endpoints with regression tests.
+
+### Learning
+
+Before a test writes data, verify the complete local chain: configured loopback URL, trusted listener, local Docker context, and matching service container. If any part cannot be inspected, stop before fixture creation.
+
+### Verification
+
+- `npm test` passed 298/298; lint, no-incremental TypeScript, JavaScript syntax checks for the helper and six smoke scripts, and `git diff --check` passed.
+- The 390×844 QR browser smoke passed its local issue/privacy/accessibility journey and removed its exact test drop, Auth user, profile, process groups, browser profile, and temp directory. QR decoding was unavailable.
+- `npm run test:local-supabase` passed the text/photo/GIF claim, send/read/reaction, relay collection, media finalization/retry, and exact cleanup checks for five disposable users plus temporary media. No database reset was run.
+- The application source did not change; no production build was run. The existing app on port 4004 was not restarted.
+
+### Git and remaining gaps
+
+Code commit `f8c709d` is pushed to `origin/feat/pilot-integrated-preview`; PR #11 was verified open/draft at that code head, and `main` remains `5138f88`. The project notes are committed separately. The Supabase CLI has no `SUPABASE_ACCESS_TOKEN`; local anon/service-role keys cannot create a hosted project. No hosted project, billing setting, or hosted data changed. Hosted two-account delivery/retention, screen-reader output, installed-PWA system sharing, and physical-device/camera checks remain open.

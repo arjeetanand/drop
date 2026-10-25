@@ -2,6 +2,16 @@
 
 Updated: 2026-10-26
 
+## Latest checkpoint — local Supabase fixture-target guard (2026-10-26)
+
+- Added a fail-closed listener/Docker/container provenance check to the six fixture-writing Supabase smokes. A review found that broad Rancher/Lima/socket substring matching could accept a lookalike remote SSH tunnel; the guard now accepts only the exact Rancher Desktop Lima mux socket title and requires a local Docker endpoint plus the matching Supabase container.
+- Verification: `npm test` passed 298/298; lint, no-incremental TypeScript, script syntax, and `git diff --check` passed. `npm run test:browser-qr` passed at 390×844 with exact drop/profile/Auth/process/temp cleanup. `npm run test:local-supabase` passed the local text/image/GIF claim, send/read/reaction, relay collection, and cleanup checks for five disposable accounts and temporary media. No database reset was run. No application source changed, so no production build was run.
+- Code commit `f8c709d` is pushed to `origin/feat/pilot-integrated-preview`. GitHub verified PR #11 open/draft at that code head; remote `main` remains `5138f88`; no merge occurred. Port 4004 was not restarted or stopped.
+- The task has no Supabase Management API token. The CLI reports `SUPABASE_ACCESS_TOKEN` missing; `.env.local` app keys are not project-management credentials. No hosted project, billing, or hosted data changed.
+- QR pixel decoding, hosted delivery/retention, screen-reader output, installed-PWA OS sharing, physical camera scanning, and physical-device behavior remain open.
+
+**Next:** add a scoped Management API token locally, verify the Free project, and finish hosted/device acceptance. Keep PR #11 open until the remaining gates pass and the user approves merging.
+
 ## Latest checkpoint — repeatable QR browser smoke pushed (2026-10-26)
 
 - Pushed code commits `9e764e8` (repeatable QR smoke) and `2a9cf49` (loopback-only Supabase requests with redirects denied) to `origin/feat/pilot-integrated-preview`. GitHub confirmed draft PR #11 open at `2a9cf49`; remote `main` remains `5138f88`. No merge occurred.

@@ -6,6 +6,16 @@ Build Drop as a mobile-first private sharing app where a person can send a photo
 
 The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailbox, and relay foundations. Existing letters continue to work as text drops, and their routes and saved content remain readable. The build covers the end-to-end mobile flow: choose content, attach an image or GIF, choose a recipient, send, open, react, and optionally follow a relay.
 
+## Implementation Status — 2026-10-26 (Trusted local Supabase smoke boundary)
+
+- Added `scripts/localSupabaseListener.mjs` and wired its fail-closed preflight into six fixture-writing Supabase smokes. A test now rejects remote `ssh -L` arguments that only contain Rancher/Lima/socket markers; Rancher Desktop is accepted only for the observed Lima mux socket title, a local Docker endpoint, and the matching Supabase service container.
+- Verification: `npm test` passed 298/298; lint, no-incremental TypeScript, syntax checks, and `git diff --check` passed. The 390×844 QR browser smoke and full local Supabase integration smoke both passed with exact cleanup. No app source changed, so the production build was not rerun.
+- Code commit `f8c709d` is pushed to `origin/feat/pilot-integrated-preview`. PR #11 was verified open/draft at that code head; remote `main` remains `5138f88`; no merge occurred.
+- No `SUPABASE_ACCESS_TOKEN` is configured for the CLI. Local app keys are not Management API credentials; no hosted project, billing, or hosted data was changed.
+- Hosted two-account delivery and physical retention, spoken screen-reader output, installed-PWA system sharing, and physical-device/camera acceptance remain open.
+
+**Next:** add a scoped Supabase Management API token locally, then provision/verify the Free project and continue hosted and device acceptance. Keep PR #11 unmerged until the pilot gates pass and the user approves merging.
+
 ## Implementation Status — 2026-10-26 (Repeatable QR browser smoke)
 
 - Added `npm run test:browser-qr` to verify a handleless text claim in an isolated 390×844 browser: pending-row privacy, anonymous denial, labeled/focused QR, fragment-only link shape, stable hide/show, and clearing stale QR state on a new draft. Exact Auth/profile/drop and process/temp cleanup passed.

@@ -1,7 +1,7 @@
 # Local private-claim QR browser verification
 
 **Repeatable smoke run:** 2026-10-26
-**Code:** commits `9e764e8` and `2a9cf49`, pushed to `feat/pilot-integrated-preview` (PR #11 remains open/draft)
+**Code:** original smoke commits `9e764e8` and `2a9cf49`; follow-up local fixture guard `f8c709d` on `feat/pilot-integrated-preview` (PR #11 remains open/draft)
 **Command:** `npm run test:browser-qr`
 **Environment:** isolated headless Chromium-family profile, local app on port 6004, loopback Supabase only
 
@@ -13,6 +13,10 @@
 - No browser-page cross-origin requests, console errors, or runtime exceptions were observed. The page-request firewall is scoped to the browser target; the isolated Next.js dev-server process was not OS-sandboxed.
 - Cleanup verified one exact drop deletion and absence of the disposable profile/Auth user, browser/app process groups, and temporary directory. Port 4004 and hosted Supabase were untouched.
 - This browser did not expose `BarcodeDetector`, so this repeatable smoke checked the link and QR SVG fingerprints, not a decoded QR image. The separate earlier manual run below did decode the captured QR and remains the only pixel-decoding evidence.
+
+### Follow-up run with the local Supabase provenance guard
+
+The QR smoke was rerun after adding the listener guard. It passed the local loopback boundary, issue/privacy/focus/hide-show/new-draft checks, and exact disposable drop/profile/Auth/process cleanup. The actual Rancher Desktop listener passed only after verifying its Lima mux socket title, local Docker context, and matching local Supabase service container. The test browser still lacked `BarcodeDetector`, so this run did not decode QR pixels. The main app port 4004 and hosted Supabase were untouched.
 
 ### Browser startup diagnosis
 
