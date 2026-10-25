@@ -8,16 +8,13 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 
 ## Implementation Status — 2026-10-25
 
-### Latest checkpoint — integrated local pilot candidate (2026-10-25)
+### Latest checkpoint — integrated candidate published for review (2026-10-25)
 
-- The integrated candidate is `feat/pilot-integrated-preview` at code commit `723d45f`, following test commit `d49aaf3`. It includes mobile composer actions, accessible photo/GIF pickers, account-safe PWA import/retry, local send/read/reaction, private photo/GIF claims, and public email sign-up/profile setup through Mailpit. The form now exposes sending through `aria-busy`.
-- `npm test` passed 287/287; lint, TypeScript, smoke-script syntax, and diff check passed after the accessibility fix. The final Webpack production build completed with all 22 routes. The email sign-up smoke passed on its source branch and is integrated here; the browser verified callback, profile persistence, and exact cleanup.
-- Authenticated local production send/read/reaction and photo/GIF claim browser flows passed on the preceding application candidate `4a3b342`; app behavior changed only by the form-level `aria-busy` state in the later code commit.
-- The mobile action tray and clean local navigation passed real Edge checks at six viewport sizes on its dedicated source branch; the same code is included here by patch-equivalent commits. The separate private-claim QR feature in PR #7 passed its authenticated local browser and maximum-scroll checks, but remains outside this candidate and PR #7 stays open as requested.
-- The focused production PWA share-target flow passed nine consecutive isolated runs with functional import, retry, replay, viewport assertions, strict request firewall, and zero cross-origin requests. One earlier final-gate `Fetch.continueRequest: Invalid InterceptionId` was not reproduced; no code was changed without evidence of the request identity or cause.
-- A fresh default Turbopack rerun was blocked by the environment's font-fetch and worker-port restrictions; the final Webpack production build passed. A prior Turbopack build passed at `4a3b342`.
-- The integrated branch remains local and unmerged; port 4004 still runs the previous canonical branch. PR #7's isolated local QR browser check passed and the PR remains open as requested.
-- Remaining pilot gates: combine first-time signup with return to a pending private claim, verify hosted two-account delivery and actual Storage cleanup (no hosted Free project exists), test spoken screen-reader output, use a physical device, verify PWA installation/system share sheet, and scan a QR code with a physical camera.
+- Current branch: `feat/pilot-integrated-preview`, tracked by [draft PR #11](https://github.com/arjeetanand/drop/pull/11). It remains unmerged. PR #7 is separate and unchanged; `git log -1 --oneline --decorate` gives the exact branch tip.
+- Candidate app code is at `723d45f`, including signup coverage from `d49aaf3`: accessible mobile composer, local send/read/reaction, private media claims, PWA import/retry, and first-time signup/profile setup.
+- Verification passed: `npm test` (287/287), lint, TypeScript, browser-script syntax, diff check, and Webpack production build with 22 routes. Existing authenticated local send/read/reaction, media-claim and PWA flows passed; the focused first-signup smoke passed on its source branch and is integrated.
+- Full recipient signup-to-private-claim journey now passes locally: signup, Mailpit callback, handle setup, profile sync, return to the same claim, explicit claim and reveal/open, and outsider/replay denial. Exact disposable claim, users/profiles, and mailbox message were removed. Harness fixes follow the intended claim-to-profile route and compare CSS-uppercase button labels consistently; app source is unchanged.
+- Next local step is to switch the canonical checkout to this candidate and verify the app at port 4004. Hosted delivery/retention, physical device/QR camera, system share sheet, and spoken screen-reader checks remain open; no hosted Drop project is configured.
 
 ### Latest checkpoint — pilot accessibility follow-up (2026-10-25)
 

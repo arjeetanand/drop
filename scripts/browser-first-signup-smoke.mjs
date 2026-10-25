@@ -27,6 +27,11 @@ let chrome;
 let browserCdp;
 let pageCdp;
 let admin;
+let sender;
+let outsider;
+let dropFixture;
+let dropSubject = '';
+let dropContent = '';
 let appError = '';
 let browserError = '';
 let browserSpawnError;
@@ -34,9 +39,19 @@ let appSpawnError;
 let email = '';
 let userId = '';
 let mailpitMessageId = '';
+const mailpitMessageIds = new Set();
 let localSupabaseOrigin = '';
+let localAnonKey = '';
 let cleanupFailed = false;
 let firewallFailure = false;
+let dropCleanupVerified = false;
+let dropCleanupDeleted = 0;
+let mailpitCleanupVerified = false;
+let mailpitCleanupDeleted = 0;
+let authCleanupVerified = 0;
+let profileCleanupVerified = 0;
+const createdUsers = [];
+const browserProcesses = [];
 const allowedOrigins = new Set();
 const blockedExternalOrigins = new Set();
 const exceptions = [];
@@ -338,30 +353,32 @@ async function requestJson(url, options = {}) {
   return response.json();
 }
 
-function observeNetwork() {
-  pageCdp.on('Fetch.requestPaused', ({ requestId, request }) => {
+function observeNetwork(connection) {
+  connection.on('Fetch.requestPaused', ({ requestId, request }) => {
     let origin = '';
     try { origin = new URL(request.url).origin; } catch { /* Invalid URLs are blocked below. */ }
     const allowed = allowedOrigins.has(origin);
     if (!allowed) blockedExternalOrigins.add(origin || '[invalid-url]');
     const method = allowed ? 'Fetch.continueRequest' : 'Fetch.failRequest';
     const params = allowed ? { requestId } : { requestId, errorReason: 'BlockedByClient' };
-    void pageCdp.send(method, params).catch((error) => {
+    void connection.send(method, params).catch((error) => {
       // Chrome can retire a paused request while a same-origin navigation is
       // replacing it. External origins are still blocked by the resolver rule.
       if (!/Invalid InterceptionId/i.test(error.message)) firewallFailure = true;
     });
   });
-  pageCdp.on('Runtime.exceptionThrown', () => exceptions.push('browser exception'));
-  pageCdp.on('Runtime.consoleAPICalled', ({ type }) => {
+  connection.on('Runtime.exceptionThrown', () => exceptions.push('browser exception'));
+  connection.on('Runtime.consoleAPICalled', ({ type }) => {
     if (type === 'error') consoleErrors.push('browser console error');
   });
 }
 
-async function startBrowser() {
+async function startBrowser(profileName) {
   if (typeof WebSocket !== 'function') throw new Error('This smoke needs Node with the built-in WebSocket API.');
   const executable = findChromeExecutable();
-  const profile = join(temporaryRoot, 'chrome-profile');
+  const profile = join(temporaryRoot, profileName);
+  browserError = '';
+  browserSpawnError = undefined;
   const resolverRule = 'MAP * ~NOTFOUND, EXCLUDE 127.0.0.1, EXCLUDE localhost, EXCLUDE [::1]';
   chrome = spawn(executable, [
     '--headless=new',
@@ -384,19 +401,32 @@ async function startBrowser() {
     windowsHide: true,
     detached: process.platform !== 'win32',
   });
+  browserProcesses.push(chrome);
   chrome.on('error', (error) => { browserSpawnError = error; });
   chrome.stderr.on('data', (chunk) => { browserError = `${browserError}${chunk.toString('utf8')}`.slice(-8_000); });
   const devTools = await waitForDevTools(profile);
   browserCdp = await CdpConnection.connect(`ws://127.0.0.1:${devTools.port}${devTools.path}`, active.signal);
   const target = await requestJson(`http://127.0.0.1:${devTools.port}/json/new?about:blank`, { method: 'PUT' });
   pageCdp = await CdpConnection.connect(target.webSocketDebuggerUrl, active.signal);
-  observeNetwork();
+  observeNetwork(pageCdp);
+  try {
+    await browserCdp.send('Browser.grantPermissions', { origin: APP_ORIGIN, permissions: ['clipboardReadWrite'] });
+  } catch { /* The composer still shows a manual link if clipboard permission is unavailable. */ }
   await Promise.all([
     pageCdp.send('Page.enable'),
     pageCdp.send('Runtime.enable'),
     pageCdp.send('Network.enable'),
     pageCdp.send('Fetch.enable', { patterns: [{ urlPattern: '*', requestStage: 'Request' }] }),
   ]);
+}
+
+async function closeCurrentBrowser() {
+  pageCdp?.close();
+  browserCdp?.close();
+  if (chrome) await stopOwnedProcess(chrome, 'isolated browser');
+  pageCdp = undefined;
+  browserCdp = undefined;
+  chrome = undefined;
 }
 
 async function evaluate(expression) {
@@ -416,16 +446,158 @@ async function navigate(url) {
   await pageCdp.send('Page.navigate', { url: parsed.href });
 }
 
-async function findDisposableUser() {
-  if (!admin || !email) return null;
+async function findDisposableUser(targetEmail = email) {
+  if (!admin || !targetEmail) return null;
   for (let page = 1; page <= 100; page += 1) {
     const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 1000 });
     if (error) throw new Error('Could not check for the exact disposable local Auth user.');
-    const match = data.users.find((candidate) => candidate.email?.toLowerCase() === email.toLowerCase());
+    const match = data.users.find((candidate) => candidate.email?.toLowerCase() === targetEmail.toLowerCase());
     if (match) return match;
     if (data.users.length < 1000) return null;
   }
   throw new Error('The local Auth user list exceeded the safety limit for exact cleanup.');
+}
+
+async function createDisposableAccount(label) {
+  const suffix = randomUUID().replaceAll('-', '').slice(0, 12);
+  const accountEmail = `drop-first-claim-${label}-${suffix}@example.test`;
+  const password = `${randomUUID()}${randomUUID()}`;
+  const username = `sm_${label.slice(0, 3)}_${suffix.slice(0, 8)}`;
+  const displayName = label === 'sender' ? 'Pilot Sender' : 'Pilot Outsider';
+  const { data, error } = await admin.auth.admin.createUser({ email: accountEmail, password, email_confirm: true });
+  if (error || !data.user?.id) throw new Error(`Could not create the disposable local ${label} account.`);
+  createdUsers.push({ id: data.user.id, email: accountEmail });
+
+  const { error: profileError } = await admin.from('profiles').insert({
+    id: data.user.id,
+    username,
+    display_name: displayName,
+    bio: '',
+  });
+  if (profileError) throw new Error(`Could not create the disposable local ${label} profile.`);
+
+  const client = createClient(localSupabaseOrigin, localAnonKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+  const { data: session, error: signInError } = await client.auth.signInWithPassword({ email: accountEmail, password });
+  if (signInError || session.user?.id !== data.user.id || !session.session?.access_token) {
+    throw new Error(`Could not authenticate the disposable local ${label} account for access-boundary checks.`);
+  }
+  const { data: profile, error: verifyError } = await client.from('profiles')
+    .select('id, username, display_name')
+    .eq('id', data.user.id)
+    .maybeSingle();
+  assert.ifError(verifyError);
+  assert.deepEqual(profile, { id: data.user.id, username, display_name: displayName });
+  return { id: data.user.id, email: accountEmail, username, displayName, client };
+}
+
+async function generateSenderMagicLink(account) {
+  const { data, error } = await admin.auth.admin.generateLink({
+    type: 'magiclink',
+    email: account.email,
+    options: { redirectTo: `${APP_ORIGIN}/auth/callback` },
+  });
+  if (error || !data.properties?.action_link) throw new Error('Local Supabase could not create the disposable sender sign-in link.');
+  const url = new URL(data.properties.action_link);
+  assert.equal(url.origin, localSupabaseOrigin, 'The sender sign-in link must use loopback Supabase.');
+  assert.equal(url.pathname, '/auth/v1/verify');
+  return url.href;
+}
+
+async function waitForIssuedTextDrop(subject, content) {
+  return waitFor(async () => {
+    const { data, error } = await admin.from('letters')
+      .select('id, sender_id, recipient_id, recipient_username, recipient_name, subject, content, status, delivery_mode, payload_kind')
+      .eq('sender_id', sender.id)
+      .eq('subject', subject)
+      .eq('content', content)
+      .limit(2);
+    if (error) throw new Error('Could not verify the exact local text claim drop.');
+    assert.ok((data || []).length <= 1, 'The unique disposable text claim must create at most one row.');
+    const row = data?.[0];
+    if (!row) return false;
+    dropFixture = { id: row.id, senderId: sender.id, subject, content };
+    assert.deepEqual(row, {
+      id: row.id,
+      sender_id: sender.id,
+      recipient_id: null,
+      recipient_username: null,
+      recipient_name: null,
+      subject,
+      content,
+      status: 'claim_pending',
+      delivery_mode: 'instant',
+      payload_kind: 'text',
+    });
+    return row;
+  }, 'the sender UI to issue one exact private text claim drop');
+}
+
+async function clickButton(label) {
+  const result = await evaluate(`(() => {
+    const normalize = (value) => (value || '').replace(/\\s+/g, ' ').trim().toLocaleLowerCase();
+    const button = Array.from(document.querySelectorAll('button')).find((item) => normalize(item.innerText) === ${JSON.stringify(label.toLocaleLowerCase())});
+    if (!button || button.disabled) return false;
+    button.click();
+    return true;
+  })()`);
+  assert.equal(result, true, `The browser could not activate the ${label} button.`);
+}
+
+async function clickLink(label) {
+  const result = await evaluate(`(() => {
+    const link = Array.from(document.querySelectorAll('a')).find((item) => item.innerText.replace(/\\s+/g, ' ').trim().toLocaleLowerCase() === ${JSON.stringify(label.toLocaleLowerCase())});
+    if (!link) return false;
+    link.click();
+    return true;
+  })()`);
+  assert.equal(result, true, `The browser could not open the ${label} link.`);
+}
+
+async function waitForClaimUiState(predicate, description, handoffId) {
+  try {
+    return await waitFor(predicate, description);
+  } catch (error) {
+    let snapshot = {
+      path: 'unavailable',
+      handoffMatches: false,
+      claimButtonPresent: false,
+      revealButtonPresent: false,
+      openButtonPresent: false,
+      profileFormPresent: false,
+    };
+    try {
+      snapshot = await evaluate(`(() => {
+        const buttonLabels = new Set([...document.querySelectorAll('button')]
+          .map((button) => button.innerText.trim().toLocaleLowerCase()));
+        return {
+          path: location.pathname,
+          handoffMatches: new URLSearchParams(location.search).get('handoff') === ${JSON.stringify(handoffId)},
+          claimButtonPresent: buttonLabels.has('claim this drop'),
+          revealButtonPresent: buttonLabels.has('reveal fragments'),
+          openButtonPresent: buttonLabels.has('open received drop'),
+          profileFormPresent: Boolean(document.querySelector('#display-name')),
+        };
+      })()`);
+    } catch { /* Keep the fallback snapshot free of page or secret data. */ }
+    throw new Error(`${error.message} Safe UI snapshot: ${JSON.stringify(snapshot)}`);
+  }
+}
+
+async function stubNativeShareForTest() {
+  const installed = await evaluate(`(() => {
+    Object.defineProperty(navigator, 'share', {
+      configurable: true,
+      value: async (details) => {
+        if (!details || typeof details.url !== 'string') throw new TypeError('Share URL missing.');
+        window.__dropBrowserE2EShareUrl = details.url;
+        try { window.sessionStorage.setItem('drop-browser-e2e-share-url', details.url); } catch { /* The in-memory value remains available. */ }
+      },
+    });
+    return typeof navigator.share === 'function';
+  })()`);
+  assert.equal(installed, true, 'The isolated browser must allow the share result to be captured without opening a native sheet.');
 }
 
 async function waitForMailpitMessage() {
@@ -433,10 +605,13 @@ async function waitForMailpitMessage() {
     const response = await fetch(`${MAILPIT_API}/messages?limit=100`, { signal: AbortSignal.timeout(5_000) });
     if (!response.ok) throw new Error(`Local Mailpit returned HTTP ${response.status}.`);
     const result = await response.json();
-    const message = result.messages?.find((candidate) =>
-      (candidate.To || []).some((recipient) => (recipient.Address || '').toLowerCase() === email.toLowerCase()));
-    if (!message) return false;
+    const matching = result.messages?.filter((candidate) =>
+      (candidate.To || []).some((recipient) => (recipient.Address || '').toLowerCase() === email.toLowerCase())) || [];
+    if (!matching.length) return false;
+    assert.equal(matching.length, 1, 'The unique public-signup address must receive exactly one local message.');
+    const [message] = matching;
     mailpitMessageId = message.ID;
+    mailpitMessageIds.add(mailpitMessageId);
     assert.ok(mailpitMessageId, 'Mailpit returned a matching message without an ID.');
     return message;
   }, 'the new user’s local Mailpit message');
@@ -475,24 +650,35 @@ async function readMagicLinkFromMailpit() {
 }
 
 async function deleteExactMailpitMessage() {
-  if (!mailpitMessageId && email) {
+  if (email) {
     const response = await fetch(`${MAILPIT_API}/messages?limit=100`, { signal: AbortSignal.timeout(5_000) });
     if (!response.ok) throw new Error('Mailpit did not return the local message list for cleanup.');
     const result = await response.json();
-    const message = result.messages?.find((candidate) =>
-      (candidate.To || []).some((recipient) => (recipient.Address || '').toLowerCase() === email.toLowerCase()));
-    mailpitMessageId = message?.ID || '';
+    for (const message of result.messages || []) {
+      if ((message.To || []).some((recipient) => (recipient.Address || '').toLowerCase() === email.toLowerCase()) && message.ID) {
+        mailpitMessageIds.add(message.ID);
+      }
+    }
   }
-  if (!mailpitMessageId) return;
+  if (mailpitMessageId) mailpitMessageIds.add(mailpitMessageId);
+  const ids = [...mailpitMessageIds];
+  if (!ids.length) {
+    mailpitCleanupVerified = true;
+    return;
+  }
   const response = await fetch(`${MAILPIT_API}/messages`, {
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ IDs: [mailpitMessageId] }),
+    body: JSON.stringify({ IDs: ids }),
     signal: AbortSignal.timeout(5_000),
   });
   if (!response.ok) throw new Error('Mailpit did not delete the exact disposable message.');
-  const check = await fetch(`${MAILPIT_API}/message/${encodeURIComponent(mailpitMessageId)}`, { signal: AbortSignal.timeout(5_000) });
-  if (check.status !== 404) throw new Error('The exact disposable Mailpit message still exists after cleanup.');
+  for (const id of ids) {
+    const check = await fetch(`${MAILPIT_API}/message/${encodeURIComponent(id)}`, { signal: AbortSignal.timeout(5_000) });
+    if (check.status !== 404) throw new Error('An exact disposable Mailpit message still exists after cleanup.');
+    mailpitCleanupDeleted += 1;
+  }
+  mailpitCleanupVerified = true;
 }
 
 async function fillBrowserInput(selector, value) {
@@ -511,27 +697,179 @@ async function fillBrowserInput(selector, value) {
   assert.equal(result, true, `The browser form field ${selector} must be available.`);
 }
 
-async function waitForNewProfileForm() {
+async function waitForNewProfileForm(expectedEmail = email) {
   return waitFor(async () => evaluate(`location.origin === ${JSON.stringify(APP_ORIGIN)}
     && location.pathname === '/profile'
     && document.querySelector('#display-name') !== null
     && document.querySelector('#account-email') === null
-    && document.body.innerText.includes(${JSON.stringify(`Connected as ${email}.`)})
+    && document.body.innerText.includes(${JSON.stringify(`Connected as ${expectedEmail}.`)})
     && !document.querySelector('#display-name').disabled`), 'the signed-in first-use profile form');
 }
 
-async function saveFirstProfile(handle, displayName, bio) {
-  await fillBrowserInput('#display-name', displayName);
-  await fillBrowserInput('#username', handle);
-  await fillBrowserInput('#bio', bio);
+async function createTextClaimInvite() {
+  dropSubject = `Local private note ${randomUUID().slice(0, 8)}`;
+  dropContent = `A first-use claim test note ${randomUUID()}.`;
+  await navigate(`${APP_ORIGIN}/compose?new=1`);
+  await waitFor(async () => evaluate(`location.pathname === '/compose'
+    && document.querySelector('#drop-subject') !== null
+    && document.querySelector('#drop-content') !== null
+    && document.querySelector('#drop-recipient')?.value === ''`), 'the signed-in sender composer with a fresh unaddressed draft');
+  await fillBrowserInput('#drop-subject', dropSubject);
+  await fillBrowserInput('#drop-content', dropContent);
+  await clickButton('Share without a handle');
+  await waitFor(async () => evaluate(`document.querySelector('#unaddressed-claim-title') !== null
+    && [...document.querySelectorAll('button')].some((button) => button.textContent?.includes('Share private link') && !button.disabled)`), 'the sender private text-link action');
+  await stubNativeShareForTest();
+  await clickButton('Share private link');
+
+  const issued = await waitForIssuedTextDrop(dropSubject, dropContent);
+  try {
+    await waitFor(async () => evaluate(`(() => {
+      const params = new URLSearchParams(location.search);
+      return location.pathname === '/sent'
+        && params.get('claim') === '1'
+        && params.get('share') === 'shared'
+        && params.get('letter') === ${JSON.stringify(issued.id)};
+    })()`), 'the sender private claim receipt route', 15_000);
+  } catch {
+    let state = 'unavailable';
+    try {
+      state = await evaluate(`(() => {
+        const params = new URLSearchParams(location.search);
+        return {
+          path: location.pathname,
+          routeParams: ['claim', 'share'].filter((key) => params.has(key)).map((key) => [key, params.get(key)]),
+          hasLetterParam: params.has('letter'),
+          hasPrivateLinkCode: Boolean(document.querySelector('code[aria-label="Select and copy this private claim link"]')),
+          heading: document.querySelector('#claim-pending-title')?.innerText?.trim() || '',
+          statuses: [...document.querySelectorAll('[role="status"], [role="alert"]')]
+            .map((element) => element.innerText.replace(/\\s+/g, ' ').trim()).filter(Boolean).slice(0, 6),
+          buttons: [...document.querySelectorAll('button')]
+            .map((button) => ({ text: button.innerText.replace(/\\s+/g, ' ').trim().slice(0, 80), disabled: button.disabled }))
+            .filter((button) => button.text).slice(0, 12),
+        };
+      })()`);
+    } catch { /* Keep a generic state if the sender page is already gone. */ }
+    throw new Error(`Timed out waiting for the sender private claim receipt route. Safe rendered state: ${JSON.stringify(state)}`);
+  }
+  const receipt = await evaluate(`(() => {
+    const params = new URLSearchParams(location.search);
+    return { path: location.pathname, claim: params.get('claim'), share: params.get('share'), letter: params.get('letter') };
+  })()`);
+  assert.deepEqual(receipt, { path: '/sent', claim: '1', share: 'shared', letter: issued.id }, 'The sender must reach the successful claim receipt for this exact drop.');
+  const linkText = await evaluate(`(() => {
+    const value = window.__dropBrowserE2EShareUrl || window.sessionStorage.getItem('drop-browser-e2e-share-url') || '';
+    try { window.sessionStorage.removeItem('drop-browser-e2e-share-url'); } catch { /* The isolated browser profile is removed after the smoke. */ }
+    return value;
+  })()`);
+  assert.equal(typeof linkText, 'string', 'The sender flow must return the private link to the isolated test.');
+  let url;
+  try { url = new URL(linkText, APP_ORIGIN); }
+  catch { throw new Error('The sender flow did not return a valid private claim link.'); }
+  assert.ok(allowedOrigins.has(url.origin), 'The private claim link must use the isolated app origin.');
+  assert.equal(url.pathname, '/claim', 'The sender must create the supported claim route.');
+  assert.equal(url.search, '', 'The private claim capability must not be in the query string.');
+  const token = new URLSearchParams(url.hash.slice(1)).get('token') || '';
+  assert.ok(/^[a-f0-9]{64}$/i.test(token), 'The private link must carry the expected fragment token.');
+  dropFixture = { ...issued, token, url: url.href };
+  return dropFixture;
+}
+
+async function startUnauthenticatedRecipient(emailAddress) {
+  await navigate(dropFixture.url);
+  let lastClaimPageState;
+  try {
+    await waitFor(async () => {
+      lastClaimPageState = await evaluate(`(() => {
+        const bodyText = document.body.innerText.toLocaleLowerCase();
+        return {
+          appOriginMatches: location.origin === ${JSON.stringify(APP_ORIGIN)},
+          claimRoute: location.pathname === '/claim',
+          hasClaimHeading: bodyText.includes('private claim invite'),
+          hasSignInLink: [...document.querySelectorAll('a')].some((link) => link.innerText.replace(/\\s+/g, ' ').trim().toLocaleLowerCase() === 'sign in or create your account'),
+          hasStorageWarning: bodyText.includes('blocking the storage needed to keep your invite open'),
+        };
+      })()`);
+      return lastClaimPageState.appOriginMatches
+        && lastClaimPageState.claimRoute
+        && lastClaimPageState.hasClaimHeading
+        && lastClaimPageState.hasSignInLink;
+    }, 'the unauthenticated recipient claim page');
+  } catch (error) {
+    throw new Error(`${error.message} Safe page state: ${JSON.stringify(lastClaimPageState || {})}`);
+  }
+  const sealedState = await evaluate(`(() => ({
+    hasSubject: document.body.innerText.toLocaleLowerCase().includes(${JSON.stringify(dropFixture.subject.toLocaleLowerCase())}),
+    hasContent: document.body.innerText.toLocaleLowerCase().includes(${JSON.stringify(dropFixture.content.toLocaleLowerCase())}),
+    hasClaimAction: [...document.querySelectorAll('button')].some((button) => button.innerText.trim().toLocaleLowerCase() === 'claim this drop'),
+    hasOpenedBody: Boolean(document.querySelector('#letter-body')),
+    imageCount: document.querySelectorAll('img').length,
+    handoff: new URLSearchParams(location.search).get('handoff'),
+    hash: location.hash,
+  }))()`);
+  assert.equal(sealedState.hasSubject, false, 'The unclaimed text subject must remain sealed.');
+  assert.equal(sealedState.hasContent, false, 'The unclaimed text content must remain sealed.');
+  assert.equal(sealedState.hasClaimAction, false, 'An unauthenticated browser cannot claim before setup.');
+  assert.equal(sealedState.hasOpenedBody, false, 'The unopened letter body must not render on the claim page.');
+  assert.equal(sealedState.imageCount, 0, 'The text claim page must not render media.');
+  assert.equal(sealedState.hash, '', 'The claim token fragment must be removed from the visible address.');
+  assert.match(sealedState.handoff || '', /^[0-9a-f-]{36}$/i, 'The browser must retain an opaque return handoff.');
+
+  await clickLink('Sign in or create your account');
+  await waitFor(async () => evaluate(`location.pathname === '/profile'
+    && document.querySelector('#account-email') !== null
+    && (new URLSearchParams(location.search).get('next') || '').startsWith('/claim?handoff=')`), 'the claim-linked public email form');
+  const claimHandoffId = await evaluate(`(() => {
+    const next = new URL(new URLSearchParams(location.search).get('next') || '/', location.origin);
+    return next.searchParams.get('handoff');
+  })()`);
+  assert.equal(claimHandoffId, sealedState.handoff, 'The profile route must retain the original invite handoff.');
+
+  await fillBrowserInput('#account-email', emailAddress);
   await evaluate(`(() => {
-    const form = document.querySelector('#display-name')?.closest('form');
+    const form = document.querySelector('#account-email')?.closest('form');
     if (!form) return false;
     form.requestSubmit(form.querySelector('button[type="submit"]'));
     return true;
   })()`);
-  await waitFor(async () => evaluate(`location.pathname === '/profile'
-    && [...document.querySelectorAll('button')].some((button) => button.textContent?.includes('Saved & synced'))`), 'the new profile to save and sync');
+  await waitFor(async () => evaluate(`document.body.innerText.includes('Sign-in link sent. Check your inbox to continue.')`), 'the public email form to request a sign-in link');
+  const message = await waitForMailpitMessage();
+  console.log('[browser-first-signup-smoke] PASS unauthenticated browser opened the sealed text invite and requested email sign-in.');
+  return { claimHandoffId, message };
+}
+
+async function saveFirstClaimProfile(handle, displayName, bio, claimHandoffId) {
+  await waitForNewProfileForm();
+  await fillBrowserInput('#display-name', displayName);
+  await fillBrowserInput('#username', handle);
+  await fillBrowserInput('#bio', bio);
+  await clickButton('Save & sync handle');
+  await waitForClaimUiState(async () => evaluate(`location.origin === ${JSON.stringify(APP_ORIGIN)}
+    && location.pathname === '/claim'
+    && new URLSearchParams(location.search).get('handoff') === ${JSON.stringify(claimHandoffId)}
+    && [...document.querySelectorAll('button')].some((button) => button.innerText.trim().toLocaleLowerCase() === 'claim this drop' && !button.disabled)`), 'first profile save to return to the original invite claim action', claimHandoffId);
+}
+
+async function revealClaimedText(fixture, handoffId) {
+  await waitForClaimUiState(async () => evaluate(`location.pathname === ${JSON.stringify(`/letter/${fixture.id}`)}
+    && document.body.innerText.includes(${JSON.stringify(fixture.subject)})
+    && [...document.querySelectorAll('button')].some((button) => button.innerText.trim().toLocaleLowerCase() === 'reveal fragments' && !button.disabled)`), 'the claimed drop page before reveal', handoffId);
+  const sealed = await evaluate(`(() => ({
+    path: location.pathname,
+    hasContent: document.body.innerText.toLocaleLowerCase().includes(${JSON.stringify(fixture.content.toLocaleLowerCase())}),
+    bodyExists: Boolean(document.querySelector('#letter-body')),
+  }))()`);
+  assert.equal(sealed.path, `/letter/${fixture.id}`);
+  assert.equal(sealed.hasContent, false, 'The recipient must explicitly reveal the claimed note.');
+  assert.equal(sealed.bodyExists, false, 'The note body must stay closed until the reveal action.');
+  await clickButton('Reveal fragments');
+  await waitForClaimUiState(async () => evaluate(`location.pathname === ${JSON.stringify(`/letter/${fixture.id}`)}
+    && [...document.querySelectorAll('button')].some((button) => button.innerText.trim().toLocaleLowerCase() === 'open received drop')`), 'the recipient reveal confirmation', handoffId);
+  await clickButton('Open received drop');
+  await waitFor(async () => evaluate(`document.querySelector('#letter-body')?.innerText.includes(${JSON.stringify(fixture.content)})`), 'the opened text drop content');
+  const openedText = await evaluate(`document.querySelector('#letter-body')?.innerText || ''`);
+  assert.ok(openedText.includes(fixture.content), 'The opened text drop must show its full content.');
+  assert.equal(await evaluate(`document.body.innerText.includes(${JSON.stringify(fixture.subject)})`), true, 'The opened text drop must show its subject.');
 }
 
 async function stopOwnedProcess(child, label) {
@@ -564,12 +902,22 @@ async function stopOwnedProcess(child, label) {
 async function cleanup() {
   pageCdp?.close();
   browserCdp?.close();
-  for (const [child, label] of [[chrome, 'isolated browser'], [app, 'isolated Next.js app']]) {
+  let ownedProcessesStopped = true;
+  for (const child of browserProcesses) {
     if (!child) continue;
-    try { await stopOwnedProcess(child, label); }
+    try { await stopOwnedProcess(child, 'isolated browser'); }
     catch {
+      ownedProcessesStopped = false;
       cleanupFailed = true;
-      console.error(`[browser-first-signup-smoke] CLEANUP FAILED: could not stop its ${label} process.`);
+      console.error('[browser-first-signup-smoke] CLEANUP FAILED: could not stop its isolated browser process.');
+    }
+  }
+  if (app) {
+    try { await stopOwnedProcess(app, 'isolated Next.js app'); }
+    catch {
+      ownedProcessesStopped = false;
+      cleanupFailed = true;
+      console.error('[browser-first-signup-smoke] CLEANUP FAILED: could not stop its isolated Next.js app process.');
     }
   }
   try { await deleteExactMailpitMessage(); }
@@ -577,28 +925,80 @@ async function cleanup() {
     cleanupFailed = true;
     console.error('[browser-first-signup-smoke] CLEANUP FAILED: the exact disposable Mailpit message could not be removed.');
   }
-  if (admin && email) {
+
+  if (admin && sender?.id && (dropFixture?.id || (dropSubject && dropContent))) {
     try {
-      const candidate = userId ? { id: userId } : await findDisposableUser();
-      if (candidate?.id) {
-        const { error } = await admin.auth.admin.deleteUser(candidate.id);
-        if (error) throw new Error('delete failed');
-        const { data: profile, error: profileError } = await admin.from('profiles').select('id').eq('id', candidate.id).maybeSingle();
-        if (profileError || profile) throw new Error('profile cleanup did not complete');
-        const remainingUser = await findDisposableUser();
-        if (remainingUser) throw new Error('Auth cleanup did not complete');
+      let query = admin.from('letters')
+        .select('id, sender_id')
+        .eq('sender_id', sender.id);
+      query = dropFixture?.id
+        ? query.eq('id', dropFixture.id)
+        : query.eq('subject', dropSubject).eq('content', dropContent);
+      const { data: matches, error: lookupError } = await query.limit(2);
+      if (lookupError || (matches || []).length > 1) throw new Error('ambiguous exact letter lookup');
+      const target = matches?.[0];
+      if (target) {
+        const { error: deleteError } = await admin.from('letters')
+          .delete()
+          .eq('id', target.id)
+          .eq('sender_id', sender.id);
+        if (deleteError) throw new Error('exact letter delete failed');
+        const { data: remaining, error: verifyError } = await admin.from('letters')
+          .select('id')
+          .eq('id', target.id)
+          .eq('sender_id', sender.id)
+          .maybeSingle();
+        if (verifyError || remaining) throw new Error('exact letter still exists');
+        dropCleanupDeleted += 1;
       }
+      dropCleanupVerified = true;
     } catch {
       cleanupFailed = true;
-      console.error('[browser-first-signup-smoke] CLEANUP FAILED: exact disposable Auth/profile cleanup did not complete.');
+      console.error('[browser-first-signup-smoke] CLEANUP FAILED: the exact disposable text drop could not be removed.');
     }
   }
-  if (temporaryRoot) {
+
+  if (admin) {
+    const targets = new Map(createdUsers.map((candidate) => [candidate.id, candidate.email]));
+    if (email) {
+      try {
+        const recipient = userId ? { id: userId, email } : await findDisposableUser(email);
+        if (recipient?.id) targets.set(recipient.id, recipient.email || email);
+      } catch {
+        cleanupFailed = true;
+        console.error('[browser-first-signup-smoke] CLEANUP FAILED: could not resolve the exact public-signup Auth user.');
+      }
+    }
+    for (const [id, targetEmail] of targets) {
+      try {
+        const { data: existingUser, error: lookupError } = await admin.auth.admin.getUserById(id);
+        if (lookupError && !/not found/i.test(lookupError.message || '')) throw new Error('Auth lookup failed');
+        if (existingUser?.user) {
+          const { error: deleteError } = await admin.auth.admin.deleteUser(id);
+          if (deleteError) throw new Error('Auth delete failed');
+        }
+        const { data: profile, error: profileError } = await admin.from('profiles').select('id').eq('id', id).maybeSingle();
+        if (profileError || profile) throw new Error('profile still exists');
+        profileCleanupVerified += 1;
+        if (targetEmail && await findDisposableUser(targetEmail)) throw new Error('exact Auth user still exists');
+        authCleanupVerified += 1;
+      } catch {
+        cleanupFailed = true;
+        console.error('[browser-first-signup-smoke] CLEANUP FAILED: an exact disposable Auth/profile pair could not be removed.');
+      }
+    }
+  }
+  if (temporaryRoot && ownedProcessesStopped) {
     try { await rm(temporaryRoot, { recursive: true, force: true }); }
     catch {
       cleanupFailed = true;
       console.error('[browser-first-signup-smoke] CLEANUP FAILED: could not remove its isolated app and browser profile.');
     }
+  } else if (temporaryRoot && !ownedProcessesStopped) {
+    console.error('[browser-first-signup-smoke] Preserved its temporary directory because an owned child process may still be running.');
+  }
+  if (!cleanupFailed) {
+    console.log(`[browser-first-signup-smoke] CLEANUP VERIFIED exactDropAbsent=${dropCleanupVerified} exactDropsDeleted=${dropCleanupDeleted} disposableAuthUsersAbsent=${authCleanupVerified} profilesAbsent=${profileCleanupVerified} recipientMailpitMessagesAbsent=${mailpitCleanupVerified} recipientMailpitMessagesDeleted=${mailpitCleanupDeleted} temporaryDirectoryRemoved=${Boolean(temporaryRoot && ownedProcessesStopped)}.`);
   }
 }
 
@@ -615,6 +1015,7 @@ async function main() {
   const anonKey = localValues.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const serviceRoleKey = localValues.SUPABASE_SERVICE_ROLE_KEY;
   assert.ok(anonKey && serviceRoleKey, '.env.local must contain local anon and service-role keys.');
+  localAnonKey = anonKey;
   assert.ok(existsSync(resolve(PROJECT_ROOT, 'node_modules/next/dist/bin/next')), 'Install project dependencies before running this smoke.');
   allowedOrigins.add(APP_ORIGIN);
   allowedOrigins.add(supabaseUrl.origin);
@@ -627,49 +1028,107 @@ async function main() {
     auth: { autoRefreshToken: false, persistSession: false },
   });
   email = `drop-first-signup-${randomUUID().replaceAll('-', '').slice(0, 20)}@example.test`;
-
   const handle = `sm${randomUUID().replaceAll('-', '').slice(0, 10)}`;
   const displayName = `Pilot ${randomUUID().slice(0, 6)}`;
-  const bio = 'First signup smoke profile.';
+  const bio = 'First signup private claim smoke profile.';
 
   temporaryRoot = await mkdtemp(join(tmpdir(), 'drop-first-signup-'));
   try {
     await startTemporaryApp(localValues);
-    await startBrowser();
-    await navigate(`${APP_ORIGIN}/profile`);
+    sender = await createDisposableAccount('sender');
+    outsider = await createDisposableAccount('outsider');
+    await startBrowser('sender-browser');
+    await navigate(await generateSenderMagicLink(sender));
     await waitFor(async () => evaluate(`location.origin === ${JSON.stringify(APP_ORIGIN)}
-      && location.pathname === '/profile'
-      && document.querySelector('#account-email') !== null`), 'the first-use profile sign-in form');
+      && location.pathname !== '/auth/callback'`), 'the disposable sender magic-link callback');
+    await navigate(`${APP_ORIGIN}/profile`);
+    await waitForNewProfileForm(sender.email);
+    await navigate(`${APP_ORIGIN}/compose`);
+    await createTextClaimInvite();
+    console.log('[browser-first-signup-smoke] PASS sender created a private text claim through the composer UI.');
+    await closeCurrentBrowser();
 
-    await fillBrowserInput('#account-email', email);
-    await evaluate(`(() => {
-      const form = document.querySelector('#account-email')?.closest('form');
-      if (!form) return false;
-      form.requestSubmit(form.querySelector('button[type="submit"]'));
-      return true;
-    })()`);
-    await waitFor(async () => evaluate(`document.body.innerText.includes('Sign-in link sent. Check your inbox to continue.')`), 'the app to accept the email sign-in request');
-    console.log('[browser-first-signup-smoke] PASS email form accepted a new local account.');
-
-    await waitForMailpitMessage();
-    const newUser = await waitFor(async () => findDisposableUser(), 'the new local Auth user to appear');
+    await startBrowser('recipient-browser');
+    const { claimHandoffId } = await startUnauthenticatedRecipient(email);
+    const newUser = await waitFor(async () => findDisposableUser(email), 'the public email form to create the exact new local Auth user');
     userId = newUser.id;
+    if (!createdUsers.some((candidate) => candidate.id === userId)) createdUsers.push({ id: userId, email });
     const { data: beforeProfile, error: beforeProfileError } = await admin.from('profiles').select('id').eq('id', userId).maybeSingle();
     assert.ifError(beforeProfileError);
-    assert.equal(beforeProfile, null, 'The new account must not already have a profile before first-use setup.');
+    assert.equal(beforeProfile, null, 'The new recipient account must not already have a profile before first-use setup.');
 
     const magicLink = await readMagicLinkFromMailpit();
     await navigate(magicLink);
-    await waitForNewProfileForm();
-    console.log('[browser-first-signup-smoke] PASS browser opened the Mailpit magic link and returned to the new account.');
+    await waitFor(async () => evaluate(`location.origin === ${JSON.stringify(APP_ORIGIN)}
+      && location.pathname === '/claim'
+      && new URLSearchParams(location.search).get('handoff') === ${JSON.stringify(claimHandoffId)}
+      && [...document.querySelectorAll('a')].some((link) => link.innerText.replace(/\\s+/g, ' ').trim().toLocaleLowerCase() === 'choose a drop handle')`), 'the email callback to return to the private claim and show its handle-setup link');
+    await clickLink('Choose a Drop handle');
+    await waitForNewProfileForm(email);
+    const returnedHandoffId = await evaluate(`(() => {
+      const next = new URL(new URLSearchParams(location.search).get('next') || '/', location.origin);
+      return next.searchParams.get('handoff');
+    })()`);
+    assert.equal(returnedHandoffId, claimHandoffId, 'The handle-setup link must preserve the original claim handoff.');
+    console.log('[browser-first-signup-smoke] PASS new recipient opened the local Mailpit email link and returned to first profile setup.');
 
-    await saveFirstProfile(handle, displayName, bio);
+    const recipientHandle = handle;
+    const recipientDisplayName = displayName;
+    await saveFirstClaimProfile(recipientHandle, recipientDisplayName, bio, claimHandoffId);
     const { data: savedProfile, error: savedProfileError } = await admin.from('profiles')
       .select('id, username, display_name, bio')
       .eq('id', userId)
       .maybeSingle();
     assert.ifError(savedProfileError);
-    assert.deepEqual(savedProfile, { id: userId, username: handle, display_name: displayName, bio });
+    assert.deepEqual(savedProfile, { id: userId, username: recipientHandle, display_name: recipientDisplayName, bio });
+
+    const { data: beforeClaim, error: beforeClaimError } = await admin.from('letters')
+      .select('id, recipient_id, status')
+      .eq('id', dropFixture.id)
+      .eq('sender_id', sender.id)
+      .maybeSingle();
+    assert.ifError(beforeClaimError);
+    assert.deepEqual(beforeClaim, { id: dropFixture.id, recipient_id: null, status: 'claim_pending' }, 'Profile setup alone must not claim the invite.');
+    const { data: outsiderBefore, error: outsiderBeforeError } = await outsider.client.from('letters')
+      .select('id')
+      .eq('id', dropFixture.id)
+      .maybeSingle();
+    assert.ifError(outsiderBeforeError);
+    assert.equal(outsiderBefore, null, 'An unrelated account must not read an unclaimed private drop.');
+
+    await clickButton('Claim this drop');
+    await waitFor(async () => evaluate(`location.origin === ${JSON.stringify(APP_ORIGIN)}
+      && location.pathname === ${JSON.stringify(`/letter/${dropFixture.id}`)}`), 'the explicit recipient claim to open the received drop page');
+    await revealClaimedText(dropFixture, claimHandoffId);
+
+    const { data: claimedLetter, error: claimedLetterError } = await admin.from('letters')
+      .select('id, sender_id, recipient_id, recipient_username, recipient_name, subject, content, status, delivery_mode, payload_kind')
+      .eq('id', dropFixture.id)
+      .eq('sender_id', sender.id)
+      .maybeSingle();
+    assert.ifError(claimedLetterError);
+    assert.deepEqual(claimedLetter, {
+      id: dropFixture.id,
+      sender_id: sender.id,
+      recipient_id: userId,
+      recipient_username: recipientHandle,
+      recipient_name: recipientDisplayName,
+      subject: dropFixture.subject,
+      content: dropFixture.content,
+      status: 'delivered',
+      delivery_mode: 'instant',
+      payload_kind: 'text',
+    }, 'The local database must record the claimed text drop for the new profile.');
+
+    const { data: outsiderAfter, error: outsiderAfterError } = await outsider.client.from('letters')
+      .select('id')
+      .eq('id', dropFixture.id)
+      .maybeSingle();
+    assert.ifError(outsiderAfterError);
+    assert.equal(outsiderAfter, null, 'An unrelated account must not read a claimed private drop.');
+    const { data: replay, error: replayError } = await outsider.client.rpc('claim_drop_invite', { p_token: dropFixture.token });
+    assert.equal(replayError?.code, '42501', 'An unrelated account must not replay the consumed invite.');
+    assert.equal(replay, null);
 
     const { data: confirmedUser, error: confirmedUserError } = await admin.auth.admin.getUserById(userId);
     assert.ifError(confirmedUserError);
@@ -679,7 +1138,7 @@ async function main() {
     assert.equal(firewallFailure, false, 'The isolated browser network guard must remain active.');
     assert.deepEqual(consoleErrors, [], 'The first-use browser flow must not produce console errors.');
     assert.deepEqual(exceptions, [], 'The first-use browser flow must not throw page exceptions.');
-    console.log('[browser-first-signup-smoke] PASS first-use profile was saved to local Supabase and confirmed by an independent admin read.');
+    console.log('[browser-first-signup-smoke] PASS new recipient completed first profile setup, explicitly claimed, revealed, and opened the text drop.');
   } finally {
     await cleanup();
   }
@@ -692,7 +1151,7 @@ process.once('SIGINT', onSigint);
 process.once('SIGTERM', onSigterm);
 
 main().then(() => {
-  console.log('[browser-first-signup-smoke] PASS exact disposable Auth/profile cleanup completed; only loopback Supabase/Mailpit were used, and ports 4004 and hosted Supabase were untouched.');
+  console.log('[browser-first-signup-smoke] PASS exact disposable letter, Auth/profile, and Mailpit cleanup completed; only loopback Supabase/Mailpit were used, and ports 4004 and hosted Supabase were untouched.');
 }).catch((error) => {
   active.abort(error);
   console.error(`[browser-first-signup-smoke] FAIL: ${error?.stack || error?.message || error}`);

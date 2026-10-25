@@ -1767,3 +1767,32 @@ In an append-only learning log, preserve old evidence but add a dated clarificat
 ### Git and remaining gaps
 
 This is a documentation clarification on the uncommitted `feat/pilot-integrated-preview` worktree. The full new-user-to-private-claim journey, hosted verification, screen-reader output, physical-device behavior, and OS share sheet remain open.
+
+## 2026-10-25 — Publish one integrated pilot candidate for review
+
+### Issue
+
+Pilot work had accumulated across feature branches, while the current integration candidate and its documentation still described the branch as local and unpublished. That made it hard to tell which branch was the latest reviewable version.
+
+### Cause
+
+Parallel work had been tested and integrated locally, but branch publication and a single review link had not yet been completed. The combined first-time-recipient claim journey was still under test.
+
+### Resolution
+
+Push `feat/pilot-integrated-preview` and open it as draft PR #11. Keep it unmerged and leave `main` and PR #7 unchanged. Update the README, checklist, plan, todo, and handoff to name the same branch, commit, PR, verification, and remaining gates.
+
+### Learning
+
+When parallel feature work is ready for review, publish one integration branch and point every status document to its exact Git tip and PR. Keep unfinished end-to-end journeys visible as pending gates instead of describing the pilot as fully accepted.
+
+### Verification
+
+- `git push -u origin feat/pilot-integrated-preview` created the remote branch; `git ls-remote` returned `b82f5e0d292bbeceea0bdce95624f30f0ee906af`.
+- `gh pr view 11` confirmed an open draft PR targeting `main` at the same head SHA. `git rev-list --left-right --count origin/main...HEAD` returned `0 25` before this documentation commit.
+- Candidate checks already passed: 287/287 unit tests, lint, typecheck, smoke-script syntax, diff check, and Webpack production build. Local authenticated send/read/reaction, media-claim, PWA, standalone signup, and combined new-recipient claim flows passed.
+- The combined signup-to-private-claim browser flow passed after two harness issues were corrected. The first attempt used a seeded `/compose` draft. A later run waited for `/profile` immediately after email callback, but the app correctly returned to `/claim?handoff=…` first and exposed a “Choose a Drop handle” link. After following it, another run reached the claim action but a case-sensitive assertion did not account for `.button-primary` CSS text transformation. The harness now follows the intended route and compares rendered labels case-insensitively; the final run passed signup, profile sync, same-claim return, explicit reveal/open, and outsider/replay denial. Exact local users, profiles, claim, and Mailpit message were removed. No app-source change was required.
+
+### Git and remaining gaps
+
+Before this note is committed, `feat/pilot-integrated-preview` is pushed and tracked at `b82f5e0`, with draft PR #11 open and unmerged. The canonical app checkout still serves the prior branch on port 4004. Hosted delivery and actual 30-day cleanup, installed-PWA/system sharing, spoken screen-reader output, and physical-device/QR-camera checks remain unverified; no hosted Drop project exists.
