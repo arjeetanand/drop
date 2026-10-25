@@ -87,3 +87,7 @@ Mailbox history is paged beyond the API's 1,000-row limit, and reaction reads ru
 Carrier invite accepts keep the exact attempt details in the current browser tab for up to 24 hours. If the response is interrupted, refresh the same invite in that tab and choose “Retry same handoff”; Drop clears the record after the carrier pass is saved.
 
 When a connected sender has confirmed that a recipient handle is not on Drop, Relay mode offers **Switch to Instant for a private link**. The switch keeps the current draft and saved media, then focuses the existing private claim-link action. It does not send or share anything until the sender explicitly chooses that action. Relay claim links remain unavailable.
+
+## Continuous integration
+
+Pull requests and pushes to `main` run the secret-free GitHub Actions gate in `.github/workflows/ci.yml`: `npm ci`, unit tests, lint, Next.js route type generation, TypeScript checking, and a Webpack production build. Draft [PR #9](https://github.com/arjeetanand/drop/pull/9) is open; its first GitHub Actions run passed on code commit `d27e381`.

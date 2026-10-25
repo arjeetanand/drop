@@ -1,6 +1,6 @@
 # Drop integration checklist
 
-Updated: 2026-10-24
+Updated: 2026-10-25
 
 ## Candidate and PR
 
@@ -41,3 +41,11 @@ Updated: 2026-10-24
 - [ ] Verify the installed PWA share target and OS share sheet in a browser/device that supports the required flow.
 - [ ] Check screen-reader announcements and physical-device keyboard/safe-area behavior.
 - [ ] Validate two-account photo/GIF claims and actual 30-day Storage cleanup against the approved Free Supabase project.
+
+## CI gate (2026-10-25)
+
+- [x] Add a pull-request and `main` push workflow with read-only repository permissions and no Supabase secrets.
+- [x] Pass a clean `npm ci`, all unit tests, lint, Next.js `typegen`, route-aware TypeScript check, and Webpack production build in the isolated branch.
+- [x] Push `chore/pilot-ci` at `d27e381` and open draft [PR #9](https://github.com/arjeetanand/drop/pull/9); its GitHub Actions job has started.
+- [x] Confirm the initial PR #9 GitHub Actions job passed on `d27e381`; GitGuardian also passed. Recheck the current head after each push.
+- [ ] Resolve the critical Next.js dependency advisories in the separate security patch branch before a hosted pilot.
