@@ -202,6 +202,18 @@ function loadLocalConfig(source) {
   return { url: parsedUrl, anonKey, serviceRoleKey };
 }
 
+function localSupabaseFetch(input, init = {}) {
+  const rawUrl = input && typeof input === 'object' && 'url' in input ? input.url : String(input);
+  let parsed;
+  try { parsed = new URL(rawUrl); }
+  catch { throw new Error('A Supabase smoke request used an invalid URL.'); }
+  const hostname = parsed.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  if (!LOOPBACK_HOSTS.has(hostname) || parsed.origin !== localSupabaseUrl.origin) {
+    throw new Error('A Supabase smoke request left its validated loopback origin.');
+  }
+  return fetch(input, { ...init, redirect: 'error' });
+}
+
 function guardSelfTest() {
   assert.equal(requireLoopbackSupabaseUrl('http://127.0.0.1:54321').origin, 'http://127.0.0.1:54321');
   assert.equal(requireLoopbackSupabaseUrl('http://localhost:54321').hostname, 'localhost');
@@ -651,6 +663,7 @@ async function createDisposableSender() {
   assert.ifError(verifyError);
   assert.deepEqual(profile, { id: data.user.id, username: userName });
   const localClient = createClient(localSupabaseUrl.origin, localAnonKey, {
+    global: { fetch: localSupabaseFetch },
     auth: { autoRefreshToken: false, persistSession: false },
   });
   const { data: signedIn, error: signInError } = await localClient.auth.signInWithPassword({ email, password });
@@ -1072,12 +1085,14 @@ async function main() {
   assert.equal(browserEnvironment().SUPABASE_SERVICE_ROLE_KEY, undefined);
 
   currentStep = 'check loopback Supabase Auth health';
-  const health = await fetch(new URL('/auth/v1/health', localSupabaseUrl), { signal: AbortSignal.timeout(5_000) });
+  const health = await localSupabaseFetch(new URL('/auth/v1/health', localSupabaseUrl), { signal: AbortSignal.timeout(5_000) });
   assert.ok(health.ok, `Local Supabase Auth health returned HTTP ${health.status}.`);
   admin = createClient(localSupabaseUrl.origin, config.serviceRoleKey, {
+    global: { fetch: localSupabaseFetch },
     auth: { autoRefreshToken: false, persistSession: false },
   });
   anonymous = createClient(localSupabaseUrl.origin, localAnonKey, {
+    global: { fetch: localSupabaseFetch },
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
