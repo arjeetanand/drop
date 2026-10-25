@@ -16,6 +16,7 @@ import {
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const loopbackHosts = new Set(['localhost', '127.0.0.1', '[::1]']);
+const MAX_FINALIZED_MEDIA_BYTES = 8 * 1024 * 1024;
 const requiredEnv = (name) => {
   const value = process.env[name]?.trim();
   if (!value) throw new Error(`Set ${name} in the process environment; this script does not read .env files.`);
@@ -304,7 +305,24 @@ async function issueUnknownHandleMedia({ sender, appUrl, payloadKind, bytes, mim
   const finalized = await response.json();
   assert.equal(finalized.mediaPath, expectedMediaPath, 'Finalization must bind media to this drop and owner');
   assert.equal(finalized.mediaMimeType, mimeType, 'Finalization must preserve the fixture MIME type');
-  assert.equal(finalized.mediaSizeBytes, bytes.length, 'Finalization must report the exact validated byte length');
+  assert.ok(
+    Number.isInteger(finalized.mediaSizeBytes)
+      && finalized.mediaSizeBytes > 0
+      && finalized.mediaSizeBytes <= MAX_FINALIZED_MEDIA_BYTES,
+    `Finalization must report a positive ${payloadKind} size within 8 MiB`,
+  );
+
+  const { data: finalizedStorageObject, error: finalizedStorageError } = await admin.storage
+    .from('drop-media')
+    .download(finalized.mediaPath);
+  ensureNoError(finalizedStorageError, `Could not read finalized ${payloadKind} from Storage`);
+  assert.ok(finalizedStorageObject, `Finalized ${payloadKind} should exist in Storage`);
+  const finalizedStorageBytes = Buffer.from(await finalizedStorageObject.arrayBuffer());
+  assert.equal(
+    finalizedStorageBytes.byteLength,
+    finalized.mediaSizeBytes,
+    `Finalization size must match the sanitized ${payloadKind} object in Storage`,
+  );
 
   const { data: stagedAfterFinalize, error: stagedAfterFinalizeError } = await admin.storage.from('drop-media').download(stagedPath);
   assert.ok(stagedAfterFinalizeError && !stagedAfterFinalize, 'The finalize route should remove the staged upload');
@@ -330,7 +348,7 @@ async function issueUnknownHandleMedia({ sender, appUrl, payloadKind, bytes, mim
     mediaPath: finalized.mediaPath,
     mimeType,
     mediaSizeBytes: finalized.mediaSizeBytes,
-    bytes,
+    bytes: finalizedStorageBytes,
   };
 }
 
@@ -370,7 +388,7 @@ async function assertClaimedDropAccess(account, expected, claimant) {
   const { data: media, error: mediaError } = await account.client.storage.from('drop-media').download(expected.mediaPath);
   ensureNoError(mediaError, `The ${expected.payloadKind} participant download failed`);
   assert.ok(media, `The sender and claimant should download the ${expected.payloadKind}`);
-  assert.deepEqual(Buffer.from(await media.arrayBuffer()), expected.bytes, `The retrieved ${expected.payloadKind} must match the repository fixture`);
+  assert.deepEqual(Buffer.from(await media.arrayBuffer()), expected.bytes, `The retrieved ${expected.payloadKind} must match the finalized Storage object`);
 
   const { data: signed, error: signedError } = await account.client.storage.from('drop-media').createSignedUrl(expected.mediaPath, 60);
   ensureNoError(signedError, `The ${expected.payloadKind} participant could not create a short-lived URL`);

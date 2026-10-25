@@ -39,6 +39,18 @@ test('uses the validated loopback origin string directly for Supabase clients an
   assert.doesNotMatch(source, /supabaseUrl\.href/);
 });
 
+test('checks sanitized output against the finalized Storage object instead of the upload fixture size', async () => {
+  const source = await readFile(scriptPath, 'utf8');
+
+  assert.match(source, /const MAX_FINALIZED_MEDIA_BYTES = 8 \* 1024 \* 1024;/);
+  assert.match(source, /Number\.isInteger\(finalized\.mediaSizeBytes\)[\s\S]{0,160}finalized\.mediaSizeBytes <= MAX_FINALIZED_MEDIA_BYTES/);
+  assert.match(source, /download\(finalized\.mediaPath\)/);
+  assert.match(source, /Buffer\.from\(await finalizedStorageObject\.arrayBuffer\(\)\)/);
+  assert.match(source, /finalizedStorageBytes\.byteLength,[\s\S]{0,100}finalized\.mediaSizeBytes/);
+  assert.match(source, /bytes: finalizedStorageBytes/);
+  assert.doesNotMatch(source, /assert\.equal\(finalized\.mediaSizeBytes,\s*bytes\.length/);
+});
+
 test('local photo/GIF smoke requires dedicated process environment values', () => {
   const result = runSmoke({});
 
