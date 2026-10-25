@@ -1453,3 +1453,56 @@ For a local API smoke, inspect the configured API port only, then bind the expec
 ### Git and remaining gaps
 
 Code commit `a71e255b415a0ed03dcfa73066b88b1f86e3aca2` is local on `fix/e2e-local-endpoint-guard`, based on `429a6294a172d20f335845a93e6d920a6d9e49fa`. This learning and the README, checklist, and handoff update are in a separate local documentation commit. Nothing was pushed and no PR was opened. The canonical checkout, `/letter`, `.env.local`, and hosted Supabase were not changed. After QA confirms a loopback-only Docker mapping, run the approved local API/browser smokes and verify disposable-data cleanup. Docker daemon metadata is local operator-controlled state, and state can change after the preflight; this is not cryptographic endpoint attestation.
+
+## 2026-10-25 — Constrain cleanup paths in the photo/GIF claim smoke
+
+### Issue
+
+If the real finalize route returned an unexpected media path, the smoke could fail its exact-path assertion before registering that returned object for cleanup.
+
+### Cause
+
+The test tracked the expected path before finalization, but cleanup did not know about a different path returned by the route. Blindly deleting any returned path would risk crossing the disposable test boundary.
+
+### Resolution
+
+- Validate the returned path against the unique disposable sender/drop prefix and a single safe object-name segment.
+- Add only a validated in-scope path to the cleanup set before asserting it equals the expected path.
+- Add a regression that checks the namespace constraint and registration order.
+
+### Learning
+
+For integration tests that create resources before asserting response details, register unexpected returned resources for cleanup only after validating ownership and namespace. Keep the tracking step before assertions that may throw.
+
+### Verification
+
+- `npm test`: 298/298 passed; `npm run lint`, `npm run typecheck`, script syntax checks, and `git diff --check` passed.
+- Independent review found no actionable issue. The local photo/GIF claim smoke passed all three assertion groups; cleanup verified zero disposable users, profiles, drops, invites, cleanup jobs, and media objects.
+
+### Git
+
+Code commit `50432436bc95a01335b6355302ee3e205cf2bce7` on `test/local-photo-gif-claim-smoke-guard` is pushed to `github`. No PR or merge was created. The app at port 4004 stayed available; the isolated QA project was stopped with its volumes preserved. No hosted resources or `/letter` files changed, and no secret values were written to the repository.
+
+## 2026-10-25 — Restore the local media-cleanup readiness prerequisite
+
+### Issue
+
+The dedicated media smoke reached the finalize route but could not issue a private media invite; the database returned SQLSTATE `55000` because `private.drop_media_cleanup_is_scheduled()` returned false.
+
+### Cause
+
+The isolated QA database had `pg_cron`, Vault entries, and the expected active hourly job, but `pg_net` was not installed, so the required `net` namespace was absent.
+
+### Resolution
+
+- Verified the job identity/schedule and required Vault secret names/lengths without reading or printing secret values.
+- Installed only `pg_net` in the disposable local QA database. The readiness predicate then returned true.
+- Reran the photo/GIF claim smoke, verified exact disposable-data cleanup, and stopped the QA project before the scheduled minute. The cleanup worker was not invoked.
+
+### Learning
+
+When a local feature gate depends on a scheduled database worker, verify each prerequisite separately: extensions, exact job name/schedule/command, and required Vault names. A configured cron row alone does not prove `pg_net` can dispatch the worker.
+
+### Verification and Git
+
+The photo/GIF smoke passed all three assertion groups with zero remaining test users, profiles, drops, invites, cleanup jobs, or media objects. This environment-only repair is not a Drop source-code change; test-script code commit `5043243` was pushed on the task branch. The original local app returned HTTP 200 on port 4004. Hosted Supabase and `/letter` were untouched.

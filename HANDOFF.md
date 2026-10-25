@@ -2,7 +2,19 @@
 
 Updated: 2026-10-25
 
-## Latest checkpoint — fail-closed local Supabase endpoint guard (2026-10-25)
+## Latest checkpoint — local photo/GIF claim pilot smoke (2026-10-25)
+
+- The media-smoke branch is `/private/tmp/drop-media-claim`, `test/local-photo-gif-claim-smoke-guard`, code tip `50432436bc95a01335b6355302ee3e205cf2bce7`. It is pushed to GitHub; no PR was opened and no branch was merged. The endpoint-guard branch is separately pushed at `efe873a`.
+- The dedicated check exercised the real `/api/drop-media/finalize` route and two-account claim API for a repository PNG and GIF. Both remained private before claim; the profiled recipient explicitly claimed them; the sender and recipient could read and download; outsiders could not read, download, sign, or replay. The smoke is API/integration coverage, not a rendered-browser check.
+- Verification on this branch: `npm test` passed 298/298; `npm run lint`, `npm run typecheck`, `node --check scripts/local-photo-gif-claim-smoke.mjs`, endpoint-guard syntax, and `git diff --check` passed. Independent review found no actionable issue in the cleanup-path hardening.
+- QA used isolated project `drop-qa-isolated-20261025-q7m4` with loopback-only published ports. The migration readiness gate initially rejected media issuance because the disposable database lacked `pg_net`; only that local extension was installed. `pg_cron`, `pg_net`, Vault, the exact active `drop-expired-drop-media-hourly` job, and the required secret-presence/length checks then passed. The cleanup worker was not invoked.
+- The smoke passed all three assertion groups. Final counts were zero for disposable Auth users, profiles, `smoke-*` drops, claim invites, cleanup jobs, and `drop-media` objects. The QA stack was stopped with backup enabled before its scheduled minute; no project containers/listeners remain, and all three QA volumes remain.
+- The existing local app at `http://localhost:4004/` returned HTTP 200 and remained on its existing Node process. QA port 5004 and Supabase ports 55321–55329 are free.
+- Hosted provisioning remains blocked in this workspace because the Supabase and signed-in browser integrations are disabled by admin. No hosted project or resource was changed. PR #7 remains open for its separate QR browser check. The relay collection/privacy work is active on `test/local-relay-pilot-smoke`.
+
+**Next:** finish and independently review the relay privacy check. After that, resolve hosted Free-project access, deploy and verify hosted migrations/Auth/storage/cleanup, and complete PR #7's QR browser check. Do not merge these task branches until their checks are complete and a merge is approved.
+
+## Previous checkpoint — fail-closed local Supabase endpoint guard (2026-10-25)
 
 - Scratch checkout: `/private/tmp/drop-e2e-guard`, branch `fix/e2e-local-endpoint-guard`, based on `feat/recipient-unread-e2e` at `429a6294a172d20f335845a93e6d920a6d9e49fa`. Harness code is committed locally as `a71e255b415a0ed03dcfa73066b88b1f86e3aca2` (`test: guard local Supabase smoke endpoints`); this checklist/README/handoff/learning record is a separate local documentation commit. The canonical checkout was not edited. No push or PR was made.
 - The local Supabase API and browser smoke scripts now validate the configured API port and require a local Docker context plus the exact expected `supabase_kong_<project-id>` container, matching `com.supabase.cli.project` label, Running status, and `8000/tcp` host mapping restricted to loopback and the configured port. This check also runs when lsof returns no owner. Unknown listener owners, remote Docker contexts, absent/mismatched containers, and wildcard mappings fail closed before any Supabase client or API request.

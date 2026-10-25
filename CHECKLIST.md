@@ -2,15 +2,27 @@
 
 Updated: 2026-10-25
 
+## Pilot acceleration — local send and claim readiness (2026-10-25)
+
+- [x] Push the endpoint guard on `fix/e2e-local-endpoint-guard` at `efe873a`; its focused review found no actionable issue.
+- [x] Push `test/local-photo-gif-claim-smoke-guard` at `5043243`; the full suite passes 298/298, lint and typecheck pass, and script syntax/diff checks pass.
+- [x] Run the isolated local photo/GIF claim smoke: finalize both media types, deny access before claim and to outsiders, allow the explicit claimant and sender, and deny replay.
+- [x] Verify cleanup leaves zero disposable Auth users, profiles, drops, claim invites, cleanup jobs, or `drop-media` objects; stop the isolated stack with volumes preserved before its scheduled job time.
+- [x] Confirm the existing app at `http://localhost:4004/` returns HTTP 200; do not stop or restart its process.
+- [ ] Finish the isolated relay collection privacy smoke on `test/local-relay-pilot-smoke` and review any migration change before pushing.
+- [ ] Provision the approved Free hosted Supabase project and verify migrations, Auth, storage, and worker deployment; current workspace Supabase/browser tools are admin-disabled.
+- [ ] Complete PR #7's separate QR browser check; leave PR #7 open until that check is done.
+
 ## Fail-closed local Supabase smoke endpoint guard (2026-10-25)
 
 - [x] Require a loopback HTTP URL and inspect only its configured API port before any Supabase client, health fetch, or temporary app starts.
 - [x] Require the expected project ID and a local Docker context whose exact `supabase_kong_<id>` container is running, has the matching Supabase project label, and maps `8000/tcp` only to the configured loopback API port. This check runs even when lsof reports no owner.
 - [x] Support per-value process environment overrides for the local URL/anon/service-role keys, `.env.local` fallback, and an explicit expected-project ID override for isolated local stacks; keep service-role values out of Chrome's environment.
-- [x] Add synthetic process, container mapping, URL, env, and secret-exclusion tests; focused guard tests pass 10/10, all other installed-dependency unit tests pass 288/288, syntax checks pass, and `git diff --check` passes.
-- [ ] Full `npm test` remains blocked by unavailable `sharp` (`ERR_MODULE_NOT_FOUND` in `tests/dropMediaValidation.test.mjs`); lint and typecheck commands cannot start because `eslint` and `tsc` are not installed in this scratch checkout. Dependencies were not installed.
-- [ ] Local Supabase/API and authenticated browser smokes were not run. QA reported the current isolated API port is wildcard-published on `0.0.0.0` and `::` and requested that runtime smoke wait for a loopback-only restart; no Supabase endpoint was contacted.
-- [ ] After QA confirms the isolated container is restarted with loopback-only mappings, run only the approved local API/browser checks, then verify exact disposable-data cleanup. Hosted Supabase remains out of scope.
+- [x] Add synthetic process, container mapping, URL, env, and secret-exclusion tests; focused guard tests pass 11/11, the guard branch suite passes 292/292, lint/typecheck/syntax checks pass, and `git diff --check` passes.
+- [x] Push guard commit `efe873a` to `github/fix/e2e-local-endpoint-guard` after testing; no PR or merge was created.
+- [x] Run local API and photo/GIF claim checks against a loopback-only isolated Supabase project. The first attempt correctly stopped at the database cleanup-readiness gate because the disposable DB lacked `pg_net`; adding only that local extension made the predicate pass.
+- [x] Verify the media smoke's exact disposable-data cleanup and stop the isolated project with its volumes preserved. No cleanup worker ran and no hosted endpoint was contacted.
+- [ ] Hosted Supabase and rendered media-claim browser verification remain separate; continue with the approved Free project when workspace access is available.
 
 ## Local send, same-recipient unread sync, and reaction browser flow (2026-10-25)
 
