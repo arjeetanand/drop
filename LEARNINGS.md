@@ -1329,6 +1329,36 @@ When localhost is unavailable, first check whether the app process is running. A
 
 No application code or environment file changed. This issue-resolution record is on `chore/docker-runtime-recovery`; see the branch's latest Git commit for the exact SHA and the final task report for push status. Hosted Supabase behavior, real aged-object deletion, screen-reader use, and physical-device checks remain open.
 
+## 2026-10-25 — Review recipient RLS visibility during relay transit
+
+### Issue
+
+An independent review suspected that authenticated recipients could directly read raw relay handoff notes/coordinates and letter events while the relay was still dispatched.
+
+### Cause
+
+The `relay_handoffs` and `letter_events` policies contain participant `EXISTS` subqueries against `public.letters`, and the handoff table grants authenticated users only its route columns. Read without composing those policies with the referenced table's own RLS, that SQL can look as though participant rows are visible before collection.
+
+### Resolution
+
+- Rechecked `20261018000100_relay_handoff_tokens.sql`, `20261022000000_restrict_relay_handoff_column_select.sql`, `20260823000000_dear_exe.sql`, and `20261023000000_relay_recipient_collection.sql` with the independent reviewer.
+- Confirmed no migration change was needed. PostgreSQL evaluates policy expressions with the caller's privileges; the recipient SELECT policy on `letters` filters out a `dispatched` letter, so the nested `EXISTS` predicates for raw handoffs and letter events return false. The recipient-specific security-definer `get_recipient_relay_drops()` RPC intentionally returns the limited route summary.
+- Kept the authenticated API regression checks: the exact disposable recipient queries raw handoff note/coordinate columns and a private event before collection and receives empty arrays, while the route summary remains available. The smoke also verifies route closure after collection and removes the exact disposable data.
+
+### Learning
+
+Review RLS policies as a composed query: a subquery inside one policy is subject to the referenced table's RLS under the querying role unless ownership, `BYPASSRLS`, or a security-definer boundary changes that context. Prove privacy using the actual authenticated API role and a populated fixture; table grants alone do not establish row visibility.
+
+### Verification
+
+- The disposable local API smoke passed with the recipient's authenticated Supabase client. Before collection, the direct `relay_handoffs` query for `note`, `handoff_lat`, `handoff_lng`, `accepted_lat`, and `accepted_lng` returned `[]`; the direct `letter_events.note` query also returned `[]`. The safe route RPC returned one expected journey summary; collection, retry, post-collection access, denial checks, route closure, and cleanup passed.
+- The rollback-only PostgreSQL fixture passed on isolated database `drop_relay_pilot_sql_20261025_1121` and ended with `ROLLBACK`. It verifies recipient denial for dispatched letters, handoff rows, and reactions, safe route fields, collection authorization/idempotence, release after collection, and private inbox notifications. It does not independently seed a `letter_events` row; that case is covered by the API smoke above.
+- `npm test`: 292/292 passed. `npm run lint`, `npm run typecheck`, smoke syntax, and `git diff --check` passed. No hosted Supabase request or credential was used.
+
+### Git and remaining gaps
+
+Code commit `cb2f196` (`test: cover local relay pilot delivery`) and the accompanying README, checklist, handoff, and learning update are published on `test/local-relay-pilot-smoke`, based on `efe873a`. No PR was opened and no merge was performed; PR #7 remains open for its separate QR browser check. The QA owner reconfirmed the exact isolated project is stopped, ports 55321–55329 are clear, its three volumes are preserved, and the app on port 4004 is untouched. Rendered UI, hosted behavior, media/GIF relay, screen-reader output, and physical-device behavior remain open.
+
 ## 2026-10-25 — Add private, durable recipient unread state
 
 ### Issue

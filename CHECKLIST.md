@@ -2,6 +2,17 @@
 
 Updated: 2026-10-25
 
+## Local relay sender–carrier–recipient pilot (2026-10-25)
+
+- [x] Add `npm run test:local-relay` with the exact local Supabase endpoint/project guard and unique sender, recipient, carrier-account, and outsider fixtures.
+- [x] Verify text-relay dispatch, short-lived handoff pass, anonymous carrier acceptance, same-request recovery, changed/new-request replay denial, and a route summary that omits message and coordinate fields.
+- [x] Verify recipient content/event/reaction privacy before collection, denied sender/carrier/outsider collection, repeat-safe recipient collection, post-collection visibility, and route closure.
+- [x] Extend the rollback-only SQL fixture for column-level handoff privacy, collection authorization/idempotency, route data release, and exactly-once private inbox notifications.
+- [x] Verify smoke cleanup removes the exact letter, event, four profiles, and four Auth users; the SQL fixture rolled back in a unique throwaway database that was then dropped.
+- [x] Pass `npm test` (292/292), `npm run lint`, `npm run typecheck`, smoke syntax, `git diff --check`, the local API smoke, and the local PostgreSQL fixture.
+- [x] Stop only `drop-qa-isolated-20261025-q7m4` with backup enabled; verify no project containers or listeners on 55321–55329 and preserve its three named volumes. Leave the existing app on port 4004 running.
+- [ ] Verify the rendered sender/carrier/recipient UI, hosted behavior, media/GIF relay, screen-reader output, and physical-device behavior.
+
 ## Fail-closed local Supabase smoke endpoint guard (2026-10-25)
 
 - [x] Require a loopback HTTP URL and inspect only its configured API port before any Supabase client, health fetch, or temporary app starts.

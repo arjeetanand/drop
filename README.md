@@ -29,6 +29,14 @@ To run the authenticated browser smoke, start the local Supabase stack and provi
 
 To verify the complete local text-drop loop, run `node scripts/browser-send-react-smoke.mjs` with local Supabase running and the same loopback-only environment values or `.env.local` file. It builds an isolated production app with `next build --webpack` and runs it on port 6004 with `next start`. Three isolated browser profiles cover the sender and two sessions for the same recipient: the smoke sends from Compose, checks unread state at 390×844 and 1440×900, opens and reacts, then verifies the second recipient session clears “New” from the next server refresh without reloading. It also checks the sender's live and reloaded reaction and removes the exact disposable drop, reaction, accounts, profiles, app, and browser profiles. The exact local project/container guard runs before API requests, and the service-role key is not passed to browser code. This exercises local text sending and reaction behavior, not hosted delivery or media claims.
 
+## Local relay pilot smoke
+
+Run `npm run test:local-relay` after starting the approved loopback-only local Supabase project and supplying its URL, anon key, and service-role key through the process environment or `.env.local`. Set `DROP_LOCAL_SUPABASE_EXPECTED_PROJECT_ID` when the isolated project's ID differs from `supabase/config.toml`; the shared endpoint guard checks the configured API port and exact local Kong project mapping before creating clients. This smoke uses only the Supabase API port (55321 for the isolated QA project), leaves the main app on port 4004 untouched, and does not start the app or use browser port 5004.
+
+The check creates four disposable accounts and a text relay, issues a short-lived carrier pass, verifies same-request recovery and changed/new-request replay denial, checks route-only privacy before recipient collection, denies collection to sender/carrier/outsider accounts, and verifies the recipient's repeat-safe collection. After collection it checks recipient access, sender access, outsider denial, and route closure. Cleanup verifies the letter, private event, profiles, and Auth users are gone. It covers the local API lifecycle; rendered UI, hosted behavior, media/GIF relay, screen readers, and physical devices remain unverified.
+
+The rollback-only SQL companion is `tests/db/relay_handoff_tokens.sql`. Run it with `psql` in a disposable test database because it creates the auth, storage, realtime, and public test schema objects inside a transaction. The fixture ends with `ROLLBACK`; do not run it against the application database.
+
 ## Try a demo without an account
 
 Choose **Try a demo drop** on Home, then pick the bundled photo or GIF. The sample uses the existing recipient reveal, reaction, and sender-copy screens; it is saved in this browser only, does not upload or send anything, and leaves the active draft untouched. Demo reactions persist on this device.
