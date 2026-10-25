@@ -2139,7 +2139,7 @@ async function main() {
   try {
     const hostnameForResolver = appUrl.hostname.replace(/^\[|\]$/g, '');
     const resolverRule = `MAP * ~NOTFOUND, EXCLUDE ${hostnameForResolver}`;
-    console.log(`[browser-demo-smoke] Starting isolated Chrome: ${chromeExecutable}`);
+    console.log(`[browser-demo-smoke] Starting isolated browser: ${chromeExecutable}`);
     chrome = spawn(chromeExecutable, [
       '--headless=new',
       '--remote-debugging-port=0',
@@ -2166,13 +2166,13 @@ async function main() {
     });
 
     const devTools = await waitForDevTools(profileDir, chrome, () => spawnError, interrupted.signal);
-    console.log('[browser-demo-smoke] Chrome DevTools is ready.');
+    console.log('[browser-demo-smoke] Browser DevTools is ready.');
     const versionInfo = await requestJson(`http://127.0.0.1:${devTools.port}/json/version`);
     assert.equal(typeof versionInfo.webSocketDebuggerUrl, 'string', 'Chrome did not expose its DevTools WebSocket URL.');
     browserCdp = await CdpConnection.connect(devTools.browserWebSocketUrl, interrupted.signal);
 
     const target = await requestJson(`http://127.0.0.1:${devTools.port}/json/new?about:blank`, { method: 'PUT' });
-    console.log('[browser-demo-smoke] Connected to the isolated Chrome page.');
+    console.log('[browser-demo-smoke] Connected to the isolated browser page.');
     pageTargetId = target.id;
     assert.equal(typeof target.webSocketDebuggerUrl, 'string', 'Chrome did not create an isolated page target.');
     pageCdp = await CdpConnection.connect(target.webSocketDebuggerUrl, interrupted.signal);
@@ -2271,7 +2271,7 @@ async function main() {
     ]);
     await setViewport(pageCdp, MOBILE_VIEWPORTS[1]);
 
-    console.log(`[browser-demo-smoke] Chrome: ${chromeExecutable}`);
+    console.log(`[browser-demo-smoke] Browser: ${chromeExecutable}`);
     const flowName = dropBackOnly ? 'drop-back-only' : shareTargetOnly ? 'share-target-only' : claimRecoveryOnly ? 'claim-recovery' : promptOnly ? 'prompt-only' : friendDraftOnly ? 'friend-draft-only' : 'full';
     const flowViewports = friendDraftOnly || shareTargetOnly || dropBackOnly ? [MOBILE_VIEWPORTS[1]] : FLOW_VIEWPORTS;
     console.log(`[browser-demo-smoke] App: ${appUrl.origin}; ${flowName} flow viewports: ${flowViewports.map(({ name }) => name).join(', ')}.`);
