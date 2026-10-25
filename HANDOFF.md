@@ -2,6 +2,15 @@
 
 Updated: 2026-10-25
 
+## Latest checkpoint — production browser smoke stability and pilot candidate (2026-10-25)
+
+- Stabilized the full browser smoke after headless Chrome stalled on `page-enter` animation state during viewport changes. The runner now waits for route content and the page shell, settles for 420ms (the CSS animation is 380ms), and includes animation details in timeout snapshots. Reveal, open, and sender-copy actions after reload use keyboard input; the initial 360px flow still exercises touch.
+- Verification: `npm test` passed 281/281; `npm run lint`, no-incremental TypeScript, browser-smoke syntax, targeted ESLint, and `git diff --check` passed. The production build passed with 22 routes. The isolated production browser smoke passed the GIF path at 360×844, 390×844, 430×844, and 1440×900; the photo/reaction/reload path at 390×844; the prompt-to-draft path with existing attachment preservation; and handleless claim choice plus saved-claim recovery at all four widths. It reported zero cross-origin requests and no horizontal overflow. Screenshots were visually reviewed at mobile and desktop sizes.
+- Code commit `36f557d` is pushed to `fix/pilot-send-account-disclosure`; this handoff, checklist, plan, README, and learning update are committed separately on the same branch. The candidate builds on the locally verified account-to-account send, unread-sync, and reaction work from `feat/recipient-unread-e2e`. Nothing was merged; PR #7 remains open for its QR check.
+- Drop remains on `http://localhost:4004`; the isolated production test server on 6004 is stopped after verification. This demo/recovery smoke does not establish hosted account-to-account behavior. Hosted verification, screen-reader output, physical-device behavior, system share-sheet behavior, and PR #7's QR browser check remain open.
+
+**Next:** complete the authorized Free-project hosted send checks when the project credentials and local endpoint are available, then finish screen-reader and physical-device acceptance. Keep PR #7 open until its QR browser check passes.
+
 ## Latest checkpoint — Home send-account clarity (2026-10-25)
 
 - Home now says the demo stays on this device and a Drop account is needed to send. The browser smoke asserts this copy before starting the Home prompt flow and before the demo flow.

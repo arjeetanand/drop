@@ -1451,3 +1451,31 @@ When a local demo and a real account-backed action share the same entry screen, 
 ### Git and remaining gaps
 
 Code commit `64f29b5` is on branch `fix/pilot-send-account-disclosure`; this record and the README, checklist, and handoff updates are in a separate commit on the same branch. Hosted Supabase sending, screen-reader output, physical-device behavior, and the full-flow animation wait remain unverified. No secret was read or recorded, no hosted resource changed, and `/letter` was not modified.
+
+## 2026-10-25 — Stabilize the production demo browser smoke
+
+### Issue
+
+The full production browser smoke intermittently stopped after reload or viewport changes, leaving the GIF, reaction-persistence, and sender-copy journey without reliable coverage.
+
+### Cause
+
+The runner required every `main.page-enter` animation to report `playState === "finished"`. A timeout snapshot showed the Home route and content were loaded while headless Chrome kept the finite CSS animation at `currentTime: 0`. A touch dispatch also timed out on the post-reload path at 360px. These failures came from the automation timing/input gates; the route content and app state were present.
+
+### Resolution
+
+Wait for the route content and page shell, then allow a named 420ms settle above the current 380ms CSS duration. Include animation state in timeout diagnostics. Use keyboard activation for post-reload reveal, open, and sender-copy actions while keeping touch in the initial 360px flow.
+
+### Learning
+
+Browser acceptance should wait for route-specific content and a bounded visual settle, not make a functional flow depend on headless animation timelines. Keep touch coverage in a stable first-run path and use deterministic keyboard input for the flaky post-reload path.
+
+### Verification
+
+- `npm test`: 281/281 passed. Lint, no-incremental TypeScript, browser-smoke syntax and targeted ESLint, and `git diff --check` passed. The production build passed with 22 routes.
+- The isolated production Chrome smoke passed GIF at 360×844, 390×844, 430×844, and 1440×900; photo/reaction reload at 390×844; prompt-to-editable-draft with attachment preservation; and handleless claim plus saved-claim recovery at all four widths. It reported zero cross-origin requests and no horizontal overflow.
+- Mobile and desktop screenshots were visually reviewed. Independent read-only review found no blocker in the harness change.
+
+### Git and remaining gaps
+
+Code commit `36f557d` is pushed to `fix/pilot-send-account-disclosure`; this log and the README, checklist, plan, and handoff are in the following documentation commit on that branch. Nothing was merged; PR #7 remains open for its QR browser check. Hosted account-to-account behavior, screen-reader output, physical-device behavior, and the system share sheet remain unverified. No hosted resource changed, and `/letter` was not modified.

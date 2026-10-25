@@ -8,6 +8,13 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 
 ## Implementation Status — 2026-10-25
 
+### Latest checkpoint — stable production browser smoke and pilot candidate (2026-10-25)
+
+- The candidate is `fix/pilot-send-account-disclosure` at code commit `36f557d`. It carries the Home account disclosure and the locally verified send, unread-sync, and reaction journey from `feat/recipient-unread-e2e`.
+- Stabilized browser verification by waiting for page content/shell plus the 420ms visual settle, instead of requiring headless Chrome's CSS animation to report `finished`. After reload, the smoke uses keyboard activation; the initial 360px path continues to cover touch.
+- Verification passed: 281/281 unit tests, lint, no-incremental TypeScript, browser-smoke syntax/ESLint, diff check, production build (22 routes), and the isolated production browser smoke at 360×844, 390×844, 430×844, and 1440×900. GIF, photo/reaction reload, prompt-to-editable-draft with attachment preservation, handleless claim choice, and saved-claim recovery passed. The browser request gate recorded zero cross-origin requests.
+- This is a local pilot candidate, not hosted acceptance. Hosted account-to-account behavior, screen-reader output, physical-device behavior, the operating-system share sheet, and PR #7's QR check remain pending. The branch is pushed and unmerged.
+
 ### Latest checkpoint — local same-recipient unread sync and Docker runtime (2026-10-25)
 
 - Extended the local authenticated browser smoke to sender plus two sessions for the same recipient. It builds an isolated production app with `next build --webpack` and runs `next start` on port 6004.
