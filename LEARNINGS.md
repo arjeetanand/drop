@@ -1422,3 +1422,34 @@ Use a production server for checks that depend on document identity. For account
 ### Git and remaining gaps
 
 Code commit `0e672f3` is pushed to `origin/feat/recipient-unread-e2e`; this learning and its README, checklist, plan, and handoff updates are recorded separately on the same branch. No PR is open for this branch. PR #7 remains open for its separate QR browser check. Hosted migration/API behavior, screen-reader output, and physical-device checks remain open. No hosted Supabase resource changed; `.env.local` was not committed, and `/letter` was not changed.
+
+## 2026-10-25 — Fail closed before local Supabase smoke requests
+
+### Issue
+
+The local API and browser smoke scripts could contact a configured loopback port even when its listener was an SSH/tunnel or an unrecognized process. A port number in a loopback URL did not establish that the expected Supabase project owned that endpoint.
+
+### Cause
+
+The scripts validated loopback URLs but did not verify the listener owner or tie a remapped port to an expected local Supabase project before creating clients, fetching Auth health, or starting an app.
+
+### Resolution
+
+- Added a shared preflight for the exact configured API port. It reads the expected project ID from `supabase/config.toml` or an explicit `DROP_LOCAL_SUPABASE_EXPECTED_PROJECT_ID`, requires a local Unix/npipe Docker context, and inspects only `supabase_kong_<project-id>`.
+- The preflight requires the exact Docker container name, `running` status, matching `com.supabase.cli.project` label, and an `8000/tcp` mapping whose host IPs are loopback and whose host port matches the configured URL. It requires this mapping even when lsof reports no owner. Known SSH/tunnel and container-forwarder process owners pass only with this exact container evidence; unknown owners fail closed.
+- Added per-value process environment overrides for the local URL and keys with `.env.local` fallback. Browser children receive a minimal environment without Supabase keys or the service-role key.
+- Updated smoke setup documentation and the task checklist/handoff to state the Docker evidence and its limits.
+
+### Learning
+
+For a local API smoke, inspect the configured API port only, then bind the expected project ID to a local service container and exact loopback host-port mapping before any health request or privileged client creation. A PID/process label alone is not project identity; local Docker state is still a preflight and can change after inspection.
+
+### Verification
+
+- `node --test tests/localSupabaseEndpointGuard.test.mjs`: 10/10 passed, including synthetic lsof/PowerShell owners, matching and mismatched project/container metadata, wildcard and wrong-port rejection, empty-owner/missing-mapping rejection, env precedence, URL validation, and browser secret exclusion.
+- `find tests -name '*.test.mjs' ! -name 'dropMediaValidation.test.mjs' -print0 | xargs -0 node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test`: 288/288 passed. `npm test` ran 289 cases; 288 passed and `tests/dropMediaValidation.test.mjs` could not load the absent `sharp` package. `npm run lint` and `npm run typecheck` could not start because `eslint` and `tsc` are absent. Dependencies were not installed.
+- `node --check` passed for the shared guard and all three smoke scripts; `git diff --check` passed. No local Supabase or browser smoke was run and no configured Supabase endpoint was contacted: QA reported the current isolated API container is wildcard-published on `0.0.0.0` and `::` and requested a loopback-only restart before runtime testing.
+
+### Git and remaining gaps
+
+Code commit `a71e255b415a0ed03dcfa73066b88b1f86e3aca2` is local on `fix/e2e-local-endpoint-guard`, based on `429a6294a172d20f335845a93e6d920a6d9e49fa`. This learning and the README, checklist, and handoff update are in a separate local documentation commit. Nothing was pushed and no PR was opened. The canonical checkout, `/letter`, `.env.local`, and hosted Supabase were not changed. After QA confirms a loopback-only Docker mapping, run the approved local API/browser smokes and verify disposable-data cleanup. Docker daemon metadata is local operator-controlled state, and state can change after the preflight; this is not cryptographic endpoint attestation.

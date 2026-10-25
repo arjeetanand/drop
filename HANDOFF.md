@@ -2,6 +2,15 @@
 
 Updated: 2026-10-25
 
+## Latest checkpoint — fail-closed local Supabase endpoint guard (2026-10-25)
+
+- Scratch checkout: `/private/tmp/drop-e2e-guard`, branch `fix/e2e-local-endpoint-guard`, based on `feat/recipient-unread-e2e` at `429a6294a172d20f335845a93e6d920a6d9e49fa`. Harness code is committed locally as `a71e255b415a0ed03dcfa73066b88b1f86e3aca2` (`test: guard local Supabase smoke endpoints`); this checklist/README/handoff/learning record is a separate local documentation commit. The canonical checkout was not edited. No push or PR was made.
+- The local Supabase API and browser smoke scripts now validate the configured API port and require a local Docker context plus the exact expected `supabase_kong_<project-id>` container, matching `com.supabase.cli.project` label, Running status, and `8000/tcp` host mapping restricted to loopback and the configured port. This check also runs when lsof returns no owner. Unknown listener owners, remote Docker contexts, absent/mismatched containers, and wildcard mappings fail closed before any Supabase client or API request.
+- Process environment values override `.env.local` per key for `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`. The expected project ID comes from `supabase/config.toml`; `DROP_LOCAL_SUPABASE_EXPECTED_PROJECT_ID` is an explicit override for an isolated local stack. Browser processes receive a minimal environment without the service-role key.
+- Verification: `node --test tests/localSupabaseEndpointGuard.test.mjs` passed 10/10; all other test files passed 288/288 when excluding `tests/dropMediaValidation.test.mjs`; `node --check` passed for the shared guard and all three smoke scripts; `git diff --check` passed. `npm test` ran 289 cases, with 288 passing and the one media-validation file unable to import missing `sharp`. `npm run lint` and `npm run typecheck` could not start because `eslint` and `tsc` are absent. No dependencies were installed.
+- Runtime Supabase/browser verification is pending. QA reported that the isolated API's current Docker mappings include `0.0.0.0` and `::` and asked that smoke requests wait for a loopback-only restart. No configured Supabase endpoint was contacted, no `.env.local` values were logged, and no hosted resource was used.
+- This process-name plus Docker metadata check is a local preflight, not cryptographic endpoint attestation; the local Docker daemon is trusted, and listener/container state may change after the preflight. To continue, wait for QA's loopback-only restart confirmation, then run the local tests approved for that disposable project.
+
 ## Latest checkpoint — local same-recipient unread sync and Docker runtime (2026-10-25)
 
 - Extended the authenticated smoke to three isolated browser profiles: sender plus two sessions for the same recipient. It builds an isolated production app with `next build --webpack`, runs `next start` on port 6004, and verifies that the second recipient session clears “New” after the server read-state refresh while its Home document stays open.

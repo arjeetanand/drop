@@ -2,6 +2,16 @@
 
 Updated: 2026-10-25
 
+## Fail-closed local Supabase smoke endpoint guard (2026-10-25)
+
+- [x] Require a loopback HTTP URL and inspect only its configured API port before any Supabase client, health fetch, or temporary app starts.
+- [x] Require the expected project ID and a local Docker context whose exact `supabase_kong_<id>` container is running, has the matching Supabase project label, and maps `8000/tcp` only to the configured loopback API port. This check runs even when lsof reports no owner.
+- [x] Support per-value process environment overrides for the local URL/anon/service-role keys, `.env.local` fallback, and an explicit expected-project ID override for isolated local stacks; keep service-role values out of Chrome's environment.
+- [x] Add synthetic process, container mapping, URL, env, and secret-exclusion tests; focused guard tests pass 10/10, all other installed-dependency unit tests pass 288/288, syntax checks pass, and `git diff --check` passes.
+- [ ] Full `npm test` remains blocked by unavailable `sharp` (`ERR_MODULE_NOT_FOUND` in `tests/dropMediaValidation.test.mjs`); lint and typecheck commands cannot start because `eslint` and `tsc` are not installed in this scratch checkout. Dependencies were not installed.
+- [ ] Local Supabase/API and authenticated browser smokes were not run. QA reported the current isolated API port is wildcard-published on `0.0.0.0` and `::` and requested that runtime smoke wait for a loopback-only restart; no Supabase endpoint was contacted.
+- [ ] After QA confirms the isolated container is restarted with loopback-only mappings, run only the approved local API/browser checks, then verify exact disposable-data cleanup. Hosted Supabase remains out of scope.
+
 ## Local send, same-recipient unread sync, and reaction browser flow (2026-10-25)
 
 - [x] Verify Compose send, unread Home in two independent sessions for the same recipient at 390×844 and 1440×900, Inbox open/read, recipient 🫶 reaction, and sender live plus reloaded reaction.
