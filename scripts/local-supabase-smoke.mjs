@@ -6,22 +6,23 @@ import { createServer } from 'node:net';
 import { join, relative, resolve, sep } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createClient } from '@supabase/supabase-js';
+import {
+  assertLocalSupabasePortsAreSafe,
+  loadExpectedLocalSupabaseProjectId,
+  loadLocalSupabaseValues,
+  validateLocalSupabaseUrl,
+} from './localSupabaseEndpointGuard.mjs';
 
 const root = process.cwd();
-const envFile = await readFile(resolve(root, '.env.local'), 'utf8').catch(() => {
-  throw new Error('Create .env.local from the local Supabase CLI output first.');
+const localEnv = await loadLocalSupabaseValues({ envFilePath: resolve(root, '.env.local') });
+const localSupabaseUrl = validateLocalSupabaseUrl(localEnv.NEXT_PUBLIC_SUPABASE_URL);
+const expectedProjectId = await loadExpectedLocalSupabaseProjectId({
+  configFilePath: resolve(root, 'supabase/config.toml'),
 });
-const localEnv = Object.fromEntries(envFile.split(/\r?\n/).flatMap((line) => {
-  const match = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/);
-  return match ? [[match[1], match[2].replace(/^("|')(.*)\1$/, '$2')]] : [];
-}));
-const supabaseUrl = localEnv.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseUrl = localSupabaseUrl.origin;
 const anonKey = localEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const serviceRoleKey = localEnv.SUPABASE_SERVICE_ROLE_KEY;
-if (!supabaseUrl || !anonKey || !serviceRoleKey) throw new Error('.env.local is missing a required local Supabase value.');
-if (!['localhost', '127.0.0.1', '::1', '[::1]'].includes(new URL(supabaseUrl).hostname)) {
-  throw new Error('This smoke test only runs against a Supabase URL on this machine.');
-}
+await assertLocalSupabasePortsAreSafe({ ports: [Number(localSupabaseUrl.port)], expectedProjectId });
 
 const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } });
 const createdUserIds = [];

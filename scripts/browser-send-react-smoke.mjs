@@ -9,6 +9,12 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { join, relative, resolve, sep } from 'node:path';
 import { createClient } from '@supabase/supabase-js';
+import {
+  assertLocalSupabasePortsAreSafe,
+  loadExpectedLocalSupabaseProjectId,
+  loadLocalSupabaseValues,
+  validateLocalSupabaseUrl,
+} from './localSupabaseEndpointGuard.mjs';
 
 const PROJECT_ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const TEST_PORT = 6004;
@@ -29,12 +35,7 @@ const VIEWPORTS = [
   { name: 'desktop-1440', width: 1440, height: 900, deviceScaleFactor: 1, mobile: false },
 ];
 const active = new AbortController();
-const allowedOrigins = new Set([
-  APP_ORIGIN,
-  'http://127.0.0.1:54321',
-  'http://localhost:54321',
-  'http://[::1]:54321',
-]);
+const allowedOrigins = new Set([APP_ORIGIN]);
 
 let admin;
 let app;
@@ -48,6 +49,7 @@ let letterId;
 let createdUserIds = [];
 let cleanupFailed = false;
 let currentStep = 'initializing';
+let supabaseApiPort;
 const sessions = [];
 
 class CdpConnection {
@@ -350,31 +352,6 @@ class BrowserSession {
   }
 }
 
-function parseEnvFile(source) {
-  const values = {};
-  for (const rawLine of source.split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith('#')) continue;
-    const match = line.match(/^(?:export\s+)?([A-Z0-9_]+)\s*=\s*(.*?)\s*$/);
-    if (!match) continue;
-    const [, name, rawValue] = match;
-    const quoted = rawValue.match(/^(?:"([\s\S]*)"|'([\s\S]*)')$/);
-    values[name] = quoted ? (quoted[1] ?? quoted[2]) : rawValue.replace(/\s+#.*$/, '').trim();
-  }
-  return values;
-}
-
-function requireLocalSupabaseUrl(rawValue) {
-  let url;
-  try { url = new URL(rawValue); } catch { throw new Error('.env.local has an invalid Supabase URL.'); }
-  const hostname = url.hostname.replace(/^\[|\]$/g, '').toLowerCase();
-  assert.ok(LOOPBACK_HOSTS.has(hostname), 'Supabase must use localhost, 127.0.0.1, or ::1.');
-  assert.equal(url.protocol, 'http:', 'The local Supabase URL must use HTTP.');
-  assert.equal(url.port || '80', '54321', 'The local Supabase URL must use port 54321.');
-  assert.ok(!url.username && !url.password && !url.search && !url.hash && url.pathname === '/', 'The Supabase URL must be a plain loopback origin.');
-  return url;
-}
-
 async function assertPortAvailable(port) {
   const server = createServer();
   try {
@@ -389,8 +366,8 @@ async function assertPortAvailable(port) {
 }
 
 async function guardSelfTest() {
-  assert.equal(requireLocalSupabaseUrl('http://127.0.0.1:54321').origin, 'http://127.0.0.1:54321');
-  assert.equal(requireLocalSupabaseUrl('http://localhost:54321/').hostname, 'localhost');
+  assert.equal(validateLocalSupabaseUrl('http://127.0.0.1:54321').origin, 'http://127.0.0.1:54321');
+  assert.equal(validateLocalSupabaseUrl('http://localhost:55321/').hostname, 'localhost');
   const browserEnv = browserEnvironment();
   assert.equal(browserEnv.HOME, process.env.HOME || tmpdir(), 'The isolated browser needs the host HOME for loopback networking.');
   assert.equal(browserEnv.TMPDIR, temporaryRoot || tmpdir(), 'The isolated browser profile still uses a temporary directory.');
@@ -399,10 +376,10 @@ async function guardSelfTest() {
     'https://127.0.0.1:54321',
     'http://example.test:54321',
     'http://0.0.0.0:54321',
-    'http://127.0.0.1:54322',
     'http://user:pass@127.0.0.1:54321',
     'http://127.0.0.1:54321/path',
-  ]) assert.throws(() => requireLocalSupabaseUrl(value), undefined, `Rejected unsafe Supabase URL: ${value}`);
+    'http://127.0.0.1',
+  ]) assert.throws(() => validateLocalSupabaseUrl(value), undefined, `Rejected unsafe Supabase URL: ${value}`);
 
   const occupied = createServer();
   await new Promise((resolveListen, reject) => occupied.once('error', reject).listen(0, '127.0.0.1', resolveListen));
@@ -413,7 +390,7 @@ async function guardSelfTest() {
   } finally {
     await new Promise((resolveClose, reject) => occupied.close((error) => error ? reject(error) : resolveClose()));
   }
-  console.log('[browser-send-react-smoke] PASS loopback URL, occupied-port, and isolated browser-environment guard checks.');
+  console.log('[browser-send-react-smoke] PASS loopback URL, occupied-port, isolated browser-environment, and secret-exclusion guard checks.');
 }
 
 function minimalEnvironment(home = temporaryHome) {
@@ -579,7 +556,7 @@ async function signInWithMagicLink(session, account) {
   const host = actionLink.hostname.replace(/^\[|\]$/g, '').toLowerCase();
   assert.ok(LOOPBACK_HOSTS.has(host), 'The generated sign-in link did not use loopback.');
   assert.equal(actionLink.protocol, 'http:');
-  assert.equal(actionLink.port, '54321');
+  assert.equal(Number(actionLink.port), supabaseApiPort);
   await session.navigate(data.properties.action_link);
   await session.waitFor(() => session.evaluate(`location.origin === ${JSON.stringify(APP_ORIGIN)}
     && location.pathname === '/profile'
@@ -994,16 +971,17 @@ async function main() {
   if (process.argv.includes('--guard-self-test')) return guardSelfTest();
   assert.deepEqual(process.argv.slice(2), [], 'This smoke has no options other than --guard-self-test.');
 
-  // Check before reading credentials or touching Supabase. Never stop an existing port owner.
-  await assertPortAvailable(TEST_PORT);
-  const envText = await readFile(resolve(PROJECT_ROOT, '.env.local'), 'utf8').catch(() => {
-    throw new Error('Create .env.local with the local Supabase URL, anon key, and service-role key first.');
+  // Read configuration without logging it, then check the exact API listener before any request.
+  localValues = await loadLocalSupabaseValues({ envFilePath: resolve(PROJECT_ROOT, '.env.local') });
+  const supabaseUrl = validateLocalSupabaseUrl(localValues.NEXT_PUBLIC_SUPABASE_URL);
+  const expectedProjectId = await loadExpectedLocalSupabaseProjectId({
+    configFilePath: resolve(PROJECT_ROOT, 'supabase/config.toml'),
   });
-  localValues = parseEnvFile(envText);
-  const supabaseUrl = requireLocalSupabaseUrl(localValues.NEXT_PUBLIC_SUPABASE_URL || '');
-  assert.ok(localValues.NEXT_PUBLIC_SUPABASE_ANON_KEY && localValues.SUPABASE_SERVICE_ROLE_KEY, '.env.local needs local anon and service-role keys.');
+  supabaseApiPort = Number(supabaseUrl.port);
+  await assertLocalSupabasePortsAreSafe({ ports: [supabaseApiPort], expectedProjectId });
+  await assertPortAvailable(TEST_PORT);
   assert.ok(resolve(PROJECT_ROOT, 'node_modules/next/dist/bin/next'), 'Install project dependencies before running this smoke.');
-  for (const alias of ['localhost', '127.0.0.1', '[::1]']) allowedOrigins.add(`http://${alias}:54321`);
+  allowedOrigins.add(supabaseUrl.origin);
 
   const health = await fetch(new URL('/auth/v1/health', supabaseUrl), { signal: AbortSignal.timeout(5_000) });
   assert.ok(health.ok, `Loopback Supabase Auth health check returned HTTP ${health.status}.`);
