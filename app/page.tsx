@@ -74,7 +74,7 @@ export default function HomeDesk() {
             <Link href="/demo" className="mt-2 inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-white/40 px-4 text-sm font-semibold text-white transition-colors hover:bg-white/10 focus-visible:outline-white">
               <Eye className="h-4 w-4" aria-hidden="true" /> Try a demo drop
             </Link>
-            <p className="mt-2 text-xs text-white/75">No sign-in · stays on this device</p>
+            <p className="mt-2 text-xs text-white/75">Demo stays on this device · a Drop account is needed to send.</p>
             <p className="mt-6 flex items-center gap-2 text-xs text-white/80"><Zap className="h-3.5 w-3.5" aria-hidden="true" /> Instant by default · private between you two</p>
           </div>
 

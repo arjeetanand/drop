@@ -16,6 +16,7 @@ let activeViewport = MOBILE_VIEWPORTS[1];
 const STEP_TIMEOUT_MS = 20_000;
 const LABELS = {
   homeDemo: 'Try a demo drop',
+  homeSendAccountDisclosure: 'Demo stays on this device · a Drop account is needed to send.',
   choosePhoto: 'Try a photo',
   chooseGif: 'Try a GIF',
   reveal: 'Reveal demo fragments',
@@ -519,8 +520,8 @@ async function runDemoFlow(cdp, {
 
   await setViewport(cdp, viewport);
   await cdp.send('Page.navigate', { url: appUrl.href });
-  await waitUntil(cdp, `Home with “${LABELS.homeDemo}”`, async () => (
-    await evaluate(cdp, `${normalizedVisibleText(LABELS.homeDemo)} && location.pathname === '/'`)
+  await waitUntil(cdp, `Home with “${LABELS.homeDemo}” and account disclosure`, async () => (
+    await evaluate(cdp, `${normalizedVisibleText(LABELS.homeDemo)} && ${normalizedVisibleText(LABELS.homeSendAccountDisclosure)} && location.pathname === '/'`)
   ));
   await waitForPageEnter(cdp, 'Home');
   if (verifyFreshDraft) {
@@ -929,8 +930,8 @@ async function runClaimRecoveryFlow(cdp, {
 async function runWritingPromptFlow(cdp, { appUrl, viewport, keyboard, screenshotDir }) {
   await setViewport(cdp, viewport);
   await cdp.send('Page.navigate', { url: appUrl.href });
-  await waitUntil(cdp, 'Home before starting a prompted draft', async () => (
-    await evaluate(cdp, `${normalizedVisibleText('Use this thought')} && location.pathname === '/'`)
+  await waitUntil(cdp, 'Home with the send account disclosure before starting a prompted draft', async () => (
+    await evaluate(cdp, `${normalizedVisibleText('Use this thought')} && ${normalizedVisibleText(LABELS.homeSendAccountDisclosure)} && location.pathname === '/'`)
   ));
 
   const seeded = await evaluate(cdp, `(async () => {
