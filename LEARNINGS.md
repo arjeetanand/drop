@@ -1359,3 +1359,9 @@ For async cleanup that protects user data, report the mutation outcome explicitl
 ### Git and remaining gaps
 
 Code commit `f0c6c70` is pushed to `origin/feat/pwa-share-acceptance`. Documentation changes follow in a separate commit on the same branch. PR #7 remains open and mergeable on its separate `feat/private-claim-qr` branch; it was not merged. Port 4004 has PID 47239 from `/Users/arjeetanand/projects/drop`, but local HTTP requests failed; the feature worktree's run script refused to replace it, so inspect/recover the runtime from that canonical checkout. Installed-PWA/OS share-sheet, screen-reader, physical-device, hosted two-account, and real 30-day Storage deletion checks remain open. `/letter`, hosted Supabase, and credential files were not changed.
+
+## 2026-10-25 — Record draft review state
+
+- Opened draft [PR #8](https://github.com/arjeetanand/drop/pull/8) from `feat/pwa-share-acceptance` after verifying the branch push. Its initial head was `a7423e3`; GitHub reports it `OPEN`, `DRAFT`, and `MERGEABLE`.
+- Kept PR #8 in draft because the standalone Chrome runner did not start on the last attempts and the production build could not resolve Google Fonts. PR #7 remains a separate QR branch and open as requested; its local QR check passed.
+- No PR was merged. This follow-up records tracking state only; no app code, credential, hosted Supabase resource, or `/letter` file changed.

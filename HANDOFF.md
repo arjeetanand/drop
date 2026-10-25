@@ -471,7 +471,8 @@ From /Users/arjeetanand/projects/drop, run npm ci, then ./run.sh. Drop uses http
 
 ### Git state and next actions
 
-- Code commit `f0c6c70` (`fix: preserve shared media on account switch`) is pushed to `origin/feat/pwa-share-acceptance`. These notes and the checklist/README updates are a separate documentation commit on that branch.
+- Code commit `f0c6c70` (`fix: preserve shared media on account switch`) and documentation commit `a7423e3` are pushed to `origin/feat/pwa-share-acceptance`.
+- Draft [PR #8](https://github.com/arjeetanand/drop/pull/8) is `OPEN`, `DRAFT`, and `MERGEABLE` on `feat/pwa-share-acceptance`; keep it draft until the standalone browser rerun and production build pass.
 - PR #7 is `OPEN` and `MERGEABLE` on the separate branch `feat/private-claim-qr` at head `dec1608`; its requested QR check passed. It remains open and unmerged.
 - Port 4004 has listener PID 47239 with working directory `/Users/arjeetanand/projects/drop`, but HTTP requests to `localhost:4004` failed. The feature worktree's `./run.sh start` safely refused to stop or replace that out-of-root process; resolve it from the canonical checkout. The isolated browser server on 6004 is stopped.
 - Remaining: cleanly repeat the share-target browser smoke after Chrome startup recovers; verify installed-PWA/OS share sheet, screen reader, physical device, hosted two-account delivery, and actual 30-day Storage cleanup. No credentials, hosted resources, or `/letter` files were changed.
