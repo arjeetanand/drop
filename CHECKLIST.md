@@ -2,6 +2,22 @@
 
 Updated: 2026-10-25
 
+## Integrated pilot candidate (2026-10-25)
+
+- [x] Combine mobile composer actions, accessible photo/GIF picker focus, contrast and media names, account-safe PWA import/retry, and local media-claim E2E coverage on `feat/pilot-integrated-preview`; latest code commit is `723d45f`.
+- [x] Correct the composer form's `aria-busy` value to include the active send state (`723d45f`).
+- [x] Pass `npm test` (287/287), lint, TypeScript, browser-script syntax, and `git diff --check` after the accessibility correction.
+- [x] Pass the final Webpack production build on the candidate (22 routes). A fresh Turbopack rerun was blocked by the worker-port permission error after the sandboxed run could not fetch Google Fonts; the earlier configured Turbopack build passed at `4a3b342`.
+- [x] Pass the authenticated local production send/read/reaction flow, including unread sync to the recipient's second session without reload.
+- [x] Pass authenticated local production photo/GIF claim flow for sender, first-use recipient, and outsider, including pre-claim denial, explicit claim, replay denial, and exact fixture cleanup.
+- [x] Carry the dedicated mobile-action branch's six-width Edge verification into this candidate via patch-equivalent commits `0686651`/`6485ef0`; verify scroll stability, nav clearance, touch targets, focus, account gate, and overflow.
+- [x] Verify the separate private-claim QR feature in PR #7 at 390×844, including QR/link decode and max-scroll copy clearance. PR #7 remains open and its QR feature code is not included in this pilot candidate.
+- [x] Pass the production PWA share-target flow nine consecutive times in an isolated run, including import/retry/replay, responsive checks, and the strict request guard; each reported zero blocked cross-origin requests. One earlier final-gate `Invalid InterceptionId` did not reproduce, so no guard code was weakened.
+- [x] Add the public first-sign-up browser check: email form → local Mailpit magic link → callback → profile save/readback; clean up the exact test user, profile, and Mailpit message. Source branch `feat/pilot-first-signup-smoke` passed; its test commit is integrated as `d49aaf3`.
+- [ ] Verify a brand-new recipient can sign up from a private claim link, return to the claim, and explicitly claim/reveal the drop; the standalone signup smoke does not yet cover this full return journey.
+- [ ] Publish `feat/pilot-integrated-preview` and open a draft review PR after the combined new-user claim journey and task notes are finalized. Keep `main` and PR #7 unchanged.
+- [ ] Verify hosted account-to-account behavior and real Storage deletion, screen-reader output, physical-device behavior, installed-PWA/OS share sheet, and a physical camera scan. PR #7's isolated local QR browser check passed and the PR remains open as requested.
+
 ## Pilot accessibility follow-up (2026-10-25)
 
 - [x] Raise Home's send-requirement helper to at least 4.5:1 and assert its rendered computed-color contrast in a real browser.
@@ -48,7 +64,7 @@ Updated: 2026-10-25
 - [x] Pass `npm test` (281/281), smoke-script syntax, harness ESLint, `git diff --check`, and the full authenticated local production browser run.
 - [x] Confirm the Rancher Desktop Docker daemon and local Supabase stack are running; start Drop on port 4004 and verify the app, Auth, and Mailpit return HTTP 200.
 - [x] Push code commit `0e672f3` to `origin/feat/recipient-unread-e2e`; record the project notes in a separate commit on the same branch.
-- [ ] Verify hosted behavior, screen-reader output, and physical-device behavior. Keep PR #7 open for its separate QR browser check.
+- [ ] Verify hosted behavior, screen-reader output, physical-device behavior, and a physical camera scan. PR #7's isolated local QR browser check passed and the PR remains open as requested.
 
 ## Private unread state (2026-10-25)
 
@@ -62,7 +78,7 @@ Updated: 2026-10-25
 
 ## Current branch state
 
-- [x] Keep PR #7 open for the private-claim QR browser check; unread-state work remains on its own pushed branch without a PR.
+- [x] Keep PR #7 open as requested after its isolated local QR browser check passed at 390×844; a physical camera scan and hosted claim remain open. Unread-state work remains on its own pushed branch without a PR.
 - [ ] Review and merge branches only through their PRs after the remaining checks pass.
 
 ## Candidate and PR

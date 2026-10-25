@@ -1543,3 +1543,227 @@ A media note is supplemental text, not a replacement for identifying the attachm
 ### Git and remaining gaps
 
 Code commit `ca29555` is on branch `fix/pilot-a11y-accessibility`, based on `feat/pilot-integrated-preview` at `da358a5`. README, checklist, plan, handoff, and this learning record are being committed separately on the same branch. Screen-reader, physical-device, hosted-send, and OS share-sheet installation checks remain open. No hosted Supabase resource was used, `.env.local` was not read, `/letter` and `main` were not changed, and PR #7 remains untouched.
+
+## 2026-10-25 — Keep composer actions reachable on mobile
+
+### Issue
+
+On short phone viewports, Compose actions competed with the bottom navigation and could require extra scrolling. The Next.js development badge also obscured part of the local mobile navigation.
+
+### Cause
+
+The action controls were in normal page flow while app navigation occupied a fixed bottom region. The dev-only badge was an additional overlay in the same area. A transformed page entrance could also change how fixed descendants attach to the viewport.
+
+### Resolution
+
+- Place Preview, Save, Delete, and Send/Connect in a compact fixed action tray on mobile, offset for the safe area and navigation; retain normal document flow on desktop and preserve the existing account/send gate.
+- Keep the mobile entry animation opacity-only so the tray remains viewport-fixed, and disable the Next.js dev badge that obscured navigation.
+- Keep browser-smoke output generic so the same isolated harness can run Edge.
+
+### Learning
+
+When a mobile screen has both a fixed tab bar and a primary action tray, test the tray while the page scrolls and reserve space for the tab bar plus safe area. Avoid transformed ancestors around viewport-fixed controls.
+
+### Verification
+
+- `npm test` passed 286/286; lint, no-incremental TypeScript, browser-smoke syntax, and `git diff --check` passed on the dedicated mobile-action branch.
+- Real Edge checks passed at 320×740, 360×844, 390×844, 430×844, 768×1024, and 1440×900. The checks covered scroll stability, navigation clearance, touch target size, overflow, keyboard focus, and account gating. The 390px screenshot is `/private/tmp/drop-composer-action-tray-qa-final/mobile-390-prompt-composer.png`.
+- The integrated candidate carries patch-equivalent code commits `0686651` and `6485ef0`; the dedicated branch commits were `4ca8900` and `b404014`.
+
+### Git and remaining gaps
+
+The dedicated code commits were pushed on `feat/pilot-mobile-composer-actions`; the integrated candidate is `feat/pilot-integrated-preview` and its push state is recorded in the latest handoff checkpoint. Hosted account-to-account behavior, PWA installation/system sharing, actual screen-reader output, and physical-device checks remain open. `/letter` and credentials were not changed.
+
+## 2026-10-25 — Verify first-time email sign-up through Mailpit
+
+### Issue
+
+The existing authenticated claim browser tests created users through Supabase Admin APIs, leaving the public email sign-up and first-profile journey unverified.
+
+### Cause
+
+Admin-created fixtures bypass the actual email form, magic-link delivery, auth callback, and first-use profile save that a new recipient must complete.
+
+### Resolution
+
+- Add `npm run test:browser-first-signup` to run an isolated browser against loopback Supabase and local Mailpit.
+- Submit the public email form, open the exact local magic link in the same browser, save the first profile, and independently read it through the local admin API.
+- Delete the exact test account/profile and matching Mailpit message; do not reset the database or contact a hosted project.
+
+### Learning
+
+For first-use account journeys, API-provisioned users are not a substitute for a browser-driven email sign-in. Follow the real callback and profile setup, then prove the disposable fixture was cleaned up.
+
+### Verification
+
+- On source branch `feat/pilot-first-signup-smoke` at `de887cd`, `npm run test:browser-first-signup` passed the public form → Mailpit link → auth callback → profile save/readback flow; exact Auth user, profile, and email were removed.
+- The same test commit was integrated into `feat/pilot-integrated-preview` as `d49aaf3`. The app suite passed 287/287, lint and TypeScript passed, and the smoke script passed `node --check`.
+- The combined new-user-to-pending-claim return journey is not yet covered by this standalone sign-up smoke.
+
+### Git and remaining gaps
+
+`feat/pilot-integrated-preview` is at `723d45f` after the following accessibility fix. The candidate is not pushed yet. Hosted delivery/deletion, actual screen-reader output, physical-device/PWA share-sheet behavior, and the new-user claim return journey remain open. No hosted service, `/letter`, or credential file was changed.
+
+## 2026-10-25 — Announce the composer send state
+
+### Issue
+
+While a drop was sending, the composer fieldset was disabled and the submit button announced progress, but the containing form still exposed `aria-busy="false"`.
+
+### Cause
+
+Form-level busy semantics included deletion and PWA import but omitted the existing `sending` state.
+
+### Resolution
+
+Include `sending` in the form's `aria-busy` expression so assistive technology sees the same busy interval as the disabled controls.
+
+### Learning
+
+Keep aggregate busy semantics synchronized with every state that disables a form. A visible live label does not replace form-level status semantics.
+
+### Verification
+
+- `npm test` passed 287/287, `npm run lint`, `npm run typecheck`, and `git diff --check` passed.
+- `npm run build -- --webpack` completed TypeScript and all 22 routes on the updated source.
+- This confirms the markup builds; spoken screen-reader output still requires real assistive-technology verification.
+
+### Git and remaining gaps
+
+The one-line source fix is commit `723d45f` on `feat/pilot-integrated-preview`; it has not been pushed. Hosted acceptance, the combined new-user claim journey, screen-reader, physical-device, and OS-share checks remain open.
+
+## 2026-10-25 — Separate production-build evidence by bundler
+
+### Issue
+
+A fresh `npm run build` rerun could not complete in the isolated environment even though the candidate had an earlier successful Turbopack build.
+
+### Cause
+
+The sandboxed Turbopack run could not fetch Google Fonts. Retrying in the approved local runtime resolved the font fetch but Turbopack failed while binding a worker port with `Operation not permitted`.
+
+### Resolution
+
+Run the repository's production Webpack build for final verification. Keep both the prior Turbopack success and this current environment-specific failure in the handoff; do not imply they are the same result.
+
+### Learning
+
+Record the exact bundler and environment boundary for build results. A passing Webpack build validates compilation and routes but does not erase a failed current Turbopack rerun.
+
+### Verification
+
+- `npm run build -- --webpack` passed after the composer fix, compiling, type-checking, and generating all 22 routes. It emitted existing Browserslist freshness and ambiguous Tailwind easing warnings.
+- The failed Turbopack attempt reported worker-port `Operation not permitted`; no product source change was made to suppress it.
+
+### Git and remaining gaps
+
+No build configuration or dependency changed. The application fix is in `723d45f` on `feat/pilot-integrated-preview`; docs and integration notes remain uncommitted and the branch is not pushed. Hosted, screen-reader, physical-device, and OS-share acceptance remain open.
+
+## 2026-10-25 — Verify QR copy below fixed navigation
+
+### Issue
+
+A QR browser screenshot showed explanatory text partly behind the fixed bottom navigation, raising a concern that the copy was clipped on mobile.
+
+### Cause
+
+The screenshot captured an intermediate scroll position. The page has trailing padding for fixed navigation, so the content moves fully above it at the document end.
+
+### Resolution
+
+No code change was needed. The authenticated QR page was checked at maximum scroll and the explanation and navigation bounds were compared.
+
+### Learning
+
+For fixed-navigation layouts, check suspected overlap at maximum scroll before changing padding. An intermediate screenshot can look clipped even when the page has enough trailing space.
+
+### Verification
+
+- At 390×844, the browser reported `scrollY=maxScrollY=596`, explanation bottom `413.09375px`, fixed-nav top `783.8125px`, and computed bottom padding `88px`.
+- The authenticated QR/link decoder check passed and its disposable drop, account, and profile were removed. Port 5004 was released; no request went to port 4004 or a hosted service.
+
+### Git and remaining gaps
+
+This was a verification-only check on `feat/pilot-mobile-composer-actions`; PR #7 remains open as requested. A physical camera scan and hosted claim, screen-reader output, and real-device checks remain open.
+
+## 2026-10-25 — Recheck the PWA request-guard interruption
+
+### Issue
+
+One production share-target browser run completed its functional assertions, then reported `Fetch.continueRequest: Invalid InterceptionId` at the final network-guard check.
+
+### Cause
+
+The error did not identify a request and could not be reproduced, so the specific CDP interception lifecycle cause remains unknown. The evidence did not establish an application request failure or a cross-origin request.
+
+### Resolution
+
+Keep the cross-origin firewall strict and do not suppress an unclassified interception error. Repeat the same production share-target flow in isolation and only change the guard if a reproducible request and failure state are identified.
+
+### Learning
+
+A one-off browser-protocol error is inconclusive. Repeat the focused production flow and preserve the security assertion instead of weakening it to turn a flaky check green.
+
+### Verification
+
+- The production `--share-target-only` flow passed nine consecutive isolated runs at port 6004 against the `4a3b342` candidate build. All manifest, multipart import, replay/reload, sent-draft preservation, responsive checks, and Auth/REST/Storage guards passed; each run reported zero blocked cross-origin attempts.
+- One earlier sandboxed Chrome launch failed before DevTools startup; the approved local browser run then completed all nine passes. The test server stopped and port 6004 was released.
+
+### Git and remaining gaps
+
+No code change or commit was justified. `feat/pilot-integrated-preview` remains at `4a3b342` pending its documentation commit and push. PWA installation and operating-system sharing, hosted delivery, physical-device behavior, and screen-reader output remain open. Port 4004, `.env.local`, hosted Supabase, and `/letter` were untouched.
+
+## 2026-10-25 — Run the configured build inside the isolated checkout
+
+### Issue
+
+The repository's configured `npm run build` initially stopped before compilation with a Turbopack error saying the `node_modules` symlink pointed outside the filesystem root.
+
+### Cause
+
+This temporary worktree borrowed dependencies through a symlink to the canonical checkout. Turbopack rejects an external dependency symlink when discovering project routes.
+
+### Resolution
+
+Install the locked dependencies inside the isolated worktree with `npm ci --offline`, then run the configured `npm run build`. Remove the temporary dependency/build output and restore the generated `next-env.d.ts` afterward.
+
+### Learning
+
+Use an in-checkout dependency tree for the configured Turbopack build. A failure caused by temporary worktree wiring does not establish a source or build defect.
+
+### Verification
+
+- `npm ci --offline` installed 655 packages from the local cache and reported zero vulnerabilities; it made no package or lockfile change.
+- The unmodified configured `npm run build` (Next.js 16.3.2, Turbopack) passed compilation, TypeScript, and all 22 route generations. It emitted only the existing outdated Browserslist data warning.
+- Temporary `node_modules` and `.next` outputs were removed and `next-env.d.ts` restored from the candidate commit.
+
+### Git and remaining gaps
+
+This was a build-environment correction only. The code remains on `feat/pilot-integrated-preview` at `4a3b342`; no dependency change or build-script edit was made. Hosted, PWA installation, screen-reader, and physical-device acceptance remain open.
+
+## 2026-10-25 — Clarify superseded candidate Git status
+
+### Issue
+
+The preceding PWA and build entries accurately describe checks performed at `4a3b342`, but their present-tense Git summaries became stale after integration continued.
+
+### Cause
+
+The later signup-smoke and composer accessibility commits advanced the same candidate branch after those entries were appended.
+
+### Resolution
+
+Keep the historical verification SHAs as written and use this clarification for current status: `feat/pilot-integrated-preview` is at `723d45f`, including the public signup-smoke commit `d49aaf3`; the branch is 24 commits ahead of refreshed `origin/main` (`5138f88`), not pushed, and not merged.
+
+### Learning
+
+In an append-only learning log, preserve old evidence but add a dated clarification when later work changes the present-tense branch or commit status.
+
+### Verification
+
+- `git fetch origin` completed successfully; `git rev-list --left-right --count origin/main...HEAD` returned `0 24` and `git rev-parse --short HEAD` returned `723d45f`.
+- These commands refreshed only local remote-tracking refs; no remote branch was changed.
+
+### Git and remaining gaps
+
+This is a documentation clarification on the uncommitted `feat/pilot-integrated-preview` worktree. The full new-user-to-private-claim journey, hosted verification, screen-reader output, physical-device behavior, and OS share sheet remain open.
