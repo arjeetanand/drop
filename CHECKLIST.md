@@ -2,6 +2,15 @@
 
 Updated: 2026-10-25
 
+## Authenticated local photo/GIF claim browser E2E (2026-10-25)
+
+- [x] Add `npm run test:browser-media-claim` with an isolated production build/server on port 6004 and separate sender, first-use recipient, and outsider browser profiles.
+- [x] Verify content and media stay unavailable before claim; first-use profile setup returns with the same opaque handoff and claims the original photo invite without a second token URL; the GIF claim is opened normally; photo/GIF images decode after claim; outsider replay is denied; and sender claimed state survives reload. GIF frame progression is not measured.
+- [x] Validate the loopback Supabase URL before parsing credentials; keep the service-role key out of build and browser environments; clean up and verify only this run's rows, media paths, accounts, profiles, processes, and browser directories.
+- [x] Pass runner guard self-test, Node syntax check, targeted ESLint, `npm test` (286/286), `git diff --check`, and the full authenticated browser run. Browser network checks recorded no cross-origin requests, console errors, or runtime exceptions.
+- [x] Commit and push the tested runner as `91d7f1b` on `origin/feat/pilot-media-claim-e2e`; keep task notes in a separate documentation commit.
+- [ ] Hosted delivery, actual aged-object deletion, screen-reader behavior, and physical-device checks remain open.
+
 ## PWA share-target rollback reliability (2026-10-25)
 
 - [x] Confirm the pilot candidate already contains the installable share manifest, service-worker target, and bounded multipart import handler.

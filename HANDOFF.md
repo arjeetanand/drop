@@ -2,6 +2,15 @@
 
 Updated: 2026-10-25
 
+## Latest checkpoint — authenticated local photo/GIF claim browser E2E (2026-10-25)
+
+- Added `scripts/browser-media-claim-e2e.mjs` and `npm run test:browser-media-claim`. It builds an isolated production copy, serves only on `127.0.0.1:6004`, and uses separate browser profiles for the sender, an unprofiled recipient, and an outsider. It checks sealed rows and media before and after handle setup; first-use setup returns to the same opaque handoff and the photo is claimed on that original invite page without a second token URL; the GIF invite is opened normally; claimed photo/GIF images decode; outsider replay is denied; and sender claimed status survives reload. The claim link uses Drop’s required `#token=...` fragment format. GIF frame progression is not measured.
+- The runner checks that the Supabase URL is plain HTTP on loopback port 54321 before parsing either key. The build and browser receive no service-role value; the isolated server gets it only at runtime for the existing finalize route. Browser requests are gated to the isolated app and loopback Supabase.
+- Verification: `npm test` passed 286/286; `npm run lint`, Node syntax, the loopback/secret-boundary guard, and `git diff --check` passed. The full local E2E passed profile setup returning to the original photo invite and claiming it without a second token URL, GIF image decode, outsider denial, sender reload state, zero cross-origin browser requests, and exact disposable cleanup. It did not reset Supabase or contact hosted Supabase. Port 6004 is stopped after the run; port 4004 was untouched.
+- Code commit `91d7f1b` is pushed to `origin/feat/pilot-media-claim-e2e`; the project notes are a separate follow-up commit. This feature branch remains separate from the pilot candidate and `main`; no PR or merge was made, and PR #7 was untouched. Temporary `.env.local` and `node_modules` symlinks are removed.
+
+**Next:** review this branch for candidate integration through a PR when ready. Hosted behavior, 30-day Storage deletion, screen-reader output, and physical-device checks remain open for pilot acceptance.
+
 ## Latest checkpoint — PWA share-target account-switch recovery (2026-10-25)
 
 - The pilot candidate already had the installable manifest, service-worker share target, and bounded multipart import handler. This branch adds the relevant follow-up from `feat/pwa-share-acceptance`: imports capture their account/draft context, rollback is scoped to that captured owner, and failed persistence keeps the staged handoff available for retry. The smoke now checks the canonical `letter` route and expected content even if navigation completes before it observes the intermediate handoff URL.

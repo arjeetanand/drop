@@ -1510,4 +1510,55 @@ For async work that writes user-scoped data, capture the owner at operation star
 
 ### Git and remaining gaps
 
-Code commit ff9c2ff is pushed to origin/feat/pilot-pwa-share; this learning and project notes are being committed separately on that branch. The temporary font fixture and node_modules symlink were removed and are not committed. No main merge, PR creation, or PR #7 change was made. OS share-sheet/install behavior, screen-reader output, physical-device checks, and hosted account-to-account behavior remain open. /letter and .env.local were not changed.
+
+## 2026-10-25 — Add authenticated photo/GIF claim browser E2E
+
+### Issue
+
+The existing local API smoke proved photo/GIF claim permissions but did not exercise first-use profile setup, explicit claim controls, rendered media, or the sender's reloaded status in isolated browsers.
+
+### Cause
+
+The API smoke does not cover browser routing and presentation. During implementation, the first browser attempt also exposed two harness assumptions that differed from the app: claim links require a named `token` fragment parameter, and visible button/eyebrow text is uppercased by CSS. The profile fields can start with suggested values, so the browser helper must select existing text before typing.
+
+### Resolution
+
+- Add a standalone authenticated browser runner and `npm run test:browser-media-claim`, using an isolated production copy on port 6004 and separate sender, recipient, and outsider browser profiles.
+- Check row/download/signed-URL denial before claim, profile setup followed by the explicit claim action, rendered photo/GIF pixels after claim, outsider replay denial, and sender claim state after reload.
+- Validate the local loopback URL before parsing keys; keep the service-role key out of the production build and browser; remove and verify only this run's exact rows, Storage paths, accounts/profiles, processes, and browser directories.
+- Normalize visible text for CSS transformations and construct the bearer link as `#token=...`, matching the app's shared fragment format.
+
+### Learning
+
+For browser tests, derive security-sensitive URLs from the same documented format the product parses, and compare normalized rendered text when CSS can transform case. Make cleanup identifiers run-owned at creation time so failures can still remove only the test's data.
+
+### Verification
+
+- `npm test`: 286/286 passed. `npm run lint`, `node --check scripts/browser-media-claim-e2e.mjs`, `node scripts/browser-media-claim-e2e.mjs --guard-self-test`, and `git diff --check` passed.
+- `npm run test:browser-media-claim` passed against loopback Supabase: recipient profile setup, explicit photo and GIF claims and rendering, outsider denial, sender claimed state after reload, zero cross-origin browser requests, and exact disposable cleanup. The runner did not reset the database or contact hosted Supabase.
+
+### Git and remaining gaps
+
+Code commit `91d7f1b` is pushed on `feat/pilot-media-claim-e2e`; this documentation follow-up is staged separately. Main, PR #7, port 4004, `/letter`, and hosted Supabase were untouched. Hosted delivery, actual aged-object deletion, screen-reader output, and physical-device checks remain open.
+
+### Review follow-up — prove original invite return; describe GIF evidence precisely
+
+#### Issue
+
+The first-use browser flow reached a claim page after profile setup, but the shared claim helper then navigated to a separately constructed photo token URL. The run therefore did not prove the original invite survived profile setup. The GIF output also claimed an animation frame without measuring frame progression.
+
+#### Resolution and learning
+
+- The browser records app navigation paths. The photo journey captures its original opaque handoff ID, completes profile setup, verifies the same handoff returned, and asserts no second `/claim` browser navigation before or after the explicit photo claim. The helper now supports claiming from the current invite page; the GIF continues to open its own invite normally.
+- The rendered-image check verifies image decode (`complete` and nonzero `naturalWidth`). Logs and docs now say “decoded GIF image” and explicitly state that animation frame progression is not measured.
+- For onboarding E2E, prove continuation through the original capability context and assert the resulting resource identity; a visible claim button by itself does not establish that the original invite was restored.
+
+#### Verification
+
+- `npm test`: 286/286 passed. `npm run lint`, `node --check scripts/browser-media-claim-e2e.mjs`, `node scripts/browser-media-claim-e2e.mjs --guard-self-test`, and `git diff --check` passed.
+- The first default-sandbox browser attempt was blocked before fixture creation by `listen EPERM` on `127.0.0.1:6004`. The authorized loopback-only rerun passed: profile setup returned to the original opaque photo handoff and claimed it from that page without a second `/claim` navigation; the GIF image decoded; outsider replay was denied; browser cross-origin requests, console errors, and runtime exceptions were zero; and the runner verified exact run-owned rows, media objects, accounts/profiles, app process, and browser profiles were removed.
+- Port 6004 is free. The temporary `.env.local` and `node_modules` symlinks are absent. The run did not reset Supabase, contact hosted Supabase, or touch port 4004.
+
+#### Git state
+
+Code commit `91d7f1b` is pushed to `origin/feat/pilot-media-claim-e2e`; the learning and project notes follow in a separate commit. The branch remains separate from the pilot candidate and `main`; no PR or merge was made.
