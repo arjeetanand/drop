@@ -8,6 +8,12 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 
 ## Implementation Status — 2026-10-25
 
+### Latest checkpoint — QR pilot and retention verification (2026-10-26)
+
+- The combined verification branch `pilot/combined-verification` starts from the integrated candidate at `f0c015a`; it contains reviewed code commits `2eb4071`, `98cb6aa`, and `f8cbde3` for handoff expiry pruning and private-claim QR sharing/reset.
+- The branch passes 288/288 unit tests, lint, typecheck, diff check, and a Webpack production build with 22 routes. The authenticated local QR flow passed at 390×844, and a local 31-day staged-media cleanup proof removed the aged test object while retaining the recent object.
+- No changes have yet been transferred to the canonical branch or pushed. Hosted delivery/scheduler, physical deletion, screen-reader, PWA OS share, and physical device/camera checks remain open.
+
 ### Latest checkpoint — integrated candidate published for review (2026-10-25)
 
 - Current branch: `feat/pilot-integrated-preview`, tracked by [draft PR #11](https://github.com/arjeetanand/drop/pull/11). It remains unmerged. PR #7 is separate and unchanged; `git log -1 --oneline --decorate` gives the exact branch tip.

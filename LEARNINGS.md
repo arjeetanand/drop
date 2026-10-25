@@ -1824,3 +1824,87 @@ For a local handoff, move the verified branch into the canonical checkout and ke
 ### Git and remaining gaps
 
 This documentation follow-up is being added on the pushed `feat/pilot-integrated-preview` branch; PR #11 remains open and draft. The hosted Free project is not configured, so hosted delivery and actual 30-day Storage deletion remain unverified. Spoken screen-reader output, installed-PWA/OS sharing, physical-device behavior, and physical camera QR scanning also remain open.
+
+## 2026-10-26 — Show the same private claim invite as a QR code
+
+### Issue
+
+The mobile private-claim flow exposed a bearer URL for copy/share, but no on-screen scan code for a nearby recipient.
+
+### Cause
+
+The ready-link panel did not render a QR representation of the issued invite.
+
+### Resolution
+
+Render a QR for the same issued invite used by copy/share on both handleless and confirmed-missing-handle paths. Clear it when draft/account context changes so a previous recipient cannot scan a stale drop. Keep the bearer-link disclosure visible: anyone holding the code can claim until the invite expires.
+
+### Learning
+
+For a QR affordance, derive the code from the already-issued canonical invite rather than creating another credential. Treat account and draft changes as invalidation events, and expose the recipient/privacy consequences beside the code.
+
+### Verification
+
+- On isolated local Chrome at 390×844, authenticated sign-in led to a private text invite; the QR rendered and received focus, and the 64-hex bearer token remained in the URL fragment.
+- Hide/show preserved the same invite. Decoding the captured QR matched the displayed invite exactly; the claim row remained pending with no recipient. Anonymous RLS read returned no rows.
+- The browser saw one local RPC, no blocked cross-origin requests, no console errors/page exceptions, and the scroll-to-end explanation stayed above fixed navigation. Exact test drop, Auth user, and profile were removed.
+- Combined code branch passed 288/288 unit tests, lint, typecheck, diff check, and a 22-route Webpack production build.
+
+### Git and remaining gaps
+
+QR code commits are `98cb6aa` and `f8cbde3` on local `pilot/combined-verification`, based on `f0c015a`. The isolated browser run itself used `pilot/qr-integration` at the same QR code tree before the handoff-pruner commit. These commits have not yet been transferred to the canonical candidate or pushed. Physical camera scanning and hosted behavior remain unverified.
+
+## 2026-10-26 — Prune expired claim handoffs after app restart
+
+### Issue
+
+If the tab that created a 10-minute claim handoff closed before its timer fired, the stale localStorage token could remain until the claim route was visited again.
+
+### Cause
+
+Physical cleanup depended on the claim route or the timer in the originating tab; no route-independent sweep ran when Drop started or returned to the foreground.
+
+### Resolution
+
+Mount a client-side pruner in the root layout. It removes expired or malformed records on startup and on `pageshow`/`focus`, while preserving the existing 10-minute logical TTL, opaque handoff ID, and bearer claim semantics. If Drop stays closed, cleanup waits until the next visit.
+
+### Learning
+
+For browser-local records with short logical TTLs, combine the existing open-tab timer with an app-start/foreground sweep. Do not imply background deletion while the app is closed.
+
+### Verification
+
+- Regression coverage proves startup removes expired records, preserves a still-live handoff, removes one that expires while backgrounded when focus returns, and unregisters listeners on unmount.
+- The combined branch passed 288/288 tests, lint, typecheck, diff check, and a 22-route Webpack production build.
+
+### Git and remaining gaps
+
+Code commit `2eb4071` is on local `pilot/combined-verification`, based on `f0c015a`. No hosted service or browser test is needed for this browser-storage lifecycle fix; browser cleanup after a closed tab occurs only on the next Drop visit. Push and canonical integration remain pending.
+
+## 2026-10-25 — Verify the 30-day staged-media cleanup worker locally
+
+### Issue
+
+The pending-media retention policy existed, but physical deletion of an aged staged object through the worker had not been proven end to end.
+
+### Cause
+
+Earlier verification covered policy and cleanup logic without running the real local Edge Function against staged Storage objects of different ages.
+
+### Resolution
+
+Create two disposable local Storage objects, age only one exact metadata row to 31 days, invoke the cleanup worker through the local Docker network, and verify the older object was deleted through the Storage API while the recent object remained. Remove both test objects, only the exact test tombstone, and restore the scan cursor.
+
+### Learning
+
+A worker unit test does not prove object deletion. Test age selection and the actual Storage API effect with a narrow disposable fixture, then verify both removal and retention and restore cursor/tombstone state.
+
+### Verification
+
+- Read-only preflight found no pending cleanup jobs, aged candidates, or preexisting aged unlinked objects. A deliberately wrong worker secret returned 401 before processing.
+- The worker reported `stagedScanned=1`, `stagedRemoved=1`, `stagedRetried=0`; the aged object disappeared and the recent object still returned HTTP 200.
+- Exact cleanup ended with zero fixture objects, zero fixture tombstones, and the initial null cursor restored. No SQL deletion from `storage.objects`, hosted resource, migration, port 4004, or `/letter` was used.
+
+### Git and remaining gaps
+
+Evidence is recorded in `docs/pilot-retention-verification.md`. This verifies local Supabase Storage and Edge Function behavior only. Hosted migrations, worker deployment/secrets, hourly schedule, and real hosted deletion remain unverified.

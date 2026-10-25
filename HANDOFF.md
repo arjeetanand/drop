@@ -1,6 +1,17 @@
 # Drop handoff
 
-Updated: 2026-10-25
+Updated: 2026-10-26
+
+## Latest checkpoint — QR pilot and cleanup verification (2026-10-26)
+
+- Combined three reviewed code commits on `pilot/combined-verification` from candidate base `f0c015a`: `2eb4071` prunes expired claim handoffs at app startup and on `pageshow`/focus; `98cb6aa` adds QR display for private claim links; `f8cbde3` clears stale QR state when the active draft or account changes.
+- Combined verification passed: `npm test` 288/288, lint, typecheck, `git diff --check`, and `npm run build -- --webpack` with 22 routes. The build passed after allowing the existing Google Fonts requests; non-blocking Browserslist and Tailwind ambiguity warnings remain.
+- Authenticated local Chrome QR journey passed at 390×844 on `pilot/qr-integration`. It verified issue/render, focus, hide/show using the same link, token only in the URL fragment, decoded screenshot matching the displayed invite, one pending claim row with no recipient yet, anonymous RLS denial, no browser errors/cross-origin calls, and exact cleanup of the test drop/user/profile. Details are in `docs/pilot-qr-verification.md`.
+- Local retention worker removed one exact 31-day staged-media fixture through the Storage API while a recent fixture stayed available. The test began and ended with zero fixture objects/tombstones and the initial null cursor restored; details are in `docs/pilot-retention-verification.md`.
+- The combined branch is still an isolated local verification branch and has not been transferred or pushed. The canonical checkout remains at `f0c015a`; GitHub could not be queried during this run, so PR #11 and PR #7 remote status is unrefreshed. No `main` merge, hosted Supabase access, or `.env.local` read occurred.
+- Main remaining pilot gates: hosted project migrations/secrets/scheduler and two-account delivery; hosted physical deletion; physical QR scan/device behavior; installed-PWA OS share; and spoken screen-reader verification.
+
+**Next:** transfer the reviewed commits and evidence docs into canonical `feat/pilot-integrated-preview`, rerun final checks there, then push the authorized update to the existing draft PR if GitHub is reachable. Keep the PR unmerged while the hosted/device acceptance gates are open.
 
 ## Latest checkpoint — integrated pilot candidate published for review (2026-10-25)
 

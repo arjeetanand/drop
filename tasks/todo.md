@@ -2,6 +2,15 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
+## Current pilot verification branch (2026-10-26)
+
+- [x] Add private-claim QR sharing and clear QR state on draft/account changes; code commits `98cb6aa` and `f8cbde3`.
+- [x] Prune expired claim handoffs at app startup and on page restore/focus; code commit `2eb4071`.
+- [x] Pass combined 288 unit tests, lint, typecheck, `git diff --check`, and Webpack production build (22 routes).
+- [x] Pass authenticated local QR browser verification at 390×844 and local aged staged-media deletion/recent-object retention proof.
+- [ ] Transfer the verified commits and task docs to canonical `feat/pilot-integrated-preview`, rerun checks, and push to the existing draft PR if GitHub access is available. Keep unmerged.
+- [ ] Complete hosted account-to-account delivery and scheduled deletion, installed-PWA OS share, spoken screen-reader, and physical device/QR-camera checks.
+
 ## Current integrated pilot candidate (2026-10-25)
 
 - [x] Integrate the mobile composer/accessibility, send/read/reaction, private media claim, PWA import/retry, and first-time signup work on `feat/pilot-integrated-preview`.

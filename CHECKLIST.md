@@ -1,23 +1,20 @@
 # Drop integration checklist
 
-Updated: 2026-10-25
+Updated: 2026-10-26
 
-## Integrated pilot candidate (2026-10-25)
+## Integrated pilot candidate (2026-10-26)
 
-- [x] Combine mobile composer actions, accessible photo/GIF picker focus, contrast and media names, account-safe PWA import/retry, and local media-claim E2E coverage on `feat/pilot-integrated-preview`; latest code commit is `723d45f`.
-- [x] Correct the composer form's `aria-busy` value to include the active send state (`723d45f`).
-- [x] Pass `npm test` (287/287), lint, TypeScript, browser-script syntax, and `git diff --check` after the accessibility correction.
-- [x] Pass the final Webpack production build on the candidate (22 routes). A fresh Turbopack rerun was blocked by the worker-port permission error after the sandboxed run could not fetch Google Fonts; the earlier configured Turbopack build passed at `4a3b342`.
-- [x] Pass the authenticated local production send/read/reaction flow, including unread sync to the recipient's second session without reload.
-- [x] Pass authenticated local production photo/GIF claim flow for sender, first-use recipient, and outsider, including pre-claim denial, explicit claim, replay denial, and exact fixture cleanup.
-- [x] Carry the dedicated mobile-action branch's six-width Edge verification into this candidate via patch-equivalent commits `0686651`/`6485ef0`; verify scroll stability, nav clearance, touch targets, focus, account gate, and overflow.
-- [x] Verify the separate private-claim QR feature in PR #7 at 390×844, including QR/link decode and max-scroll copy clearance. PR #7 remains open and its QR feature code is not included in this pilot candidate.
-- [x] Pass the production PWA share-target flow nine consecutive times in an isolated run, including import/retry/replay, responsive checks, and the strict request guard; each reported zero blocked cross-origin requests. One earlier final-gate `Invalid InterceptionId` did not reproduce, so no guard code was weakened.
-- [x] Add the public first-sign-up browser check: email form → local Mailpit magic link → callback → profile save/readback; clean up the exact test user, profile, and Mailpit message. Source branch `feat/pilot-first-signup-smoke` passed; its test commit is integrated as `d49aaf3`.
-- [x] Verify a brand-new recipient can sign up from a private claim link, return to that claim, and explicitly claim/reveal the drop. Local browser flow passed signup, Mailpit callback, handle setup, handoff preservation, claim, reveal/open, and outsider/replay denial. The harness follows the app's claim-page-to-profile step and normalizes CSS-uppercase button labels. Exact disposable users/profiles, claim, and Mailpit message were removed.
-- [x] Open [draft PR #11](https://github.com/arjeetanand/drop/pull/11) from the integrated branch, then push the verified end-to-end harness and handoff update at `7dad439`; keep it unmerged and leave `main` and PR #7 unchanged.
-- [x] Switch the canonical checkout to `feat/pilot-integrated-preview`; `./run.sh start` serves the pilot at `http://localhost:4004` with HTTP 200.
-- [ ] Verify hosted account-to-account behavior and real Storage deletion, screen-reader output, physical-device behavior, installed-PWA/OS share sheet, and a physical camera scan. PR #7's isolated local QR browser check passed and the PR remains open as requested.
+- [x] Assemble the verified pilot changes on `pilot/combined-verification`, based on `feat/pilot-integrated-preview` at `f0c015a`.
+- [x] Add a route-independent sweep for expired claim handoffs on app startup, `pageshow`, and focus; keep the existing 10-minute TTL and bearer claim flow. Code commit: `2eb4071`.
+- [x] Add private-claim QR display and clear the rendered QR when account or draft changes. Code commits: `98cb6aa` and `f8cbde3`; the existing `qrcode.react@4.2.0` dependency is reused.
+- [x] Pass the combined `npm test` suite (288/288), `npm run lint`, `npm run typecheck`, and `git diff --check`.
+- [x] Pass `npm run build -- --webpack`; Next.js compiled and generated all 22 routes. Existing Browserslist freshness and ambiguous Tailwind easing warnings remain.
+- [x] Pass the authenticated local QR browser flow at 390×844 on `pilot/qr-integration`: private link issuance, QR render, keyboard focus, hide/show stability, bearer fragment placement, screenshot decode matching the displayed link, no console/page errors, and exact fixture cleanup. Details: [QR browser verification](./docs/pilot-qr-verification.md).
+- [ ] Add a committed repeatable QR browser smoke so same-link rendering, hide/show, token placement, and cleanup are guarded in future runs.
+- [x] Pass the local 31-day staged-media deletion check through the cleanup worker; retain a recent object and remove only the exact test fixtures. Details: [retention verification](./docs/pilot-retention-verification.md).
+- [x] Append issue/cause/resolution and evidence to `LEARNINGS.md`.
+- [ ] Transfer the tested commits and docs into the canonical `feat/pilot-integrated-preview` checkout and update the existing draft PR after final review. Do not merge to `main` without approval.
+- [ ] Verify hosted account-to-account delivery and scheduled physical deletion, actual screen-reader output, installed-PWA/OS sharing, and physical-device/camera scanning.
 
 ## Pilot accessibility follow-up (2026-10-25)
 
