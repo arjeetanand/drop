@@ -92,6 +92,14 @@ function assertRpcDenied({ data, error }, message) {
   assert.equal(data, null, `${message}: a denied claim must not return a drop ID`);
 }
 
+function isDisposableFinalizedMediaPath(mediaPath, senderId, letterId) {
+  if (typeof mediaPath !== 'string') return false;
+  const prefix = `${senderId}/${letterId}/`;
+  if (!mediaPath.startsWith(prefix)) return false;
+  const objectName = mediaPath.slice(prefix.length);
+  return /^[A-Za-z0-9_-]{1,128}$/.test(objectName);
+}
+
 async function assertPortFree(port) {
   const server = createServer();
   await new Promise((resolveListen, reject) => {
@@ -303,6 +311,9 @@ async function issueUnknownHandleMedia({ sender, appUrl, payloadKind, bytes, mim
   });
   assert.equal(response.status, 200, `The real finalize route should accept the ${payloadKind} fixture`);
   const finalized = await response.json();
+  if (isDisposableFinalizedMediaPath(finalized.mediaPath, sender.id, letterId)) {
+    createdStoragePaths.add(finalized.mediaPath);
+  }
   assert.equal(finalized.mediaPath, expectedMediaPath, 'Finalization must bind media to this drop and owner');
   assert.equal(finalized.mediaMimeType, mimeType, 'Finalization must preserve the fixture MIME type');
   assert.ok(

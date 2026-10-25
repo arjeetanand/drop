@@ -51,6 +51,17 @@ test('checks sanitized output against the finalized Storage object instead of th
   assert.doesNotMatch(source, /assert\.equal\(finalized\.mediaSizeBytes,\s*bytes\.length/);
 });
 
+test('tracks unexpected finalized paths only inside the disposable sender/draft namespace', async () => {
+  const source = await readFile(scriptPath, 'utf8');
+
+  assert.match(source, /function isDisposableFinalizedMediaPath\(mediaPath, senderId, letterId\)/);
+  assert.match(source, /const prefix = `\$\{senderId\}\/\$\{letterId\}\/`;/);
+  assert.match(source, /if \(!mediaPath\.startsWith\(prefix\)\) return false;/);
+  assert.match(source, /const objectName = mediaPath\.slice\(prefix\.length\);/);
+  assert.match(source, /return \/\^\[A-Za-z0-9_-\]\{1,128\}\$\/\.test\(objectName\);/);
+  assert.match(source, /if \(isDisposableFinalizedMediaPath\(finalized\.mediaPath, sender\.id, letterId\)\) \{\s*createdStoragePaths\.add\(finalized\.mediaPath\);\s*\}\s*assert\.equal\(finalized\.mediaPath, expectedMediaPath/);
+});
+
 test('local photo/GIF smoke requires dedicated process environment values', () => {
   const result = runSmoke({});
 
