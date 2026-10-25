@@ -16,8 +16,13 @@ const APP_ORIGIN = `http://127.0.0.1:${TEST_PORT}`;
 const SUBJECT = `A little check-in ${randomUUID().slice(0, 8)}`;
 const MESSAGE = `I saw this and thought of you. ${randomUUID()}`;
 const APP_TIMEOUT_MS = 60_000;
+const BUILD_TIMEOUT_MS = 180_000;
 const BROWSER_TIMEOUT_MS = 45_000;
 const STEP_TIMEOUT_MS = 30_000;
+// The live inbox reconciles read state every 60 seconds; allow one full cycle plus request margin.
+const CROSS_SESSION_READ_TIMEOUT_MS = 75_000;
+const OBSERVER_HOME_STABILITY_MS = 8_000;
+const OBSERVER_HOME_STABILITY_TIMEOUT_MS = 30_000;
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
 const VIEWPORTS = [
   { name: 'mobile-390', width: 390, height: 844, deviceScaleFactor: 1, mobile: true },
@@ -153,11 +158,13 @@ class BrowserSession {
     this.pageCdp = null;
     this.spawnError = null;
     this.pendingRequests = new Map();
+    this.mainDocumentRequests = [];
     this.failedLocalRequests = [];
     this.blockedExternalOrigins = new Set();
     this.consoleErrorCount = 0;
     this.exceptionCount = 0;
     this.readMarkerStatuses = [];
+    this.recipientReadStateResponses = [];
     this.reactionChannelObserved = false;
   }
 
@@ -219,15 +226,35 @@ class BrowserSession {
 
   observeNetwork() {
     const cdp = this.pageCdp;
-    cdp.on('Network.requestWillBeSent', ({ requestId, request }) => {
+    cdp.on('Network.requestWillBeSent', ({ requestId, request, type, initiator }) => {
       let parsed;
       try { parsed = new URL(request.url); } catch { return; }
-      const entry = { origin: parsed.origin, path: parsed.pathname, letterId: null };
+      if (type === 'Document' && parsed.origin === APP_ORIGIN) {
+        this.mainDocumentRequests.push({
+          path: parsed.pathname,
+          startedAt: performance.now(),
+          initiatorType: initiator?.type || null,
+          initiatorFrames: (initiator?.stack?.callFrames || []).slice(0, 3).map((frame) => {
+            let path = '';
+            try { path = new URL(frame.url).pathname; } catch { /* Keep only local source paths in diagnostics. */ }
+            return { path, functionName: frame.functionName || '', lineNumber: frame.lineNumber };
+          }),
+        });
+      }
+      const entry = { origin: parsed.origin, path: parsed.pathname, letterId: null, startedAt: performance.now() };
       if (parsed.pathname === '/rest/v1/rpc/mark_recipient_drop_read') {
         try {
           const body = JSON.parse(request.postData || '');
           entry.letterId = typeof body.p_letter_id === 'string' ? body.p_letter_id : null;
         } catch { /* The smoke will fail unless the exact read RPC can be correlated. */ }
+      }
+      if (parsed.pathname === '/rest/v1/rpc/get_recipient_drop_read_states') {
+        try {
+          const body = JSON.parse(request.postData || '');
+          entry.letterIds = Array.isArray(body.p_letter_ids)
+            ? body.p_letter_ids.filter((id) => typeof id === 'string')
+            : [];
+        } catch { entry.letterIds = []; }
       }
       this.pendingRequests.set(requestId, entry);
       if (/^https?:$/.test(parsed.protocol) && !allowedOrigins.has(parsed.origin)) this.blockedExternalOrigins.add(parsed.origin);
@@ -245,8 +272,38 @@ class BrowserSession {
     cdp.on('Network.responseReceived', ({ requestId, response }) => {
       const request = this.pendingRequests.get(requestId);
       if (request?.path === '/rest/v1/rpc/mark_recipient_drop_read') {
-        this.readMarkerStatuses.push({ letterId: request.letterId, status: response.status });
+        this.readMarkerStatuses.push({ letterId: request.letterId, status: response.status, responseAt: performance.now() });
       }
+      if (request?.path === '/rest/v1/rpc/get_recipient_drop_read_states') {
+        request.status = response.status;
+      }
+    });
+    cdp.on('Network.loadingFinished', ({ requestId }) => {
+      const request = this.pendingRequests.get(requestId);
+      if (request?.path !== '/rest/v1/rpc/get_recipient_drop_read_states'
+        || request.status === undefined) return;
+      void cdp.send('Network.getResponseBody', { requestId }).then(({ body, base64Encoded }) => {
+        let includesReadMarker = false;
+        try {
+          const payload = JSON.parse(Buffer.from(body, base64Encoded ? 'base64' : 'utf8').toString('utf8'));
+          includesReadMarker = Array.isArray(payload) && payload.some((row) => row.letter_id === letterId
+            && typeof row.read_at === 'string'
+            && Number.isFinite(Date.parse(row.read_at)));
+        } catch { /* The exact marker assertion below will fail if the response is not valid JSON. */ }
+        this.recipientReadStateResponses.push({
+          includesTestLetter: request.letterIds?.includes(letterId) === true,
+          status: request.status,
+          requestStartedAt: request.startedAt,
+          includesReadMarker,
+        });
+      }).catch(() => {
+        this.recipientReadStateResponses.push({
+          includesTestLetter: request.letterIds?.includes(letterId) === true,
+          status: request.status,
+          requestStartedAt: request.startedAt,
+          includesReadMarker: false,
+        });
+      });
     });
     cdp.on('Network.loadingFailed', ({ requestId, errorText }) => {
       const request = this.pendingRequests.get(requestId);
@@ -431,19 +488,51 @@ async function makeIsolatedProject() {
 
 async function startTemporaryApp() {
   const projectRoot = await makeIsolatedProject();
+  const nextCli = resolve(PROJECT_ROOT, 'node_modules/next/dist/bin/next');
+  const appEnvironment = {
+    ...minimalEnvironment(),
+    NEXT_PUBLIC_SUPABASE_URL: localValues.NEXT_PUBLIC_SUPABASE_URL,
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: localValues.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    NEXT_TELEMETRY_DISABLED: '1',
+    NODE_ENV: 'production',
+  };
+  console.log('[browser-send-react-smoke] Building the isolated production app for browser verification.');
+  app = spawn(process.execPath, [nextCli, 'build', '--webpack'], {
+    cwd: projectRoot,
+    env: appEnvironment,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    detached: process.platform !== 'win32',
+  });
+  let buildOutput = '';
+  const retainBuildOutput = (chunk) => { buildOutput = `${buildOutput}${chunk}`.slice(-8_000); };
+  app.stdout?.on('data', retainBuildOutput);
+  app.stderr?.on('data', retainBuildOutput);
+  let buildSpawnError = null;
+  app.on('error', (error) => { buildSpawnError = error; });
+  const buildProcess = app;
+  const buildDeadline = Date.now() + BUILD_TIMEOUT_MS;
+  while (Date.now() < buildDeadline && !buildSpawnError && buildProcess.exitCode === null) {
+    await sleep(250, active.signal);
+  }
+  if (buildSpawnError || buildProcess.exitCode !== 0) {
+    const reason = buildSpawnError
+      ? 'could not start'
+      : buildProcess.exitCode === null ? 'timed out' : `exited with code ${buildProcess.exitCode}`;
+    const safeBuildOutput = buildOutput
+      .replaceAll(localValues.NEXT_PUBLIC_SUPABASE_URL, '[loopback Supabase URL]')
+      .replaceAll(localValues.NEXT_PUBLIC_SUPABASE_ANON_KEY, '[redacted anon key]')
+      .trim();
+    if (buildProcess.pid) await stopOwnedProcess(buildProcess, 'isolated local production build');
+    app = null;
+    throw new Error(`The isolated local production build ${reason}.${safeBuildOutput ? ` Build output: ${safeBuildOutput}` : ''}`);
+  }
+  await stopOwnedProcess(buildProcess, 'isolated local production build');
   app = spawn(process.execPath, [
-    resolve(PROJECT_ROOT, 'node_modules/next/dist/bin/next'),
-    'dev', '--webpack', '--hostname', '127.0.0.1', '--port', String(TEST_PORT),
+    nextCli,
+    'start', '--hostname', '127.0.0.1', '--port', String(TEST_PORT),
   ], {
     cwd: projectRoot,
-    env: {
-      ...minimalEnvironment(),
-      NEXT_PUBLIC_SUPABASE_URL: localValues.NEXT_PUBLIC_SUPABASE_URL,
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: localValues.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-      WATCHPACK_POLLING: 'true',
-      NEXT_TELEMETRY_DISABLED: '1',
-      NODE_ENV: 'development',
-    },
+    env: appEnvironment,
     stdio: ['ignore', 'ignore', 'ignore'],
     detached: process.platform !== 'win32',
   });
@@ -618,6 +707,121 @@ async function assertUnreadHomeAtBothSizes(session) {
   }
 }
 
+async function waitForStableUnreadObserverHome(session) {
+  const deadline = Date.now() + OBSERVER_HOME_STABILITY_TIMEOUT_MS;
+  let stableSince = Date.now();
+  let documentTimeOrigin = null;
+
+  while (Date.now() < deadline) {
+    const state = await session.evaluate(`(() => {
+      const card = Array.from(document.querySelectorAll('a[aria-label^="Open new drop from "]'))
+        .find((element) => element.innerText.includes(${JSON.stringify(SUBJECT)}));
+      const pill = Array.from(card?.querySelectorAll('span') || [])
+        .map((element) => element.innerText.trim().toLowerCase())
+        .find((text) => ['new', 'in your inbox'].includes(text)) || null;
+      return {
+        path: location.pathname,
+        visibility: document.visibilityState,
+        pill,
+        inboxNewMarkers: document.querySelectorAll('[aria-label="New unread drop"]').length,
+        timeOrigin: performance.timeOrigin,
+      };
+    })()`);
+
+    if (state?.path === '/' && state.visibility === 'visible' && state.pill === 'new' && state.inboxNewMarkers > 0) {
+      if (documentTimeOrigin === null) {
+        documentTimeOrigin = state.timeOrigin;
+        stableSince = Date.now();
+      } else if (state.timeOrigin !== documentTimeOrigin) {
+        documentTimeOrigin = state.timeOrigin;
+        stableSince = Date.now();
+      } else if (Date.now() - stableSince >= OBSERVER_HOME_STABILITY_MS) {
+        return documentTimeOrigin;
+      }
+    } else {
+      documentTimeOrigin = null;
+      stableSince = Date.now();
+    }
+    await sleep(200, active.signal);
+  }
+
+  throw new Error('The observer Home document did not stabilize after recipient sign-in.');
+}
+
+async function assertReadStateSyncInOpenHome(session, priorReadStateResponseCount, priorDocumentRequestCount, documentTimeOrigin, readMarkerResponseAt) {
+  const getHomeState = () => session.evaluate(`(() => {
+      const card = Array.from(document.querySelectorAll('a')).find((element) => element.innerText.includes(${JSON.stringify(SUBJECT)}));
+      if (!card) return null;
+      const pill = Array.from(card.querySelectorAll('span'))
+        .map((element) => element.innerText.trim().toLowerCase())
+        .find((text) => ['new', 'in your inbox'].includes(text)) || null;
+      return {
+        path: location.pathname,
+        visibility: document.visibilityState,
+        pill,
+        inboxNewMarkers: document.querySelectorAll('[aria-label="New unread drop"]').length,
+        timeOrigin: performance.timeOrigin,
+      };
+    })()`);
+  const findReadStateResponse = () => session.recipientReadStateResponses
+    .slice(priorReadStateResponseCount)
+    .find((response) => response.status === 200
+      && response.requestStartedAt > readMarkerResponseAt
+      && response.includesTestLetter
+      && response.includesReadMarker);
+  let result;
+  try {
+    result = await session.waitFor(async () => {
+      const state = await getHomeState();
+      if (state?.path === '/' && state.timeOrigin !== documentTimeOrigin) {
+        return { documentReplaced: true, state };
+      }
+      const refreshedReadState = findReadStateResponse();
+      return state?.path === '/'
+        && state.pill === 'in your inbox'
+        && state.inboxNewMarkers === 0
+        && state.timeOrigin === documentTimeOrigin
+        && refreshedReadState
+        ? { state, refreshedReadState }
+        : null;
+    }, 'the open second recipient session to clear New from the server refresh without reload', CROSS_SESSION_READ_TIMEOUT_MS);
+  } catch (error) {
+    const state = await getHomeState().catch(() => null);
+    const readStateResponses = session.recipientReadStateResponses
+      .slice(priorReadStateResponseCount)
+      .map((response) => ({
+        status: response.status,
+        includesTestLetter: response.includesTestLetter,
+        includesReadMarker: response.includesReadMarker,
+        startedAfterRead: response.requestStartedAt > readMarkerResponseAt,
+      }));
+    const mainDocumentRequests = session.mainDocumentRequests.slice(priorDocumentRequestCount);
+    throw new Error(`${error.message}; observer diagnostics=${JSON.stringify({
+      state,
+      expectedTimeOrigin: documentTimeOrigin,
+      sameDocument: state?.timeOrigin === documentTimeOrigin,
+      mainDocumentRequests,
+      readStateResponseCount: readStateResponses.length,
+      readStateResponses,
+    })}`);
+  }
+  if (result.documentReplaced) {
+    const mainDocumentRequests = session.mainDocumentRequests.slice(priorDocumentRequestCount);
+    throw new Error(`The observer Home document was replaced during the sync window; observer diagnostics=${JSON.stringify({
+      state: result.state,
+      expectedTimeOrigin: documentTimeOrigin,
+      mainDocumentRequests,
+      readStateResponseCount: session.recipientReadStateResponses.slice(priorReadStateResponseCount).length,
+    })}`);
+  }
+
+  assert.equal(result.state.path, '/', 'The observer session should stay on Home while its unread state synchronizes.');
+  assert.equal(result.state.pill, 'in your inbox', 'The observer Home card should reflect the server read marker.');
+  assert.equal(result.state.inboxNewMarkers, 0, 'The observer Home inbox should no longer mark the drop New.');
+  assert.equal(result.state.timeOrigin, documentTimeOrigin, 'The observer page should synchronize without a reload.');
+  console.log('[browser-send-react-smoke] PASS second recipient session cleared New from Home through its loopback read-state refresh without reload.');
+}
+
 async function openFromInbox(session) {
   await session.navigate(`${APP_ORIGIN}/mailbox`);
   await session.waitFor(() => session.evaluate(`location.pathname === '/mailbox'
@@ -636,10 +840,10 @@ async function openFromInbox(session) {
   await session.waitFor(() => session.evaluate(`Array.from(document.querySelectorAll('button')).some((button) => button.innerText.replace(/\\s+/g, ' ').trim().toLocaleLowerCase() === 'open received drop')`), 'Open received drop control');
   assert.equal(await clickButton(session, 'Open received drop'), true, 'Could not activate Open received drop.');
   await session.waitFor(() => session.evaluate(`document.querySelector('#letter-body')?.innerText.includes(${JSON.stringify(MESSAGE)})`), 'full recipient message');
-    await session.waitFor(
-      () => session.readMarkerStatuses.some((marker) => marker.letterId === letterId && marker.status === 200),
-      'successful read marker for this exact drop',
-    );
+  await session.waitFor(
+    () => session.readMarkerStatuses.some((marker) => marker.letterId === letterId && marker.status === 200),
+    'successful read marker for this exact drop',
+  );
   console.log('[browser-send-react-smoke] PASS recipient opened the full drop through Inbox and its read marker succeeded.');
 }
 
@@ -875,6 +1079,23 @@ async function main() {
     await recipientSession.navigate(`${APP_ORIGIN}/`);
     await assertUnreadHomeAtBothSizes(recipientSession);
 
+    currentStep = 'signing in the same recipient from a second isolated browser';
+    const recipientObserverSession = new BrowserSession('recipient-observer');
+    sessions.push(recipientObserverSession);
+    await recipientObserverSession.launch();
+    await recipientObserverSession.navigate(`${APP_ORIGIN}/profile`);
+    await recipientObserverSession.waitFor(() => recipientObserverSession.evaluate(`location.pathname === '/profile' && Boolean(document.querySelector('#account-email'))`), 'second recipient sign-in screen');
+    await signInWithMagicLink(recipientObserverSession, recipient);
+    await recipientObserverSession.navigate(`${APP_ORIGIN}/`);
+    await assertUnreadHomeAtBothSizes(recipientObserverSession);
+    await setViewport(recipientObserverSession, VIEWPORTS[0]);
+    console.log('[browser-send-react-smoke] PASS both isolated sessions for the same recipient show the exact drop as New.');
+
+    currentStep = 'stabilizing the second recipient session on unread Home';
+    const stableObserverDocumentTimeOrigin = await waitForStableUnreadObserverHome(recipientObserverSession);
+    const priorReadStateResponseCount = recipientObserverSession.recipientReadStateResponses.length;
+    const priorDocumentRequestCount = recipientObserverSession.mainDocumentRequests.length;
+
     currentStep = 'opening the drop and reacting in recipient UI';
     await openFromInbox(recipientSession);
     assert.equal(await clickButton(recipientSession, 'React with heart hands'), true, 'Could not select the rendered heart-hands reaction.');
@@ -882,6 +1103,9 @@ async function main() {
     await verifyReactionRow();
     currentStep = 'checking read-state clearing';
     await assertReadStateCleared(recipientSession);
+    const readMarkerResponse = recipientSession.readMarkerStatuses.find((marker) => marker.letterId === letterId && marker.status === 200);
+    assert.ok(readMarkerResponse, 'The primary recipient browser did not receive the successful read marker response.');
+    await assertReadStateSyncInOpenHome(recipientObserverSession, priorReadStateResponseCount, priorDocumentRequestCount, stableObserverDocumentTimeOrigin, readMarkerResponse.responseAt);
     console.log('[browser-send-react-smoke] PASS recipient sent 🫶 from the opened drop UI; one reaction row is persisted.');
 
     currentStep = 'checking sender live reaction';
@@ -913,7 +1137,7 @@ async function main() {
       assert.equal(session.consoleErrorCount, 0, `${session.name} browser recorded a console error.`);
       assert.equal(session.exceptionCount, 0, `${session.name} browser recorded a runtime exception.`);
     }
-    console.log('[browser-send-react-smoke] PASS both isolated browsers stayed on the app and loopback Supabase origins.');
+    console.log('[browser-send-react-smoke] PASS all isolated browser sessions stayed on the app and loopback Supabase origins.');
   } finally {
     await cleanup();
   }
