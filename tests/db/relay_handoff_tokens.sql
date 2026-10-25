@@ -1,11 +1,19 @@
 \set ON_ERROR_STOP on
 
+-- Run against a disposable database; all test objects and fixture rows roll back.
 begin;
 
-create role anon;
-create role authenticated;
+do $$ begin
+  if not exists (select 1 from pg_catalog.pg_roles where rolname = 'anon') then
+    execute 'create role anon';
+  end if;
+  if not exists (select 1 from pg_catalog.pg_roles where rolname = 'authenticated') then
+    execute 'create role authenticated';
+  end if;
+end $$;
 create schema auth;
 create schema storage;
+create schema realtime;
 create table auth.users (id uuid primary key);
 create function auth.uid() returns uuid language sql stable as $$
   select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
@@ -24,11 +32,29 @@ create table storage.objects (
   primary key (bucket_id, name)
 );
 alter table storage.objects enable row level security;
+create table realtime.messages (
+  id bigint generated always as identity primary key,
+  topic text not null,
+  event text not null,
+  payload jsonb not null,
+  is_private boolean not null
+);
+create function realtime.send(payload jsonb, event text, topic text, is_private boolean)
+returns void
+language sql
+security definer
+set search_path = ''
+as $$
+  insert into realtime.messages (topic, event, payload, is_private)
+  values ($3, $2, $1, $4)
+$$;
 
 \ir ../../supabase/migrations/20260823000000_dear_exe.sql
 \ir ../../supabase/migrations/20261018000000_drop_media_reactions.sql
 \ir ../../supabase/migrations/20261018000100_relay_handoff_tokens.sql
 \ir ../../supabase/migrations/20261020000000_carrier_route_summary.sql
+\ir ../../supabase/migrations/20261022000000_restrict_relay_handoff_column_select.sql
+\ir ../../supabase/migrations/20261023000000_relay_recipient_collection.sql
 
 insert into auth.users (id) values
   ('11111111-1111-4111-8111-111111111111'),
@@ -58,9 +84,12 @@ insert into public.letters (
   '11111111-1111-4111-8111-111111111111/relay-gif/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
   'image/gif', 123
 );
+insert into public.letter_reactions (letter_id, recipient_id, emoji)
+values ('relay', '22222222-2222-4222-8222-222222222222', '💜');
 
 grant usage on schema auth, public to anon, authenticated;
 grant select on public.letters to authenticated;
+grant select on public.letter_reactions to authenticated;
 grant execute on function auth.uid() to anon, authenticated;
 
 set local role authenticated;
@@ -332,23 +361,110 @@ grant select on public.letters to authenticated;
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '11111111-1111-4111-8111-111111111111', true);
 do $$ begin
-  if (select count(*) from public.relay_handoffs where letter_id = 'relay') <> 2 then
+  if (select count(id) from public.relay_handoffs where letter_id = 'relay') <> 2 then
     raise exception 'the sender could not read relay handoffs';
   end if;
 end $$;
 
 select set_config('request.jwt.claim.sub', '22222222-2222-4222-8222-222222222222', true);
-do $$ begin
-  if (select count(*) from public.relay_handoffs where letter_id = 'relay') <> 2 then
-    raise exception 'the recipient could not read relay handoffs';
+do $$
+declare
+  v_route jsonb;
+begin
+  if (select count(id) from public.letters where id = 'relay') <> 0
+    or (select count(id) from public.relay_handoffs where letter_id = 'relay') <> 0
+    or (select count(letter_id) from public.letter_reactions where letter_id = 'relay') <> 0 then
+    raise exception 'the recipient read message, handoff, or reaction data before collection';
   end if;
+  select pg_catalog.to_jsonb(route) into v_route
+  from public.get_recipient_relay_drops() as route
+  where route.id = 'relay';
+  if v_route is null
+    or (select count(*) from pg_catalog.jsonb_object_keys(v_route)) <> 9
+    or v_route->>'handoff_count' <> '2'
+    or v_route->>'latest_carrier' <> 'Noor'
+    or v_route ?| array['subject', 'content', 'payload_kind', 'media_path', 'handoff_lat', 'handoff_lng', 'accepted_lat', 'accepted_lng'] then
+    raise exception 'the recipient route summary did not stay limited to safe journey details';
+  end if;
+end $$;
+
+select set_config('request.jwt.claim.sub', '11111111-1111-4111-8111-111111111111', true);
+do $$ begin
+  begin
+    perform * from public.collect_relay_drop('relay');
+    raise exception 'the sender collected the relay for its recipient';
+  exception when insufficient_privilege then null;
+  end;
 end $$;
 
 select set_config('request.jwt.claim.sub', '33333333-3333-4333-8333-333333333333', true);
 do $$ begin
-  if (select count(*) from public.relay_handoffs where letter_id = 'relay') <> 0 then
+  if (select count(id) from public.relay_handoffs where letter_id = 'relay') <> 0 then
     raise exception 'an unrelated carrier could read relay handoffs';
   end if;
+  begin
+    perform * from public.collect_relay_drop('relay');
+    raise exception 'an unrelated account collected the relay';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+
+select set_config('request.jwt.claim.sub', '22222222-2222-4222-8222-222222222222', true);
+do $$
+declare
+  v_collection jsonb;
+  v_retry jsonb;
+  v_delivered_at timestamptz;
+begin
+  select pg_catalog.to_jsonb(result) into v_collection
+  from public.collect_relay_drop('relay') as result;
+  if v_collection->>'drop_id' <> 'relay'
+    or not (v_collection ? 'delivered_at')
+    or (select count(*) from pg_catalog.jsonb_object_keys(v_collection)) <> 2 then
+    raise exception 'recipient collection did not return only the drop ID and receipt time';
+  end if;
+  v_delivered_at := (v_collection->>'delivered_at')::timestamptz;
+  select pg_catalog.to_jsonb(result) into v_retry
+  from public.collect_relay_drop('relay') as result;
+  if v_retry <> v_collection then
+    raise exception 'repeating collection changed its delivery receipt';
+  end if;
+  if (select count(id) from public.letters where id = 'relay' and status = 'delivered' and delivery_mode = 'relay') <> 1
+    or (select count(id) from public.relay_handoffs where letter_id = 'relay') <> 2
+    or (select count(letter_id) from public.letter_reactions where letter_id = 'relay') <> 1
+    or (select content from public.letters where id = 'relay') <> 'private relay body' then
+    raise exception 'collection did not release recipient-only data after arrival';
+  end if;
+  if exists (select 1 from public.get_recipient_relay_drops() where id = 'relay') then
+    raise exception 'a collected relay remained in the in-transit summary';
+  end if;
+  if v_delivered_at is null then
+    raise exception 'collection did not save a delivery timestamp';
+  end if;
+end $$;
+
+reset role;
+do $$ begin
+  if (select count(*) from realtime.messages
+      where payload = '{"drop_id":"relay"}'::jsonb
+        and event = 'drop_received'
+        and is_private) <> 3
+    or (select count(*) from realtime.messages
+        where payload = '{"drop_id":"relay"}'::jsonb
+          and topic = 'user:11111111-1111-4111-8111-111111111111:drop-inbox') <> 1
+    or (select count(*) from realtime.messages
+        where payload = '{"drop_id":"relay"}'::jsonb
+          and topic = 'user:22222222-2222-4222-8222-222222222222:drop-inbox') <> 2 then
+    raise exception 'send and collection must notify only their intended participants with the drop ID';
+  end if;
+  if (select count(*) from realtime.messages where payload->>'drop_id' = 'relay') <> 3 then
+    raise exception 'an idempotent collection retry broadcast a duplicate notification';
+  end if;
+end $$;
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '33333333-3333-4333-8333-333333333333', true);
+do $$ begin
   if (select count(*) from public.letters where id = 'relay') <> 0 then
     raise exception 'an unrelated carrier could read the drop message';
   end if;
