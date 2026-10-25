@@ -1511,3 +1511,33 @@ For async work that writes user-scoped data, capture the owner at operation star
 ### Git and remaining gaps
 
 Code commit ff9c2ff is pushed to origin/feat/pilot-pwa-share; this learning and project notes are being committed separately on that branch. The temporary font fixture and node_modules symlink were removed and are not committed. No main merge, PR creation, or PR #7 change was made. OS share-sheet/install behavior, screen-reader output, physical-device checks, and hosted account-to-account behavior remain open. /letter and .env.local were not changed.
+
+## 2026-10-25 — Allow IPv6 loopback in the media browser smoke
+
+### Issue
+
+The media claim runner accepted a local Supabase URL using `http://[::1]:54321`, but its browser-wide resolver block excluded only `127.0.0.1` and `localhost`. An IPv6-configured local project could therefore pass URL validation while the browser could not reach its API.
+
+### Cause
+
+The `--host-resolver-rules` value mapped all hosts to `~NOTFOUND` and did not exempt the IPv6 loopback literal. Chrome/Edge resolver exclusions use unbracketed `::1`, while an IPv6 address in an HTTP URL must be bracketed.
+
+### Resolution
+
+- Centralized the resolver rule and added `EXCLUDE ::1` while retaining the existing localhost and IPv4 exceptions.
+- Extended `--guard-self-test` to accept `http://[::1]:54321` and assert the exact resolver policy.
+- Compared both literal forms in headless Edge against a disposable HTTP server bound only to `::1`.
+
+### Learning
+
+When a browser resolver policy allows IPv6 loopback, test the resolver argument separately from URL parsing: the URL host uses brackets, but the `EXCLUDE` rule must use the unbracketed `::1` form.
+
+### Verification
+
+- `node --check scripts/browser-media-claim-e2e.mjs`, `node scripts/browser-media-claim-e2e.mjs --guard-self-test`, `npm run lint`, `npm run typecheck`, and `npm test` passed; the suite reported 286/286 tests. `git diff --check` passed.
+- Actual headless Edge fetched the expected response from the temporary `::1`-only listener with `EXCLUDE ::1`. The alternative `EXCLUDE [::1]` returned `FETCH_ERROR:Failed to fetch`.
+- The complete authenticated media claim E2E against a Supabase URL using IPv6 was not run. `.env.local` was not read; no hosted backend, app port 4004, or persistent test data was used.
+
+### Git and remaining gaps
+
+Code commit `0743125` is on `fix/media-e2e-ipv6-loopback`; the runner itself was not present at the requested `e21a958` base and was brought in as `70f6f33` so the fix could be validated in context. The IPv6 change is independently cherry-pickable as `0743125`. This learning, README, checklist, plan, and handoff record are a separate documentation commit on the branch. No main merge or PR change was made; `/letter` and secrets were untouched. Full authenticated IPv6-Supabase E2E coverage remains open.

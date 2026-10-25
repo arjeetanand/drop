@@ -2,6 +2,15 @@
 
 Updated: 2026-10-25
 
+## Media claim browser smoke IPv6 loopback (2026-10-25)
+
+- [x] Add the unbracketed `EXCLUDE ::1` host-resolver rule while retaining `localhost` and IPv4 loopback support.
+- [x] Extend `--guard-self-test` to accept `http://[::1]:54321` and assert the exact resolver policy.
+- [x] Verify actual Edge resolver behavior against a disposable HTTP listener bound only to `::1`: `EXCLUDE ::1` returned the expected response; `EXCLUDE [::1]` failed.
+- [x] Pass Node syntax, `--guard-self-test`, full lint, typecheck, all 286 unit tests, and `git diff --check`.
+- [x] Commit the code fix as `0743125` on `fix/media-e2e-ipv6-loopback`.
+- [ ] Run the full authenticated media claim flow with a local Supabase URL using IPv6 loopback; `.env.local` was not read for this fix.
+
 ## PWA share-target rollback reliability (2026-10-25)
 
 - [x] Confirm the pilot candidate already contains the installable share manifest, service-worker target, and bounded multipart import handler.

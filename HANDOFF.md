@@ -2,6 +2,15 @@
 
 Updated: 2026-10-25
 
+## Latest checkpoint — IPv6 loopback support in media browser smoke (2026-10-25)
+
+- The media claim runner already accepted `http://[::1]:54321`, but its Chrome resolver rule blocked the IPv6 loopback literal. The runner now uses the tested unbracketed `EXCLUDE ::1` rule and its guard self-test covers both IPv6 URL acceptance and the resolver policy.
+- Verification: Node syntax, `node scripts/browser-media-claim-e2e.mjs --guard-self-test`, `npm run lint`, `npm run typecheck`, `npm test` (286/286), and `git diff --check` passed. Headless Edge fetched the expected response from a disposable server bound only to `::1` with `EXCLUDE ::1`; the bracketed rule `EXCLUDE [::1]` failed.
+- Code commit `0743125` is on `fix/media-e2e-ipv6-loopback`, based at `e21a958` plus the media smoke runner commit. The full authenticated media E2E with an IPv6 Supabase URL was not run; `.env.local` was not read.
+- No hosted Supabase, database, project, or credential was used. Port 4004 and `/letter` were untouched. No main merge or PR change was made.
+
+**Next:** run the complete media claim E2E against an isolated local Supabase endpoint using `[::1]` when that test configuration is available.
+
 ## Latest checkpoint — PWA share-target account-switch recovery (2026-10-25)
 
 - The pilot candidate already had the installable manifest, service-worker share target, and bounded multipart import handler. This branch adds the relevant follow-up from `feat/pwa-share-acceptance`: imports capture their account/draft context, rollback is scoped to that captured owner, and failed persistence keeps the staged handoff available for retry. The smoke now checks the canonical `letter` route and expected content even if navigation completes before it observes the intermediate handoff URL.

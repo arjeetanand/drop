@@ -8,6 +8,12 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 
 ## Implementation Status — 2026-10-25
 
+### Latest checkpoint — media browser smoke IPv6 loopback resolver (2026-10-25)
+
+- The claim smoke accepts `http://[::1]:54321`; Chrome's block-all resolver policy now explicitly excludes `::1` in the unbracketed form validated by headless Edge. The guard self-test covers both accepted IPv6 URL parsing and the exact resolver rule.
+- Verification passed: actual Edge request to a disposable `::1`-only HTTP listener; Node syntax; guard self-test; lint; typecheck; all 286 unit tests; and `git diff --check`.
+- Code commit `0743125` is on `fix/media-e2e-ipv6-loopback`. The full authenticated claim flow with IPv6-configured local Supabase is still pending; no `.env.local` was read and no hosted project was contacted.
+
 ### Latest checkpoint — local pilot candidate with PWA import recovery (2026-10-25)
 
 - The pilot candidate combines Home's account requirement, the locally verified send/read/reaction journey, and account-safe PWA photo/GIF import with retry. `fix/pilot-send-account-disclosure` and `feat/pilot-pwa-share` identify the same current candidate tip; the latest code commit is `ff9c2ff`, followed by PWA and pilot-status documentation commits.
