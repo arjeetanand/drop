@@ -1206,3 +1206,125 @@ Use deterministic, clearly synthetic identifiers where a test is not measuring e
 ### Git and remaining gaps
 
 Code commit `8ecb1a4` (`test: use deterministic UUID fixtures`) is pushed to `feat/demo-relay-preview` and included in [PR #1](https://github.com/arjeetanand/drop/pull/1). GitGuardian remains the only reported check failure, and `main` has no required branch-protection checks. The live PR page holds the current gate state; no GitGuardian finding was dismissed in its dashboard.
+
+## 2026-10-24 — Align the local claim smoke with bearer-link behavior
+
+### Issue
+
+The local Supabase smoke expected an unrelated account to be denied before claim even though it was given the valid bearer link. After correcting that case, the smoke also failed because the sender’s recent-recipient query now included the profiled account from newly claimed text and media invites.
+
+### Cause
+
+A claim link is a bearer capability: the first authenticated, profiled account holding the valid token can claim it. The authorization boundary is the token before claim, then the first claimant’s account after claim. Separately, the smoke inspected raw sender drop rows and expected only the direct-recipient fixture, overlooking the sender’s additional claimed drops.
+
+### Resolution
+
+- Use a fresh invalid token for the pre-claim denial assertion and preserve the valid-token cross-account replay denial after the claimant succeeds.
+- Update recent-recipient assertions to expect the direct recipient and the profiled claimant, including each claimed text/media row.
+- Document the local Docker cleanup-worker setup: pending migrations, `pg_cron`/`pg_net`, Vault values, scheduler, and local Edge Function server.
+
+### Learning
+
+Test bearer-link access at two distinct states: invalid credentials before first claim and a different account replaying a consumed credential after claim. When an integration flow creates legitimate records, update downstream query expectations to reflect the complete scenario instead of hiding those records or changing production authorization.
+
+### Verification
+
+- `npm run test:local-supabase` passed with five disposable accounts; the `finally` cleanup left zero `drop-smoke-*` auth accounts.
+- `npm test`: 272/272 passed. Lint, TypeScript check, `node --check scripts/local-supabase-smoke.mjs`, and `git diff --check` passed. `npm run build -- --webpack` passed with existing Browserslist and Tailwind ambiguity warnings. The app root returned HTTP 200 on port 4004.
+- Local Docker Supabase services were running; the cleanup cron job is active and all three required Vault entries are present. The local function server is running in the current terminal session.
+
+### Git and remaining gaps
+
+Code commit `8115a58` (`test: align claim smoke with bearer semantics`) is pushed to `origin/fix/local-bearer-claim-smoke` and tracked by [PR #2](https://github.com/arjeetanand/drop/pull/2). This learning entry and the setup/checklist/handoff updates are in a follow-up documentation commit on the same branch. No hosted Supabase project or resource was changed. Real aged-object deletion, hosted two-account delivery, and device/screen-reader behavior remain unverified.
+
+## 2026-10-24 — Keep Drop back separate from an unfinished draft
+
+### Issue
+
+Choosing **Drop back** from a received drop could reopen the current empty-caption draft. If that draft already held a photo or GIF, the reply started with the wrong attachment and the unfinished work was no longer isolated from the new reply.
+
+### Cause
+
+The action navigated with `new=1`, while Compose calls `startNewLetter()` without `forceNew`. That helper deliberately reuses a draft whenever its text is empty, regardless of its subject, recipient, payload kind, or saved media.
+
+### Resolution
+
+- Add `startDropBackDraft` to validate and normalize the sender handle, force a new draft, require the prior draft to be saved and the new draft to be verified, and return a URL keyed by the new draft ID.
+- Turn Drop back into a guarded button action. If the local draft-preservation write fails, stay on the received drop and explain that the old draft is unchanged.
+- Add unit coverage for the exact photo attachment bytes and old draft fields, plus an isolated mobile browser flow covering route identity, prefill, no send, and no overflow.
+
+### Learning
+
+When an action means “start a new thing,” do not rely on a generic new-route parameter if the draft store intentionally reuses blank text. Force a new persisted identity and preserve the current state before navigation; test metadata and stored media, not just the visible text.
+
+### Verification
+
+- `npm test`: 274/274 passed. Lint, no-incremental TypeScript, `node --check scripts/browser-demo-smoke.mjs`, and `git diff --check` passed.
+- `npm run build -- --webpack` passed with the existing outdated Browserslist data and ambiguous Tailwind easing-class warnings.
+- Isolated Chrome passed `--drop-back-only` at 390×844 with keyboard input. The route points to the new draft, the sender is prefilled, the original photo fields and exact IndexedDB bytes remain unchanged, the account gate remains explicit, no send occurs, and no overflow/cross-origin request was observed. This uses a local received-demo fixture, not a hosted account-to-account drop.
+- Local Home returned HTTP 200 on port 4004; the project server remains running.
+
+### Git and remaining gaps
+
+Code commit `a71612b` (`fix: start fresh draft from received drop`) is pushed to `origin/fix/drop-back-fresh-draft` and tracked by [PR #5](https://github.com/arjeetanand/drop/pull/5), which is open and unmerged. This learning entry and project-note updates are in a separate documentation commit. Hosted account-to-account behavior, screen-reader output, and physical-device behavior remain unverified. No hosted resources, credentials, or `/letter` files were changed.
+
+## 2026-10-24 — Verify local Docker services and repair the rendered E2E harness
+
+### Issue
+
+The shell initially reported a permission error for Rancher Desktop’s Docker socket, and the first rendered two-account run stopped while waiting for the signed-in profile label.
+
+### Cause
+
+The Docker daemon and local Supabase services were healthy; the workspace sandbox blocked direct access to the Docker socket. The browser harness used an admin-generated magic link, which bypassed the browser’s PKCE setup, then had brittle assertions for CSS-uppercased text, serialized DOM nodes, an inverted enabled-button predicate, and an outdated receipt-page action.
+
+### Resolution
+
+- Confirm local Docker/Supabase status through read-only elevated inspection; leave socket permissions and global Docker settings unchanged.
+- Run the app’s rendered email sign-in against local Mailpit so the one-time link returns to the same browser context that stored the PKCE verifier.
+- Correct the temporary harness’s case-insensitive UI checks, primitive DOM predicates, enabled-button condition, and receipt-to-mailbox navigation. Do not invoke the cleanup worker.
+
+### Learning
+
+When testing PKCE email sign-in, request the link through the same browser session that will exchange it. For rendered UI checks, normalize visible text and return primitive values from Chrome Runtime evaluation; keep the browser journey aligned with the current visible receipt actions.
+
+### Verification
+
+- `npm run test:local-supabase` passed all eight groups with five disposable accounts; cleanup verified the test accounts were removed.
+- The isolated Chrome run at 390×844 passed real local email sign-in, sender creation of text/photo/GIF private claim drops, recipient claim/open for all three, and visible photo/GIF rendering. Browser requests stayed on the Drop and Supabase loopback origins; no console errors occurred.
+- Cleanup verified zero matching disposable users and zero sender-prefix objects; it removed two test Storage objects and two Mailpit messages and removed the browser profiles. The browser script passed `node --check` and remained temporary under `/private/tmp`.
+- Filtered `npx supabase status --output json` confirmed local API, Studio, and Mailpit URLs without displaying key values. No hosted project was accessed.
+
+### Git and remaining gaps
+
+No application source changed. The current code commit is `a71612b` on `fix/drop-back-fresh-draft`, pushed to `origin/fix/drop-back-fresh-draft` and tracked by open, unmerged [PR #5](https://github.com/arjeetanand/drop/pull/5). This verification and its documentation are a follow-up on that branch. Actual aged-object deletion remains unverified: the cleanup-worker POST was blocked by the automatic approval review because the endpoint can delete aged media. Hosted account-to-account, desktop, screen-reader, and physical-device checks also remain open.
+
+## 2026-10-24 — Restore the local Docker-backed runtime
+
+### Issue
+
+Drop's local URL refused connections on port 4004, and a default sandboxed Docker command returned a permission error for Rancher Desktop's socket.
+
+### Cause
+
+The Next.js development server had stopped. Docker and the local Supabase services were already running; only the sandboxed command context was blocked from accessing the Docker socket.
+
+### Resolution
+
+- Started the app with the documented `./run.sh start` command on port 4004.
+- Used the approved local runtime context for read-only Docker and HTTP health checks; left Docker socket permissions and global settings unchanged.
+- Kept the existing Docker-backed Supabase stack and verified its Auth and Mailpit endpoints.
+
+### Learning
+
+When localhost is unavailable, first check whether the app process is running. A Docker socket permission error from a restricted command context does not prove the Docker daemon is stopped; verify Docker through an authorized local context before changing runtime settings or reinstalling tools.
+
+### Verification
+
+- App, local Supabase Auth, and Mailpit returned HTTP 200.
+- `npm run test:local-supabase` passed all eight groups with five disposable accounts and temporary media; its cleanup completed successfully.
+- The app remains running on port 4004. The smoke did not invoke the aged-media cleanup worker.
+
+### Git and remaining gaps
+
+No application code or environment file changed. This issue-resolution record is on `chore/docker-runtime-recovery`; see the branch's latest Git commit for the exact SHA and the final task report for push status. Hosted Supabase behavior, real aged-object deletion, screen-reader use, and physical-device checks remain open.

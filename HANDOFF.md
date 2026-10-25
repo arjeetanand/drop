@@ -2,6 +2,53 @@
 
 Updated: 2026-10-24
 
+## Latest checkpoint — PR #5 merged into main (2026-10-24)
+
+- PR #5, **fix: preserve unfinished drafts when replying**, merged into `main` at `e098388` (`Merge pull request #5 from arjeetanand/fix/drop-back-fresh-draft`). The reviewed PR head was `37afbda`, including code commit `a71612b` and the Docker runtime recovery record.
+- Verification before merge: GitGuardian passed; the independent code review found no actionable issues; `npm test` passed 274/274; lint and no-incremental TypeScript passed; local Docker-backed Supabase smoke passed all eight groups; Drop, Auth, and Mailpit returned HTTP 200.
+- The remote PR source branch and Docker recovery task branch remain available. Automatic review declined the extra source-branch deletion request, so no branch deletion was performed.
+- The merged change contains no hosted Supabase resource changes. Hosted two-account behavior, actual 30-day media deletion, screen-reader behavior, and physical-device checks remain open.
+
+**Next:** continue the remaining hosted, aged-object cleanup, accessibility, and device checks; use `main` as the current branch and `e098388` as the latest code-bearing merge.
+
+## Latest checkpoint — Restore the local Docker-backed runtime (2026-10-24)
+
+- The app initially refused connections on port 4004 because its Next.js process was stopped. The Docker client and Rancher Desktop daemon were already installed/running; the default sandboxed command could not access the Docker socket, while the approved local runtime context could. No Docker permissions or global settings were changed.
+- Started Drop with `./run.sh start` on its documented port. The app, Supabase Auth, and Mailpit returned HTTP 200. The existing local Supabase Docker services remained in place.
+- `npm run test:local-supabase` passed all eight groups with five disposable local accounts; the script's cleanup completed. The cleanup worker was not invoked, and no hosted Supabase resources or unrelated containers were changed.
+- No application code changed. The Next.js app runs directly through Node; the local Supabase backend runs in Docker through the Supabase CLI. This checkpoint is on `chore/docker-runtime-recovery`; see the branch's latest Git commit and the final task report for its exact SHA and push state.
+
+**Next:** use `http://localhost:4004`; continue the open product, hosted-project, aged-object deletion, screen-reader, and device checks when their required access is available.
+
+## Latest checkpoint — Docker-backed local account-to-account verification (2026-10-24)
+
+- The local Docker/Supabase stack is healthy. The initial Docker socket denial came from the workspace sandbox blocking Rancher Desktop access; read-only elevated status confirmed the daemon and local services. No socket permissions or global Docker settings were changed.
+- The local stack has the project migrations applied, `pg_cron`/`pg_net`, local Vault configuration, the hourly media-cleanup schedule, and the local cleanup Edge Function runtime. Local API and Mailpit are on `127.0.0.1:54321` and `127.0.0.1:54324`. `.env.local` remains ignored and mode `600`; no keys were printed or committed.
+- `npm run test:local-supabase` passed with five disposable accounts and cleaned them up. An isolated Chrome run at 390×844 then used the actual profile email sign-in and local Mailpit link in one browser context; a second account claimed and opened sent text, photo, and GIF drops, and both media attachments rendered. The browser stayed on local origins with no console errors.
+- Browser-test cleanup verified zero matching accounts and sender-prefix Storage objects remain; it removed two test Storage objects, two captured sign-in emails, and the isolated Chrome profiles. The corrected browser harness is temporary under `/private/tmp`; no application source changed.
+- The cleanup worker was not invoked, so actual 30-day Storage deletion remains unverified. A worker POST was previously stopped by the automatic approval review because the endpoint can delete aged media. Hosted Supabase, `/letter`, and unrelated Docker data were not changed.
+- Current code candidate remains `fix/drop-back-fresh-draft` at `a71612b`, pushed and tracked by [PR #5](https://github.com/arjeetanand/drop/pull/5); PR #5 is open and unmerged. This checkpoint records local verification only.
+
+**Next:** verify actual deletion with an exact disposable aged-object fixture if the deletion action clears review; run the pending SQL fixture; finish hosted, screen-reader, and physical-device checks separately.
+
+## Latest checkpoint — Drop back draft isolation (2026-10-24)
+
+- Fixed the received-drop **Drop back** action so it creates a separate persisted text draft addressed to the sender. The old `/compose?new=1` route could intentionally reuse any empty-text draft, including one with a photo/GIF. The new action normalizes the sender handle, requires the old draft to be preserved and the new draft to be verifiably stored, and navigates by the new draft ID. If storage fails, it stays on the received drop and reports that the existing draft is unchanged.
+- Added unit and focused browser regressions. The unit case keeps the old draft fields and attachment bytes under its original ID. Isolated Chrome at 390×844 verified the control by keyboard, the new route and prefilled handle, the preserved photo data, the explicit account gate, no send, no horizontal overflow, and no cross-origin requests.
+- Verification: `npm test` passed 274/274; `npm run lint`, `./node_modules/.bin/tsc --noEmit --incremental false`, `node --check scripts/browser-demo-smoke.mjs`, `git diff --check`, and `npm run build -- --webpack` passed. The build reported the existing outdated Browserslist data and ambiguous Tailwind easing-class warnings. Local Home returned HTTP 200 on port 4004.
+- Code commit `a71612b` (`fix: start fresh draft from received drop`) is pushed to `origin/fix/drop-back-fresh-draft` and tracked by [PR #5](https://github.com/arjeetanand/drop/pull/5), which is open and unmerged. The browser fixture is local; hosted two-account delivery, screen-reader output, and physical-device behavior remain unverified. No hosted Supabase resources, credentials, or `/letter` files were changed.
+
+**Next:** review this branch and open its PR when ready; then complete screen-reader and physical-device checks and verify a real received-drop reply with disposable accounts.
+
+## Latest checkpoint — Docker-backed local Supabase smoke repair (2026-10-24)
+
+- Corrected `scripts/local-supabase-smoke.mjs`: an invalid bearer token is denied before claim, while the existing check still rejects a second account replaying the valid token after the first claim. The raw recent-recipient query now expects both the direct recipient and the profiled claimant from the sender’s claimed text/media invites. No claim RPC behavior changed.
+- The Docker-backed local Supabase stack is running. `pg_cron` and `pg_net` are enabled; the three local Vault entries are present; `drop-expired-drop-media-hourly` is active; and the local cleanup Edge Function is being served by the CLI process. `.env.local` remains ignored and mode `600`; no secret values were printed or committed.
+- Verification: `npm run test:local-supabase` passed across five disposable accounts and its cleanup left zero `drop-smoke-*` accounts. `npm test` passed 272/272; lint, type-check, `node --check scripts/local-supabase-smoke.mjs`, `git diff --check`, and `npm run build -- --webpack` passed. The build only reported the existing Browserslist data and ambiguous Tailwind easing-class warnings. `http://localhost:4004/` returned HTTP 200.
+- Code commit `8115a58` (`test: align claim smoke with bearer semantics`) is pushed on `fix/local-bearer-claim-smoke`; [PR #2](https://github.com/arjeetanand/drop/pull/2) tracks the change. Hosted Supabase provisioning was not attempted. The smoke and unit tests do not confirm an actual aged Storage object deletion; screen-reader and physical-device checks remain open.
+
+**Next:** keep the local Edge Function server running while using the local Supabase stack; follow [SUPABASE_SETUP.md](./SUPABASE_SETUP.md) to restart it. Verify actual object deletion only with a disposable aged-object fixture.
+
 ## Latest checkpoint — Main integration PR and Relay invite safety (2026-10-24)
 
 - Current integration candidate: `/Users/arjeetanand/projects/drop`, branch `feat/demo-relay-preview`; GitHub PR [#1](https://github.com/arjeetanand/drop/pull/1) targets `main`. The PR opened at head `1c5870aa362ee3005c59420ca95c410f77b8ccb0` against `main` at `1887ac4c702952f26ebb4a196ae19fd6ac2cb620`; test-fixture cleanup later advanced the code head to `8ecb1a4edff12ce1843a9830d21b1884b6d55a63`. At that code head, `origin/main...HEAD` was `0 126`; this project-note commit adds one more commit. The live PR page records current review, checks, and merge state.
