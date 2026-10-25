@@ -543,28 +543,66 @@ async function signInWithMagicLink(session, account) {
     && document.body.innerText.includes(${JSON.stringify(`Connected as ${account.email}.`)})`), 'local magic-link sign-in');
 }
 
-async function seedRelayDrop() {
-  const letterId = randomUUID();
+async function createRelayDropThroughCompose(session) {
   const suffix = randomUUID().replaceAll('-', '').slice(0, 10);
   const subject = `Relay pilot subject ${suffix}`;
   const content = `RELAY_PRIVATE_SENTINEL_${suffix}`;
+  await session.navigate(`${APP_ORIGIN}/compose?new=1&mode=relay`);
+  await session.waitFor(() => session.evaluate(`location.pathname === '/compose'
+    && Boolean(document.querySelector('#drop-recipient'))
+    && Boolean(document.querySelector('#drop-subject'))
+    && Boolean(document.querySelector('#drop-content'))`), 'rendered Relay Compose form');
+  await session.waitFor(() => pageIncludes(session, 'Your account is ready.'), 'connected sender account in Relay Compose');
+  await assertNoHorizontalOverflow(session, 'Sender Relay Compose page');
+  const relaySelected = await session.evaluate(`Array.from(document.querySelectorAll('button'))
+    .some((button) => button.innerText.replace(/\\s+/g, ' ').includes('Make a journey')
+      && button.getAttribute('aria-pressed') === 'true')`);
+  assert.equal(relaySelected, true, 'Compose did not start with Relay mode selected.');
+
+  await fillByKeyboard(session, '#drop-recipient', recipient.username);
+  let recipientControls;
+  try {
+    recipientControls = await session.waitFor(async () => {
+      const state = await recipientCheckState(session, recipient.username);
+      return state.inputMatches && state.checkButtonFound && !state.checkButtonDisabled
+        && !state.buttonLabel.startsWith('checking') ? state : null;
+    }, 'enabled recipient handle confirmation control');
+  } catch (error) {
+    const state = await recipientCheckState(session, recipient.username);
+    throw new Error(`${error.message}; recipient controls=${JSON.stringify(state)}`);
+  }
+  assert.equal(recipientControls.inputMatches, true);
+  assert.equal(recipientControls.checkButtonDisabled, false);
+  assert.equal(await clickRecipientCheck(session), true, 'Could not check the recipient handle in Compose.');
+  await session.waitFor(() => pageIncludes(session, `Recipient confirmed: ${recipient.displayName} (@${recipient.username})`), 'confirmed Relay recipient handle');
+  await fillByKeyboard(session, '#drop-subject', subject);
+  await fillByKeyboard(session, '#drop-content', content);
+  const letterId = await session.evaluate(`(() => {
+    const prefix = 'dear-exe:active-letter:v1:account:';
+    const keys = Object.keys(localStorage).filter((key) => key.startsWith(prefix));
+    if (keys.length !== 1) return null;
+    try { return JSON.parse(localStorage.getItem(keys[0]) || 'null')?.id || null; }
+    catch { return null; }
+  })()`);
+  assert.match(letterId || '', /^draft-[a-f0-9-]{36}$/i, 'The rendered Relay Compose draft did not have a cleanable ID.');
   disposableDrops.push({ letterId, senderId: sender.id });
-  const { error } = await admin.from('letters').insert({
-    id: letterId,
-    sender_id: sender.id,
-    recipient_id: recipient.id,
-    sender_display_name: sender.displayName,
-    recipient_username: recipient.username,
-    recipient_name: recipient.displayName,
-    subject,
-    content,
-    teaser: [content],
-    status: 'dispatched',
-    dispatched_at: new Date().toISOString(),
-    payload_kind: 'text',
-    delivery_mode: 'relay',
-  });
-  if (error) throw new Error('Could not seed the exact disposable local Relay drop.');
+  await clickButton(session, 'Send drop');
+  await session.waitFor(() => session.evaluate(`location.pathname === '/sent'
+    && new URL(location.href).searchParams.get('letter') === ${JSON.stringify(letterId)}`), 'sender Relay success receipt from Compose');
+
+  const { data, error } = await admin.from('letters')
+    .select('id,sender_id,recipient_id,status,subject,content,payload_kind,delivery_mode')
+    .eq('id', letterId)
+    .eq('sender_id', sender.id);
+  assert.equal(error, null, 'Admin read of the disposable local Relay send failed.');
+  assert.equal(data?.length, 1, 'Expected exactly one local row for the UI-submitted Relay drop.');
+  assert.equal(data[0].recipient_id, recipient.id);
+  assert.equal(data[0].status, 'dispatched');
+  assert.equal(data[0].subject, subject);
+  assert.equal(data[0].content, content);
+  assert.equal(data[0].payload_kind, 'text');
+  assert.equal(data[0].delivery_mode, 'relay');
+  console.log('[browser-relay-e2e] PASS sender created a text Relay drop through the rendered mobile Compose flow.');
   return { letterId, subject, content };
 }
 
@@ -584,6 +622,48 @@ async function clickButton(session, label) {
     return true;
   })()`);
   assert.equal(clicked, true, `Could not activate the visible “${label}” button.`);
+}
+
+async function fillByKeyboard(session, selector, value) {
+  const focused = await session.evaluate(`(() => {
+    const field = document.querySelector(${JSON.stringify(selector)});
+    if (!field || field.disabled || field.readOnly) return false;
+    field.focus();
+    return document.activeElement === field;
+  })()`);
+  assert.equal(focused, true, `Could not focus rendered field ${selector}.`);
+  await session.pageCdp.send('Input.insertText', { text: value });
+}
+
+async function recipientCheckState(session, username) {
+  return session.evaluate(`(() => {
+    const input = document.querySelector('#drop-recipient');
+    const buttons = Array.from(document.querySelectorAll('button'));
+    const getLabel = (element) => element.innerText.replace(/\\s+/g, ' ').trim().toLocaleLowerCase();
+    const button = buttons.find((element) => /^(check(?:\\s|$)|checking|try again)/.test(getLabel(element)));
+    const rawButtonLabel = button ? getLabel(button) : '';
+    const safeButtonLabels = buttons.map(getLabel).filter(Boolean).map((label) => label.startsWith('check @') ? 'check @<recipient>' : label);
+    return {
+      inputFound: Boolean(input),
+      inputLength: input?.value.length || 0,
+      inputMatches: input?.value === ${JSON.stringify(username)},
+      checkButtonFound: Boolean(button),
+      checkButtonDisabled: button?.disabled ?? true,
+      buttonLabel: rawButtonLabel.startsWith('check @') ? 'check @recipient' : rawButtonLabel,
+      renderedButtonLabels: safeButtonLabels,
+    };
+  })()`);
+}
+
+async function clickRecipientCheck(session) {
+  return session.evaluate(`(() => {
+    const label = (element) => element.innerText.replace(/\\s+/g, ' ').trim().toLocaleLowerCase();
+    const button = Array.from(document.querySelectorAll('button'))
+      .find((element) => /^(check(?:\\s|$)|try again)/.test(label(element)));
+    if (!button || button.disabled) return false;
+    button.click();
+    return true;
+  })()`);
 }
 
 async function clickLink(session, label) {
@@ -804,13 +884,14 @@ async function main() {
     sender = await createAccount('sender');
     carrier = await createAccount('carrier');
     recipient = await createAccount('recipient');
-    currentStep = 'seeding a text-only dispatched Relay fixture';
-    const fixture = await seedRelayDrop();
 
     currentStep = 'starting isolated mobile browser sessions';
     const senderSession = await createBrowserSession('sender', sender);
     const carrierSession = await createBrowserSession('carrier', carrier);
     const recipientSession = await createBrowserSession('recipient', recipient);
+
+    currentStep = 'sending a text Relay drop through the sender Compose UI';
+    const fixture = await createRelayDropThroughCompose(senderSession);
 
     currentStep = 'creating the secure carrier invite through the sender UI';
     await senderSession.navigate(`${APP_ORIGIN}/relay?letter=${encodeURIComponent(fixture.letterId)}`);
