@@ -10,6 +10,8 @@ The append-only engineering learning log is in [LEARNINGS.md](./LEARNINGS.md); i
 
 **Current pilot candidate:** `fix/pilot-send-account-disclosure` and `feat/pilot-pwa-share` point to the same verified candidate tip; use `git log -1 --oneline --decorate` for its current documentation commit. The latest code commit is `ff9c2ff`. It combines the locally verified send, same-recipient unread sync and reactions with account-safe PWA photo/GIF imports and retry. The local pilot passes its authenticated Supabase browser flow and focused share-target browser flow. Hosted account-to-account acceptance, PWA installation/system sharing, screen-reader and physical-device checks remain open; no hosted Free Drop project is configured or verified. PR #7 remains open for its separate QR browser check.
 
+**Accessibility follow-up:** branch `fix/pilot-a11y-accessibility` is based on `feat/pilot-integrated-preview` at `da358a5`, with code commit `ca29555`. It adds rendered contrast and media-name regressions, plus keyboard-visible focus and scrolling for the photo/GIF picker. `npm test` (287/287), lint, typecheck, and isolated Chrome accessibility/share-target checks passed at 320×740 and 390×844 on port 6004. See [HANDOFF.md](./HANDOFF.md) for evidence and remaining checks. This branch is separate from `main`; do not treat its work as merged until the usual PR merge completes.
+
 ## Run locally
 
 ```bash

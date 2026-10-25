@@ -8,6 +8,13 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 
 ## Implementation Status — 2026-10-25
 
+### Latest checkpoint — pilot accessibility follow-up (2026-10-25)
+
+- Improved Home helper contrast to 4.62:1 in the rendered browser; added unit/browser regressions for contrast and meaningful photo/GIF accessible names in composer, recipient preview, and received view with accompanying text.
+- The clipped photo/GIF input now gives its picker surface a visible 3px keyboard focus outline and scrolls the picker clear of the fixed action tray. Browser checks cover 320×740 and 390×844, accessibility-tree names, and the canonical PWA-import route returning to interactive composer controls.
+- `npm test` passed 287/287; lint, typecheck, browser-script syntax, and diff checks passed. Isolated Chrome accessibility and share-target checks passed on port 6004; screenshots are in `/private/tmp/drop-a11y-evidence`.
+- Code commit `ca29555` is on `fix/pilot-a11y-accessibility`, based on `feat/pilot-integrated-preview` at `da358a5`. Screen-reader, physical-device, hosted-send, and OS share-sheet acceptance remain open.
+
 ### Latest checkpoint — local pilot candidate with PWA import recovery (2026-10-25)
 
 - The pilot candidate combines Home's account requirement, the locally verified send/read/reaction journey, and account-safe PWA photo/GIF import with retry. `fix/pilot-send-account-disclosure` and `feat/pilot-pwa-share` identify the same current candidate tip; the latest code commit is `ff9c2ff`, followed by PWA and pilot-status documentation commits.

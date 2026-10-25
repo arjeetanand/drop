@@ -1511,3 +1511,35 @@ For async work that writes user-scoped data, capture the owner at operation star
 ### Git and remaining gaps
 
 Code commit ff9c2ff is pushed to origin/feat/pilot-pwa-share; this learning and project notes are being committed separately on that branch. The temporary font fixture and node_modules symlink were removed and are not committed. No main merge, PR creation, or PR #7 change was made. OS share-sheet/install behavior, screen-reader output, physical-device checks, and hosted account-to-account behavior remain open. /letter and .env.local were not changed.
+
+## 2026-10-25 — Improve pilot photo/GIF accessibility
+
+### Issue
+
+Home's small send-requirement helper did not meet the 4.5:1 text-contrast target. Composer media alternatives became empty when the sender also entered a note, and the clipped file input could receive keyboard focus while its picker surface was below or behind the fixed action tray without a visible cue.
+
+### Cause
+
+The Home helper used a translucent white treatment with insufficient contrast over cobalt. Media `alt` text was derived from the note and therefore disappeared when that note was nonempty. The visually styled picker had no focus-visible surface treatment, and the fixed action tray could obscure the focused control.
+
+### Resolution
+
+- Raise the helper's white opacity and add a browser assertion against its rendered computed colors.
+- Use the meaningful type-specific fallbacks “Attached photo” and “Attached GIF” consistently in composer, recipient preview, and received view, independent of note/message text.
+- Add a 3px mint focus outline to the picker surface for `:focus-visible`; when keyboard focus reaches the clipped file input, scroll the picker into view above the fixed actions.
+- Add unit and browser regressions for both media labels, contrast, keyboard focus/visibility, media names in each view, and share-import route interactivity.
+
+### Learning
+
+A media note is supplemental text, not a replacement for identifying the attachment. For custom file pickers with clipped inputs, verify both the focused control's accessible name and the visible, unobscured surface where the user can act.
+
+### Verification
+
+- `npm test`: 287/287 passed; `npm run lint`, `npm run typecheck`, `node --check scripts/browser-demo-smoke.mjs`, and staged `git diff --cached --check` passed.
+- `DROP_BROWSER_SCREENSHOT_DIR=/private/tmp/drop-a11y-evidence node scripts/browser-demo-smoke.mjs http://127.0.0.1:6004 --accessibility-only` passed in isolated Chrome at 320×740 and 390×844. Computed contrast measured 4.62:1. Keyboard Tab reached photo/GIF inputs; the focus-visible picker outline was 3px and clear of the fixed action tray. The accessibility tree retained “Attached photo” and “Attached GIF” in composer, recipient preview, and received samples with nonempty accompanying text. There was no horizontal overflow or cross-origin request.
+- `node scripts/browser-demo-smoke.mjs http://127.0.0.1:6004 --share-target-only` passed, including the post-canonical-route `aria-busy=false` and enabled compose-control assertion. The lifecycle check did not reproduce a stuck composer, so no app fix was needed.
+- Screenshots were reviewed in `/private/tmp/drop-a11y-evidence`. The local test server was stopped and port 6004 released. These checks do not establish actual screen-reader output or physical-device behavior.
+
+### Git and remaining gaps
+
+Code commit `ca29555` is on branch `fix/pilot-a11y-accessibility`, based on `feat/pilot-integrated-preview` at `da358a5`. README, checklist, plan, handoff, and this learning record are being committed separately on the same branch. Screen-reader, physical-device, hosted-send, and OS share-sheet installation checks remain open. No hosted Supabase resource was used, `.env.local` was not read, `/letter` and `main` were not changed, and PR #7 remains untouched.

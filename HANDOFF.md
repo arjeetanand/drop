@@ -2,6 +2,16 @@
 
 Updated: 2026-10-25
 
+## Latest checkpoint — pilot accessibility follow-up (2026-10-25)
+
+- Improved the Home send-account helper to meet 4.5:1 contrast, retained accessible names for attached photo/GIF media across the composer, recipient preview, and received view when text is present, and added a visible keyboard focus ring for the clipped picker input. Keyboard focus scrolls the picker above the fixed action tray.
+- Added unit regression coverage for both media labels and real-browser checks for computed contrast, keyboard focus visibility, AX-tree media names in all three views, responsive overflow, and interactivity after PWA share import reaches its canonical route. The route was interactive in the check, so no share-import app change was needed.
+- Verification passed: `npm test` (287/287), `npm run lint`, `npm run typecheck`, browser-smoke syntax, and staged diff checks. Isolated Chrome checks passed at 320×740 and 390×844: computed contrast was 4.62:1; keyboard focus showed a visible 3px mint outline on the photo and GIF picker without overlap; both media kinds had the expected accessible names with nonempty text in composer, preview, and received samples. The focused share-target check also passed its canonical-route interactivity assertion. No cross-origin requests or horizontal overflow were observed.
+- Code commit `ca29555` is on `fix/pilot-a11y-accessibility`, branched from `feat/pilot-integrated-preview` (`da358a5`). The branch is isolated in `/private/tmp/drop-a11y`; port 6004 was released after testing. Browser screenshots are in `/private/tmp/drop-a11y-evidence`.
+- These local checks do not verify actual screen-reader announcements, physical-device behavior, hosted sending, or operating-system share-sheet installation. No hosted Supabase resource was used, `.env.local` was not read, `/letter` was not changed, and `main` and PR #7 were left unchanged.
+
+**Next:** review and merge the accessibility branch through the normal PR flow after screen-reader and device acceptance are scheduled; keep hosted delivery and OS share-sheet acceptance separate from these local results.
+
 ## Latest checkpoint — PWA share-target account-switch recovery (2026-10-25)
 
 - The pilot candidate already had the installable manifest, service-worker share target, and bounded multipart import handler. This branch adds the relevant follow-up from `feat/pwa-share-acceptance`: imports capture their account/draft context, rollback is scoped to that captured owner, and failed persistence keeps the staged handoff available for retry. The smoke now checks the canonical `letter` route and expected content even if navigation completes before it observes the intermediate handoff URL.

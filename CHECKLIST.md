@@ -2,6 +2,17 @@
 
 Updated: 2026-10-25
 
+## Pilot accessibility follow-up (2026-10-25)
+
+- [x] Raise Home's send-requirement helper to at least 4.5:1 and assert its rendered computed-color contrast in a real browser.
+- [x] Keep photo/GIF media exposed with the meaningful fallback names “Attached photo” and “Attached GIF” in composer, recipient preview, and received view when accompanying text is nonempty.
+- [x] Add a visible 3px focus ring to the clipped media picker input and scroll the picker into view on keyboard focus so the fixed action tray does not cover it.
+- [x] Add unit coverage for both media labels and browser coverage for computed contrast, keyboard picker focus, media accessibility names, responsive overflow, and the post-share-import interactive state.
+- [x] Pass `npm test` (287/287), `npm run lint`, `npm run typecheck`, browser-script syntax, and staged diff checks.
+- [x] Pass isolated Chrome accessibility smoke at 320×740 and 390×844, and the focused PWA share-target smoke on port 6004. Review screenshots under `/private/tmp/drop-a11y-evidence`; the server was stopped and port 6004 released.
+- [x] Commit the code as `ca29555` on `fix/pilot-a11y-accessibility`; keep `main` and PR #7 unchanged.
+- [ ] Verify with a screen reader and a physical device; hosted account-to-account sending and OS share-sheet installation are outside this local check.
+
 ## PWA share-target rollback reliability (2026-10-25)
 
 - [x] Confirm the pilot candidate already contains the installable share manifest, service-worker target, and bounded multipart import handler.
