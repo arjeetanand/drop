@@ -14,6 +14,8 @@ const DESKTOP_VIEWPORT = { name: 'desktop-1440', width: 1440, height: 900, devic
 const FLOW_VIEWPORTS = [...MOBILE_VIEWPORTS, DESKTOP_VIEWPORT];
 let activeViewport = MOBILE_VIEWPORTS[1];
 const STEP_TIMEOUT_MS = 20_000;
+// Keep just above .page-enter's 380ms duration in app/globals.css.
+const PAGE_ENTER_SETTLE_MS = 420;
 const LABELS = {
   homeDemo: 'Try a demo drop',
   homeSendAccountDisclosure: 'Demo stays on this device · a Drop account is needed to send.',
@@ -358,7 +360,24 @@ async function waitUntil(cdp, description, predicate, timeoutMs = STEP_TIMEOUT_M
     }
     await sleep(200, interrupted.signal);
   }
-  const snapshot = await evaluate(cdp, `({ pathname: location.pathname, readyState: document.readyState, title: document.title, bodyText: document.body?.innerText.slice(0, 500) || '' })`).catch(() => null);
+  const snapshot = await evaluate(cdp, `(() => {
+    const page = document.querySelector('main.page-enter');
+    return {
+      pathname: location.pathname,
+      readyState: document.readyState,
+      title: document.title,
+      bodyText: document.body?.innerText.slice(0, 500) || '',
+      pageEnter: page ? {
+        animation: getComputedStyle(page).animation,
+        animations: page.getAnimations().map((animation) => ({
+          playState: animation.playState,
+          currentTime: animation.currentTime,
+          playbackRate: animation.playbackRate,
+          timing: animation.effect?.getTiming(),
+        })),
+      } : null,
+    };
+  })()`).catch(() => null);
   throw new Error(`Timed out waiting for ${description}${lastError ? ` (${lastError.message})` : ''}${snapshot ? `; page=${JSON.stringify(snapshot)}` : ''}.`);
 }
 
@@ -480,13 +499,11 @@ async function assertNoFrameworkOverlay(cdp, step) {
   assert.equal(overlayText, '', `${step}: framework error overlay text was visible (${overlayText}).`);
 }
 
-async function waitForPageEnter(cdp, step) {
-  await waitUntil(cdp, `${step} entrance animation`, async () => (
-    await evaluate(cdp, `(() => {
-      const page = document.querySelector('main.page-enter');
-      return Boolean(page) && page.getAnimations().every((animation) => animation.playState === 'finished');
-    })()`)
+async function waitForPageShell(cdp, step) {
+  await waitUntil(cdp, `${step} page shell`, async () => (
+    await evaluate(cdp, 'Boolean(document.querySelector("main.page-enter"))')
   ));
+  await sleep(PAGE_ENTER_SETTLE_MS, interrupted.signal);
 }
 
 async function activateFlowControl(cdp, { keyboard, name, selector, expectedTag, expectedHref }) {
@@ -523,7 +540,7 @@ async function runDemoFlow(cdp, {
   await waitUntil(cdp, `Home with “${LABELS.homeDemo}” and account disclosure`, async () => (
     await evaluate(cdp, `${normalizedVisibleText(LABELS.homeDemo)} && ${normalizedVisibleText(LABELS.homeSendAccountDisclosure)} && location.pathname === '/'`)
   ));
-  await waitForPageEnter(cdp, 'Home');
+  await waitForPageShell(cdp, 'Home');
   if (verifyFreshDraft) {
     const seeded = await evaluate(cdp, `(async () => {
       const draft = ${JSON.stringify(PROMPT_ACTIVE_DRAFT)};
@@ -562,6 +579,7 @@ async function runDemoFlow(cdp, {
   await waitUntil(cdp, `the demo chooser with “${optionLabel}”`, async () => (
     await evaluate(cdp, `${normalizedVisibleText(optionLabel)} && location.pathname === '/demo'`)
   ));
+  await waitForPageShell(cdp, 'Demo chooser');
   await assertNoFrameworkOverlay(cdp, 'Demo chooser');
   await checkWidth('Demo chooser');
   await capture('chooser');
@@ -570,6 +588,7 @@ async function runDemoFlow(cdp, {
   await waitUntil(cdp, 'the recipient demo route', async () => (
     await evaluate(cdp, `${normalizedVisibleText('See your drop as the recipient.')} && /^\\/letter\\/[^/]+$/.test(location.pathname)`)
   ));
+  await waitForPageShell(cdp, 'Recipient preview');
   const recipientPath = await evaluate(cdp, 'location.pathname');
   await assertNoFrameworkOverlay(cdp, 'Recipient preview');
   await assertNoHorizontalOverflow(cdp, 'Recipient preview', viewport.width);
@@ -611,16 +630,16 @@ async function runDemoFlow(cdp, {
     ));
     await assertNoFrameworkOverlay(cdp, 'Recipient demo after reload');
     await assertNoHorizontalOverflow(cdp, 'Recipient demo after reload', viewport.width);
-    await activateFlowControl(cdp, { keyboard, name: LABELS.reveal, expectedTag: 'BUTTON' });
+    await activateFlowControl(cdp, { keyboard: true, name: LABELS.reveal, expectedTag: 'BUTTON' });
     await waitUntil(cdp, `“${LABELS.open}” after reload`, async () => (
       await evaluate(cdp, `${normalizedVisibleText(LABELS.open)} && !document.querySelector('#letter-fragments')?.innerText.includes('confidential fragment')`)
     ));
-    await activateFlowControl(cdp, { keyboard, name: LABELS.open, expectedTag: 'BUTTON' });
+    await activateFlowControl(cdp, { keyboard: true, name: LABELS.open, expectedTag: 'BUTTON' });
     await waitUntil(cdp, 'the persisted reaction after reload', async () => (
       await evaluate(cdp, `document.querySelector(${JSON.stringify(`[aria-label="${LABELS.reaction}"]`)})?.getAttribute('aria-pressed') === 'true'`)
     ));
     await assertNoHorizontalOverflow(cdp, 'Reaction persisted after reload', viewport.width);
-    await activateFlowControl(cdp, { keyboard, name: 'See your sender copy', expectedTag: 'A' });
+    await activateFlowControl(cdp, { keyboard: true, name: 'See your sender copy', expectedTag: 'A' });
   }
 
   await waitUntil(cdp, `sender copy${verifyFreshDraft ? '' : ' with the saved reaction'}`, async () => (
@@ -644,13 +663,13 @@ async function runDemoFlow(cdp, {
       return { scrollY: window.scrollY, top: bounds.top, bottom: bounds.bottom, height: window.innerHeight };
     })()`);
     assert.ok(friendActionScroll && friendActionScroll.top >= 0 && friendActionScroll.bottom <= friendActionScroll.height, `The “${LABELS.makeForFriend}” action should be scrolled into view for the screenshot; found ${JSON.stringify(friendActionScroll)}.`);
-    await waitForPageEnter(cdp, 'Sender copy');
+    await waitForPageShell(cdp, 'Sender copy');
     await captureScreenshot(cdp, screenshotDir, `${viewport.name}-friend-draft-cta`);
     await activateFlowControl(cdp, { keyboard, name: LABELS.makeForFriend, expectedTag: 'BUTTON' });
     await waitUntil(cdp, 'a fresh editable composer opened from the demo', async () => (
       await evaluate(cdp, `location.pathname === '/compose' && Boolean(document.querySelector('#drop-content'))`)
     ));
-    await waitForPageEnter(cdp, 'Fresh draft from demo');
+    await waitForPageShell(cdp, 'Fresh draft from demo');
     const state = await evaluate(cdp, `(() => {
       const active = JSON.parse(localStorage.getItem('dear-exe:active-letter:v1') || 'null');
       const drafts = JSON.parse(localStorage.getItem('dear-exe:letter-drafts:v1') || '[]');
