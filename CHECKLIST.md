@@ -2,6 +2,16 @@
 
 Updated: 2026-10-26
 
+## Secure Relay browser journey (2026-10-26)
+
+- [x] Add `npm run test:browser-relay` with an isolated production app on port `6004`, exact loopback Supabase origin checks, redirect denial, and a browser request firewall.
+- [x] Verify the sender creates the invite in the UI and the UUIDv4 bearer stays in the fragment; accept it as a carrier with geolocation denied and no location call.
+- [x] Verify carrier subject/body privacy, fresh invite replay denial, exactly one handoff with null coordinate fields, sender Journey refresh, and recipient route-only view followed by explicit collection/reveal.
+- [x] Pass the full 390×844 local browser run with no horizontal overflow, browser errors, or cross-origin requests; verify disposable drop/users/profiles/processes/browser/temp cleanup.
+- [x] Pass `npm test` (298/298), lint, TypeScript, production build within the smoke, runner syntax, and `git diff --check`.
+- [x] Push code commit `57ce03a` to the existing `feat/pilot-integrated-preview` branch. PR #11 was verified open/draft at that code head; remote `main` remains `5138f88`.
+- [ ] Provision and verify the hosted Free project when a Management API token is available; complete hosted delivery/retention, screen-reader, installed-PWA sharing, and physical-device/camera checks.
+
 ## Local Supabase fixture-target guard (2026-10-26)
 
 - [x] Add a fail-closed listener, Docker endpoint, and matching-container preflight to all six fixture-writing Supabase smoke scripts.

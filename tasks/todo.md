@@ -2,6 +2,14 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
+## Checkpoint — secure Relay browser journey (2026-10-26)
+
+- [x] Add `npm run test:browser-relay` on isolated test port `6004`; restrict Node Supabase calls to exact loopback origin and reject redirects.
+- [x] Pass sender invite creation, carrier acceptance with geolocation denied/no call, carrier privacy, fresh replay denial, one-handoff/null-coordinate assertion, sender Journey refresh, and recipient collect/reveal at `390×844`.
+- [x] Verify exact local fixture/account/profile/process/browser cleanup; pass production build, 298 unit tests, lint, TypeScript, syntax, and diff checks.
+- [x] Push code commit `57ce03a` to the existing pilot branch; PR #11 stays open/draft and remote `main` remains unchanged at `5138f88`.
+- [ ] Provision the approved hosted Free project when the Management API token is available; finish hosted, screen-reader, installed-PWA sharing, and physical-device/camera checks.
+
 ## Current integrated pilot candidate (2026-10-26)
 
 - [x] Add private-claim QR sharing and clear QR state on draft/account changes; code commits `98cb6aa` and `f8cbde3`.

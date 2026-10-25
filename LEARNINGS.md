@@ -2047,3 +2047,31 @@ Before a test writes data, verify the complete local chain: configured loopback 
 ### Git and remaining gaps
 
 Code commit `f8c709d` is pushed to `origin/feat/pilot-integrated-preview`; PR #11 was verified open/draft at that code head, and `main` remains `5138f88`. The project notes are committed separately. The Supabase CLI has no `SUPABASE_ACCESS_TOKEN`; local anon/service-role keys cannot create a hosted project. No hosted project, billing setting, or hosted data changed. Hosted two-account delivery/retention, screen-reader output, installed-PWA system sharing, and physical-device/camera checks remain open.
+
+## 2026-10-26 — Add a browser journey for secure Relay
+
+### Issue
+
+Relay handoff, route privacy, replay denial, and recipient collection had backend smoke coverage, but no repeatable real-browser run proving that the sender, carrier, and recipient screens worked together.
+
+### Cause
+
+The existing Relay checks called the RPCs directly. They did not create a carrier invite from the sender UI, accept it in a separate signed-in browser, refresh the sender Journey, or collect the recipient's sealed drop in Mailbox.
+
+### Resolution
+
+Add `scripts/browser-relay-e2e.mjs` and `npm run test:browser-relay`. The smoke uses an isolated production app and three disposable browser sessions at 390×844; validates the UUIDv4 bearer is fragment-only; denies geolocation and verifies the secure flow never calls it; checks carrier subject/body privacy, fresh replay denial, exactly one handoff with null coordinates, sender route refresh, and recipient collection/reveal. Node-side Supabase requests are restricted to the exact configured loopback origin and reject redirects. Browser traffic outside the local app/Supabase origins is blocked.
+
+### Learning
+
+Test contracts should match the rendered UI: the Relay capability is UUIDv4, CSS can change `innerText` casing, and “Open carrier view” is a link. Use the local service client only for fixture-internal row counts when authenticated table reads are intentionally unavailable. Keep UI assertions on the real signed-in sessions.
+
+### Verification
+
+- `npm run test:browser-relay` passed its isolated production build and 390×844 sender invite, carrier acceptance, no-geolocation, sealed-content, replay, one-handoff/null-coordinate, sender Journey, and recipient collect/reveal checks. Browser console/runtime errors, external browser requests, and horizontal overflow were absent; exact disposable cleanup completed.
+- `npm test` passed 298/298; lint, TypeScript, `node --check scripts/browser-relay-e2e.mjs`, the smoke guard self-test, and `git diff --check` passed.
+- The test used only verified local Rancher Desktop Supabase and port `6004`; the main app on `4004` remained running. No database reset or hosted request occurred.
+
+### Git and remaining gaps
+
+Code commit `57ce03a` is pushed to `origin/feat/pilot-integrated-preview`. GitHub verified PR #11 open/draft at `57ce03a`; remote `main` remains `5138f88`. The documentation update is committed separately. Hosted Free-project provisioning is still waiting on a Management API token in the task environment; hosted two-account delivery/retention, screen-reader output, installed-PWA sharing, and physical-device/camera acceptance remain open.

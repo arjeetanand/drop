@@ -2,6 +2,16 @@
 
 Updated: 2026-10-26
 
+## Latest checkpoint — secure Relay browser journey (2026-10-26)
+
+- Added `npm run test:browser-relay`, an isolated production-browser smoke on port `6004`. It creates a text Relay fixture through the sender UI, accepts the UUIDv4 fragment invite from a signed-in carrier, checks geolocation is denied and never called, confirms the carrier cannot see subject/body, rejects a fresh replay, verifies one handoff with null coordinates, refreshes the sender Journey, and lets the recipient collect and reveal the drop.
+- The final local browser run passed at `390×844`: no horizontal overflow, console/runtime errors, or cross-origin browser requests. The runner verified cleanup of its exact disposable drop, three Auth users/profiles, browser profiles, temporary app, and process groups. Its isolated production build passed. `npm test` passed 298/298; lint, TypeScript, syntax, and `git diff --check` passed. No hosted request or database reset occurred.
+- A code review found and the test now prevents Supabase SDK redirects outside the exact configured loopback origin. The runner normalizes CSS-transformed labels and only uses the service client to inspect its exact disposable handoff fixture; authenticated table reads remain denied.
+- Code commit `57ce03a` is pushed to `origin/feat/pilot-integrated-preview`. GitHub verified PR #11 open/draft at `57ce03a`; remote `main` remains `5138f88`; no merge occurred. The existing app on `4004` was left running, and test port `6004` was released.
+- No Supabase Management API token is configured in this task, so no hosted Free project or billing/resource change was made. Hosted delivery/retention, screen-reader output, installed-PWA sharing, and physical-device/camera checks remain open.
+
+**Next:** provision the approved Free hosted project when a Management API token is available to the task, then complete hosted and device acceptance. Keep PR #11 open until the remaining gates pass and the user approves merging.
+
 ## Latest checkpoint — local Supabase fixture-target guard (2026-10-26)
 
 - Added a fail-closed listener/Docker/container provenance check to the six fixture-writing Supabase smokes. A review found that broad Rancher/Lima/socket substring matching could accept a lookalike remote SSH tunnel; the guard now accepts only the exact Rancher Desktop Lima mux socket title and requires a local Docker endpoint plus the matching Supabase container.

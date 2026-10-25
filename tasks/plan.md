@@ -6,7 +6,14 @@ Build Drop as a mobile-first private sharing app where a person can send a photo
 
 The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailbox, and relay foundations. Existing letters continue to work as text drops, and their routes and saved content remain readable. The build covers the end-to-end mobile flow: choose content, attach an image or GIF, choose a recipient, send, open, react, and optionally follow a relay.
 
-## Implementation Status — 2026-10-25
+## Implementation Status — 2026-10-26
+
+### Latest checkpoint — secure Relay browser journey (2026-10-26)
+
+- Added `npm run test:browser-relay` for the secure server-backed Relay flow. The isolated 390×844 browser run creates an invite from the sender UI, verifies fragment-only UUIDv4, accepts from a carrier while geolocation is denied and unused, checks sealed subject/body and one-time replay denial, refreshes sender Journey, and collects/reveals in recipient Mailbox.
+- The smoke checks exactly one handoff with null coordinates, local-only redirect-denying Supabase calls, no cross-origin browser requests, no horizontal overflow/browser errors, and exact disposable cleanup. Its isolated Webpack production build passed.
+- Verification passed: 298/298 unit tests, lint, TypeScript, smoke syntax, and `git diff --check`. Code commit `57ce03a` is pushed to `origin/feat/pilot-integrated-preview`; PR #11 remains open/draft and `main` remains `5138f88`.
+- Hosted delivery/retention, actual screen-reader output, installed-PWA system sharing, and physical device/camera behavior remain open. No hosted Supabase Management API token is configured for this task.
 
 ### Latest checkpoint — repeatable QR browser smoke (2026-10-26)
 
