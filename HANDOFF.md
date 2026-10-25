@@ -1,6 +1,14 @@
 # Drop handoff
 
-Updated: 2026-10-24
+Updated: 2026-10-25
+
+## 2026-10-25 — Patch critical Next.js dependency advisories
+
+- `fix/next-critical-advisories` pins `next` and `eslint-config-next` to 16.4.3 and `sharp` to 0.35.5. The resolved lockfile versions match the manifest.
+- The Next.js 16.4.3 Webpack production build completed and generated 22 routes. `npm test` passed 274/274, lint passed, and `next typegen` followed by TypeScript passed. Clean `npm ci` passed.
+- A fresh `npm audit --omit=dev` reports 0 critical, 5 high, and 1 moderate findings. Remaining packages include brace-expansion, browserslist, js-yaml, postcss-selector-parser, source-map-js, and Zod; the Zod fix requires a major version and is not included.
+- Source commit `ce924fd` is pushed to `origin/fix/next-critical-advisories`. Draft PR #10 is open and GitHub reports it mergeable; GitGuardian passed. No Actions job is attached yet because the CI workflow is proposed separately in PR #9.
+- Next.js emitted its existing React 18 deprecation warning. Netlify adapter compatibility for the exact pinned plugin version, hosted Supabase, and device acceptance remain unverified.
 
 ## Latest checkpoint — PR #5 merged into main (2026-10-24)
 

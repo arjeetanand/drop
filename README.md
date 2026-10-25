@@ -17,6 +17,8 @@ npm ci
 
 Open `http://localhost:4004`. Run `./run.sh` again to restart Drop, or `./run.sh stop` to stop it. Without Supabase credentials, the app runs with local demo data. Real account-to-account media delivery needs the Supabase migrations and private storage setup in [SUPABASE_SETUP.md](./SUPABASE_SETUP.md). Hosted Drop provisioning is currently waiting on project-creation access; no Drop project has been created.
 
+Draft [PR #10](https://github.com/arjeetanand/drop/pull/10) pins `next` and `eslint-config-next` to 16.4.3 and `sharp` to 0.35.5. See [CHECKLIST.md](./CHECKLIST.md) for the audit and deployment checks that remain open.
+
 The local Supabase backend runs in Docker through the Supabase CLI (`npm run supabase:start`); the Next.js app runs as a local Node process through `run.sh`. The main local endpoints are app `4004`, Supabase API `54321`, Studio `54323`, and Mailpit `54324`. Use `npm run supabase:stop` to stop this project's local Supabase stack.
 
 ## Try a demo without an account

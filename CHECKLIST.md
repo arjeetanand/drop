@@ -1,6 +1,6 @@
 # Drop integration checklist
 
-Updated: 2026-10-24
+Updated: 2026-10-25
 
 ## Candidate and PR
 
@@ -41,3 +41,13 @@ Updated: 2026-10-24
 - [ ] Verify the installed PWA share target and OS share sheet in a browser/device that supports the required flow.
 - [ ] Check screen-reader announcements and physical-device keyboard/safe-area behavior.
 - [ ] Validate two-account photo/GIF claims and actual 30-day Storage cleanup against the approved Free Supabase project.
+
+## Dependency security patch (2026-10-25)
+
+- [x] Upgrade the locked Next.js and matching ESLint config from 16.3.2 to 16.4.3, and Sharp from 0.35.3 to 0.35.5.
+- [x] Pass a clean `npm ci`, `npm test` (274/274), lint, `next typegen`, TypeScript check, and Webpack production build (22 routes).
+- [x] Confirm `npm audit --omit=dev` reports zero critical advisories after the patch.
+- [x] Push commit `ce924fd` and open draft [PR #10](https://github.com/arjeetanand/drop/pull/10); GitGuardian passed and GitHub reports the PR mergeable.
+- [ ] Re-run the GitHub Actions gate after the workflow in PR #9 is available on the base branch; PR #10 currently has no Actions run.
+- [ ] Triage the remaining audit findings (5 high, 1 moderate), including Zod's available fix requiring a major version; this patch does not update those unrelated dependencies.
+- [ ] Verify the configured Netlify Next.js adapter build and hosted pilot flow; the local Next.js build is not deployment proof.

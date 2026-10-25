@@ -1328,3 +1328,33 @@ When localhost is unavailable, first check whether the app process is running. A
 ### Git and remaining gaps
 
 No application code or environment file changed. This issue-resolution record is on `chore/docker-runtime-recovery`; see the branch's latest Git commit for the exact SHA and the final task report for push status. Hosted Supabase behavior, real aged-object deletion, screen-reader use, and physical-device checks remain open.
+
+## 2026-10-25 — Patch the critical Next.js runtime dependency
+
+### Issue
+
+The pilot lockfile resolved Next.js 16.3.2 and Sharp 0.35.3, which were in current critical advisory ranges.
+
+### Cause
+
+The manifest allowed newer Next versions through semver ranges, but the committed lockfile still selected the older patched-out releases. The direct Sharp pin also remained below its fixed version.
+
+### Resolution
+
+- Pin Next.js and its matching ESLint config to 16.4.3, and Sharp to 0.35.5.
+- Use the official stable Next.js 16.4.3 release, which includes the prior security fixes and the Google Fonts URL fix needed by this project.
+- Leave the unrelated Zod major upgrade and other transitive audit findings for separate review.
+
+### Learning
+
+Check the resolved lockfile versions, not just manifest ranges. When a framework security update also affects its image-processing dependency, update and verify the direct image package too. A passing local framework build still does not prove the deployment adapter works.
+
+### Verification
+
+- `npm ci` passed in the isolated branch; `npm ls` resolved Next.js 16.4.3, eslint-config-next 16.4.3, and Sharp 0.35.5.
+- `npm test` passed 274/274, `npm run lint` passed, Next route type generation and TypeScript passed, and `npm run build -- --webpack` generated 22 routes.
+- `npm audit --omit=dev` reports zero critical, five high, and one moderate advisories. The original Next.js critical findings no longer appear.
+
+### Git and remaining gaps
+
+Source commit `ce924fd` is pushed to `origin/fix/next-critical-advisories`. Draft PR #10 is open and mergeable; GitGuardian passed, and the CI workflow has not yet been merged from PR #9. Remaining dependency findings, the exact Netlify adapter build, hosted Supabase, OS share sheet, screen-reader, and physical-device checks are still open.
