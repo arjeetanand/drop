@@ -14,7 +14,7 @@ Updated: 2026-10-26
 - [x] Pass the local 31-day staged-media deletion check through the cleanup worker; retain a recent object and remove only the exact test fixtures. Details: [retention verification](./docs/pilot-retention-verification.md).
 - [x] Append issue/cause/resolution and evidence to `LEARNINGS.md`.
 - [x] Transfer the tested commits and docs into canonical `feat/pilot-integrated-preview` at `d9d9823`; verify the canonical branch is clean and the app, local Auth, and Mailpit return HTTP 200.
-- [ ] Push the tested update to the existing draft PR when GitHub is reachable; leave it unmerged pending hosted/device gates and explicit merge approval.
+- [x] Push the tested update through code checkpoint `9781ed6` to the existing pilot branch; PR #11 was open/draft at that head, PR #7 stayed open at `dec1608`, and remote `main` stayed at `5138f88`.
 - [ ] Verify hosted account-to-account delivery and scheduled physical deletion, actual screen-reader output, installed-PWA/OS sharing, and physical-device/camera scanning.
 
 ## Pilot accessibility follow-up (2026-10-25)

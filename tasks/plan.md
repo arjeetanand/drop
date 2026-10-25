@@ -12,7 +12,7 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 
 - The combined verification branch `pilot/combined-verification` starts from the integrated candidate at `f0c015a`; it contains reviewed code commits `2eb4071`, `98cb6aa`, and `f8cbde3` for handoff expiry pruning and private-claim QR sharing/reset.
 - The branch passes 288/288 unit tests, lint, typecheck, diff check, and a Webpack production build with 22 routes. The authenticated local QR flow passed at 390×844, and a local 31-day staged-media cleanup proof removed the aged test object while retaining the recent object.
-- The verified commits are now fast-forwarded into canonical `feat/pilot-integrated-preview` at `d9d9823`, and the local app/Auth/Mailpit are live on their documented ports. The branch update is not pushed yet. Hosted delivery/scheduler, physical deletion, screen-reader, PWA OS share, and physical device/camera checks remain open.
+- The verified candidate was pushed to `origin/feat/pilot-integrated-preview` through code checkpoint `9781ed6`; draft PR #11 was open at that head, PR #7 stayed open unchanged, and remote `main` remained `5138f88`. The local app/Auth/Mailpit are live on their documented ports. Hosted delivery/scheduler, physical deletion, screen-reader, PWA OS share, and physical device/camera checks remain open.
 
 ### Latest checkpoint — integrated candidate published for review (2026-10-25)
 

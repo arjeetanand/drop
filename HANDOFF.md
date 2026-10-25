@@ -2,6 +2,16 @@
 
 Updated: 2026-10-26
 
+## Latest checkpoint — tested pilot branch pushed (2026-10-26)
+
+- Pushed the tested canonical candidate to `origin/feat/pilot-integrated-preview` through code checkpoint `9781ed6`. GitHub confirmed draft PR #11 open at that head, PR #7 open and unchanged at `dec1608`, and `main` at `5138f88`.
+- PR #11 currently reports GitGuardian Security Checks as passing. No additional CI checks were reported. Local validation passed 288/288 unit tests, lint, no-incremental TypeScript, diff check, and Webpack build with 22 routes.
+- `http://localhost:4004` is running from `/Users/arjeetanand/projects/drop`; local Auth and Mailpit each return HTTP 200. The local Supabase Docker stack is running with no database reset.
+- No PR was merged. QR browser automation, hosted Free project setup/two-account delivery/scheduled deletion, physical camera/device behavior, installed-PWA OS sharing, and spoken screen-reader checks remain open.
+- The verified feature push is `9781ed6`; follow-up docs can advance the branch, so check the current PR head before any merge decision.
+
+**Next:** provision and configure the approved Free hosted project when access is available, then run the real two-account and scheduled-retention checks. Keep PR #11 unmerged until the hosted and device gates pass and the user approves merging.
+
 ## Latest checkpoint — canonical pilot candidate running locally (2026-10-26)
 
 - Fast-forwarded the verified local branch into canonical `feat/pilot-integrated-preview` at `d9d9823`. Its four commits ahead of the cached `origin` ref are `2eb4071` (expired claim handoff sweep), `98cb6aa`/`f8cbde3` (QR issue and stale-state reset), and this pilot evidence/docs update.

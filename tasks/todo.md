@@ -9,7 +9,7 @@ Tasks are ordered by dependency. Progress is recorded at each tested and pushed 
 - [x] Pass combined 288 unit tests, lint, typecheck, `git diff --check`, and Webpack production build (22 routes).
 - [x] Pass authenticated local QR browser verification at 390×844 and local aged staged-media deletion/recent-object retention proof.
 - [x] Transfer the verified commits and task docs into canonical `feat/pilot-integrated-preview` at `d9d9823`; restart and verify the app at `http://localhost:4004`, local Auth, and Mailpit.
-- [ ] Push the tested update to the existing draft PR once GitHub is reachable; keep it unmerged.
+- [x] Push the tested candidate through code checkpoint `9781ed6`; verify draft PR #11 stays open, PR #7 stays unchanged, and `main` is untouched. Keep PR #11 unmerged.
 - [ ] Add a repeatable QR browser smoke; complete hosted account-to-account delivery and scheduled deletion, installed-PWA OS share, spoken screen-reader, and physical device/QR-camera checks.
 
 

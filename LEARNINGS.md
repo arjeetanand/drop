@@ -1936,3 +1936,31 @@ Use an isolated writable checkout for development, then transfer by fast-forward
 ### Git and remaining gaps
 
 Local `feat/pilot-integrated-preview` is four commits ahead of the cached origin ref and has not been pushed; GitHub could not be refreshed. The candidate remains unmerged from `main`. Hosted Free project setup and two-account behavior, scheduled hosted deletion, QR smoke automation, screen-reader output, installed-PWA system share, and physical-device/camera scans remain open.
+
+## 2026-10-26 — Publish the tested pilot branch without merging
+
+### Issue
+
+The candidate had passed local checks and was running from the canonical checkout, but reviewers could not see the updated QR and claim-handoff fixes.
+
+### Cause
+
+The verified commits were local while GitHub access had previously failed DNS resolution.
+
+### Resolution
+
+Push only the tested `feat/pilot-integrated-preview` branch. Leave `main` and PR merge state unchanged, then refresh the target PR and branch refs rather than inferring remote status from the local push response.
+
+### Learning
+
+A successful push confirms the branch update, but not PR checks or merge readiness. Refresh the actual PR head, checks, the separate QR PR, and `main`; report exactly which remote evidence was observed.
+
+### Verification
+
+- Push advanced `origin/feat/pilot-integrated-preview` from `f0c015a` through code checkpoint `9781ed6`.
+- GitHub showed PR #11 open and draft at `9781ed6`, PR #7 open at unchanged head `dec1608`, and remote `main` at `5138f88`.
+- PR #11 reported GitGuardian Security Checks passing; no other checks were reported. Local tests/build evidence is recorded in the handoff.
+
+### Git and remaining gaps
+
+No merge occurred. The candidate still needs the repeatable QR browser smoke and hosted/device acceptance; the updated status docs are a follow-up commit on the same feature branch.
