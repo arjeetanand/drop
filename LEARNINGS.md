@@ -1362,6 +1362,11 @@ Code commit `f0c6c70` is pushed to `origin/feat/pwa-share-acceptance`. Documenta
 
 ## 2026-10-25 — Record draft review state
 
-- Opened draft [PR #8](https://github.com/arjeetanand/drop/pull/8) from `feat/pwa-share-acceptance` after verifying the branch push. Its initial head was `a7423e3`; GitHub reports it `OPEN`, `DRAFT`, and `MERGEABLE`.
+- Opened draft [PR #8](https://github.com/arjeetanand/drop/pull/8) from `feat/pwa-share-acceptance` after verifying the branch push. Its initial head was `a7423e3`; GitHub reported it `OPEN`, `DRAFT`, and `MERGEABLE` at that time.
 - Kept PR #8 in draft because the standalone Chrome runner did not start on the last attempts and the production build could not resolve Google Fonts. PR #7 remains a separate QR branch and open as requested; its local QR check passed.
 - No PR was merged. This follow-up records tracking state only; no app code, credential, hosted Supabase resource, or `/letter` file changed.
+
+## 2026-10-25 — Recheck draft PR merge status
+
+- At head `537dae8`, after pushing the branch-tracking update, GitHub reported PR #8 as `OPEN` and `DRAFT`, with mergeability `UNKNOWN`.
+- Keep PR #8 in draft until GitHub recalculates mergeability and the standalone browser/build checks are complete. PR #7 remains open and unmerged.
