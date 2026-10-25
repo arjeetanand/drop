@@ -1328,3 +1328,33 @@ When localhost is unavailable, first check whether the app process is running. A
 ### Git and remaining gaps
 
 No application code or environment file changed. This issue-resolution record is on `chore/docker-runtime-recovery`; see the branch's latest Git commit for the exact SHA and the final task report for push status. Hosted Supabase behavior, real aged-object deletion, screen-reader use, and physical-device checks remain open.
+
+## 2026-10-25 — Generate Next route types before CI type checking
+
+### Issue
+
+The project had no repeatable pull-request gate, and a clean-checkout TypeScript command could pass without validating generated Next.js route types.
+
+### Cause
+
+`next-env.d.ts` imports route declarations generated under `.next`; those files do not exist on a clean checkout. Running TypeScript before the generator can leave the route-specific check incomplete.
+
+### Resolution
+
+- Add a secret-free pull-request and `main` push workflow with `npm ci`, tests, lint, Next route type generation, TypeScript, and a Webpack build.
+- Keep CI permissions read-only and do not provide Supabase credentials.
+- Use Next's generated `next-env.d.ts` path from `.next/types` and run `next typegen` before `tsc`.
+
+### Learning
+
+Generate framework-owned type artifacts before static checks that consume them, then verify the generated imports are part of TypeScript's program. A green command alone is not evidence that all intended declarations were checked.
+
+### Verification
+
+- Clean `npm ci` passed in the isolated branch; `npm test` passed 274/274, lint passed, Next route type generation plus `npm run typecheck` passed, and the Webpack build generated 22 routes.
+- YAML parsing confirmed the `verify` job and `contents: read`; `git diff --check` passed.
+- Draft PR #9 is open at code head `d27e381`; GitHub Actions and GitGuardian passed. Recheck the live status after any later push.
+
+### Git and remaining gaps
+
+The workflow commit is pushed to `origin/chore/pilot-ci` as `d27e381`. PR #9 remains open and unmerged. The first remote Actions run passed; recheck after later pushes and do not treat this CI branch as the user's merged release line.

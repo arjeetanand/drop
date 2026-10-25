@@ -1,5 +1,12 @@
 # Drop handoff
 
+## 2026-10-25 — CI pilot gate
+
+- Branch `chore/pilot-ci` adds `.github/workflows/ci.yml` with pull-request and `main` push triggers, least-privilege `contents: read`, pinned action releases, clean npm install, tests, lint, Next route type generation, typecheck, and Webpack build.
+- Local clean-install verification passed: `npm ci`, `npm test` (274/274), `npm run lint`, `next typegen`, `npm run typecheck`, and `npm run build -- --webpack` (22 routes). Workflow YAML parsed and `git diff --check` passed.
+- Commit `d27e381` is pushed to `origin/chore/pilot-ci`; draft PR #9 is open and GitHub reports it mergeable. The initial Actions run and GitGuardian both passed on this code commit. The build emitted only existing Browserslist freshness and Tailwind easing warnings.
+- Current locked Next.js and Sharp versions are being checked in a separate security patch track; do not call the hosted pilot ready until the patched dependencies and all hosted Supabase gates are verified.
+
 Updated: 2026-10-24
 
 ## Latest checkpoint — PR #5 merged into main (2026-10-24)
