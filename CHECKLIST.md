@@ -42,7 +42,7 @@ Updated: 2026-10-25
 - [x] Add regression coverage for a switch during attachment cleanup and make current-account deletion return an explicit `deleted` or `account-switched` result while preserving the existing public delete API.
 - [x] Pass `npm test` (280/280), lint, TypeScript, `node --check scripts/browser-demo-smoke.mjs`, and `git diff --check`.
 - [x] Push code commit `f0c6c70` to `origin/feat/pwa-share-acceptance`.
-- [x] Open draft [PR #8](https://github.com/arjeetanand/drop/pull/8) for the PWA branch; GitHub reports it open and mergeable, but browser/build follow-ups keep it in draft.
+- [x] Open draft [PR #8](https://github.com/arjeetanand/drop/pull/8) for the PWA branch; it remains open and in draft while browser/build follow-ups remain.
 - [x] Verify the separate local private-claim QR flow: local email sign-in, one successful invite RPC, correct pending sender row, accessible QR show/hide, and exact QR-token decode using Vision and Core Image. No hosted project was contacted.
 - [ ] Repeat the share-target browser smoke with a clean Chrome startup. One run exercised import, replay, reload, and responsive behavior but failed its final console check on a cold-start React warning; two later attempts timed out before DevTools started.
 - [ ] Retry the production build when `fonts.googleapis.com` resolves; the latest Webpack build attempt stopped on DNS `ENOTFOUND` during `next/font`.
