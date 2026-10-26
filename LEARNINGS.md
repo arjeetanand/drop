@@ -2484,3 +2484,29 @@ When application data and RLS are keyed to Supabase Auth users, a second identit
 ### Git and remaining gaps
 
 Code commit `459e648` is pushed to `origin/feat/firebase-auth-pilot`; the project records are committed separately after it. The branch is unmerged and has no PR. No Supabase project or paid Firebase resource was created, no credentials were committed, and `/letter` was not modified. Next: enable the approved Supabase integration or provide a scoped local Management API token, create the Free project, configure Google Auth, and complete desktop/mobile sign-in plus two-account send/open acceptance.
+
+## 2026-10-26 — Keep the Firebase preview on its assigned port
+
+### Issue
+
+The feature branch needed a live local preview while the canonical Drop checkout already owned the documented main port.
+
+### Cause
+
+Port `4004` was listening from `/Users/arjeetanand/projects/drop`; the Firebase feature checkout already had its isolated preview on port `6004`.
+
+### Resolution
+
+Kept the feature preview on its assigned test port and did not stop or replace the canonical `4004` process.
+
+### Learning
+
+Check the listener's working directory before restarting a project on its stable port; preserve another checkout and use the mapped test port for isolated QA.
+
+### Verification
+
+The listener on `6004` had cwd `/private/tmp/drop-local-demo-cleanup`; `http://127.0.0.1:6004/profile` returned HTTP 200 using the approved local runtime context. Port `4004` remained owned by `/Users/arjeetanand/projects/drop`; no process was stopped.
+
+### Git and remaining gaps
+
+The feature branch `feat/firebase-auth-pilot` remains pushed and unmerged; code commit `459e648` contains the implementation. This runtime handoff is a documentation-only follow-up. Hosted Supabase auth and real Google sign-in remain unavailable until a Supabase project/provider is configured.
