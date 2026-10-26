@@ -695,7 +695,7 @@ export function saveLocalDemoDrop(letterId: string): LetterDraftState | null {
   return dispatchLetter(source.id, 'delivered');
 }
 
-/** Save a bundled-media demo in local history and mark it complete without replacing the active draft. */
+/** Save a bundled text or media demo in local history without replacing the active draft. */
 export function createLocalDemoDrop(
   draft: LetterDraftState,
   expectedAccountId = getLocalAccountId(),
@@ -708,19 +708,26 @@ export function createLocalDemoDrop(
   const allowedMimeTypes = next.payloadKind === 'gif'
     ? new Set(['image/gif'])
     : new Set(['image/jpeg', 'image/png', 'image/webp']);
+  const validTextPayload = next.payloadKind === 'text'
+    && next.content.trim().length > 0
+    && !next.mediaPath
+    && !next.mediaMimeType
+    && next.mediaSizeBytes === undefined
+    && !next.mediaUploadId;
+  const validMediaPayload = (next.payloadKind === 'image' || next.payloadKind === 'gif')
+    && Boolean(next.mediaMimeType)
+    && allowedMimeTypes.has(next.mediaMimeType ?? '')
+    && Number.isSafeInteger(next.mediaSizeBytes)
+    && (next.mediaSizeBytes ?? 0) >= 1
+    && (next.mediaSizeBytes ?? 0) <= 8 * 1024 * 1024;
 
   if (!canUseStorage()
     || !next.id.startsWith('draft-local-demo-')
     || !next.localDemo
     || next.status !== 'draft'
     || next.deliveryMode !== 'instant'
-    || (next.payloadKind !== 'image' && next.payloadKind !== 'gif')
     || !normalizeDropRecipient(next.recipient)
-    || !next.mediaMimeType
-    || !allowedMimeTypes.has(next.mediaMimeType)
-    || !Number.isSafeInteger(next.mediaSizeBytes)
-    || (next.mediaSizeBytes ?? 0) < 1
-    || (next.mediaSizeBytes ?? 0) > 8 * 1024 * 1024
+    || !(validTextPayload || validMediaPayload)
     || active?.id === next.id
     || history.some((item) => item.id === next.id)) return null;
 

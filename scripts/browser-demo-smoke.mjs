@@ -12,6 +12,7 @@ const PROJECT_ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const MOBILE_VIEWPORTS = [360, 390, 430].map((width) => ({ name: `mobile-${width}`, width, height: 844, deviceScaleFactor: 1, mobile: true }));
 const DESKTOP_VIEWPORT = { name: 'desktop-1440', width: 1440, height: 900, deviceScaleFactor: 1, mobile: false };
 const FLOW_VIEWPORTS = [...MOBILE_VIEWPORTS, DESKTOP_VIEWPORT];
+const TEXT_DEMO_VIEWPORTS = [...MOBILE_VIEWPORTS, { name: 'tablet-768', width: 768, height: 1024, deviceScaleFactor: 1, mobile: true }, DESKTOP_VIEWPORT];
 let activeViewport = MOBILE_VIEWPORTS[1];
 const STEP_TIMEOUT_MS = 20_000;
 // Keep just above .page-enter's 380ms duration in app/globals.css.
@@ -19,6 +20,7 @@ const PAGE_ENTER_SETTLE_MS = 420;
 const LABELS = {
   homeDemo: 'Try a demo drop',
   homeSendAccountDisclosure: 'Demo stays on this device · a Drop account is needed to send.',
+  chooseText: 'Try a note',
   choosePhoto: 'Try a photo',
   chooseGif: 'Try a GIF',
   reveal: 'Reveal demo fragments',
@@ -611,6 +613,7 @@ async function runDemoFlow(cdp, {
   screenshotDir,
   screenshotSteps = new Set(),
   checkResponsive = false,
+  verifyReactionPersistence = false,
   getPageLoadEvents,
 }) {
   const prefix = viewport.name;
@@ -662,7 +665,7 @@ async function runDemoFlow(cdp, {
   await capture('home');
   await activateFlowControl(cdp, { keyboard, name: LABELS.homeDemo, expectedTag: 'A', expectedHref: '/demo' });
 
-  const optionLabel = payload === 'gif' ? LABELS.chooseGif : LABELS.choosePhoto;
+  const optionLabel = payload === 'text' ? LABELS.chooseText : payload === 'gif' ? LABELS.chooseGif : LABELS.choosePhoto;
   await waitUntil(cdp, `the demo chooser with “${optionLabel}”`, async () => (
     await evaluate(cdp, `${normalizedVisibleText(optionLabel)} && location.pathname === '/demo'`)
   ));
@@ -677,6 +680,7 @@ async function runDemoFlow(cdp, {
   ));
   await waitForPageShell(cdp, 'Recipient preview');
   const recipientPath = await evaluate(cdp, 'location.pathname');
+  assert.equal(await evaluate(cdp, `document.querySelector('header p.meta')?.textContent?.startsWith('Drop draft-local-demo-') === true`), false, 'The local demo should not show its generated record ID as user-facing copy.');
   await assertNoFrameworkOverlay(cdp, 'Recipient preview');
   await assertNoHorizontalOverflow(cdp, 'Recipient preview', viewport.width);
   await capture('recipient');
@@ -690,15 +694,17 @@ async function runDemoFlow(cdp, {
   await capture('fragments-revealed');
   await activateFlowControl(cdp, { keyboard, name: LABELS.open, expectedTag: 'BUTTON' });
 
-  const payloadLabel = payload === 'gif' ? 'GIF' : 'Photo';
+  const payloadLabel = payload === 'text' ? 'text note' : payload === 'gif' ? 'GIF' : 'Photo';
   await waitUntil(cdp, `the opened ${payloadLabel.toLowerCase()} and reaction controls`, async () => (
-    await evaluate(cdp, `Boolean(document.querySelector('#letter-body img')?.complete && document.querySelector('#letter-body img')?.naturalWidth > 0) && document.querySelector('#letter-body')?.innerText.toLocaleLowerCase().includes(${JSON.stringify(payloadLabel.toLocaleLowerCase())}) && Boolean(document.querySelector(${JSON.stringify(`[aria-label="${LABELS.reaction}"]`)}))`)
+    await evaluate(cdp, payload === 'text'
+      ? `document.querySelector('#letter-body')?.innerText.includes(${JSON.stringify('I saved you the window seat. No reply needed — just wanted you to know I thought of you.')}) && !document.querySelector('#letter-body img') && Boolean(document.querySelector(${JSON.stringify(`[aria-label="${LABELS.reaction}"]`)}))`
+      : `Boolean(document.querySelector('#letter-body img')?.complete && document.querySelector('#letter-body img')?.naturalWidth > 0) && document.querySelector('#letter-body')?.innerText.toLocaleLowerCase().includes(${JSON.stringify(payloadLabel.toLocaleLowerCase())}) && Boolean(document.querySelector(${JSON.stringify(`[aria-label="${LABELS.reaction}"]`)}))`)
   ));
   const reactionLabels = await evaluate(cdp, `Array.from(document.querySelectorAll('section[aria-labelledby="drop-reaction-heading"] button')).map(button => button.getAttribute('aria-label'))`);
   assert.deepEqual(reactionLabels, REACTION_BUTTON_LABELS, 'Every reaction button should expose a descriptive spoken name.');
   await assertNoFrameworkOverlay(cdp, `Opened ${payloadLabel} drop`);
   await assertNoHorizontalOverflow(cdp, `Opened ${payloadLabel} drop`, viewport.width);
-  if (verifyFreshDraft) {
+  if (verifyFreshDraft && !verifyReactionPersistence) {
     await activateFlowControl(cdp, { keyboard, name: 'Skip to sender copy', expectedTag: 'A' });
   } else {
     await activateFlowControl(cdp, { keyboard, selector: `[aria-label="${LABELS.reaction}"]`, expectedTag: 'BUTTON' });
@@ -729,8 +735,9 @@ async function runDemoFlow(cdp, {
     await activateFlowControl(cdp, { keyboard: true, name: 'See your sender copy', expectedTag: 'A' });
   }
 
-  await waitUntil(cdp, `sender copy${verifyFreshDraft ? '' : ' with the saved reaction'}`, async () => (
-    await evaluate(cdp, `${normalizedVisibleText('Your demo copy.')} && ${verifyFreshDraft ? normalizedVisibleText('Same-device demo · nothing was sent or shared.') : normalizedVisibleText('They reacted 🫶')} && new URL(location.href).searchParams.get('view') === 'sender'`)
+  const expectReactionInSenderCopy = !verifyFreshDraft || verifyReactionPersistence;
+  await waitUntil(cdp, `sender copy${expectReactionInSenderCopy ? ' with the saved reaction' : ''}`, async () => (
+    await evaluate(cdp, `${normalizedVisibleText('Your demo copy.')} && ${expectReactionInSenderCopy ? normalizedVisibleText('They reacted 🫶') : normalizedVisibleText('Same-device demo · nothing was sent or shared.')} && new URL(location.href).searchParams.get('view') === 'sender'`)
   ));
   await assertNoFrameworkOverlay(cdp, 'Sender copy');
   await assertNoHorizontalOverflow(cdp, 'Sender copy', viewport.width);
@@ -2266,7 +2273,7 @@ async function runShareTargetFlow(cdp, { appUrl, screenshotDir, getPageLoadEvent
 
 async function main() {
   if (process.argv.includes('--help') || process.argv.includes('-h')) {
-    console.log('Usage: node scripts/browser-demo-smoke.mjs [http://127.0.0.1:4004] [--claim-recovery-only|--prompt-only|--friend-draft-only|--share-target-only|--drop-back-only|--accessibility-only]');
+    console.log('Usage: node scripts/browser-demo-smoke.mjs [http://127.0.0.1:4004] [--claim-recovery-only|--prompt-only|--friend-draft-only|--text-demo-only|--share-target-only|--drop-back-only|--accessibility-only]');
     console.log('Set DROP_BROWSER_EXECUTABLE to select an installed Chrome, Edge, or Chromium executable.');
     return;
   }
@@ -2275,10 +2282,11 @@ async function main() {
   const claimRecoveryOnly = args.includes('--claim-recovery-only');
   const promptOnly = args.includes('--prompt-only');
   const friendDraftOnly = args.includes('--friend-draft-only');
+  const textDemoOnly = args.includes('--text-demo-only');
   const shareTargetOnly = args.includes('--share-target-only');
   const dropBackOnly = args.includes('--drop-back-only');
   const accessibilityOnly = args.includes('--accessibility-only');
-  assert.ok([claimRecoveryOnly, promptOnly, friendDraftOnly, shareTargetOnly, dropBackOnly, accessibilityOnly].filter(Boolean).length <= 1, 'Choose only one focused browser-smoke mode.');
+  assert.ok([claimRecoveryOnly, promptOnly, friendDraftOnly, textDemoOnly, shareTargetOnly, dropBackOnly, accessibilityOnly].filter(Boolean).length <= 1, 'Choose only one focused browser-smoke mode.');
   const appUrl = parseAppUrl(args.find((argument) => !argument.startsWith('--')) || DEFAULT_APP_URL);
   if (typeof WebSocket !== 'function') throw new Error('This smoke check needs a Node runtime with the built-in WebSocket API.');
   const screenshotDir = screenshotDirectoryFromEnv();
@@ -2302,7 +2310,9 @@ async function main() {
   let pageLoadEvents = 0;
   let chromeStopped = false;
   let capturingShareImportRequests = false;
+  let capturingTextDemoRequests = false;
   const shareImportRequests = [];
+  const textDemoWrites = [];
   const shareTargetRedirects = [];
   const shareImportForbiddenRequests = [];
 
@@ -2366,6 +2376,9 @@ async function main() {
       }
       const method = (request.method || 'GET').toUpperCase();
       const path = requestUrl.pathname;
+      if (capturingTextDemoRequests && !['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+        textDemoWrites.push({ method, path, origin: requestUrl.origin });
+      }
       if (capturingShareImportRequests) {
         const entry = { method, path, origin: requestUrl.origin };
         shareImportRequests.push(entry);
@@ -2442,8 +2455,8 @@ async function main() {
     await setViewport(pageCdp, MOBILE_VIEWPORTS[1]);
 
     console.log(`[browser-demo-smoke] Browser: ${chromeExecutable}`);
-    const flowName = accessibilityOnly ? 'accessibility-only' : dropBackOnly ? 'drop-back-only' : shareTargetOnly ? 'share-target-only' : claimRecoveryOnly ? 'claim-recovery' : promptOnly ? 'prompt-only' : friendDraftOnly ? 'friend-draft-only' : 'full';
-    const flowViewports = accessibilityOnly ? ['mobile-320', 'mobile-390'].map((name) => ({ name })) : friendDraftOnly || shareTargetOnly || dropBackOnly ? [MOBILE_VIEWPORTS[1]] : FLOW_VIEWPORTS;
+    const flowName = accessibilityOnly ? 'accessibility-only' : dropBackOnly ? 'drop-back-only' : shareTargetOnly ? 'share-target-only' : claimRecoveryOnly ? 'claim-recovery' : promptOnly ? 'prompt-only' : textDemoOnly ? 'text-demo-only' : friendDraftOnly ? 'friend-draft-only' : 'full';
+    const flowViewports = accessibilityOnly ? ['mobile-320', 'mobile-390'].map((name) => ({ name })) : textDemoOnly ? TEXT_DEMO_VIEWPORTS : friendDraftOnly || shareTargetOnly || dropBackOnly ? [MOBILE_VIEWPORTS[1]] : FLOW_VIEWPORTS;
     console.log(`[browser-demo-smoke] App: ${appUrl.origin}; ${flowName} flow viewports: ${flowViewports.map(({ name }) => name).join(', ')}.`);
 
     if (accessibilityOnly) {
@@ -2490,7 +2503,30 @@ async function main() {
       console.log(`[browser-demo-smoke] PASS keyboard sender-copy to fresh editable text draft at ${viewport.width}×${viewport.height}; existing media draft and local demo remain preserved.`);
     }
 
-    if (!friendDraftOnly && !claimRecoveryOnly && !promptOnly && !shareTargetOnly && !dropBackOnly && !accessibilityOnly) {
+    if (textDemoOnly) {
+      capturingTextDemoRequests = true;
+      for (const viewport of TEXT_DEMO_VIEWPORTS) {
+        const captureViewport = screenshotDir && (viewport.width === 390 || !viewport.mobile);
+        await runDemoFlow(pageCdp, {
+          appUrl,
+          viewport,
+          payload: 'text',
+          keyboard: true,
+          verifyFreshDraft: true,
+          verifyReactionPersistence: true,
+          screenshotDir: captureViewport ? screenshotDir : null,
+          screenshotSteps: captureViewport ? new Set(['chooser', 'recipient', 'reaction-saved', 'sender-copy']) : new Set(),
+          getPageLoadEvents: () => pageLoadEvents,
+        });
+        console.log(`[browser-demo-smoke] PASS text-note demo at ${viewport.width}×${viewport.height}; reaction persists and the unfinished media draft remains unchanged.`);
+      }
+      capturingTextDemoRequests = false;
+      assert.deepEqual(textDemoWrites, [], `The local text demo issued backend write requests: ${JSON.stringify(textDemoWrites)}.`);
+      assert.equal(await evaluate(pageCdp, `document.querySelector('#drop-content')?.value === ''`), true, 'The new composer should start blank after the text demo.');
+      console.log('[browser-demo-smoke] PASS the text-note demo makes no backend write request.');
+    }
+
+    if (!friendDraftOnly && !textDemoOnly && !claimRecoveryOnly && !promptOnly && !shareTargetOnly && !dropBackOnly && !accessibilityOnly) {
       const screenshotSteps = new Set(['home', 'chooser', 'recipient', 'fragments-revealed', 'reaction-saved', 'sender-copy']);
       for (const viewport of FLOW_VIEWPORTS) {
         const keyboard = viewport.width !== 360;
@@ -2517,7 +2553,7 @@ async function main() {
       });
     }
 
-    if (!friendDraftOnly && !claimRecoveryOnly && !shareTargetOnly && !dropBackOnly && !accessibilityOnly) {
+    if (!friendDraftOnly && !textDemoOnly && !claimRecoveryOnly && !shareTargetOnly && !dropBackOnly && !accessibilityOnly) {
       for (const viewport of FLOW_VIEWPORTS) {
         await runWritingPromptFlow(pageCdp, {
           appUrl,
@@ -2540,7 +2576,7 @@ async function main() {
       console.log('[browser-demo-smoke] PASS readable 44px actions fit at 320×740 without horizontal overflow.');
     }
 
-    if (!friendDraftOnly && !promptOnly && !shareTargetOnly && !dropBackOnly && !accessibilityOnly) {
+    if (!friendDraftOnly && !textDemoOnly && !promptOnly && !shareTargetOnly && !dropBackOnly && !accessibilityOnly) {
       for (const viewport of FLOW_VIEWPORTS) {
         await runRecipientlessClaimChoiceFlow(pageCdp, {
           appUrl,
@@ -2570,12 +2606,12 @@ async function main() {
     assert.deepEqual(pageExceptions, [], `The browser reported JavaScript exceptions: ${JSON.stringify(pageExceptions)}.`);
     if (firewallFailure) throw new Error(`The browser network gate failed: ${firewallFailure.message}`);
 
-    if (!friendDraftOnly && !promptOnly && !shareTargetOnly && !dropBackOnly && !accessibilityOnly) {
+    if (!friendDraftOnly && !textDemoOnly && !promptOnly && !shareTargetOnly && !dropBackOnly && !accessibilityOnly) {
       console.log('[browser-demo-smoke] PASS saved-claim recovery after reload, including the encoded detail route and fresh-link action at all mobile and desktop widths.');
       console.log('[browser-demo-smoke] PASS handleless claim disclosure, account readiness gate, and focus recovery at all mobile and desktop widths.');
       console.log('[browser-demo-smoke] PASS no Auth, REST, or Storage request during the saved-claim recovery flow.');
     }
-    if (!friendDraftOnly && !claimRecoveryOnly && !promptOnly && !shareTargetOnly && !dropBackOnly && !accessibilityOnly) {
+    if (!friendDraftOnly && !textDemoOnly && !claimRecoveryOnly && !promptOnly && !shareTargetOnly && !dropBackOnly && !accessibilityOnly) {
       console.log('[browser-demo-smoke] PASS photo flow at 390×844, including saved reaction, reload persistence, and sender copy.');
       console.log('[browser-demo-smoke] PASS no horizontal overflow on Home and demo chooser at 360, 390, 430px and 1440×900.');
       console.log('[browser-demo-smoke] PASS no Auth, RPC, or Storage write request during the local demo.');

@@ -403,6 +403,97 @@ test('creates the home demo without replacing or sending the active user draft',
   }
 });
 
+test('creates a local text demo without media or replacing the active draft', () => {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const values = new Map();
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { localStorage: { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) } },
+  });
+  try {
+    setLocalAccountId(null);
+    const active = saveLetterDraft({
+      id: 'draft-unfinished-user-note-for-text-demo',
+      recipient: '@close.friend',
+      subject: 'Keep this thought',
+      content: 'This unfinished note must remain a draft.',
+    });
+    const activeBefore = values.get('dear-exe:active-letter:v1');
+    const demoDraft = {
+      id: 'draft-local-demo-text-note',
+      recipient: 'demo.friend',
+      subject: 'A tiny reminder',
+      content: 'I saved you the window seat. No reply needed — just wanted you to know I thought of you.',
+      fontSize: 18,
+      alignment: 'left',
+      address: { name: 'Your person', street: '', city: '', postcode: '', country: '' },
+      sealId: 'celestial',
+      sealColor: '#102a43',
+      sealMonogram: '',
+      payloadKind: 'text',
+      deliveryMode: 'instant',
+      status: 'draft',
+      updatedAt: new Date().toISOString(),
+      localDemo: true,
+    };
+
+    const completed = createLocalDemoDrop(demoDraft);
+    const displayed = getLettersWithDraft().find((letter) => letter.id === demoDraft.id);
+
+    assert.equal(completed?.status, 'delivered');
+    assert.equal(completed?.localDemo, true);
+    assert.equal(completed?.payloadKind, 'text');
+    assert.equal(completed?.mediaMimeType, undefined);
+    assert.equal(completed?.mediaSizeBytes, undefined);
+    assert.equal(getLetterDraft().id, active.id);
+    assert.equal(values.get('dear-exe:active-letter:v1'), activeBefore);
+    assert.equal(getLetterDraftById(demoDraft.id)?.content, demoDraft.content);
+    assert.equal(displayed?.excerpt, demoDraft.content);
+    assert.equal(displayed?.status, 'delivered');
+  } finally {
+    setLocalAccountId(null);
+    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
+    else delete globalThis.window;
+  }
+});
+
+test('rejects a blank or media-backed local text demo', () => {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const values = new Map();
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { localStorage: { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) } },
+  });
+  try {
+    setLocalAccountId('text-demo-validation');
+    const base = {
+      id: 'draft-local-demo-invalid-text',
+      recipient: 'demo.friend',
+      subject: 'A note',
+      content: 'A note for a friend.',
+      fontSize: 18,
+      alignment: 'left',
+      address: { name: 'Your person', street: '', city: '', postcode: '', country: '' },
+      sealId: 'celestial',
+      sealColor: '#102a43',
+      sealMonogram: '',
+      payloadKind: 'text',
+      deliveryMode: 'instant',
+      status: 'draft',
+      updatedAt: new Date().toISOString(),
+      localDemo: true,
+    };
+
+    assert.equal(createLocalDemoDrop({ ...base, content: '   ' }), null);
+    assert.equal(createLocalDemoDrop({ ...base, mediaMimeType: 'image/png', mediaSizeBytes: 64 }), null);
+    assert.equal(getLetterDraftById(base.id), null);
+  } finally {
+    setLocalAccountId(null);
+    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
+    else delete globalThis.window;
+  }
+});
+
 test('keeps account-scoped demos out of other accounts and rejects an account switch', () => {
   const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
   const values = new Map();

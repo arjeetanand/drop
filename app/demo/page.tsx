@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, ArrowRight, LoaderCircle, Sparkles } from 'lucide-react';
+import { ArrowLeft, ArrowRight, LoaderCircle, Quote, Sparkles } from 'lucide-react';
 import { useState } from 'react';
 import type { DropPayloadKind } from '@/data/mockData';
 import { createLocalDemoDrop, type LetterDraftState } from '@/lib/letterStore';
@@ -12,18 +12,32 @@ import { validateDropMedia } from '@/lib/dropValidation';
 import { getLocalAccountId } from '@/lib/localAccountScope';
 import { RelayDemoPreview } from '@/components/RelayDemoPreview';
 
-const demoOptions: Array<{
-  kind: Exclude<DropPayloadKind, 'text'>;
+type DemoOptionBase = {
   label: string;
   eyebrow: string;
   title: string;
   description: string;
+  subject: string;
+  note: string;
+};
+
+type DemoOption = (DemoOptionBase & { kind: 'text' }) | (DemoOptionBase & {
+  kind: Exclude<DropPayloadKind, 'text'>;
   image: string;
   fileName: string;
   mimeType: string;
-  subject: string;
-  note: string;
-}> = [
+});
+
+const demoOptions: DemoOption[] = [
+  {
+    kind: 'text',
+    label: 'Try a note',
+    eyebrow: 'A few words, kept close',
+    title: 'A tiny reminder',
+    description: 'A little note for your person, just because.',
+    subject: 'A tiny reminder',
+    note: 'I saved you the window seat. No reply needed — just wanted you to know I thought of you.',
+  },
   {
     kind: 'image',
     label: 'Try a photo drop',
@@ -50,22 +64,21 @@ const demoOptions: Array<{
   },
 ];
 
-function makeDemoDraft(kind: Exclude<DropPayloadKind, 'text'>, subject: string, note: string, file: File): LetterDraftState {
+function makeDemoDraft(option: DemoOption, file?: File): LetterDraftState {
   return {
     id: `draft-local-demo-${crypto.randomUUID()}`,
     recipient: 'demo.friend',
-    subject,
-    content: note,
+    subject: option.subject,
+    content: option.note,
     fontSize: 18,
     alignment: 'left',
     address: { name: 'Your person', street: '', city: '', postcode: '', country: '' },
     sealId: 'celestial',
     sealColor: '#102a43',
     sealMonogram: '',
-    payloadKind: kind,
+    payloadKind: option.kind,
     deliveryMode: 'instant',
-    mediaMimeType: file.type,
-    mediaSizeBytes: file.size,
+    ...(file ? { mediaMimeType: file.type, mediaSizeBytes: file.size } : {}),
     status: 'draft',
     updatedAt: new Date().toISOString(),
     localDemo: true,
@@ -87,19 +100,24 @@ export default function DemoPage() {
     const demoAccountId = getLocalAccountId();
 
     try {
-      const response = await fetch(option.image, { cache: 'force-cache' });
-      if (!response.ok) throw new Error('The sample file could not be loaded.');
-      const blob = await response.blob();
-      const file = new File([blob], option.fileName, { type: option.mimeType, lastModified: Date.now() });
-      const validation = validateDropMedia(file);
-      if (validation) throw new Error(validation);
+      let file: File | undefined;
+      if (option.kind !== 'text') {
+        const response = await fetch(option.image, { cache: 'force-cache' });
+        if (!response.ok) throw new Error('The sample file could not be loaded.');
+        const blob = await response.blob();
+        file = new File([blob], option.fileName, { type: option.mimeType, lastModified: Date.now() });
+        const validation = validateDropMedia(file);
+        if (validation) throw new Error(validation);
+      }
 
-      const draft = makeDemoDraft(option.kind, option.subject, option.note, file);
+      const draft = makeDemoDraft(option, file);
       draftId = draft.id;
-      // The IndexedDB write can commit before its account-switch guard throws.
-      // Mark it for rollback first, then delete only from the captured account.
-      attachmentSaved = true;
-      await saveDraftAttachment(draft.id, file, demoAccountId);
+      if (file) {
+        // The IndexedDB write can commit before its account-switch guard throws.
+        // Mark it for rollback first, then delete only from the captured account.
+        attachmentSaved = true;
+        await saveDraftAttachment(draft.id, file, demoAccountId);
+      }
 
       const completed = createLocalDemoDrop(draft, demoAccountId);
       if (!completed) throw new Error('This demo could not be saved on this device.');
@@ -132,12 +150,22 @@ export default function DemoPage() {
 
           {error && <p className="error-notice mt-5" role="alert">{error}</p>}
 
-          <div className="mt-7 grid gap-4 sm:grid-cols-2 sm:gap-5" aria-busy={startingKind !== null}>
+          <div className="mt-7 grid gap-4 sm:grid-cols-2 sm:gap-5 xl:grid-cols-3" aria-busy={startingKind !== null}>
             {demoOptions.map((option) => (
               <article key={option.kind} className="overflow-hidden rounded-[1.4rem] border border-[rgba(16,42,67,.12)] bg-white shadow-[0_9px_24px_rgba(16,42,67,.06)]">
                 <div className="relative aspect-[4/3] overflow-hidden bg-[#eee9df]">
-                  <Image src={option.image} alt="A tiny cat taking a curious look at the camera" fill sizes="(max-width: 639px) 100vw, 50vw" unoptimized className="object-cover" />
-                  <span className="absolute left-3 top-3 rounded-full bg-[#fffaf2]/95 px-3 py-1.5 font-mono text-[0.62rem] font-bold uppercase tracking-[0.12em] text-ink-navy">{option.kind === 'gif' ? 'GIF loop' : 'Photo drop'}</span>
+                  {option.kind === 'text' ? (
+                    <div aria-hidden="true" className="absolute inset-0 flex items-center justify-center bg-[#efe4d5] p-5">
+                      <div className="w-full -rotate-2 rounded-xl border border-[#e2d4bf] bg-[#fffaf2] p-5 shadow-[0_12px_28px_rgba(16,42,67,.12)] sm:p-6">
+                        <Quote className="h-5 w-5 text-[#aa5f42]" />
+                        <p className="mt-3 text-sm font-medium leading-relaxed text-ink-navy [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:4] overflow-hidden">{option.note}</p>
+                        <span className="mt-4 block border-t border-[#ead5c6] pt-3 font-mono text-[0.58rem] font-bold uppercase tracking-[0.12em] text-[#aa5f42]">For your person</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <Image src={option.image} alt="A tiny cat taking a curious look at the camera" fill sizes="(max-width: 639px) 100vw, 50vw" unoptimized className="object-cover" />
+                  )}
+                  <span className="absolute left-3 top-3 rounded-full bg-[#fffaf2]/95 px-3 py-1.5 font-mono text-[0.62rem] font-bold uppercase tracking-[0.12em] text-ink-navy">{option.kind === 'gif' ? 'GIF loop' : option.kind === 'text' ? 'Text note' : 'Photo drop'}</span>
                 </div>
                 <div className="p-5 sm:p-6">
                   <p className="eyebrow text-[#aa5f42]">{option.eyebrow}</p>
@@ -159,7 +187,7 @@ export default function DemoPage() {
           {startingKind && <p className="mt-5 text-center text-sm text-on-surface-variant" role="status" aria-live="polite">Saving this sample only in your browser…</p>}
         </section>
 
-        <p className="mx-auto mt-5 max-w-xl text-center text-xs leading-relaxed text-on-surface-variant">Your unfinished drop stays where it is. This sample uses a bundled image and never uploads it.</p>
+        <p className="mx-auto mt-5 max-w-xl text-center text-xs leading-relaxed text-on-surface-variant">Your unfinished drop stays where it is. These samples stay on this device and never upload.</p>
       </div>
     </main>
   );

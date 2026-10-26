@@ -681,7 +681,7 @@ export default function LetterArrivalPage() {
             <ArrowLeft className="h-4 w-4" aria-hidden="true" />
             Back to mailbox
           </Link>
-          <p className="meta">Drop {letter.id}</p>
+          {!letter.sample && !letter.localDemo && <p className="meta">Drop {letter.id}</p>}
         </header>
 
         {letter.sample && <p className="notice mt-5" role="status">{letter.direction === 'received' ? 'Sample drop · this is an example, not a message you received. Reactions stay on this device.' : 'Sample drop · an example only. Nothing was sent or delivered.'}</p>}
