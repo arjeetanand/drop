@@ -161,3 +161,5 @@ Updated: 2026-10-26
 - [ ] Rerun the final browser journey with the bearer-link disclosure assertions. Port 6004 is occupied by an active `next-server` in `/private/tmp/drop-local-demo-cleanup`; it was left untouched.
 - [ ] Run the opt-in human value/usability pilot and verify native OS sharing, screen-reader output, and physical-device behavior.
 - [x] Commit code as `b9fb0f5` on `codex/social-relay-pilot`, based on `feat/pilot-integrated-preview`; push the feature branch. No merge to `main`.
+- [x] Open draft [PR #12](https://github.com/arjeetanand/drop/pull/12) into `feat/pilot-integrated-preview`; leave it unmerged.
+- [ ] Review PR CI status when GitHub's API or Code Review connection is available; both checks failed to connect after PR creation.
