@@ -2,6 +2,15 @@
 
 Updated: 2026-10-26
 
+## Latest checkpoint — format-matched demo-to-first-drop starter (2026-10-26)
+
+- **Make one for a friend** now creates a blank editable draft in the demo's selected text, photo, or GIF format. It does not copy sample content, recipient, reaction, or media. Existing drafts and the original photo attachment remain intact.
+- Verification: `npm test` passed 329/329; lint, typecheck, browser-script syntax, `git diff --check`, and isolated Webpack production build (22 routes) passed. The production browser smoke passed by keyboard for all three formats at 390×844 and 1440×900, including format controls, blank fields, no copied sample state, prior draft/attachment preservation, and zero cross-origin requests. Existing Browserslist and ambiguous easing-class build warnings remain.
+- Git: code commit `3f53f07` is pushed to `origin/feat/demo-to-first-drop-starter`, based on `dd41541` (`perf/demo-preview-assets`). No PR or merge was created. The isolated smoke used port `6004` and was stopped afterward; the existing app on `4004` and preview on `5004` were left untouched. `/letter` was not modified.
+- Auth decision: Drop already uses Supabase Google OAuth and its Supabase session/UUID account model. Firebase auth would require a Firebase project, Supabase third-party-auth configuration, and identity/session compatibility work, so it does not speed up this pilot. No Firebase project, dependency, hosted credential, or paid resource was added. Hosted Google OAuth and two-account sending remain unverified.
+
+**Next:** configure the existing Supabase Google provider once a hosted project is available, then verify first-time sender sign-in and an account-to-account send/open flow. Keep this branch separate pending review and an explicit merge request.
+
 ## Latest checkpoint — low-bandwidth demo media previews (2026-10-26)
 
 - Home and `/demo` now display two small WebP assets: 46,286 B at 840×630 for the sample photo and 20,854 B at 280×280 for a static GIF poster. The original 2,302,534 B PNG and 920,382 B animated GIF remain as the selected demo payloads and are fetched only after the matching choice.

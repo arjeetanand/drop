@@ -2389,3 +2389,34 @@ Keep preview assets separate from source media whenever a screen must show a rep
 ### Git and remaining gaps
 
 Code commit `7740912` (`perf: add compact media previews to the demo`) is pushed to `origin/perf/demo-preview-assets`, based on `73e1474` (`feat/demo-text-note`). The checklist, plan, README, handoff, and this learning entry are committed separately on that branch. No PR or merge was created, and this task did not modify `main`. Current `.env.local` points to the local Supabase loopback; hosted Google sign-in and account-to-account send/open remain unverified. No Firebase project, new dependency, paid service, credential, or hosted resource was created or changed.
+
+## 2026-10-26 — Preserve demo format when starting a first drop
+
+### Issue
+
+Opening **Make one for a friend** from a photo or GIF example always created a text composer. The CTA lost the format the visitor had just explored.
+
+### Cause
+
+The sender-copy action called the draft initializer without carrying the example's payload kind, so it fell back to the text default.
+
+### Resolution
+
+- Pass the selected format into the fresh-draft initializer while keeping all content fields empty.
+- Do not copy the sample recipient, reaction, or media. Preserve the existing draft and attachment records.
+- Add regression coverage for text/photo/GIF format selection and the production browser journey at mobile and desktop widths.
+- Keep the existing Supabase Google OAuth flow. Firebase would need new project/provider setup and session/identity compatibility work; it adds more setup than using the provider path already in Drop.
+
+### Learning
+
+For a sample-to-compose CTA, carry only the format choice into a new draft. Explicitly test that sample data does not leak and that the user's previous draft remains recoverable.
+
+### Verification
+
+- `npm test` passed 329/329; lint, typecheck, browser-script syntax, and `git diff --check` passed.
+- Isolated Webpack production build passed with 22 routes. The existing stale Browserslist data and ambiguous easing utility warnings remain.
+- The production Chrome smoke passed by keyboard for text, photo, and GIF at 390×844 and 1440×900. It checked the selected composer controls, blank fields, no copied demo identity/reaction/media, and preservation of a prior photo draft and its attachment. Zero cross-origin requests were observed.
+
+### Git and remaining gaps
+
+Code commit `3f53f07` is pushed to `origin/feat/demo-to-first-drop-starter`, based on `dd41541` (`perf/demo-preview-assets`). No PR or merge was created. The isolated smoke used port `6004`, then stopped its owned process; ports `4004` and `5004` and `/letter` were untouched. Hosted Google OAuth and real account-to-account send/open remain unverified; no hosted project or credential was created or changed. No Firebase project, dependency, or paid service was added.

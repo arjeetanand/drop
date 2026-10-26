@@ -6,6 +6,14 @@ Build Drop as a mobile-first private sharing app where a person can send a photo
 
 The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailbox, and relay foundations. Existing letters continue to work as text drops, and their routes and saved content remain readable. The build covers the end-to-end mobile flow: choose content, attach an image or GIF, choose a recipient, send, open, react, and optionally follow a relay.
 
+## Implementation Status — 2026-10-26 (Format-matched demo-to-first-drop starter)
+
+The no-account demo's **Make one for a friend** action now starts a blank editable draft using the selected example's format: text, photo, or GIF. It carries the format only; sample content, recipient, reaction, and media are not copied. Existing drafts and saved attachments are preserved.
+
+**Acceptance:** unit suite passed 329/329; lint, typecheck, browser-runner syntax, diff checks, and the 22-route isolated production build passed. The keyboard-driven production browser smoke passed all three formats at 390×844 and 1440×900, including no sample-state leakage and preservation of the previous photo draft. Code commit `3f53f07` is pushed to `feat/demo-to-first-drop-starter`; no PR or merge exists.
+
+**Next gate:** hosted Supabase Google OAuth and real two-account send/open are still unverified. Keep the existing Supabase identity flow; Firebase would add project and session integration work without speeding up this pilot.
+
 ## Text-note no-account demo slice (2026-10-26)
 
 ### Product hypothesis and limits

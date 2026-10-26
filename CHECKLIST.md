@@ -2,6 +2,15 @@
 
 Updated: 2026-10-26
 
+## Format-matched demo-to-first-drop starter (2026-10-26)
+
+- [x] Make sender copy open a new blank editable draft in the sample's text, photo, or GIF format without copying sample content, recipient, reaction, or media.
+- [x] Preserve existing drafts and photo attachment data while starting each fresh draft.
+- [x] Pass `npm test` (329/329), lint, typecheck, browser-script syntax, `git diff --check`, and isolated Webpack production build (22 routes).
+- [x] Pass the production browser smoke by keyboard at 390×844 and 1440×900 for all three formats; verify format controls, blank content, no sample data, prior draft/attachment preservation, and zero cross-origin requests.
+- [x] Commit code as `3f53f07` and push `feat/demo-to-first-drop-starter`; no PR or merge was created.
+- [ ] Configure hosted Supabase Google OAuth and verify real account-to-account sending; this checkout uses local Supabase credentials. Firebase was not added because the existing Supabase OAuth/session path is already wired and direct Firebase auth needs additional project integration and identity/session work.
+
 ## Text-note no-account demo (2026-10-26)
 
 - [x] Add a local-only text-note example beside the existing photo and GIF demos; keep media attachment writes exclusive to media samples.
