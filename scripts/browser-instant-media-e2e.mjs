@@ -456,6 +456,124 @@ async function clickButton(session, label) {
   })()`);
 }
 
+async function verifyPwaShareOnboarding(session) {
+  await session.pageCdp.send('Page.addScriptToEvaluateOnNewDocument', { source: `(() => {
+    const originalMatchMedia = window.matchMedia.bind(window);
+    window.__dropAllowSyntheticInstallEvents = false;
+    window.matchMedia = (query) => query === '(display-mode: standalone)'
+      ? { matches: false, media: query, onchange: null, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, dispatchEvent() { return false; } }
+      : originalMatchMedia(query);
+    window.addEventListener('beforeinstallprompt', (event) => {
+      if (window.__dropAllowSyntheticInstallEvents) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }, true);
+    window.addEventListener('appinstalled', (event) => {
+      if (!window.__dropAllowSyntheticInstallEvents) event.stopImmediatePropagation();
+    }, true);
+  })()` });
+  await session.navigate(`${APP_ORIGIN}/`);
+  await session.waitFor(() => session.evaluate(`location.pathname === '/' && document.body.innerText.includes('Send a photo or GIF from another app')`), 'Home share-to-Drop guidance');
+
+  const initialInstallState = await session.evaluate(`(() => ({
+    manualGuide: Array.from(document.querySelectorAll('details')).some((details) => {
+    const label = details.querySelector('summary')?.innerText.replace(/\\s+/g, ' ').trim();
+    return label === 'How to install' && !details.open;
+    }),
+    installButton: Array.from(document.querySelectorAll('button')).some((button) => button.innerText.replace(/\\s+/g, ' ').trim().toLocaleLowerCase() === 'install drop'),
+    standalone: window.matchMedia('(display-mode: standalone)').matches,
+    summaries: Array.from(document.querySelectorAll('details summary')).map((summary) => summary.innerText.replace(/\\s+/g, ' ').trim()),
+    installCopy: document.querySelector('#pwa-share-onboarding-title')?.innerText || null,
+  }))()`);
+  assert.ok(initialInstallState.manualGuide || initialInstallState.installButton, `Home should show manual install guidance or the browser-provided install action: ${JSON.stringify(initialInstallState)}`);
+  if (initialInstallState.manualGuide) {
+    const openedGuide = await session.evaluate(`(() => {
+      const details = Array.from(document.querySelectorAll('details')).find((item) => item.querySelector('summary')?.innerText.replace(/\\s+/g, ' ').trim() === 'How to install');
+      details?.querySelector('summary')?.click();
+      return details?.open === true && details.querySelector('p')?.innerText.includes('Add to Home Screen');
+    })()`);
+    assert.equal(openedGuide, true, 'The manual install guide should open and provide a browser-menu path.');
+  }
+  const firstPrompt = await session.evaluate(`document.querySelector('aside [aria-live="polite"]')?.textContent?.trim() || null`);
+  assert.ok(firstPrompt, 'Home should render a writing prompt while its client state hydrates.');
+  assert.equal(await clickButton(session, 'another one'), true, 'Could not activate the Home writing prompt control.');
+  const homeHydrated = await session.waitFor(() => session.evaluate(`document.querySelector('aside [aria-live="polite"]')?.textContent?.trim() !== ${JSON.stringify(firstPrompt)}`), 'hydrated Home prompt interaction');
+  assert.equal(homeHydrated, true, 'The Home client should hydrate before synthetic install events are dispatched.');
+
+  const manifest = await session.evaluate(`(async () => {
+    const manifestLink = document.querySelector('link[rel="manifest"]')?.href;
+    if (!manifestLink || new URL(manifestLink).origin !== location.origin) return null;
+    const response = await fetch(manifestLink);
+    if (!response.ok) return null;
+    const value = await response.json();
+    const files = value.share_target?.params?.files || [];
+    return {
+      action: value.share_target?.action || null,
+      method: value.share_target?.method || null,
+      enctype: value.share_target?.enctype || null,
+      acceptsPhoto: files.some((item) => (item.accept || []).includes('image/jpeg')),
+      acceptsGif: files.some((item) => (item.accept || []).includes('image/gif')),
+    };
+  })()`);
+  assert.deepEqual(manifest, {
+    action: '/share-target',
+    method: 'POST',
+    enctype: 'multipart/form-data',
+    acceptsPhoto: true,
+    acceptsGif: true,
+  }, 'The installed share target must accept photos and GIFs through the existing multipart route.');
+
+  const workerActive = await session.waitFor(() => session.evaluate(`navigator.serviceWorker?.getRegistration('/')
+    .then((registration) => Boolean(registration?.active?.scriptURL.endsWith('/service-worker.js')))`), 'active Drop share service worker');
+  assert.equal(workerActive, true, 'The existing share-target service worker should be active.');
+
+  const eventPrevented = await session.evaluate(`(() => {
+    window.__dropInstallPromptCalls = 0;
+    window.__dropAllowSyntheticInstallEvents = true;
+    const event = new Event('beforeinstallprompt', { cancelable: true });
+    Object.defineProperties(event, {
+      prompt: { value: async () => { window.__dropInstallPromptCalls += 1; } },
+      userChoice: { value: Promise.resolve({ outcome: 'accepted', platform: 'test' }) },
+    });
+    window.dispatchEvent(event);
+    return event.defaultPrevented;
+  })()`);
+  assert.equal(eventPrevented, true, 'The onboarding should defer the native install prompt until the user chooses Install.');
+  const installButtonReady = await session.waitFor(() => session.evaluate(`Array.from(document.querySelectorAll('button')).some((button) => button.innerText.replace(/\\s+/g, ' ').trim().toLocaleLowerCase() === 'install drop' && !button.disabled)`), 'enabled Install Drop action', 5_000).catch(() => false);
+  if (!installButtonReady) {
+    const state = await session.evaluate(`({
+      allowSynthetic: window.__dropAllowSyntheticInstallEvents,
+      standalone: window.matchMedia('(display-mode: standalone)').matches,
+      buttons: Array.from(document.querySelectorAll('button')).map((button) => ({ text: button.innerText.replace(/\\s+/g, ' ').trim(), disabled: button.disabled })),
+      installSummaries: Array.from(document.querySelectorAll('#pwa-share-onboarding-title ~ * details summary')).map((item) => item.innerText),
+      installStatus: document.querySelector('#pwa-share-onboarding-title')?.parentElement?.parentElement?.parentElement?.innerText || null,
+    })`);
+    throw new Error(`Install action did not appear after the deferred event: ${JSON.stringify(state)}`);
+  }
+  assert.equal(await clickButton(session, 'install drop'), true, 'Could not activate Install Drop.');
+  await session.waitFor(() => session.evaluate(`window.__dropInstallPromptCalls === 1`), 'user-triggered install prompt');
+  await session.waitFor(() => session.evaluate(`Array.from(document.querySelectorAll('a')).some((link) => {
+    const destination = new URL(link.href);
+    return destination.pathname === '/compose' && destination.searchParams.get('new') === '1'
+      && link.innerText.replace(/\\s+/g, ' ').trim().toLocaleLowerCase().includes('attach in compose');
+  })`), 'always-available Compose attachment fallback');
+
+  await session.evaluate(`window.dispatchEvent(new Event('appinstalled'))`);
+  await session.waitFor(() => session.evaluate(`document.body.innerText.includes('Drop is installed.')
+    && document.body.innerText.includes('If this browser supports app sharing')`), 'installed share guidance');
+  const installedState = await session.evaluate(`({
+    installButton: Array.from(document.querySelectorAll('button')).some((button) => button.innerText.replace(/\\s+/g, ' ').trim().toLocaleLowerCase() === 'install drop'),
+    composeFallback: Array.from(document.querySelectorAll('a')).some((link) => {
+      const destination = new URL(link.href);
+      return destination.pathname === '/compose' && destination.searchParams.get('new') === '1';
+    }),
+    width: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+  })`);
+  assert.deepEqual(installedState, { installButton: false, composeFallback: true, width: 390, scrollWidth: 390 }, 'The installed state must keep the Compose fallback and fit the 390px viewport.');
+  console.log('[browser-instant-media-e2e] PASS capability-aware PWA install guidance and Compose fallback on Home.');
+}
+
 async function fill(session, selector, value) {
   const ready = await session.evaluate(`(() => {
     const input = document.querySelector(${JSON.stringify(selector)});
@@ -808,7 +926,12 @@ async function main() {
     guardSelfTest();
     return;
   }
-  assert.deepEqual(process.argv.slice(2), [], 'This smoke accepts only --guard-self-test.');
+  if (process.argv.includes('--onboarding-only')) {
+    assert.deepEqual(process.argv.slice(2), ['--onboarding-only']);
+    await runOnboardingOnly();
+    return;
+  }
+  assert.deepEqual(process.argv.slice(2), [], 'This smoke accepts only --guard-self-test or --onboarding-only.');
   await assertPortAvailable(TEST_PORT);
   const envText = await readFile(resolve(PROJECT_ROOT, '.env.local'), 'utf8').catch(() => {
     throw new Error('Create .env.local with loopback Supabase URL, anon key, and service-role key first.');
@@ -845,6 +968,8 @@ async function main() {
     currentStep = 'authenticating the sender through local magic link';
     await signIn(senderSession, sender);
     await signIn(recipientSession, recipient);
+    currentStep = 'checking PWA install and photo/GIF share guidance';
+    await verifyPwaShareOnboarding(senderSession);
     currentStep = 'sending Instant photo and GIF drops through Compose';
     const photo = await sendMediaThroughCompose(senderSession, 'image');
     await assertOutsiderCannotRead(photo);
@@ -875,6 +1000,30 @@ async function main() {
     await cleanup();
   }
   if (cleanupFailed) throw new Error('The browser smoke finished with cleanup failures; see the messages above.');
+}
+
+async function runOnboardingOnly() {
+  await assertPortAvailable(TEST_PORT);
+  temporaryRoot = await mkdtemp(join(tmpdir(), 'drop-pwa-onboarding-e2e-'));
+  await mkdir(join(temporaryRoot, 'home'), { recursive: true });
+  try {
+    currentStep = 'starting the isolated production app without a Supabase backend';
+    await startTemporaryApp();
+    currentStep = 'starting the isolated PWA onboarding browser';
+    const session = new BrowserSession('pwa-onboarding');
+    sessions.push(session);
+    await session.launch();
+    currentStep = 'verifying Home install and share states';
+    await verifyPwaShareOnboarding(session);
+    assert.deepEqual([...session.externalOrigins], [], 'PWA onboarding attempted a cross-origin network request.');
+    assert.deepEqual(session.failedLocalRequests, [], 'PWA onboarding had a failed local request.');
+    assert.equal(session.consoleErrors, 0, 'PWA onboarding recorded a browser console error.');
+    assert.equal(session.runtimeExceptions, 0, 'PWA onboarding recorded a browser exception.');
+    console.log('[browser-instant-media-e2e] PASS isolated Home PWA install/share onboarding without Supabase.');
+  } finally {
+    await cleanup();
+  }
+  if (cleanupFailed) throw new Error('The PWA onboarding smoke finished with cleanup failures; see the messages above.');
 }
 
 const onSignal = (signal) => active.abort(new Error(`Received ${signal}; cleaning up this local smoke.`));

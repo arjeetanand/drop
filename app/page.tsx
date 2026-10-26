@@ -8,6 +8,7 @@ import { ArrowRight, ArrowUpRight, Camera, Eye, Mail, RefreshCw, Sparkles, Zap }
 import { LiveDropStatus } from '@/components/LiveDropCue';
 import { LiveReactionCue } from '@/components/LiveReactionCue';
 import { LetterCard } from '@/components/LetterCard';
+import { PwaShareOnboarding } from '@/components/PwaShareOnboarding';
 import { writingPrompts } from '@/data/mockData';
 import { getRemoteProfile } from '@/lib/letterBackend';
 import { selectFeaturedInboxDrop } from '@/lib/mailboxView';
@@ -104,6 +105,10 @@ export default function HomeDesk() {
             </Link>
           )}
         </section>
+
+        <div className="mt-6">
+          <PwaShareOnboarding />
+        </div>
 
         <section className="mt-8 grid gap-7 md:mt-10 md:grid-cols-[minmax(0,1fr)_300px] md:gap-10">
           <div>
