@@ -6,6 +6,14 @@ Build Drop as a mobile-first private sharing app where a person can send a photo
 
 The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailbox, and relay foundations. Existing letters continue to work as text drops, and their routes and saved content remain readable. The build covers the end-to-end mobile flow: choose content, attach an image or GIF, choose a recipient, send, open, react, and optionally follow a relay.
 
+## Latest correction — push account-switch isolation (2026-10-26)
+
+A reused browser push endpoint now stops carrying queued alerts across account ownership changes. The management RPC retires pending and leased rows for the old owner; the lease RPC retires stale mismatched rows and returns only events whose recipient matches the subscription's current owner. Enable, disable, and provider-gone completion now lock subscription before delivery rows. This remains an opt-in, generic arrival alert with no drop content in the payload.
+
+**Verification:** `npm test` passed 333/333; lint, typecheck, focused account-switch regression, and diff checks passed. `tests/db/drop_push_endpoint_account_switch.sql` was added but could not be executed in this environment because Docker access was denied and isolated PostgreSQL startup failed with `shmget` “No space left on device.” A provider request already returned from the lease RPC cannot be recalled after a later account switch. Hosted delivery, operating-system notifications, and mobile device acceptance remain open.
+
+**Git:** commit `29a26aa` is pushed to `origin/fix/drop-push-recipient-switch`, based on `feat/firebase-auth-pilot` at `49ae88f`. No PR or merge was created.
+
 ## Implementation Status — 2026-10-26 (Format-matched demo-to-first-drop starter)
 
 The no-account demo's **Make one for a friend** action now starts a blank editable draft using the selected example's format: text, photo, or GIF. It carries the format only; sample content, recipient, reaction, and media are not copied. Existing drafts and saved attachments are preserved.

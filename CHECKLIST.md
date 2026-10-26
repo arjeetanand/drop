@@ -2,6 +2,17 @@
 
 Updated: 2026-10-26
 
+## Push alert account-switch isolation (2026-10-26)
+
+- [x] Add a corrective migration that retires pending and leased deliveries for the previous endpoint owner before reassignment.
+- [x] Require the event recipient to match the current subscription owner before leasing, and retire stale mismatched rows.
+- [x] Add a rollback-only SQL fixture for A's pending/leased alerts, endpoint reassignment to B, a stale raced row, and B's valid new alert.
+- [x] Pass `npm test` (333/333), lint, typecheck, focused account-switch test, and `git diff --check`.
+- [x] Commit `29a26aa` and push `fix/drop-push-recipient-switch`; no PR or merge was created.
+- [ ] Execute the SQL fixture in a fresh disposable PostgreSQL database. This environment denied Docker access and `initdb` failed at `shmget`; the SQL assertions remain unverified here.
+
+**Residual:** a provider request already returned by the lease RPC can still complete during an account switch. The notification payload is generic and contains no drop content.
+
 ## First-time sender profile and send (2026-10-26)
 
 - [x] Route first-time sender sign-in through profile setup only when the matching Supabase account has no profile; preserve the exact safe Compose draft return and recheck the active account after lookup.
@@ -236,6 +247,8 @@ Updated: 2026-10-26
 - [x] Save Firebase web SDK settings in the ignored active-worktree `.env.local`; keep the bridge flag `false` until Supabase Google Auth is configured.
 - [x] Add a gated Firebase Google OAuth token-to-Supabase session bridge. Keep Firebase auth state in memory, require cleanup, use the popup on all viewports, and fall back to Supabase redirect only when the popup is blocked.
 - [x] Pass `npm test` (332/332), `npm run lint`, `npm run typecheck`, focused auth ESLint, `git diff --check`, and an isolated Webpack production build with the Firebase path enabled at compile time; the build generated 22 routes using local Arial fixtures.
-- [ ] Create or confirm the hosted Free Drop Supabase project. The active checkout and process have no `SUPABASE_ACCESS_TOKEN` or hosted Supabase URL/anon key, and the Supabase connector is disabled by the workspace administrator. The CLI list attempt stopped at an `EPERM` writing global telemetry before it could query Supabase.
+- [x] Confirm Firebase project `drop-auth-pilot-20261026` and one web app exist; the active `6004` worktree has Firebase web config, but no hosted Supabase URL/anon key or Management API token.
+- [x] Keep the Firebase-to-Supabase Google bridge disabled while those Supabase settings are absent; focused Firebase bridge tests pass 2/2, but real sign-in is not verified.
+- [ ] Inspect the approved organization’s Free plan and available project slot, create one hosted Free Supabase project, then configure the matching Google provider and test real account sign-in plus account-to-account send/open.
 - [ ] Configure the same Google OAuth web client in Supabase Auth, enable `NEXT_PUBLIC_FIREBASE_GOOGLE_LOGIN_ENABLED`, then verify real existing/new account sign-in and profile/draft returns in desktop and mobile browsers.
 - [ ] Verify hosted origin/domain settings and live account-to-account send/open after Supabase project setup.

@@ -2510,3 +2510,32 @@ The listener on `6004` had cwd `/private/tmp/drop-local-demo-cleanup`; `http://1
 ### Git and remaining gaps
 
 The feature branch `feat/firebase-auth-pilot` remains pushed and unmerged; code commit `459e648` contains the implementation. This runtime handoff is a documentation-only follow-up. Hosted Supabase auth and real Google sign-in remain unavailable until a Supabase project/provider is configured.
+
+## 2026-10-26 — Hosted Supabase is still required for Google login
+
+### Issue
+
+The local pilot still cannot complete Drop sign-in even though Firebase is configured, and the user expected the hosted Supabase project to exist.
+
+### Cause
+
+The `6004` checkout's ignored `.env.local` contains Firebase web settings, but has no `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, or `SUPABASE_ACCESS_TOKEN`. The Firebase bridge exchanges Google's token for a Supabase session, so Firebase settings alone cannot establish a Drop account. The project's Google bridge flag is `false`.
+
+### Resolution
+
+Confirmed that Firebase project `drop-auth-pilot-20261026` and one web app already exist; no duplicate Firebase project was created. Kept the bridge disabled. A hosted Supabase Free project and matching Google provider still need to be provisioned before live sign-in can work. The current task has no usable Management API token, and the Supabase integration is disabled by workspace policy.
+
+### Learning
+
+A configured social-login provider is only one part of the sign-in path. Verify that its token can exchange into the app's session authority before enabling the button. Reuse the existing Firebase project and keep the bridge off until Supabase is configured.
+
+### Verification
+
+- `firebase projects:list` showed two visible projects, including `drop-auth-pilot-20261026`; `firebase apps:list` showed one web app. These read-only checks do not confirm the Firebase billing tier.
+- The active `6004` runtime belongs to `/private/tmp/drop-local-demo-cleanup`. Safe environment inspection confirmed Firebase web config present, Supabase URL/anon key absent, bridge flag false, and no Supabase Management token.
+- `tests/firebaseGoogleLogin.test.mjs` passed 2/2. This verifies the feature gate and popup-fallback selection only; real Google sign-in was not tested. `npm test`, lint, and typecheck passed for the push-recipient change.
+- The Supabase Free project limit is two active projects across organizations where the account is Owner/Admin; current Supabase quota and billing were not verifiable without Management API access. No hosted resource was changed.
+
+### Git and remaining gaps
+
+Code commit `29a26aa` is pushed to `origin/fix/drop-push-recipient-switch`; the Firebase bridge originates in commit `459e648` on its ancestry. The SQL fixture remains unexecuted because Docker access was denied and temporary PostgreSQL startup failed at `shmget`. No hosted Supabase project, Google sign-in, account-to-account delivery, or billing change was verified. Next: add a scoped Management API token to the active worktree's ignored `.env.local`, inspect Free quota, provision the approved project, configure Google OAuth, and run hosted acceptance.

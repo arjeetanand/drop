@@ -2,6 +2,17 @@
 
 Updated: 2026-10-26
 
+## Latest checkpoint — push endpoint account-switch isolation (2026-10-26)
+
+- Fixed push endpoint reassignment so a device signed in as account B cannot newly lease alerts queued for account A. The management RPC retires old-owner pending/leased deliveries; the lease RPC cleans stale mismatches and requires `outbox.recipient_id = subscription.user_id`. Enable, disable, and provider-gone completion now acquire subscription locks before delivery locks.
+- Added `tests/db/drop_push_endpoint_account_switch.sql`. It simulates an A delivery already leased, another still pending, the endpoint transfer to B, a raced stale row, and a valid new B event. It rolls back all fixture changes and must run only in a fresh disposable PostgreSQL database.
+- Verification: `npm test` passed 333/333; lint, typecheck, the focused account-switch unit test, and `git diff --check` passed. The SQL fixture was not run: Docker API access was denied, and temporary PostgreSQL 16 startup failed at `shmget` with “No space left on device.” No SQL behavior is claimed as runtime-verified.
+- Review found and removed a lock-order inversion before the follow-up commit. Enable, disable, and provider-gone completion use subscription-before-delivery lock order; lease locks deliveries only.
+- Git: code commits `860f20d` and `29a26aa` are pushed to `origin/fix/drop-push-recipient-switch`, based on `feat/firebase-auth-pilot` at `49ae88f`. No PR or merge was created; `main`, the app on `4004`, `/letter`, and hosted Supabase were not changed.
+- Residual: an external push request already returned by the lease RPC can still complete after an account switch. The payload remains generic and contains no drop content. The active `6004` worktree has Firebase web settings only; its Supabase URL, anon key, and Management API token are missing, so the gated Firebase-to-Supabase Google bridge stays disabled. The Firebase project and one web app already exist. No hosted Supabase project was created, and the Free quota/billing state was not re-read. Provider delivery, live Google sign-in, operating-system notification, and physical-device acceptance remain open.
+
+Run the SQL fixture only in a fresh disposable database; do not use an existing local or hosted Supabase database. The existing local web preview on `6004` was not touched by this backend-only change.
+
 ## Latest checkpoint — first-time sender profile and send (2026-10-26)
 
 - Fixed the auth return so a new sender with no Supabase profile goes through profile setup before returning to the same safe `/compose?letter=...` draft. The callback confirms the profile belongs to the callback account and rechecks the current session after the lookup. Existing profiles and the recipient claim route keep their previous behavior.
