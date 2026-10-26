@@ -2,6 +2,18 @@
 
 Updated: 2026-10-26
 
+## Latest checkpoint — hosted Free Supabase provisioning (2026-10-26)
+
+- Created Supabase project `Drop` (`gdtodskvabewhebmpmgp`) in verified Free organization `Drop App Free` (`sofucwhjqdyfensxlltl`), region `ap-south-1`, state `ACTIVE_HEALTHY`. No paid compute size, high availability, or add-on was requested.
+- Saved the project URL, anon key, service-role key, and database password to ignored `.env.local` (mode `600`); no credentials were added to Git. Applied all 25 migrations; the subsequent dry run reported zero pending. The `drop-media` bucket exists and is private.
+- Auth is not ready for user sign-in: Google is disabled, the site URL remains `http://localhost:3000`, and the redirect allow-list is empty. The Management API returned HTTP 403 `Missing required permission(s): project_admin_write` when updating Auth config. SMTP delivery is unconfigured; no sign-up or real two-account journey was tested.
+- No Edge Functions or Edge secrets are deployed. The auto-review rejected the cleanup-function deployment because its configured `verify_jwt=false` changes the endpoint authentication boundary, even though the handler also checks a private request secret. Vault secrets and the hourly cleanup schedule are absent; automatic 30-day storage cleanup is not active.
+- Edge permission follow-up: macOS could not launch `/Applications/Microsoft Edge.app` because its executable is missing (`kLSNoExecutableErr`). No Apple Events setting was changed. The local site on port `6004` belongs to this checkout; port `4004` belongs to `/Users/arjeetanand/projects/drop` and `5004` to `/private/tmp/drop-media-claim-compose-e2e`. Those processes were left untouched. Loopback `curl` probes returned HTTP `000` (`Couldn't connect to server`) despite the listeners, so no rendered route was verified in this run.
+- Verification: `npm test` passed 333/333; `npm run lint` and `npm run typecheck` passed. The unmocked Turbopack build could not fetch existing Google Fonts. The production Webpack build passed with a temporary local font-response mock (22 routes); existing Browserslist and ambiguous easing-class warnings remain. A static artifact scan found no service-role key in `.next/static`.
+- Git: active branch `feat/drop-preview-continuity`, parent checkpoint `045b933`. The pre-existing `app/compose/page.tsx` modification was preserved and is not part of this provisioning change. Only setup/status documentation is being changed; `.env.local` remains ignored. Do not merge this branch. No hosted browser acceptance or Edge setting change is claimed.
+
+**Next:** provide a token with `project_admin_write` on this project and matching Google OAuth web credentials, configure a verified email provider, then complete hosted sign-in and two-account send/open. Separately approve or decline deployment of the cleanup Edge Function with JWT verification disabled; if approved, deploy it with the private request secret, create its three Vault secrets, schedule hourly cleanup, and verify the schedule. Repair or select a working Edge installation before requesting browser Apple Events automation.
+
 ## Latest checkpoint — push endpoint account-switch isolation (2026-10-26)
 
 - Fixed push endpoint reassignment so a device signed in as account B cannot newly lease alerts queued for account A. The management RPC retires old-owner pending/leased deliveries; the lease RPC cleans stale mismatches and requires `outbox.recipient_id = subscription.user_id`. Enable, disable, and provider-gone completion now acquire subscription locks before delivery locks.

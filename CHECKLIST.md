@@ -2,6 +2,19 @@
 
 Updated: 2026-10-26
 
+## Hosted Free Supabase setup (2026-10-26)
+
+- [x] Create `Drop` in the verified Free organization `Drop App Free`; request no paid compute size or add-ons.
+- [x] Save the app URL, anon key, service-role key, and database password in ignored `.env.local` with mode `600`.
+- [x] Apply all 25 migrations and confirm a second dry run has zero pending migrations.
+- [x] Verify the hosted `drop-media` bucket exists and is private; confirm the organization plan reports Free.
+- [ ] **Blocked:** add `project_admin_write` to a project-scoped Management API token, then configure the Auth callback allow-list and matching Google provider credentials. The current Auth settings have Google disabled; keep the Firebase bridge flag false.
+- [ ] **Blocked:** configure hosted SMTP and verify a real sign-up/email-link flow.
+- [ ] **Approval required:** deploy `cleanup-expired-drop-media` with JWT verification disabled and its separate high-entropy request secret, then create the three Vault secrets and hourly schedule. Automatic 30-day physical cleanup is not active until this is verified.
+- [ ] Run hosted two-account text and media send/open journeys; no hosted browser acceptance has passed.
+
+**Verified in this run:** `npm test` 333/333, lint, typecheck, and the production Webpack build using a temporary local font-response fixture. An ordinary build was blocked by unavailable Google Fonts network access. Edge could not launch because the local app bundle lacks its executable, so its Apple Events setting remains unchanged.
+
 ## Push alert account-switch isolation (2026-10-26)
 
 - [x] Add a corrective migration that retires pending and leased deliveries for the previous endpoint owner before reassignment.

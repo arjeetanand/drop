@@ -2,11 +2,18 @@
 
 Drop needs Supabase Auth, the existing `profiles` and `letters` schema, and the new private `drop-media` bucket for real account-to-account sends.
 
-## Hosted project provisioning status — 2026-10-24
+## Hosted project provisioning status — 2026-10-26
 
-The CLI created the distinct `Drop App Free` organization, but could not verify its plan or create the `Drop` project: both organization details and project creation returned 403. The read-only project list contains only the existing `arjeetanand's Project`; it was not changed. No Drop project or paid compute/add-on was created, and `.env.local` was left unchanged. Continue only after verifying the new organization/project is Free.
+The approved organization `Drop App Free` (`sofucwhjqdyfensxlltl`) is verified as Free. Its hosted project `Drop` (`gdtodskvabewhebmpmgp`) is active in `ap-south-1`. No paid compute size, high availability, or add-on was requested. The ignored `.env.local` now contains the project URL, anon key, service-role key, and database password; it is mode `600` and must stay out of Git.
 
-The supplied token appears to lack the required fine-grained permissions. Supabase documents `organization_admin_read` for reading organization details and `organization_projects_create` for creating a project. For the remaining setup, also grant `database_migrations_write`, `edge_functions_write`, `edge_functions_secrets_write`, and `api_gateway_keys_read` and `api_gateway_keys_secret_read` on the new project. Store a new scoped token in the ignored local `.env.local`; do not paste it into chat. Revoke the token pasted into chat after replacing it.
+All 25 migrations were applied in filename order. A follow-up `supabase db push --dry-run` reported zero pending migrations. The `drop-media` bucket exists and is private. A public Auth settings request returned HTTP 200; the anon role is denied direct `profiles` table access, as expected before a user session is established.
+
+### Remaining hosted setup gates
+
+- The Supabase Google provider is disabled and the Firebase bridge flag remains `false`. The Auth URL configuration is still at `http://localhost:3000` with an empty redirect allow-list. A Management API update returned HTTP 403, `Missing required permission(s): project_admin_write`. Add that permission to a project-scoped token before setting the development callback URLs. Supply and verify the matching Google OAuth web client credentials before enabling the Firebase bridge; Supabase requires its Google provider to be enabled and configured for `signInWithIdToken` ([Supabase API requirements](https://supabase.com/docs/reference/javascript/auth-signinwithidtoken)).
+- No Edge Functions or Edge secrets are deployed. The automatic security review rejected deploying `cleanup-expired-drop-media` with JWT verification disabled. Its handler also checks a high-entropy request secret, but the deployment still changes the function's authentication boundary. The three Vault secrets and hourly `pg_cron` schedule are therefore not configured; automatic cleanup and media claim readiness remain unverified. Do not claim the 30-day physical cleanup worker is active.
+- Email authentication is enabled with confirmation required, but hosted SMTP delivery has not been configured or tested. No hosted sign-up or two-account browser journey has passed.
+- Edge could not be launched to change or verify “Allow JavaScript from Apple Events”: `/Applications/Microsoft Edge.app` is missing its executable (`kLSNoExecutableErr`). No Edge setting was changed.
 
 1. Add `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` from the Supabase project to `.env.local`, plus `SUPABASE_SERVICE_ROLE_KEY` as a server-only secret in local and deployed environments. Never expose the service-role key with a `NEXT_PUBLIC_` name.
 2. Apply every migration in `supabase/migrations/` in filename order. The validated-media migration restricts browser uploads to private staging paths; a Node route validates image bytes and writes final media using the service-role key. Apply it together with the matching app deployment so the older direct-upload client is not left active.

@@ -2539,3 +2539,33 @@ A configured social-login provider is only one part of the sign-in path. Verify 
 ### Git and remaining gaps
 
 Code commit `29a26aa` is pushed to `origin/fix/drop-push-recipient-switch`; the Firebase bridge originates in commit `459e648` on its ancestry. The SQL fixture remains unexecuted because Docker access was denied and temporary PostgreSQL startup failed at `shmget`. No hosted Supabase project, Google sign-in, account-to-account delivery, or billing change was verified. Next: add a scoped Management API token to the active worktree's ignored `.env.local`, inspect Free quota, provision the approved project, configure Google OAuth, and run hosted acceptance.
+
+## 2026-10-26 — hosted Free project provisioned; sign-in and cleanup remain gated
+
+### Issue
+
+Drop had no hosted Supabase project, so the user could not test account-based sending against the new project.
+
+### Cause
+
+The earlier setup attempt lacked project-create access. The later scoped token created the project and applied migrations, but its Auth settings write returned 403 because `project_admin_write` was missing. Google OAuth credentials were not verified, and the cleanup worker is configured without JWT verification; deploying it requires explicit approval of that authentication boundary.
+
+### Resolution
+
+Created the `Drop` project in the verified Free organization, stored its app keys and database password in ignored `.env.local`, and applied all 25 migrations. Confirmed the project is active and the `drop-media` bucket is private. Kept the Google bridge disabled; did not deploy Edge Functions or secrets after the automatic security review rejected the no-JWT cleanup deployment.
+
+### Learning
+
+Project creation, Auth configuration, and Edge deployment use different permissions and security decisions. Verify each control-plane step independently; a working URL and keys do not prove that sign-in, email delivery, or scheduled cleanup is ready.
+
+### Verification
+
+- The Supabase Management API reported organization plan `free` and project state `ACTIVE_HEALTHY` in `ap-south-1`.
+- The database dry run reported zero pending migrations after applying 25; the hosted Storage API confirmed the private `drop-media` bucket. Auth settings showed Google disabled and email confirmation required.
+- Auth config PATCH returned HTTP 403 `Missing required permission(s): project_admin_write`; the cleanup function and secrets listings were both empty. The auto-review rejected the no-JWT function deployment before execution.
+- `npm test` passed 333/333; lint and typecheck passed. Unmocked build failed on network access to Google Fonts; the Webpack production build passed with a temporary local font fixture. `.next/static` contained no service-role key.
+- Edge could not launch because its app bundle had no executable. Loopback HTTP probes returned HTTP `000` (`Couldn't connect to server`) despite the listeners; the current `6004` process was left running, and `4004`/`5004` listeners owned by other checkouts were left untouched.
+
+### Git and remaining gaps
+
+At the time of this entry, branch `feat/drop-preview-continuity` was at `045b933`. The pre-existing `app/compose/page.tsx` modification was preserved. This setup record was prepared for a documentation-only commit; `.env.local` is ignored and no credential is staged. Hosted Google/email sign-in, account-to-account browser acceptance, and scheduled media cleanup remain incomplete until the required Auth permission, OAuth/SMTP configuration, and explicit cleanup-deployment approval are supplied.
