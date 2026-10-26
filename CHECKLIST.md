@@ -2,6 +2,18 @@
 
 Updated: 2026-10-26
 
+## Opt-in new-drop alert pilot (2026-10-26)
+
+- [x] Add private per-device subscriptions and idempotent delivery events for Instant, Relay collection, and successful claim; exclude drafts, duplicate delivered updates, and self-sends.
+- [x] Add authenticated, CORS-enabled subscription management and the server-only bounded Web Push dispatcher; remove stale provider endpoints and keep notification data generic.
+- [x] Add the signed-in Profile opt-in/out control and same-origin Inbox notification click behavior. Permission is requested only after the user taps the control.
+- [x] Pass `npm test` (325/325), lint, typecheck, `supabase db lint --local`, the rollback-only SQL transition fixture, and `git diff --check`.
+- [x] Pass `npm run test:browser-drop-push` at 390×844 against the real local manager Edge Function, including CORS preflight, auth, opt-in, account transfer/isolation, disable, generic notification handling, and exact fixture cleanup. The synthetic push endpoint was registered but never dispatched.
+- [x] Commit the code on `feat/drop-arrival-alerts` as `08e794a`; keep `main` and port `4004` unchanged.
+- [ ] Push the feature branch when GitHub DNS is available; the initial remote lookup failed with `Could not resolve host: github.com`.
+- [ ] Create the hosted Free project, deploy migration/functions, configure VAPID/internal secrets and dispatcher wake schedule, then prove real provider delivery and OS notification behavior.
+- [ ] Run recipient interviews, screen-reader checks, and physical-device acceptance before widening the pilot.
+
 ## Home PWA install/share onboarding (2026-10-26)
 
 - [x] Add a Home card that explains install-dependent share-to-Drop, offers the browser's install prompt when available, shows a manual menu guide otherwise, and always keeps **Attach in Compose** available.

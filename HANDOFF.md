@@ -2,6 +2,17 @@
 
 Updated: 2026-10-26
 
+## Latest checkpoint — opt-in new-drop alert pilot (2026-10-26)
+
+- Added a private subscription/outbox/delivery model. A delivered transition queues one generic event for a distinct recipient across Instant, Relay collection, and claim; duplicate updates, drafts, and self-sends do not create another arrival.
+- Added an authenticated subscription manager with browser CORS preflight handling and account-scoped enable/status/disable actions; the internal dispatcher verifies its shared secret, leases bounded batches, retries provider failures, and removes `404`/`410` endpoints.
+- Added the opt-in Profile control and service-worker notification/click handling. It requests permission only after a user action, omits sender/content/media/link data, and opens only the same-origin Inbox. Sign-out disables the current device subscription and stops if backend cleanup fails.
+- Verification: `npm test` passed 325/325; lint, typecheck, local Supabase database lint, and `git diff --check` passed. A rollback-only SQL fixture verified delivered transitions and negative cases. `npm run test:browser-drop-push` passed at 390×844 against the real local manager Edge Function, including OPTIONS/CORS, auth, enable, cross-account transfer/isolation, disable, and exact disposable cleanup. A synthetic provider endpoint was registered but never dispatched; OS notification tapping and real provider delivery were not tested.
+- Git: code commit `08e794a` is on `feat/drop-arrival-alerts`, based on `8b39850`; no main change or PR was made. The push is pending because GitHub DNS lookup failed (`Could not resolve host: github.com`). The task-branch preview uses port `5004`; the existing `4004` app was preserved.
+- No hosted project, hosted credential, VAPID key, or dispatcher schedule was created or changed. The Supabase management and signed-in browser plugins report `DISABLED_BY_ADMIN`. The local `.env.local` loopback setup remains ignored and was not staged.
+
+**Next:** push the tested feature branch when GitHub DNS returns. Then provision the approved Free project through an enabled management/browser integration, deploy the migration and functions, configure VAPID/internal secrets and dispatcher scheduling, and verify closed-app delivery on supported devices. Collect recipient feedback and screen-reader results before expanding the opt-in pilot.
+
 ## Latest checkpoint — photo/GIF send recovery (2026-10-26)
 
 - Compose now keeps the draft, caption, and selected media after a safe upload failure, requires recipient confirmation again, and labels the next action **Retry send**. If the insert may have committed, it disables resubmission and offers **Check Sent**; Mailbox opens with Sent selected.

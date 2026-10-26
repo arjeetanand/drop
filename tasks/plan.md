@@ -6,6 +6,47 @@ Build Drop as a mobile-first private sharing app where a person can send a photo
 
 The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailbox, and relay foundations. Existing letters continue to work as text drops, and their routes and saved content remain readable. The build covers the end-to-end mobile flow: choose content, attach an image or GIF, choose a recipient, send, open, react, and optionally follow a relay.
 
+## Active pilot hypothesis — opt-in new-drop alerts (2026-10-26)
+
+### Product signal and limits
+
+Pew's 2026 U.S. teen survey found that 57% of teen Snapchat users message people daily; its 2025 survey found that 74% of teens say social media makes them feel more connected to friends, while 39% feel overwhelmed by drama and 45% say they spend too much time on social media. These findings describe existing social platforms and **do not validate demand for Drop or push alerts**. The feature remains an opt-in pilot hypothesis; ask actual Drop recipients whether they miss arrivals before making alerts prominent or adding any reminder cadence. ([Pew 2026](https://www.pewresearch.org/internet/2026/04/15/teens-experiences-on-tiktok-instagram-and-snapchat/), [Pew 2025](https://www.pewresearch.org/internet/2025/04/22/teens-social-media-and-mental-health/))
+
+### User experience
+
+Add a **New-drop alerts** control to the signed-in Profile. It starts off and requests OS permission only after a user taps **Turn on alerts**. Explain that the notification contains no drop details and can be disabled on this device. Unsupported or denied browsers keep the existing Inbox refresh/live cue and explain the fallback without repeatedly prompting. Use warm, plain copy such as “A drop is waiting. Open when you’re ready.”; no streaks, artificial urgency, sender identity, or lock-screen preview.
+
+When a drop reaches a recipient, a generic notification opens the authenticated Inbox. The Inbox remains the place where the recipient chooses whether to open the sealed drop. No notification payload may contain the sender, subject, message, media path/URL, signed URL, or claim token. Push subscriptions are account-scoped and private; unsubscribe removes the current device association. The service worker uses the mobile `showNotification()` path and a stable tag to collapse duplicate delivery attempts.
+
+### Acceptance
+
+- [x] Default is off; visiting Profile or loading the service worker never requests notification permission.
+- [x] A signed-in user can explicitly enable and disable alerts for the current device. Unsupported, permission-denied, signed-out, and backend-unavailable states give an honest Inbox fallback.
+- [x] The database queues one idempotent event when a letter first becomes delivered to a distinct recipient, covering Instant sends, Relay collection, and successful claim. Drafts, pending claims, reactions, and sender-only changes do not enqueue an arrival.
+- [x] Dispatch is server-only, bounded, leased, retryable, and scoped to the event recipient's active subscriptions. `404`/`410` endpoints are removed. A failed push never undoes a successfully delivered drop.
+- [x] Push copy/data stay generic. Clicking opens only the same-origin Inbox; normal auth/RLS applies and no drop is opened automatically. Duplicate delivery attempts do not stack duplicate notices.
+- [x] Unit, local database/function, and isolated browser checks cover permission timing, account ownership, idempotent queueing, retry/stale subscriptions, notification text/data, Inbox click routing, and exact disposable cleanup.
+- [ ] Hosted acceptance separately proves closed-app delivery, recipient-only delivery, sealed Inbox navigation, opt-out, and device/account switching on supported Android browsers and an installed iOS/iPadOS Home Screen web app.
+
+**Local verification (2026-10-26):** 325 unit tests, lint, typecheck, Supabase local DB lint, rollback-only delivery-transition SQL, and `npm run test:browser-drop-push` passed. The browser called the real local manager function and cleaned up disposable users/subscriptions. Its synthetic endpoint was registered but not dispatched; this does not verify push-provider or OS delivery.
+
+### Platform and implementation evidence
+
+- MDN says notification permission should follow a user gesture; mobile display should use `ServiceWorkerRegistration.showNotification()`. Push is specifically for server-to-service-worker delivery while the page is not open. ([Notifications API](https://developer.mozilla.org/en-US/docs/Web/API/Notifications_API/Using_the_Notifications_API), [Push API](https://developer.mozilla.org/en-US/docs/Web/API/Push_API))
+- WebKit supports Web Push for iOS/iPadOS Home Screen web apps from 16.4 and requires the permission request to follow direct user interaction. Feature-detect support; do not promise it in ordinary Safari tabs or embedded webviews. ([WebKit](https://webkit.org/blog/13878/))
+- The Push API requires express consent and revocable subscriptions; its payload is encrypted but delivery timing/frequency metadata remains visible to the push service. Keep payloads minimal and endpoints private. ([W3C Push API privacy/security](https://www.w3.org/TR/2024/WD-push-api-20240708/#security-and-privacy-considerations))
+- Supabase Edge Functions support local execution and server-only project secrets. The Free plan currently includes 500,000 Edge Function invocations/month; actual account usage and project limits must be checked before hosted rollout. No hosted project or paid add-on is used by local development. ([Edge Functions](https://supabase.com/docs/guides/functions), [Free plan](https://supabase.com/pricing))
+
+### Build order
+
+1. Define private subscription/outbox schema, authenticated enable/disable/status operations, and transactional delivered-transition queueing.
+2. Add the internal dispatcher with a vetted Web Push implementation, bounded retries, stale-endpoint cleanup, and handler tests; configure its wake/recovery schedule and Vault secrets during hosted setup.
+3. Add the Profile opt-in control and generic service-worker push/click handling.
+4. Exercise local database/function behavior and the isolated 390×844 browser flow; update the README, checklist, handoff, and append-only learning log from actual results.
+5. After a hosted Free project and supported devices are available, verify true background delivery and collect recipient feedback before increasing prominence or scope.
+
+**Open gate:** the Supabase management and signed-in browser plugins currently report `DISABLED_BY_ADMIN`. No hosted project or credentials were created or changed. Hosted migration, secrets, dispatcher scheduling, provider delivery, and device acceptance remain unverified until the workspace enables access and a supported device is available.
+
 ## Implementation Status — 2026-10-26
 
 ### Completed locally — photo/GIF send recovery

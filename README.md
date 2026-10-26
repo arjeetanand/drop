@@ -6,9 +6,9 @@ The append-only engineering learning log is in [LEARNINGS.md](./LEARNINGS.md); i
 
 ## Branch status and latest checkpoint
 
-The current feature branch is `feat/media-send-recovery`; tested code commit `71b1f5b` is pushed to `origin/feat/media-send-recovery`, based on `feat/pwa-share-onboarding` at `45b1d04`. The docs-only status reconciliation is commit `79477b1`. This is an unmerged feature branch; no PR or main branch was changed. The focused browser check used isolated port `6004`; port `4004` and hosted Supabase were untouched. Use `git status --short --branch`, `git log -1 --oneline --decorate`, and GitHub to see current branch and checks.
+The active task branch is `feat/drop-arrival-alerts`, based on `feat/media-send-recovery` at `8b39850`. The opt-in alert code checkpoint is `08e794a`; the branch is not merged and has no PR. The authorized push is pending because this environment could not resolve `github.com`. `main`, the canonical app on port `4004`, and `/letter` were not changed. Use `git status --short --branch` and `git log -1 --oneline --decorate` for the local state.
 
-**Pilot verification:** the local Supabase fixture guard is integrated into six fixture-writing smoke scripts. `npm run test:browser-relay` passes both text and GIF Relay journeys at 390×844: the sender creates each drop through Compose, the carrier invite stays fragment-only, carrier location and private media stay unused/sealed, the recipient explicitly collects, and the GIF renders only after opening. The run verifies exact staged/final object metadata, confirmed Storage cleanup, no horizontal overflow/browser errors/cross-origin requests, and exact disposable data cleanup. `npm run test:browser-instant-media` also verifies PNG/GIF upload retry keeps the same draft, removes failed staged objects, and avoids duplicate sends after an uncertain response. The isolated PWA onboarding check passes without Supabase. Optional screenshots are written outside the repository with `DROP_BROWSER_SCREENSHOT_DIR`. These are local results; hosted delivery and scheduled hosted cleanup remain unverified. Screen-reader, installed-PWA system sharing, physical camera scans, and physical-device behavior remain open.
+**Latest local pilot:** `feat/drop-arrival-alerts` adds opt-in, generic new-drop alerts. The profile/browser smoke talks to the real local subscription Edge Function, including CORS preflight and authenticated enable, account transfer/isolation, and disable. The local trigger fixture verified first-delivery queueing for Instant, Relay collection, and claim transitions; duplicate updates, drafts, and self-sends do not create alerts. `npm test` passes 325/325; lint, typecheck, local database lint, and the isolated 390×844 browser smoke pass. The smoke registers a synthetic push endpoint but does not dispatch it, so actual provider delivery, hosted scheduling, and OS notification taps are unverified. Existing Relay and photo/GIF journeys are documented below. Screen-reader and physical-device acceptance remain open.
 
 ## Run locally
 
@@ -20,6 +20,16 @@ npm ci
 Open `http://localhost:4004`. Run `./run.sh` again to restart Drop, or `./run.sh stop` to stop it. Without Supabase credentials, the app runs with local demo data. Real account-to-account media delivery needs the Supabase migrations and private storage setup in [SUPABASE_SETUP.md](./SUPABASE_SETUP.md). Hosted setup and acceptance were not part of this local recovery slice; no hosted token, project, or billing setting was used or changed.
 
 The local Supabase backend runs in Docker through the Supabase CLI (`npm run supabase:start`); the Next.js app runs as a local Node process through `run.sh`. The main local endpoints are app `4004`, Supabase API `54321`, Studio `54323`, and Mailpit `54324`. Use `npm run supabase:stop` to stop this project's local Supabase stack.
+
+## Opt-in new-drop alerts
+
+The signed-in Profile has a **New-drop alerts** setting. It is off by default, requests browser permission only after an explicit tap, and uses generic notification copy that opens the Inbox without revealing drop content. Unsupported, denied, or unconfigured browsers keep the Inbox fallback.
+
+Run `npm run test:browser-drop-push` with the local Supabase stack running and the ignored `.env.local` configured for loopback. The isolated production browser runs on port `6004`; it calls the real local manager Edge Function to check CORS, auth, account isolation, opt-in, transfer, and disable. It verifies generic worker payload handling and exact disposable cleanup. Its synthetic provider endpoint is never dispatched, so the test does not establish actual push delivery or operating-system notification behavior. The SQL event/queue path is covered by unit tests and a rollback-only local PostgreSQL fixture.
+
+The current preview has no hosted Supabase project, VAPID keys, deployed functions, or dispatcher wake schedule. Hosted setup and real closed-app delivery remain blocked until the workspace enables the Supabase management and signed-in browser tools. Keep hosted credentials out of Git and do not replace the loopback values in `.env.local` with empty or unverified values.
+
+To run this task branch beside the app already using `4004`, start its preview on the mapped test port with `WATCHPACK_POLLING=true npm run dev -- --hostname 127.0.0.1 --port 5004`. This keeps the existing `4004` process untouched; the isolated browser smoke uses `6004`.
 
 ## Home PWA install and share onboarding
 

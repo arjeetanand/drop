@@ -2,6 +2,15 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
+## Active — opt-in new-drop alert pilot (hypothesis; recipient demand not yet validated)
+
+- [x] Define private subscription/outbox schema; enqueue one event only when a drop first becomes delivered to a distinct recipient. Verify Instant, Relay collection, and claim transitions; exclude drafts and non-arrival mutations.
+- [x] Implement authenticated per-device subscription lifecycle and the server-only Web Push dispatcher with bounded retries and stale-endpoint removal. Hosted wake/scheduling and secrets remain deployment work.
+- [x] Add the Profile opt-in states and generic service-worker notification/click flow; request permission only from the explicit button and retain the existing Inbox fallback.
+- [x] Pass handler/unit, local database/function, and isolated browser checks at 390×844 with exact fixture cleanup. The synthetic push endpoint was not dispatched.
+- [ ] Create the approved Free hosted project, apply the migration, deploy the functions, configure VAPID/internal secrets and dispatcher scheduling, then verify provider delivery across two disposable accounts.
+- [ ] Before broader rollout, ask actual recipients whether they miss drops and test real closed-app delivery on supported Android browsers and installed iOS/iPadOS web apps.
+
 ## Completed locally — photo/GIF send recovery
 
 - [x] Keep the same draft and attachment after a one-shot upload failure; expose **Retry send** only after the recipient is checked again.

@@ -2273,3 +2273,31 @@ When a later branch closes an earlier acceptance item, update the original check
 ### Git and remaining gaps
 
 Documentation changes are on `feat/media-send-recovery`, based on `5b2620e`; the checklist and README correction is commit `79477b1abfa8c0cf8c779ac6780b958c7364710b`. Hosted project provisioning, hosted delivery/retention, screen-reader output, actual installed-PWA sharing, and physical-device/camera acceptance remain open. No credential was minted or reused and no hosted resource was changed.
+
+## 2026-10-26 — Opt-in new-drop alerts and local Edge-function browser acceptance
+
+### Issue
+
+The Drop pilot needed a privacy-preserving alert when a new drop reaches a recipient. The Profile called a Supabase Edge Function from the browser, but the first local browser harness stubbed the function and therefore could not reveal a missing CORS preflight path.
+
+### Cause
+
+The subscription manager lacked the browser `OPTIONS` response and CORS headers. Unit and stubbed-browser checks bypassed that boundary. A migration retry-delay expression also initially schema-qualified PostgreSQL's `LEAST` special expression, which is parsed as syntax rather than resolved as a normal function.
+
+### Resolution
+
+Return `204` to `OPTIONS` before creating a Supabase client and include CORS headers on the manager's JSON responses. Change the SQL expression to use unqualified `least(...)`. Replace the manager stub in the isolated browser smoke with the real local function, while allowing only its local `OPTIONS`/`POST` requests and recording sanitized action details. Keep notifications generic and user initiated; the service worker opens only the same-origin Inbox.
+
+### Learning
+
+A passing browser test with an intercepted/stubbed API cannot prove browser CORS behavior. Exercise preflight and authenticated requests against the actual local function. PostgreSQL `LEAST`/`GREATEST` are special expressions; do not prefix them with `pg_catalog.`. Keep local account/subscription evidence separate from push-provider and OS delivery.
+
+### Verification
+
+- `npm test` passed 325/325; `npm run lint`, `npm run typecheck`, local Supabase database lint, `node --check`, and `git diff --check` passed.
+- The rollback-only local PostgreSQL trigger fixture verified one queue event for first delivered transitions via Instant, Relay collection, and claim; duplicate transitions, drafts, and self-sends added none.
+- `npm run test:browser-drop-push` passed at 390×844 against the real local manager function, including preflight, authenticated enable, cross-account transfer/isolation, disable, generic notification handling, and exact disposable cleanup. The synthetic provider endpoint was never dispatched; no OS notification tap was tested.
+
+### Git and remaining gaps
+
+Code commit `08e794a` is on `feat/drop-arrival-alerts`, based on `8b39850`. Documentation was recorded separately after the code checkpoint. The branch push is still pending because `github.com` could not be resolved. The hosted Free project, secrets, migration/deployment, dispatcher schedule, real push delivery, recipient research, screen-reader output, and physical-device checks remain open. No hosted credentials or project values were added to Git; `.env.local` stayed ignored.
