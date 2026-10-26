@@ -2569,3 +2569,31 @@ Project creation, Auth configuration, and Edge deployment use different permissi
 ### Git and remaining gaps
 
 At the time of this entry, branch `feat/drop-preview-continuity` was at `045b933`. The pre-existing `app/compose/page.tsx` modification was preserved. This setup record was prepared for a documentation-only commit; `.env.local` is ignored and no credential is staged. Hosted Google/email sign-in, account-to-account browser acceptance, and scheduled media cleanup remain incomplete until the required Auth permission, OAuth/SMTP configuration, and explicit cleanup-deployment approval are supplied.
+
+## 2026-10-26 — pushed the hosted setup checkpoint to the existing branch
+
+### Issue
+
+The project provisioning status needed to be visible remotely without creating another feature branch or merging before hosted acceptance.
+
+### Cause
+
+The active local branch was `feat/drop-preview-continuity`, while the existing task branch `fix/drop-push-recipient-switch` pointed to the shared base commit.
+
+### Resolution
+
+Pushed the setup and handoff documentation commits to the existing `fix/drop-push-recipient-switch` remote branch. No new remote branch or merge was created.
+
+### Learning
+
+When a repository already has many active branches, push a verified status update to the existing task branch only after checking the precise remote target; keep source and secret files out of the documentation push.
+
+### Verification
+
+- `git push origin HEAD:fix/drop-push-recipient-switch` advanced the remote from `045b933` to `8e8134f`.
+- `git ls-remote origin refs/heads/fix/drop-push-recipient-switch` returned `8e8134f323409bc57b191f2f811b9e425b49f82e`.
+- No merge command was run. The only remaining working-tree change is the pre-existing `app/compose/page.tsx` modification; `.env.local` is ignored.
+
+### Git and remaining gaps
+
+The documentation commits `d9be59f` and `8e8134f` are on `origin/fix/drop-push-recipient-switch`; the local working branch remains `feat/drop-preview-continuity`. Google sign-in, hosted email delivery, hosted two-account acceptance, and scheduled cleanup remain gated as recorded above. The remote PR was not merged.
