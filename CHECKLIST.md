@@ -8,7 +8,7 @@ Updated: 2026-10-26
 - [x] Wrap long subject, fragment, and opened message text on narrow screens; verify the 390px detail view has no horizontal overflow.
 - [x] Extend and pass the isolated text/GIF Relay browser journey, including exact final/staged Storage verification, sealed-media privacy, recipient collection/render, and confirmed cleanup.
 - [x] Pass `npm test` (301/301), TypeScript, focused ESLint, runner syntax/guard, `git diff --check`, and the isolated production browser build/run. Review mobile screenshots in `/private/tmp/drop-pilot-final-evidence.Lyw5xo/`.
-- [x] Commit code as `bce0f37` and push it to `feat/pilot-integrated-preview`; GitHub confirms PR #11 is open/draft at that code commit and `main` remains `5138f88`. CI checks were not queried; docs commit follows separately.
+- [x] Commit code as `bce0f37` and push it with separate documentation commit `6a20dc4` to `feat/pilot-integrated-preview`; GitHub confirms PR #11 is open/draft on this branch and `main` remains `5138f88`. CI checks were not queried.
 - [ ] Provision the approved hosted Free project when a scoped Management API token is available; complete hosted delivery/retention, screen-reader, installed-PWA sharing, and physical-device/camera checks.
 
 ## Secure Relay browser journey (2026-10-26)
