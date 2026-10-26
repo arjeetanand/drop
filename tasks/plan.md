@@ -8,6 +8,14 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 
 ## Implementation Status — 2026-10-26
 
+### Latest checkpoint — Home PWA install/share onboarding (2026-10-26)
+
+- Added a Home onboarding card that explains the install requirement for sharing photos/GIFs from other apps, uses the browser-provided install prompt when available, gives a manual browser-menu guide when it is not, and keeps the in-app Compose attachment path visible.
+- Added `npm run test:browser-pwa-share-onboarding`. Its isolated production-browser check passed at 390px, verifying the share manifest, active service worker, fallback guide, user-triggered synthetic install prompt, installed copy, Compose fallback, and absence of overflow or browser/network errors.
+- `npm test` passed 301/301; lint, typecheck, smoke syntax, and `git diff --check` passed. The focused run used no Supabase project and did not touch port `4004`.
+- Code commit `4242fa0` is pushed to `origin/feat/pwa-share-onboarding`. Verified remote refs: feature branch `4242fa0`, pilot branch `9b3ee7c`, previous task branch `6a47d27`, and `main` `5138f88`. No PR or merge was made.
+- Actual PWA installation/OS share-sheet, hosted acceptance, screen-reader output, and physical-device checks remain open.
+
 ### Latest checkpoint — known-recipient Instant photo/GIF browser journey (2026-10-26)
 
 - Added `npm run test:browser-instant-media` to exercise real Compose sends of the bundled PNG and GIF in Instant mode to a known recipient.

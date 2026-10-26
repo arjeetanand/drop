@@ -2,6 +2,14 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
+## Checkpoint — Home PWA install/share onboarding (2026-10-26)
+
+- [x] Explain Home's install-dependent photo/GIF sharing and expose the browser's install prompt only when available.
+- [x] Keep a collapsed manual install guide and an always-available Compose attachment fallback; reflect installed state without claiming universal share support.
+- [x] Pass the isolated production-browser onboarding check at 390px, `npm test` (301/301), lint, typecheck, syntax, and diff checks.
+- [x] Push code commit `4242fa0` to `origin/feat/pwa-share-onboarding`; verify the pilot, previous task branch, and `main` refs stayed at `9b3ee7c`, `6a47d27`, and `5138f88`. No PR or merge was made.
+- [ ] Verify real installation and operating-system share-sheet discovery on a supported device; finish hosted and assistive-technology acceptance.
+
 ## Checkpoint — known-recipient Instant photo/GIF browser journey (2026-10-26)
 
 - [x] Drive a PNG and GIF through authenticated sender Compose in Instant mode to a known recipient; verify delivered rows, exact finalized metadata/signatures, and staged-object removal.

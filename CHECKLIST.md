@@ -2,6 +2,14 @@
 
 Updated: 2026-10-26
 
+## Home PWA install/share onboarding (2026-10-26)
+
+- [x] Add a Home card that explains install-dependent share-to-Drop, offers the browser's install prompt when available, shows a manual menu guide otherwise, and always keeps **Attach in Compose** available.
+- [x] Exercise the manifest and service worker, manual guide, deferred install prompt, installed state, Compose fallback, and 390px viewport in the isolated production-browser smoke.
+- [x] Pass `npm test` (301/301), `npm run lint`, `npm run typecheck`, runner syntax, `git diff --check`, and `npm run test:browser-pwa-share-onboarding`; the focused run cleaned its isolated app and did not use Supabase or touch port `4004`.
+- [x] Commit and push code `4242fa0` to `origin/feat/pwa-share-onboarding`; verify remote pilot at `9b3ee7c`, prior task branch at `6a47d27`, and `main` at `5138f88`. No PR or merge was made.
+- [ ] Verify actual PWA installation and OS share-sheet discovery on a supported device; complete hosted, screen-reader, and physical-device acceptance.
+
 ## Known-recipient Instant photo/GIF browser journey (2026-10-26)
 
 - [x] Add `npm run test:browser-instant-media` for sender Compose → Instant delivery → recipient Inbox/open/reaction with a PNG and GIF.

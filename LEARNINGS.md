@@ -2189,3 +2189,31 @@ Build browser assertions against accessible control structure, not an assumption
 ### Git and remaining gaps
 
 Code commit `f83053c` is pushed to `origin/test/media-claim-compose-e2e`. Verified remote refs are task branch `f83053c`, pilot branch `9b3ee7c`, and `main` `5138f88`. Draft PR #11 remains on the pilot branch at `9b3ee7c`; this task branch has no PR, and no PR or merge was made. No Supabase Management API token is configured in the canonical `.env.local` or process environment, so no hosted project, billing, or hosted data changed. Hosted delivery/retention, screen-reader output, installed-PWA sharing, downloaded-webfont layout, and physical-device/camera acceptance remain open.
+
+## 2026-10-26 — Make PWA sharing discoverable from Home
+
+### Issue
+
+The app already accepted photos/GIFs through its installed PWA share target, but Home did not explain why Drop might be missing from another app's share menu or how to install it. Browser support and install-prompt availability vary.
+
+### Cause
+
+The share-target work focused on validating and importing the multipart handoff. The Home page had no capability-aware install guidance or direct Compose fallback for people whose browser does not provide a programmatic install prompt.
+
+### Resolution
+
+Add a Home onboarding card that describes the install requirement, offers **Install Drop** only after `beforeinstallprompt`, shows a collapsed manual browser-menu guide when that event is absent, reflects `appinstalled`/standalone state, and always keeps **Attach in Compose** available. Add a focused production-browser command that checks the manifest, active service worker, manual and prompt states, installed copy, Compose path, and 390px overflow.
+
+### Learning
+
+Describe progressive web app sharing as a browser/device capability, not a universal feature. Keep the normal in-app attachment path visible, and test the app's prompt handling with synthetic lifecycle events while labeling actual OS installation and share-sheet discovery as separate device acceptance.
+
+### Verification
+
+- `npm test` passed 301/301; `npm run lint`, `npm run typecheck`, `node --check scripts/browser-instant-media-e2e.mjs`, and `git diff --check` passed.
+- `npm run test:browser-pwa-share-onboarding` passed its isolated production build and Chrome run at 390px, including manifest/service-worker checks, manual guide, user-triggered mocked install prompt, installed copy, Compose fallback, no overflow, no browser errors or external requests, and isolated-app cleanup. It used no Supabase backend and left port `4004` untouched.
+- The integrated `npm run test:browser-instant-media` journey passed sender Compose photo/GIF delivery, recipient open/reaction, outsider denial, and exact local fixture cleanup after the onboarding assertion was added.
+
+### Git and remaining gaps
+
+Code commit `4242fa0` is pushed to `origin/feat/pwa-share-onboarding`. Verified remote refs are feature branch `4242fa0`, pilot branch `9b3ee7c`, previous task branch `6a47d27`, and `main` `5138f88`. No PR was opened or changed and no merge occurred. No hosted project or billing resource was used or changed. Actual installed-PWA/OS share behavior, screen-reader output, hosted delivery/retention, and physical-device/camera checks remain open.

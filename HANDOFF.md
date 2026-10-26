@@ -2,7 +2,17 @@
 
 Updated: 2026-10-26
 
-## Latest checkpoint — known-recipient Instant photo/GIF browser journey (2026-10-26)
+## Latest checkpoint — Home PWA install/share onboarding (2026-10-26)
+
+- Home now explains that sending a photo or GIF from another app requires installation and appears in the system share picker only where the browser/device supports it. It offers the browser install prompt when available, a manual browser-menu guide otherwise, and an always-visible Compose attachment fallback.
+- `npm run test:browser-pwa-share-onboarding` passed an isolated production build and Chrome check at 390px. It verified the manifest photo/GIF share target, active worker, install guidance, mocked user-triggered prompt, installed copy, Compose fallback, zero overflow, no browser errors/external requests, and cleanup. It needs no Supabase backend and leaves `4004` alone. Synthetic events do not verify actual OS installation/share behavior.
+- `npm test` passed 301/301; `npm run lint`, `npm run typecheck`, runner syntax, and `git diff --check` passed. The full known-recipient Instant media browser run also passed after this onboarding assertion was integrated.
+- Git checkpoint: code commit `4242fa0` is pushed to `origin/feat/pwa-share-onboarding`. Verified remote refs: feature branch `4242fa0`, pilot branch `9b3ee7c`, previous task branch `6a47d27`, and `main` `5138f88`. No PR was opened or changed, and no merge occurred.
+- The app on `4004` and canonical checkout were not touched. No hosted Supabase resource or billing setting was changed. Hosted project provisioning still requires a usable scoped Management API credential; hosted delivery/retention, actual installed-PWA share, screen-reader output, and physical-device/camera behavior remain open.
+
+**Next:** verify actual installation and OS share-sheet discovery on a supported device; continue hosted two-account and retention acceptance when the approved Free project can be provisioned.
+
+## Previous checkpoint — known-recipient Instant photo/GIF browser journey (2026-10-26)
 
 - `npm run test:browser-instant-media` sends the bundled PNG and GIF through the authenticated Compose flow in Instant mode to a known recipient. At 390×844 it verifies the delivered row and exact final media metadata/signature, removal of the staged object, no private media-byte request before explicit Open, outsider download/signed-URL denial, recipient reactions, and sender reaction feedback after reload.
 - The isolated production browser run passed with zero overflow, browser errors, or external origins. It cleaned exactly three disposable local accounts/profiles, two drops/reactions, sender-owned Storage objects, browser profiles, and the isolated app. No database reset, hosted request, or port-4004 action occurred.
