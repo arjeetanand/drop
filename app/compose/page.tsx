@@ -20,6 +20,7 @@ import { cn } from '@/lib/utils';
 import { shareInviteLink } from '@/lib/shareInvite';
 import { buildDropClaimUrl, createDropClaimSharePayload, createDropClaimToken } from '@/lib/dropClaim';
 import { buildPrivateClaimDetailsPath, buildSentReceiptPath, getComposerClaimPendingCopy } from '@/lib/claimReceipt';
+import { COMPOSE_STARTERS, getComposeStarterValue } from '@/lib/composeStarters';
 import type { RecentDropRecipient } from '@/lib/recentDropRecipients';
 import { deleteShareTargetHandoff, getShareTargetHandoff, isValidShareTargetHandoffId, validateShareTargetHandoffFile } from '@/lib/shareTargetHandoff';
 
@@ -84,6 +85,7 @@ function Composer() {
   const [recentRecipients, setRecentRecipients] = useState<RecentDropRecipient[]>([]);
   const recipientCheckRequest = useRef(0);
   const recipientInputRef = useRef<HTMLInputElement>(null);
+  const contentInputRef = useRef<HTMLTextAreaElement>(null);
   const recipientlessPanelRef = useRef<HTMLDivElement>(null);
   const focusRecipientlessPanel = useRef(false);
   const focusRecipientInput = useRef(false);
@@ -513,6 +515,14 @@ function Composer() {
     attachmentChosenRef.current = true;
     setPayloadKind(kind);
     setAttachmentFormatError('');
+  };
+
+  const applyStarter = (starter: string) => {
+    const nextContent = getComposeStarterValue(content, starter);
+    if (nextContent === content) return;
+    setContent(nextContent);
+    setSaved(false);
+    contentInputRef.current?.focus();
   };
 
   const handleFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -1228,7 +1238,13 @@ function Composer() {
             <div className="mt-4 border-t border-[rgba(16,42,67,.1)] pt-4">
               {writingPrompt && <div className="mb-4 rounded-xl border-l-2 border-[#dc7951] bg-[#fff4e7] px-3 py-2.5"><p className="font-mono text-[0.6rem] font-bold uppercase tracking-[0.12em] text-[#9a5037]">A thought to start with</p><p className="mt-1 font-literata text-sm leading-relaxed text-ink-navy">{writingPrompt}</p></div>}
               <label htmlFor="drop-content" className="field-label">{isText ? 'Your note' : 'Add a caption or description'} <span className="font-normal text-on-surface-variant">{isText ? '' : '(optional)'}</span></label>
-              <textarea id="drop-content" value={content} onChange={(event) => { setContent(event.target.value); setSaved(false); }} className={cn('textarea-field mt-2 min-h-[150px] !rounded-xl !border-0 !bg-[#f5f1e9] font-literata leading-relaxed text-ink-navy placeholder:font-sans placeholder:text-sm sm:min-h-[190px]', isText && alignClass)} style={isText ? { fontSize: `${fontSize}px` } : undefined} placeholder={isText ? 'Say the thing you wanted them to know…' : 'Describe the moment or add a little context.'} maxLength={5000} />
+              {!content.trim() && <div className="mt-2">
+                <p id="drop-content-starter-help" className="text-xs leading-relaxed text-on-surface-variant">Not sure where to start? Choose a line, then make it yours.</p>
+                <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label={isText ? 'Optional note starters' : 'Optional caption starters'} aria-describedby="drop-content-starter-help">
+                  {COMPOSE_STARTERS[payloadKind].map((starter) => <button key={starter} type="button" onClick={() => applyStarter(starter)} className="min-h-11 max-w-full rounded-full border border-[rgba(16,42,67,.14)] bg-white/75 px-3 py-2 text-left text-xs leading-snug text-ink-navy transition-colors hover:bg-white active:bg-[#f1ede5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2b45f7] focus-visible:ring-offset-2 sm:text-sm">{starter}</button>)}
+                </div>
+              </div>}
+              <textarea ref={contentInputRef} id="drop-content" value={content} onChange={(event) => { setContent(event.target.value); setSaved(false); }} className={cn('textarea-field mt-2 min-h-[150px] !rounded-xl !border-0 !bg-[#f5f1e9] font-literata leading-relaxed text-ink-navy placeholder:font-sans placeholder:text-sm sm:min-h-[190px]', isText && alignClass)} style={isText ? { fontSize: `${fontSize}px` } : undefined} placeholder={isText ? 'Say the thing you wanted them to know…' : 'Describe the moment or add a little context.'} maxLength={5000} />
               {isText && <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
                 <span className="meta">{wordCount} {wordCount === 1 ? 'word' : 'words'}</span>
                 <div className="flex items-center gap-1 rounded-xl border border-[rgba(16,42,67,.1)] bg-white/70 p-0.5">

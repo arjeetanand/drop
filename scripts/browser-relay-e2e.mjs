@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:net';
-import { cp, mkdir, mkdtemp, readFile, rm, symlink } from 'node:fs/promises';
+import { access, cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { join, relative, resolve, sep } from 'node:path';
@@ -14,16 +14,19 @@ import { assertTrustedLocalSupabaseListener } from './localSupabaseListener.mjs'
 const PROJECT_ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const APP_PORT = 6004;
 const APP_ORIGIN = `http://127.0.0.1:${APP_PORT}`;
+const screenshotDir = screenshotDirectoryFromEnv();
 const BUILD_TIMEOUT_MS = 180_000;
 const APP_TIMEOUT_MS = 60_000;
 const BROWSER_TIMEOUT_MS = 45_000;
 const STEP_TIMEOUT_MS = 30_000;
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
+const MEDIA_BUCKET = 'drop-media';
 const BROWSER_HOST_RESOLVER_RULES = 'MAP * ~NOTFOUND, EXCLUDE 127.0.0.1, EXCLUDE localhost, EXCLUDE ::1';
 const active = new AbortController();
 const allowedOrigins = new Set([APP_ORIGIN]);
 const createdUserIds = [];
 const disposableDrops = [];
+const disposableStorageObjects = new Set();
 const sessions = [];
 
 let localValues = {};
@@ -146,6 +149,7 @@ class BrowserSession {
     this.spawnError = null;
     this.externalOrigins = new Set();
     this.failedRequests = [];
+    this.storageObjectRequests = [];
     this.consoleErrors = 0;
     this.runtimeExceptions = 0;
   }
@@ -234,6 +238,17 @@ class BrowserSession {
       let parsed;
       try { parsed = new URL(request.url); } catch { return; }
       if (/^https?:$/.test(parsed.protocol) && !allowedOrigins.has(parsed.origin)) this.externalOrigins.add(parsed.origin);
+      if (parsed.pathname.includes(`/storage/v1/object/`)) {
+        let pathname = parsed.pathname;
+        try { pathname = decodeURIComponent(pathname); } catch { /* Keep the encoded path if it is malformed. */ }
+        this.storageObjectRequests.push({ method: request.method || 'GET', origin: parsed.origin, pathname });
+        const uploadPrefix = `/storage/v1/object/${MEDIA_BUCKET}/`;
+        if (this.name === 'sender'
+          && ['POST', 'PUT'].includes(request.method)
+          && pathname.startsWith(uploadPrefix)) {
+          disposableStorageObjects.add(pathname.slice(uploadPrefix.length));
+        }
+      }
     });
     cdp.on('Network.webSocketCreated', ({ url }) => {
       try {
@@ -272,6 +287,14 @@ class BrowserSession {
     const target = new URL(url);
     assert.ok(allowedOrigins.has(target.origin), 'The smoke navigates only to the isolated app and local Supabase.');
     await this.pageCdp.send('Page.navigate', { url }, STEP_TIMEOUT_MS);
+  }
+
+  async captureScreenshot(name) {
+    if (!screenshotDir) return;
+    const screenshot = await this.pageCdp.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+    const path = join(screenshotDir, `${this.name}-${name}.png`);
+    await writeFile(path, Buffer.from(screenshot.data, 'base64'), { flag: 'wx' });
+    console.log(`[browser-relay-e2e] Screenshot: ${path}`);
   }
 
   async waitFor(predicate, description, timeoutMs = STEP_TIMEOUT_MS) {
@@ -340,6 +363,28 @@ function createLocalSupabaseFetch(expectedUrl) {
     }
     return fetch(input, { ...init, redirect: 'error' });
   };
+}
+
+async function storageObjectExists(path) {
+  const segments = String(path).split('/');
+  assert.ok(segments.length > 0 && segments.every((segment) => segment && segment !== '.' && segment !== '..'), 'Storage verification needs a relative object path.');
+  const objectPath = segments.map((segment) => encodeURIComponent(segment)).join('/');
+  const url = new URL(`/storage/v1/object/${encodeURIComponent(MEDIA_BUCKET)}/${objectPath}`, supabaseUrl);
+  const serviceRoleKey = localValues.SUPABASE_SERVICE_ROLE_KEY;
+  const response = await localSupabaseFetch(url, {
+    method: 'GET',
+    headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` },
+    signal: AbortSignal.timeout(5_000),
+  });
+  if (response.ok) {
+    await response.body?.cancel();
+    return true;
+  }
+  let payload = null;
+  try { payload = await response.json(); } catch { await response.body?.cancel().catch(() => undefined); }
+  if (response.status === 404
+    || (response.status === 400 && payload?.statusCode === '404' && payload?.error === 'not_found' && payload?.code === 'NoSuchKey')) return false;
+  throw new Error(`Local Storage returned unexpected HTTP ${response.status} while verifying a test object.`);
 }
 
 async function assertPortAvailable(port) {
@@ -492,6 +537,16 @@ function redact(value) {
     .replaceAll(localValues.SUPABASE_SERVICE_ROLE_KEY || '\u0000', '[redacted service key]');
 }
 
+function screenshotDirectoryFromEnv() {
+  const configured = process.env.DROP_BROWSER_SCREENSHOT_DIR;
+  if (!configured) return '';
+  const directory = resolve(configured);
+  const pathFromProject = relative(PROJECT_ROOT, directory);
+  const isInsideProject = pathFromProject === '' || (pathFromProject !== '..' && !pathFromProject.startsWith(`..${sep}`));
+  assert.equal(isInsideProject, false, 'Set DROP_BROWSER_SCREENSHOT_DIR outside the repository.');
+  return directory;
+}
+
 function client() {
   return createClient(supabaseUrl.origin, localValues.NEXT_PUBLIC_SUPABASE_ANON_KEY, {
     auth: { autoRefreshToken: false, persistSession: false },
@@ -606,6 +661,155 @@ async function createRelayDropThroughCompose(session) {
   return { letterId, subject, content };
 }
 
+async function createGifRelayDropThroughCompose(session) {
+  const suffix = randomUUID().replaceAll('-', '').slice(0, 10);
+  const subject = `Relay GIF pilot ${suffix}`;
+  const content = `RELAY_GIF_PRIVATE_SENTINEL_${suffix}`;
+  const filePath = join(PROJECT_ROOT, 'public/demo-cat.gif');
+  const fixtureBytes = await readFile(filePath);
+  assert.ok(fixtureBytes.length > 0 && fixtureBytes.length <= 8 * 1024 * 1024, 'The local GIF fixture must fit the app media limit.');
+
+  await session.navigate(`${APP_ORIGIN}/compose?new=1&mode=relay`);
+  await session.waitFor(() => session.evaluate(`location.pathname === '/compose'
+    && Boolean(document.querySelector('#drop-recipient'))
+    && Boolean(document.querySelector('#drop-subject'))
+    && Boolean(document.querySelector('#drop-content'))`), 'rendered Relay Compose form for GIF');
+  await session.waitFor(() => pageIncludes(session, 'Your account is ready.'), 'connected sender account in GIF Relay Compose');
+  await assertNoHorizontalOverflow(session, 'Sender GIF Relay Compose page');
+  const relaySelected = await session.evaluate(`Array.from(document.querySelectorAll('button'))
+    .some((button) => button.innerText.replace(/\\s+/g, ' ').includes('Make a journey')
+      && button.getAttribute('aria-pressed') === 'true')`);
+  assert.equal(relaySelected, true, 'GIF Compose did not start with Relay mode selected.');
+
+  await fillByKeyboard(session, '#drop-recipient', recipient.username);
+  const recipientControls = await session.waitFor(async () => {
+    const state = await recipientCheckState(session, recipient.username);
+    return state.inputMatches && state.checkButtonFound && !state.checkButtonDisabled
+      && !state.buttonLabel.startsWith('checking') ? state : null;
+  }, 'enabled recipient handle confirmation control for GIF');
+  assert.equal(recipientControls.inputMatches, true);
+  assert.equal(recipientControls.checkButtonDisabled, false);
+  assert.equal(await clickRecipientCheck(session), true, 'Could not check the GIF recipient handle in Compose.');
+  await session.waitFor(() => pageIncludes(session, `Recipient confirmed: ${recipient.displayName} (@${recipient.username})`), 'confirmed GIF Relay recipient handle');
+
+  await clickButton(session, 'A GIF');
+  await session.waitFor(() => session.evaluate('Boolean(document.querySelector("#drop-media"))'), 'GIF file input');
+  const expectedGifStarters = [
+    'This made me think of you.',
+    'A little laugh for your day.',
+    'Sending a smile your way.',
+  ];
+  const starterState = await session.evaluate(`(() => ({
+    labels: [...document.querySelectorAll('[aria-label="Optional caption starters"] button')]
+      .map((button) => button.innerText.replace(/\\s+/g, ' ').trim()),
+    draftId: (() => {
+      const prefix = 'dear-exe:active-letter:v1:account:';
+      const keys = Object.keys(localStorage).filter((key) => key.startsWith(prefix));
+      if (keys.length !== 1) return null;
+      try { return JSON.parse(localStorage.getItem(keys[0]) || 'null')?.id || null; }
+      catch { return null; }
+    })(),
+  }))()`);
+  assert.deepEqual(starterState.labels, expectedGifStarters, 'All three GIF caption starters should render in the 390px Compose flow.');
+  assert.match(starterState.draftId || '', /^draft-[a-f0-9-]{36}$/i, 'GIF starter check needs the current unsent draft ID.');
+  await session.evaluate('document.querySelector("#drop-content")?.scrollIntoView({ behavior: "instant", block: "center" }); true');
+  await session.captureScreenshot('gif-caption-starters');
+  await clickButton(session, expectedGifStarters[1]);
+  const selectedStarter = await session.waitFor(() => session.evaluate(`(() => {
+    const caption = document.querySelector('#drop-content');
+    return caption?.value === ${JSON.stringify(expectedGifStarters[1])}
+      && !caption.disabled && !caption.readOnly
+      && document.activeElement === caption
+      && location.pathname === '/compose';
+  })()`), 'selected GIF starter in the editable caption field');
+  assert.equal(selectedStarter, true, 'Selecting a GIF starter should fill an editable caption without navigating away from Compose.');
+  await session.captureScreenshot('gif-caption-starter-selected');
+  const { data: sentStarterDrafts, error: starterDraftError } = await admin.from('letters').select('id')
+    .eq('id', starterState.draftId)
+    .eq('sender_id', sender.id);
+  assert.ifError(starterDraftError);
+  assert.deepEqual(sentStarterDrafts, [], 'Selecting a GIF starter must not send a drop.');
+  await fillControl(session, '#drop-content', '');
+  await session.waitFor(() => session.evaluate('document.querySelector("#drop-content")?.value === ""'), 'cleared GIF starter caption');
+  await setInputFile(session, '#drop-media', filePath);
+  await session.waitFor(() => pageIncludes(session, 'Saved privately on this device'), 'GIF attachment saved on the device');
+  await session.waitFor(() => session.evaluate(`(() => {
+    const image = [...document.querySelectorAll('img[alt]')].find((item) => item.getAttribute('alt') === 'Attached GIF');
+    return Boolean(image && image.getBoundingClientRect().width > 0 && image.getBoundingClientRect().height > 0);
+  })()`), 'sender GIF preview');
+  await clickButton(session, expectedGifStarters[2]);
+  const retainedAttachment = await session.waitFor(() => session.evaluate(`(() => {
+    const caption = document.querySelector('#drop-content');
+    const file = document.querySelector('#drop-media')?.files?.[0];
+    return caption?.value === ${JSON.stringify(expectedGifStarters[2])}
+      && document.activeElement === caption
+      && file?.name === 'demo-cat.gif'
+      && location.pathname === '/compose';
+  })()`), 'GIF starter to preserve the selected attachment');
+  assert.equal(retainedAttachment, true, 'Selecting a different GIF starter should keep the selected GIF attached.');
+  await fillControl(session, '#drop-content', '');
+  await session.waitFor(() => session.evaluate('document.querySelector("#drop-content")?.value === ""'), 'cleared GIF starter after confirming attachment preservation');
+  await fillByKeyboard(session, '#drop-subject', subject);
+  await fillByKeyboard(session, '#drop-content', content);
+
+  const draft = await session.evaluate(`(() => {
+    const prefix = 'dear-exe:active-letter:v1:account:';
+    const keys = Object.keys(localStorage).filter((key) => key.startsWith(prefix));
+    if (keys.length !== 1) return null;
+    try {
+      const value = JSON.parse(localStorage.getItem(keys[0]) || 'null');
+      return value ? { id: value.id || null, mediaUploadId: value.mediaUploadId || null, payloadKind: value.payloadKind || null } : null;
+    } catch { return null; }
+  })()`);
+  assert.match(draft?.id || '', /^draft-[a-f0-9-]{36}$/i, 'The rendered GIF Relay Compose draft did not have a cleanable ID.');
+  assert.match(draft?.mediaUploadId || '', /^[a-f0-9-]{36}$/i, 'The rendered GIF draft did not retain its media upload ID.');
+  assert.equal(draft.payloadKind, 'gif', 'Compose must persist the chosen GIF payload kind.');
+  const letterId = draft.id;
+  const mediaPath = `${sender.id}/${letterId}/${draft.mediaUploadId}`;
+  disposableDrops.push({ letterId, senderId: sender.id });
+  disposableStorageObjects.add(mediaPath);
+  const requestOffset = session.storageObjectRequests.length;
+
+  await clickButton(session, 'Send drop');
+  await session.waitFor(() => session.evaluate(`location.pathname === '/sent'
+    && new URL(location.href).searchParams.get('letter') === ${JSON.stringify(letterId)}`), 'sender GIF Relay success receipt from Compose');
+
+  const stagedPrefix = `/storage/v1/object/${MEDIA_BUCKET}/${sender.id}/pending/${letterId}/${draft.mediaUploadId}/`;
+  const stagedRequests = session.storageObjectRequests.slice(requestOffset)
+    .filter((request) => ['POST', 'PUT'].includes(request.method) && request.pathname.startsWith(stagedPrefix));
+  assert.equal(stagedRequests.length, 1, 'The sender UI should upload exactly one staged GIF object for this draft.');
+  const stagedPath = stagedRequests[0].pathname.slice(`/storage/v1/object/${MEDIA_BUCKET}/`.length);
+  assert.match(stagedPath, new RegExp(`^${sender.id}/pending/${letterId}/${draft.mediaUploadId}/[a-f0-9-]{36}$`, 'i'));
+  disposableStorageObjects.add(stagedPath);
+
+  const { data, error } = await admin.from('letters')
+    .select('id,sender_id,recipient_id,status,subject,content,payload_kind,delivery_mode,media_path,media_mime_type,media_size_bytes')
+    .eq('id', letterId)
+    .eq('sender_id', sender.id);
+  assert.equal(error, null, 'Admin read of the disposable local GIF Relay send failed.');
+  assert.equal(data?.length, 1, 'Expected exactly one local row for the UI-submitted GIF Relay drop.');
+  assert.equal(data[0].recipient_id, recipient.id);
+  assert.equal(data[0].status, 'dispatched');
+  assert.equal(data[0].subject, subject);
+  assert.equal(data[0].content, content);
+  assert.equal(data[0].payload_kind, 'gif');
+  assert.equal(data[0].delivery_mode, 'relay');
+  assert.equal(data[0].media_path, mediaPath);
+  assert.equal(data[0].media_mime_type, 'image/gif');
+  assert.ok(Number.isInteger(data[0].media_size_bytes) && data[0].media_size_bytes > 0 && data[0].media_size_bytes <= 8 * 1024 * 1024);
+
+  const { data: storedGif, error: storageError } = await admin.storage.from(MEDIA_BUCKET).download(mediaPath);
+  assert.ifError(storageError);
+  assert.ok(storedGif, 'The exact final GIF Storage object must exist.');
+  assert.equal(storedGif.type, 'image/gif');
+  assert.equal(storedGif.size, data[0].media_size_bytes, 'Drop metadata must match the exact final Storage object size.');
+  const signature = Buffer.from(await storedGif.slice(0, 6).arrayBuffer()).toString('ascii');
+  assert.match(signature, /^GIF8[79]a$/, 'The final Storage object must retain a valid GIF signature after media sanitization.');
+  assert.equal(await storageObjectExists(stagedPath), false, 'The temporary staged object should be missing with a confirmed Storage 404 after finalization.');
+  console.log('[browser-relay-e2e] PASS sender created a real GIF Relay drop through mobile Compose; exact final Storage object has valid GIF metadata and bytes.');
+  return { letterId, subject, content, mediaPath, mediaMimeType: 'image/gif', mediaSizeBytes: data[0].media_size_bytes, stagedPath };
+}
+
 async function createBrowserSession(name, account) {
   const session = new BrowserSession(name);
   sessions.push(session);
@@ -633,6 +837,13 @@ async function fillByKeyboard(session, selector, value) {
   })()`);
   assert.equal(focused, true, `Could not focus rendered field ${selector}.`);
   await session.pageCdp.send('Input.insertText', { text: value });
+}
+
+async function setInputFile(session, selector, filePath) {
+  const { root } = await session.pageCdp.send('DOM.getDocument', { depth: -1, pierce: true });
+  const { nodeId } = await session.pageCdp.send('DOM.querySelector', { nodeId: root.nodeId, selector });
+  assert.ok(nodeId, `Could not find the visible file input ${selector}.`);
+  await session.pageCdp.send('DOM.setFileInputFiles', { nodeId, files: [filePath] });
 }
 
 async function recipientCheckState(session, username) {
@@ -676,6 +887,22 @@ async function clickLink(session, label) {
   assert.equal(clicked, true, `Could not activate the visible “${label}” link.`);
 }
 
+async function clickLinkTo(session, label, pathname) {
+  const clicked = await session.evaluate(`(() => {
+    const expectedLabel = ${JSON.stringify(label.toLocaleLowerCase())};
+    const expectedPath = ${JSON.stringify(pathname)};
+    const link = [...document.querySelectorAll('a[href]')].find((node) => (
+      node.innerText.replace(/\\s+/g, ' ').trim().toLocaleLowerCase().includes(expectedLabel)
+      && new URL(node.href, location.href).origin === ${JSON.stringify(APP_ORIGIN)}
+      && new URL(node.href, location.href).pathname === expectedPath
+    ));
+    if (!link) return false;
+    link.click();
+    return true;
+  })()`);
+  assert.equal(clicked, true, `Could not activate the visible “${label}” link for ${pathname}.`);
+}
+
 function textIncludes(text, phrase) {
   return text.toLocaleLowerCase().includes(phrase.toLocaleLowerCase());
 }
@@ -701,9 +928,105 @@ async function bodyText(session) {
   return session.evaluate('document.body.innerText');
 }
 
+function privateMediaObjectRequests(session) {
+  return session.storageObjectRequests.filter(({ pathname }) => pathname.includes(`/${MEDIA_BUCKET}/`));
+}
+
+async function assertNoPrivateMediaDisclosure(session, fixture, phase) {
+  const requests = privateMediaObjectRequests(session);
+  assert.deepEqual(requests, [], `${phase}: the browser must not request any private media Storage object.`);
+  const disclosure = await session.evaluate(`(() => {
+    const attributes = [...document.querySelectorAll('[src], [srcset], [href]')]
+      .flatMap((element) => [element.getAttribute('src'), element.getAttribute('srcset'), element.getAttribute('href')])
+      .filter(Boolean);
+    return {
+      bodyHasObjectPath: document.body.innerText.includes(${JSON.stringify(fixture.mediaPath)}),
+      bodyHasPrivateCaption: document.body.innerText.includes(${JSON.stringify(fixture.content)}),
+      objectUrlInDom: attributes.some((value) => value.includes('/storage/v1/object/') || value.includes(${JSON.stringify(fixture.mediaPath)})),
+      mediaImageRendered: [...document.querySelectorAll('img')].some((image) => (image.currentSrc || image.src).includes('/storage/v1/object/')),
+    };
+  })()`);
+  assert.equal(disclosure.bodyHasObjectPath, false, `${phase}: the private Storage path must stay out of the rendered page.`);
+  assert.equal(disclosure.bodyHasPrivateCaption, false, `${phase}: the private caption must stay sealed.`);
+  assert.equal(disclosure.objectUrlInDom, false, `${phase}: the private media URL must stay out of the rendered DOM.`);
+  assert.equal(disclosure.mediaImageRendered, false, `${phase}: the GIF must not render before recipient collection.`);
+}
+
+async function assertPrivateMediaRenderedAfterCollection(session, fixture) {
+  const requestOffset = session.storageObjectRequests.length;
+  try {
+    await session.waitFor(() => session.evaluate(`Array.from(document.querySelectorAll('button'))
+      .some((button) => button.innerText.replace(/\\s+/g, ' ').trim().toLocaleLowerCase() === 'reveal fragments' && !button.disabled)`), 'collected GIF reveal action');
+  } catch (error) {
+    const state = await session.evaluate(`({
+      pathname: location.pathname,
+      buttons: [...document.querySelectorAll('button')].map((button) => ({
+        label: button.innerText.replace(/\\s+/g, ' ').trim(),
+        disabled: button.disabled,
+      })),
+      detailLoaded: Boolean(document.querySelector('#letter-fragments')),
+    })`);
+    throw new Error(`${error.message}; detail action state=${JSON.stringify(state)}`);
+  }
+  await clickButton(session, 'Reveal fragments');
+  await session.waitFor(() => session.evaluate(`Array.from(document.querySelectorAll('button'))
+    .some((button) => button.innerText.replace(/\\s+/g, ' ').trim().toLocaleLowerCase() === 'open received drop' && !button.disabled)`), 'collected GIF open action');
+  await clickButton(session, 'Open received drop');
+  await session.waitFor(() => pageIncludes(session, fixture.content), 'recipient GIF caption after opening');
+  const rendered = await session.waitFor(async () => {
+    const result = await session.evaluate(`(() => {
+      const image = document.querySelector('#letter-body img');
+      return image ? {
+        alt: image.getAttribute('alt'),
+        complete: image.complete,
+        naturalWidth: image.naturalWidth,
+        sourceProtocol: new URL(image.currentSrc || image.src, location.href).protocol,
+        reducedMotionFrame: (image.currentSrc || image.src).startsWith('data:image/png;base64,'),
+        badge: document.querySelector('#letter-body')?.innerText.includes('GIF') || false,
+      } : null;
+    })()`);
+    return result?.complete && result.naturalWidth > 0 ? result : null;
+  }, 'recipient GIF pixels after collection', 20_000);
+  assert.equal(rendered.alt, 'Attached GIF');
+  assert.equal(rendered.sourceProtocol, 'data:', 'Reduced-motion mode should render the decoded GIF as a still frame.');
+  assert.equal(rendered.reducedMotionFrame, true, 'The GIF still frame should be rendered as decoded PNG pixels.');
+  assert.equal(rendered.badge, true, 'The opened attachment should be identified as a GIF.');
+  const expectedPathSuffix = `/storage/v1/object/sign/${MEDIA_BUCKET}/${fixture.mediaPath}`;
+  const objectReads = session.storageObjectRequests.slice(requestOffset).filter(({ method, pathname }) => (
+    method === 'GET' && pathname.endsWith(expectedPathSuffix)
+  ));
+  assert.equal(objectReads.length, 1, 'Opening the collected drop should request its exact signed GIF object once.');
+  assert.ok(allowedOrigins.has(objectReads[0].origin), `The exact GIF object should be fetched from an allowed loopback origin; observed ${objectReads[0].origin}.`);
+}
+
 async function assertNoHorizontalOverflow(session, name) {
-  const dimensions = await session.evaluate('({width: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth})');
-  assert.ok(dimensions?.scroll <= dimensions?.width + 1, `${name} has horizontal overflow at the 390px mobile viewport.`);
+  const dimensions = await session.evaluate(`(() => {
+    const width = document.documentElement.clientWidth;
+    const offenders = [...document.body.querySelectorAll('*')].map((element) => {
+      const rect = element.getBoundingClientRect();
+      return {
+        tag: element.tagName.toLocaleLowerCase(),
+        id: element.id || '',
+        className: (element.getAttribute('class') || '').slice(0, 100),
+        left: Math.round(rect.left),
+        right: Math.round(rect.right),
+        width: Math.round(rect.width),
+        scrollWidth: element.scrollWidth,
+        clientWidth: element.clientWidth,
+      };
+    }).filter((element) => element.left < -1 || element.right > width + 1).slice(0, 8);
+    return { width, scroll: document.documentElement.scrollWidth, viewport: window.innerWidth, offenders };
+  })()`);
+  let screenshotPath = '';
+  if (dimensions?.scroll > dimensions?.width + 1) {
+    try {
+      const screenshot = await session.pageCdp.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+      screenshotPath = join(tmpdir(), `drop-relay-overflow-${session.name}-${Date.now()}.png`);
+      await writeFile(screenshotPath, Buffer.from(screenshot.data, 'base64'));
+    } catch { /* Keep the DOM diagnostic even if DevTools cannot capture the viewport. */ }
+  }
+  assert.ok(dimensions?.scroll <= dimensions?.width + 1,
+    `${name} has horizontal overflow at the 390px mobile viewport: viewport=${dimensions?.viewport}, client=${dimensions?.width}, scroll=${dimensions?.scroll}, overflowing elements=${JSON.stringify(dimensions?.offenders || [])}${screenshotPath ? `, screenshot=${screenshotPath}` : ''}.`);
 }
 
 async function extractInviteUrl(session) {
@@ -754,9 +1077,33 @@ async function cleanup() {
           cleanupFailed = true;
           console.error('[browser-relay-e2e] CLEANUP FAILED: an exact disposable drop row remains or could not be verified absent.');
         }
+        const { data: remainingHandoffs, error: handoffVerifyError } = await admin.from('relay_handoffs')
+          .select('id')
+          .eq('letter_id', fixture.letterId);
+        if (handoffVerifyError || remainingHandoffs?.length) {
+          cleanupFailed = true;
+          console.error('[browser-relay-e2e] CLEANUP FAILED: a disposable Relay handoff remains or could not be verified absent.');
+        }
       } catch {
         cleanupFailed = true;
         console.error('[browser-relay-e2e] CLEANUP FAILED: could not remove an exact disposable drop row.');
+      }
+    }
+    if (disposableStorageObjects.size > 0) {
+      try {
+        const paths = [...disposableStorageObjects];
+        const presentPaths = [];
+        for (const path of paths) if (await storageObjectExists(path)) presentPaths.push(path);
+        if (presentPaths.length > 0) {
+          const { error } = await admin.storage.from(MEDIA_BUCKET).remove(presentPaths);
+          if (error) throw new Error('Could not remove exact disposable Storage objects.');
+        }
+        for (const path of paths) {
+          if (await storageObjectExists(path)) throw new Error('A disposable Storage object remains after deletion.');
+        }
+      } catch {
+        cleanupFailed = true;
+        console.error('[browser-relay-e2e] CLEANUP FAILED: exact disposable Storage objects remain or could not be verified absent.');
       }
     }
     for (const userId of createdUserIds) {
@@ -786,6 +1133,15 @@ async function cleanup() {
     catch {
       cleanupFailed = true;
       console.error('[browser-relay-e2e] CLEANUP FAILED: could not remove temporary app/browser profiles.');
+    }
+    if (!cleanupFailed) {
+      try {
+        for (const session of sessions) await assert.rejects(access(session.profile), (error) => error?.code === 'ENOENT');
+        await assert.rejects(access(temporaryRoot), (error) => error?.code === 'ENOENT');
+      } catch {
+        cleanupFailed = true;
+        console.error('[browser-relay-e2e] CLEANUP FAILED: an isolated browser profile or temporary app directory remains.');
+      }
     }
   } else if (temporaryRoot) {
     cleanupFailed = true;
@@ -874,6 +1230,7 @@ async function main() {
     global: { fetch: localSupabaseFetch },
   });
   temporaryRoot = await mkdtemp(join(tmpdir(), 'drop-relay-e2e-'));
+  if (screenshotDir) await mkdir(screenshotDir, { recursive: true });
   await mkdir(join(temporaryRoot, 'home'), { recursive: true });
 
   try {
@@ -981,8 +1338,88 @@ async function main() {
     currentStep = 'checking the sender collection receipt';
     await senderSession.navigate(`${APP_ORIGIN}/journey?letter=${encodeURIComponent(fixture.letterId)}`);
     await senderSession.waitFor(() => pageIncludes(senderSession, 'Drop collected'), 'sender collection status after recipient action');
+
+    currentStep = 'sending a real GIF Relay drop through sender Compose';
+    const gifFixture = await createGifRelayDropThroughCompose(senderSession);
+
+    currentStep = 'creating a secure carrier invite for the GIF through the sender UI';
+    await senderSession.navigate(`${APP_ORIGIN}/relay?letter=${encodeURIComponent(gifFixture.letterId)}`);
+    await senderSession.waitFor(() => pageIncludes(senderSession, 'Invite a carrier'), 'sender GIF Relay page');
+    await assertNoHorizontalOverflow(senderSession, 'Sender GIF Relay page');
+    await clickButton(senderSession, 'Invite a carrier');
+    await senderSession.waitFor(() => pageIncludes(senderSession, 'Carrier invite ready. It expires in 10 minutes.'), 'GIF carrier invite confirmation');
+    const gifInviteUrl = await extractInviteUrl(senderSession);
+    const gifInvite = new URL(gifInviteUrl);
+    assert.equal(gifInvite.origin, APP_ORIGIN);
+    assert.equal(gifInvite.pathname, '/relay/scan');
+    assert.equal(gifInvite.searchParams.get('letter'), gifFixture.letterId);
+    assert.equal(gifInvite.searchParams.has('token'), false, 'The GIF carrier capability must stay out of the query string.');
+    assert.match(gifInvite.hash, /^#token=[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+
+    currentStep = 'accepting the GIF carrier invite and checking media privacy';
+    await carrierSession.navigate(gifInviteUrl);
+    await carrierSession.waitFor(() => pageIncludes(carrierSession, 'Accept sealed drop'), 'GIF secure carrier acceptance form');
+    await assertNoHorizontalOverflow(carrierSession, 'GIF carrier invite page');
+    await fillControl(carrierSession, '#relay-carrier-name', carrier.displayName);
+    await fillControl(carrierSession, '#relay-carrier-neighborhood', 'GIF Pilot Neighborhood');
+    await fillControl(carrierSession, '#relay-carrier-note', 'The GIF stays sealed while the route moves.');
+    await clickButton(carrierSession, 'Accept sealed drop');
+    await carrierSession.waitFor(() => pageIncludes(carrierSession, 'A sealed drop is in your care.'), 'accepted GIF carrier confirmation');
+    assert.equal(await carrierSession.evaluate('window.__dropGeoCalls'), 0, 'The GIF carrier flow must not request device geolocation.');
+    assert.ok(!textIncludes(await bodyText(carrierSession), gifFixture.subject), 'The carrier must not see the GIF subject.');
+    assert.ok(!textIncludes(await bodyText(carrierSession), gifFixture.content), 'The carrier must not see the GIF caption.');
+    await assertNoPrivateMediaDisclosure(carrierSession, gifFixture, 'GIF carrier acceptance');
+    await clickLink(carrierSession, 'Open carrier view');
+    await carrierSession.waitFor(() => carrierSession.evaluate("location.pathname === '/relay/carry' && document.body.innerText.toLocaleLowerCase().includes('pass it on')"), 'GIF carrier view');
+    assert.ok(!textIncludes(await bodyText(carrierSession), gifFixture.subject), 'The carrier view must not expose the GIF subject.');
+    assert.ok(!textIncludes(await bodyText(carrierSession), gifFixture.content), 'The carrier view must not expose the GIF caption.');
+    await assertNoPrivateMediaDisclosure(carrierSession, gifFixture, 'GIF carrier view');
+    console.log('[browser-relay-e2e] PASS carrier accepted the GIF Relay drop without seeing its subject, caption, Storage path, URL, or media request.');
+
+    currentStep = 'refreshing the sender Journey route for the GIF';
+    await senderSession.navigate(`${APP_ORIGIN}/journey?letter=${encodeURIComponent(gifFixture.letterId)}`);
+    await senderSession.waitFor(() => pageIncludes(senderSession, 'Refresh route'), 'sender GIF Journey page');
+    await clickButton(senderSession, 'Refresh route');
+    await senderSession.waitFor(async () => {
+      const text = await bodyText(senderSession);
+      return textIncludes(text, carrier.displayName) && textIncludes(text, 'GIF Pilot Neighborhood');
+    }, 'sender GIF Journey to show the carrier stop');
+    await assertNoHorizontalOverflow(senderSession, 'Sender GIF Journey page');
+
+    currentStep = 'checking GIF Relay recipient privacy before collection';
+    await recipientSession.navigate(`${APP_ORIGIN}/mailbox`);
+    await recipientSession.waitFor(() => pageIncludes(recipientSession, 'I got this drop'), 'recipient sealed GIF Relay card');
+    const gifBeforeCollect = await bodyText(recipientSession);
+    assert.ok(textIncludes(gifBeforeCollect, 'A sealed drop is traveling to you'), 'Recipient should see the sealed GIF route card.');
+    assert.ok(textIncludes(gifBeforeCollect, carrier.displayName), 'Recipient should see safe GIF carrier route details.');
+    assert.ok(!textIncludes(gifBeforeCollect, gifFixture.subject), 'Recipient must not see the GIF subject before collection.');
+    assert.ok(!textIncludes(gifBeforeCollect, gifFixture.content), 'Recipient must not see the GIF caption before collection.');
+    await assertNoPrivateMediaDisclosure(recipientSession, gifFixture, 'GIF recipient mailbox before collection');
+    await assertNoHorizontalOverflow(recipientSession, 'Recipient GIF mailbox before collection');
+
+    currentStep = 'collecting and opening the GIF Relay drop as its recipient';
+    await clickButton(recipientSession, 'I got this drop');
+    await recipientSession.waitFor(async () => {
+      const text = await bodyText(recipientSession);
+      return textIncludes(text, gifFixture.subject) && textIncludes(text, gifFixture.content);
+    }, 'recipient mailbox to reveal the collected GIF drop');
+    assert.deepEqual(privateMediaObjectRequests(recipientSession), [], 'Collection alone must not request the GIF object before the recipient opens the drop.');
+    await assertNoHorizontalOverflow(recipientSession, 'Recipient GIF mailbox after collection');
+    await clickLinkTo(recipientSession, 'Open drop', `/letter/${encodeURIComponent(gifFixture.letterId)}`);
+    await recipientSession.waitFor(() => recipientSession.evaluate(`location.pathname === ${JSON.stringify(`/letter/${gifFixture.letterId}`)}
+      && document.body.innerText.includes(${JSON.stringify(gifFixture.subject)})`), 'collected GIF detail page');
+    await assertNoPrivateMediaDisclosure(recipientSession, gifFixture, 'collected GIF detail before opening');
+    await assertPrivateMediaRenderedAfterCollection(recipientSession, gifFixture);
+    await assertNoHorizontalOverflow(recipientSession, 'Recipient opened GIF drop');
+    await recipientSession.evaluate('document.querySelector("#letter-body img")?.scrollIntoView({ behavior: "instant", block: "center" }); true');
+    await recipientSession.captureScreenshot('opened-gif-after-collection');
+    console.log('[browser-relay-e2e] PASS recipient saw no GIF subject, caption, path, URL, image, or Storage request before collection; the exact GIF rendered after opening the collected drop.');
+
+    currentStep = 'checking the sender GIF collection receipt';
+    await senderSession.navigate(`${APP_ORIGIN}/journey?letter=${encodeURIComponent(gifFixture.letterId)}`);
+    await senderSession.waitFor(() => pageIncludes(senderSession, 'Drop collected'), 'sender GIF collection status');
     await assertBrowserBoundaries();
-    console.log('[browser-relay-e2e] PASS 390×844 browser journey had no horizontal overflow, console errors, runtime exceptions, or cross-origin requests.');
+    console.log('[browser-relay-e2e] PASS text and GIF Relay browser journeys had no horizontal overflow, console errors, runtime exceptions, failed requests, or cross-origin requests.');
   } finally {
     await cleanup();
   }
