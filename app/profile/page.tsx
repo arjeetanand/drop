@@ -13,6 +13,7 @@ import { getLocalAccountId } from '@/lib/localAccountScope';
 import { safeInternalPath } from '@/lib/safeInternalPath';
 import { authCallbackRoute, canEditInviteProfile, claimReturnAfterProfileSync, isClaimReturnPath, profileRoute } from '@/lib/inviteOnboarding';
 import { emailLinkErrorMessage } from '@/lib/emailLinkErrorMessage';
+import { isFirebaseGoogleLoginEnabled, isFirebasePopupBlockedError } from '@/lib/firebaseGoogleConfig';
 import { copyProfileSharePayload, createProfileSharePayload } from '@/lib/profileInviteShare';
 import { shareInviteLink } from '@/lib/shareInvite';
 import { clearPendingRemoteProfile, defaultUserProfile, getFirstUseProfile, getPendingRemoteProfileSnapshot, getUserProfile, getUserProfileForAccount, getUserProfileOwnerId, hasCustomizedUserIdentity, hasUnmatchedLocalProfile, markPendingRemoteProfileSynced, preserveUserProfileForAccount, profileUrl, savePendingRemoteProfile, saveUserProfile, type UserProfile } from '@/lib/userStore';
@@ -385,6 +386,28 @@ function ProfileContent() {
       if (nextPath) window.sessionStorage.setItem('dear-exe:auth-return', nextPath);
     } catch { /* Sign-in can continue without a return path when storage is disabled. */ }
     try {
+      if (isFirebaseGoogleLoginEnabled()) {
+        const { signInWithFirebaseGooglePopup } = await import('@/lib/firebaseBrowser');
+        let credential: { idToken: string; accessToken?: string } | null = null;
+        try {
+          credential = await signInWithFirebaseGooglePopup();
+        } catch (error) {
+          if (!isFirebasePopupBlockedError(error)) throw error;
+          // A blocked popup falls back to Supabase's supported full-page OAuth redirect.
+        }
+
+        if (credential) {
+          const { error } = await supabase.auth.signInWithIdToken({
+            provider: 'google',
+            token: credential.idToken,
+            ...(credential.accessToken ? { access_token: credential.accessToken } : {}),
+          });
+          if (error) throw error;
+          router.replace(authCallbackRoute(inviteContext, nextPath));
+          return;
+        }
+      }
+
       const redirectTo = new URL(authCallbackRoute(inviteContext, nextPath), window.location.origin);
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',

@@ -12,6 +12,8 @@ openrouter-last-response.json
 openrouter-fix.patch
 openrouter-issue.txt
 npm-debug.log*
+firebase-debug.log
+firebase.json
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
