@@ -228,3 +228,14 @@ Updated: 2026-10-26
 - [ ] Verify the installed PWA share target and OS share sheet in a browser/device that supports the required flow.
 - [ ] Check screen-reader announcements and physical-device keyboard/safe-area behavior.
 - [ ] Validate two-account photo/GIF claims and actual 30-day Storage cleanup against the approved Free Supabase project.
+
+## Firebase Google sign-in bridge (2026-10-26)
+
+- [x] Create Firebase project `drop-auth-pilot-20261026` and its `Drop Web` app; verify the project is active and deploy Google Sign-In with Firebase Authentication only. Firebase docs list social sign-in as a no-cost Spark feature; this setup did not link billing, and the current billing-plan setting was not independently queried.
+- [x] Allow the documented local origins `localhost:4004`, `localhost:5004`, and `localhost:6004`; Firebase Auth-only deployment succeeded.
+- [x] Save Firebase web SDK settings in the ignored active-worktree `.env.local`; keep the bridge flag `false` until Supabase Google Auth is configured.
+- [x] Add a gated Firebase Google OAuth token-to-Supabase session bridge. Keep Firebase auth state in memory, require cleanup, use the popup on all viewports, and fall back to Supabase redirect only when the popup is blocked.
+- [x] Pass `npm test` (332/332), `npm run lint`, `npm run typecheck`, focused auth ESLint, `git diff --check`, and an isolated Webpack production build with the Firebase path enabled at compile time; the build generated 22 routes using local Arial fixtures.
+- [ ] Create or confirm the hosted Free Drop Supabase project. The active checkout and process have no `SUPABASE_ACCESS_TOKEN` or hosted Supabase URL/anon key, and the Supabase connector is disabled by the workspace administrator. The CLI list attempt stopped at an `EPERM` writing global telemetry before it could query Supabase.
+- [ ] Configure the same Google OAuth web client in Supabase Auth, enable `NEXT_PUBLIC_FIREBASE_GOOGLE_LOGIN_ENABLED`, then verify real existing/new account sign-in and profile/draft returns in desktop and mobile browsers.
+- [ ] Verify hosted origin/domain settings and live account-to-account send/open after Supabase project setup.

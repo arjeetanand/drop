@@ -102,6 +102,17 @@ Run the focused smoke with local Supabase running and loopback `.env.local` conf
 
 **Next:** continue the hosted and device acceptance gates when scoped Management API access is available; refresh PR #11 and checks before any merge.
 
+## Latest checkpoint — Firebase Google sign-in bridge (2026-10-26)
+
+- Created Firebase project `drop-auth-pilot-20261026`, registered its Drop Web app, enabled Google sign-in, and confirmed the project is `ACTIVE` with `firebase projects:list`. Only Firebase Authentication was used. Firebase documents social sign-in as Spark no-cost; this setup did not link billing, but the Firebase CLI does not reveal the project's current billing-plan setting. Check Firebase Console before enabling other Firebase products.
+- Added an opt-in browser bridge that takes Google's OAuth ID token from Firebase and exchanges it for a regular Supabase session, preserving Drop's Supabase UUID and RLS model. Firebase auth is memory-only, asks the user to select an account, and must sign out successfully before passing the token onward. A Firebase popup-blocked error falls back to Supabase's existing full-page Google OAuth. The flag remains `false`.
+- Firebase web SDK settings exist only in ignored `.env.local`. No Firebase secret or Supabase key/token was committed. `firebase.json` remains ignored because it contains the authenticated account's OAuth support contact; `.firebaserc` contains only the Firebase project ID.
+- Verification: `npm test` passed 332/332, lint, typecheck, focused auth ESLint, and `git diff --check` passed. An isolated Webpack build compiled the enabled Firebase path and generated 22 routes with local Arial font fixtures. Existing Browserslist and Tailwind easing warnings remain. This was not a real Google sign-in test.
+- Supabase remains unprovisioned from this task. The active worktree has no Supabase URL, anon key, or Management API token; the Supabase connector is disabled by the workspace administrator. `supabase projects list` stopped before its remote request because the CLI could not write global telemetry outside the workspace. No Supabase project or billing setting was changed.
+- Git: code commit `459e648` is pushed to `origin/feat/firebase-auth-pilot`. This handoff and the README, checklist, setup guide, and learning entry are in a separate documentation commit on the same branch. No PR or merge was created; `main` and `/letter` were not modified.
+
+**Next:** unblock scoped Supabase project access, provision the approved Free project, configure its Google provider, then verify new/existing sign-in and return-to-draft behavior in desktop and mobile browsers before enabling the bridge.
+
 ## Latest checkpoint — Compose starters and GIF Relay pilot verification (2026-10-26)
 
 - Added optional note/caption starters for text, photo, and GIF Compose; selection fills an editable field, preserves existing text and attachments, and never sends automatically. Wrapped unbroken subject, fragment, and message text on the opened-drop screen to prevent narrow-screen overflow.

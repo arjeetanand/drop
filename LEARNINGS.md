@@ -2452,3 +2452,35 @@ Preserving an auth return URL is not enough for first-time users. Check the auth
 ### Git and remaining gaps
 
 Code commit `382cb92` is pushed to `origin/feat/demo-to-first-drop-starter`. The documentation update is a separate commit on the same branch. No PR or merge was created. `main`, ports `4004` and `5004`, and `/letter` were not modified. No Firebase project, new dependency, paid resource, or hosted credential was created or changed.
+
+## 2026-10-26 — Firebase Google sign-in bridge and Free-tier boundary
+
+### Issue
+
+Drop's Google sign-in still depended on Supabase OAuth, but the requested Firebase project had not been connected to the app. The hosted Supabase project also remained unavailable, so there was no real hosted account flow to test.
+
+### Cause
+
+Drop's data model and RLS expect a Supabase Auth UUID. A Firebase login by itself cannot create that Drop session; Supabase requires its Google provider to be configured before accepting a Google ID token. The active worktree has no Supabase URL, anon key, or Management API token, and the Supabase connector is disabled by the workspace administrator.
+
+### Resolution
+
+- Verified Firebase project `drop-auth-pilot-20261026` is active, enabled Google sign-in using Firebase Authentication, and saved the web SDK config only in ignored `.env.local`.
+- Added an opt-in bridge that exchanges Google's OAuth ID token for the existing Supabase session type. The bridge keeps Firebase auth state in memory, fails closed if Firebase sign-out fails, selects an account explicitly, and falls back to Supabase's OAuth redirect only when the Firebase popup is blocked.
+- Kept `NEXT_PUBLIC_FIREBASE_GOOGLE_LOGIN_ENABLED=false` until the hosted Supabase Google provider is configured and browser acceptance passes.
+- Ignored `firebase.json` because its current OAuth support contact is a personal account address; `.firebaserc` contains only the project ID.
+
+### Learning
+
+When application data and RLS are keyed to Supabase Auth users, a second identity provider only helps if its Google token can be exchanged into a normal Supabase session. Firebase Authentication's social sign-in is a no-cost Spark feature, but it does not replace the Supabase project. Do not turn on the bridge before the target Supabase Google provider is enabled and configured.
+
+### Verification
+
+- `firebase projects:list` returned `drop-auth-pilot-20261026` as `ACTIVE`; no billing account was linked by this setup. The Firebase CLI does not report current billing tier. Official Firebase docs list social sign-in under Spark's no-cost features.
+- `npm test` passed 332/332; `npm run lint`, `npm run typecheck`, focused auth ESLint, and `git diff --check` passed.
+- Isolated Webpack production build passed with the Firebase path compiled on and generated all 22 routes. Local Arial fixtures avoided external Google Fonts; actual Google Font rendering was not checked.
+- No real Firebase-to-Supabase login, account linkage, profile return, desktop/mobile browser flow, or hosted send/open was verified. The Supabase CLI list command failed before a network call because sandbox permissions denied writes to its global telemetry path.
+
+### Git and remaining gaps
+
+Code commit `459e648` is pushed to `origin/feat/firebase-auth-pilot`; the project records are committed separately after it. The branch is unmerged and has no PR. No Supabase project or paid Firebase resource was created, no credentials were committed, and `/letter` was not modified. Next: enable the approved Supabase integration or provide a scoped local Management API token, create the Free project, configure Google Auth, and complete desktop/mobile sign-in plus two-account send/open acceptance.
