@@ -2651,3 +2651,31 @@ Keep Supabase CLI management credentials separate from app URL/API keys. Use the
 ### Git and remaining gaps
 
 The login itself changed no repository files. Code commit `25f7581` is on `feat/drop-preview-continuity`; these docs record the code and auth state separately. Push status is pending verification, and no merge is claimed here.
+
+## 2026-10-26 — push the preview continuity checkpoint
+
+### Issue
+
+The tested compose fallback and its status documentation were local-only, so the task branch was not yet reviewable remotely.
+
+### Cause
+
+The local branch had no upstream configured and no remote `feat/drop-preview-continuity` branch existed.
+
+### Resolution
+
+Pushed code and docs to the task-matched `origin/feat/drop-preview-continuity` branch. The push created that feature branch; it did not update `main`, PR #7, or the unrelated `fix/drop-push-recipient-switch` branch.
+
+### Learning
+
+Push the named, tested task branch so the work is reviewable, and verify the exact remote ref; keep main merges behind the requested PR review.
+
+### Verification
+
+- `git push origin HEAD:refs/heads/feat/drop-preview-continuity` succeeded.
+- `git ls-remote origin refs/heads/feat/drop-preview-continuity` returned `202167dd0e66a062d5ac8d8d64650f55c6150c1c`.
+- The branch contains code commit `25f7581` and docs commit `202167d`. The local worktree was clean when the remote tip was verified.
+
+### Git and remaining gaps
+
+`origin/feat/drop-preview-continuity` was verified at `202167d` before this follow-up log commit. No PR was opened and no merge occurred. The account-unavailable browser flow and Edge physical toggle-off remain pending as recorded in `HANDOFF.md`.

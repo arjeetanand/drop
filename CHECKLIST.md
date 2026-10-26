@@ -8,6 +8,7 @@ Updated: 2026-10-26
 - [x] Announce the changing account state with a polite status region.
 - [x] Extend the browser smoke to check the preview URL and announcement when preview mode is active.
 - [x] Pass `npm test` (333/333), lint, typecheck, browser-smoke syntax, and `git diff --check`; commit code as `25f7581` on `feat/drop-preview-continuity`.
+- [x] Push code and documentation to `origin/feat/drop-preview-continuity`; remote tip `202167d` verified. No PR was opened and no merge occurred.
 - [ ] Render the unavailable-account flow in a no-backend browser. The Chrome attempt on 6004 timed out at Home with the configured Supabase account check still showing “Checking your account…”, so it did not reach the changed CTA.
 - [ ] Turn off Edge’s temporary “Allow JavaScript from Apple Events” setting with a physical click; scripted menu interaction left it checked.
 

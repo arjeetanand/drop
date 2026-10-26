@@ -8,7 +8,7 @@ Updated: 2026-10-26
 - The browser smoke now checks the unavailable-state CTA's draft-specific preview URL and status announcement. `npm test` passed 333/333; lint, typecheck, browser-smoke syntax, and `git diff --check` passed. Chrome ran the `--friend-draft-only` flow on 6004 but timed out at Home while the configured Supabase account check remained “Checking your account…”. It did not reach the changed CTA, so rendered unavailable-account behavior is still unverified.
 - The user-approved Supabase CLI sign-in completed through the already signed-in Edge session. The read-only CLI project listing confirmed `Drop` in Free organization `Drop App Free`, region `ap-south-1`, state `ACTIVE_HEALTHY`. Supabase CLI keeps its own auth session in its local config; the app credentials remain in ignored `.env.local`. No hosted Auth settings, migrations, functions, secrets, or schedules were changed in this step.
 - Edge’s “Allow JavaScript from Apple Events” checkbox was confirmed on for the CLI check. A scripted toggle-off did not change the checkmark; a physical click is still required to honor the temporary setting request. The user has been asked to clear it. No page scripts will run while it remains on.
-- Git: code commit `25f7581` is local on `feat/drop-preview-continuity`; this handoff records the current code, browser, auth, and Edge-toggle status. No PR was changed and no merge occurred. Push status is pending verification against the named task branch.
+- Git: code commit `25f7581` and docs commit `202167d` are pushed to `origin/feat/drop-preview-continuity`; `git ls-remote` verified the remote tip. No PR was opened or merged, and existing PR #7 was untouched.
 
 ## Latest checkpoint — hosted Free Supabase provisioning (2026-10-26)
 
