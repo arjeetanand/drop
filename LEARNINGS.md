@@ -2272,4 +2272,4 @@ When a later branch closes an earlier acceptance item, update the original check
 
 ### Git and remaining gaps
 
-Documentation changes are on `feat/media-send-recovery`, based on `5b2620e`; the documentation commit is recorded in the handoff. Hosted project provisioning, hosted delivery/retention, screen-reader output, actual installed-PWA sharing, and physical-device/camera acceptance remain open. No credential was minted or reused and no hosted resource was changed.
+Documentation changes are on `feat/media-send-recovery`, based on `5b2620e`; the checklist and README correction is commit `79477b1abfa8c0cf8c779ac6780b958c7364710b`. Hosted project provisioning, hosted delivery/retention, screen-reader output, actual installed-PWA sharing, and physical-device/camera acceptance remain open. No credential was minted or reused and no hosted resource was changed.

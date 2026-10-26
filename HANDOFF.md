@@ -10,6 +10,7 @@ Updated: 2026-10-26
 - `npm test` passed 301/301; lint, typecheck, runner syntax/loopback guard, and `git diff --check` passed. Review found no confirmed security/privacy or logic blocker; one duplicated retry instruction was removed before the final browser run.
 - The stale upload-retry boxes in `CHECKLIST.md` and `tasks/todo.md` are reconciled with that browser evidence. A fresh `npm run test:browser-pwa-share-onboarding` pass also verified the install guidance and Compose fallback at 390px without Supabase.
 - Git code checkpoint: commit `71b1f5b` is pushed to `origin/feat/media-send-recovery`, based on `45b1d04`. The branch is unmerged and has no PR. No main change was made. The app on `4004` and hosted Supabase were untouched; only the local Supabase stack was used. No access token was needed.
+- Documentation/status commit `79477b1abfa8c0cf8c779ac6780b958c7364710b` reconciles the older checklist entries with the completed retry browser run. It is on the same feature branch.
 - Hosted access is still unavailable from this task environment: the active worktree has no `.env.local`, process token, Supabase CLI, or authenticated Supabase connector. No credential was minted or reused, and no hosted resource was changed.
 - Hosted migration/application and hosted two-account/retention acceptance, screen-reader output, installed-PWA sharing, and physical-device/camera behavior remain open.
 
