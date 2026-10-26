@@ -2,6 +2,16 @@
 
 Updated: 2026-10-26
 
+## Text-note no-account demo (2026-10-26)
+
+- [x] Add a local-only text-note example beside the existing photo and GIF demos; keep media attachment writes exclusive to media samples.
+- [x] Preserve existing drafts and attachments, keep reactions local, and hide generated demo IDs from the sample detail view.
+- [x] Pass `npm test` (327/327), lint, typecheck, browser-script syntax, and `git diff --check`.
+- [x] Pass the isolated Edge text-demo flow at 360×844, 390×844, 430×844, 768×1024, and 1440×900; verify reaction reload, sender copy, draft preservation, zero write requests, and zero cross-origin requests.
+- [x] Commit code as `5bb3ddf` and push `feat/demo-text-note`; keep `main`, the canonical app at 4004, and `/letter` unchanged.
+- [ ] Retry production build when Google Fonts DNS/network is available; the isolated build failed fetching the existing Google font imports.
+- [ ] Configure hosted Supabase Google OAuth and verify real account-to-account sending; no hosted project exists yet.
+
 ## Opt-in new-drop alert pilot (2026-10-26)
 
 - [x] Add private per-device subscriptions and idempotent delivery events for Instant, Relay collection, and successful claim; exclude drafts, duplicate delivered updates, and self-sends.

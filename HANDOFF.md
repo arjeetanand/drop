@@ -2,6 +2,17 @@
 
 Updated: 2026-10-26
 
+## Latest checkpoint — local text-note demo (2026-10-26)
+
+- Added a local-only text-note card to `/demo` alongside photo and GIF examples. The note opens through the same recipient reveal, reaction, and sender-copy flow; text samples create no attachment record, backend request, or media upload.
+- Hardened `createLocalDemoDrop` to accept only nonblank text without media metadata, and kept the active draft untouched. Sample/demo record IDs no longer appear in the detail header. The new browser regression seeds an unfinished photo draft and attachment, then checks they remain available after starting a new draft from the sender copy.
+- Verification: `npm test` passed 327/327; `npm run lint`, `npm run typecheck`, `node --check scripts/browser-demo-smoke.mjs`, and `git diff --check` passed. `npm run test:browser-text-demo -- http://127.0.0.1:5004` passed in isolated Edge at 360×844, 390×844, 430×844, 768×1024, and 1440×900; reaction persisted after reload, sender copy opened, there were no non-read requests, no cross-origin requests, and no horizontal overflow. Screenshots are in `/private/tmp/drop-text-demo-ux-final-verified/`.
+- Production build was attempted in an isolated copy to protect the running preview. It failed because `next/font/google` could not resolve `fonts.googleapis.com` (`ENOTFOUND`); this does not indicate a source compile failure, but a production build remains unverified.
+- Git: code commit `5bb3ddf` is pushed to `origin/feat/demo-text-note`, based on `5b0bdc0` (`feat/drop-arrival-alerts`). Remote `main` was verified at `5138f88`; no PR or merge was created. The 5004 task preview was used; canonical 4004 and `/letter` were left untouched.
+- Auth: keep the existing Supabase Google OAuth flow; no Firebase dependency was added. Hosted OAuth and account-to-account acceptance remain unverified because no hosted Supabase project is configured. No paid service or hosted resource was created.
+
+**Next:** continue local pilot work on this feature branch while hosted Supabase access is unavailable. Re-run the production build when Google Fonts is reachable, then configure and verify hosted Google sign-in and two-account send/open. Collect actual pilot-user feedback on the new note wording.
+
 ## Latest checkpoint — opt-in new-drop alert pilot (2026-10-26)
 
 - Added a private subscription/outbox/delivery model. A delivered transition queues one generic event for a distinct recipient across Instant, Relay collection, and claim; duplicate updates, drafts, and self-sends do not create another arrival.

@@ -6,9 +6,9 @@ The append-only engineering learning log is in [LEARNINGS.md](./LEARNINGS.md); i
 
 ## Branch status and latest checkpoint
 
-The active task branch is `feat/drop-arrival-alerts`, based on `feat/media-send-recovery` at `8b39850`. Code commit `08e794a` and the separate pilot documentation checkpoint are pushed to `origin/feat/drop-arrival-alerts`; the branch is not merged and has no PR. The initial GitHub DNS lookup failed, but the retry succeeded and the remote tip was verified. `main`, the canonical app on port `4004`, and `/letter` were not changed. Use `git status --short --branch` and `git log -1 --oneline --decorate` for the current tip.
+The active task branch is `feat/demo-text-note`, based on `feat/drop-arrival-alerts` at `5b0bdc0`. Code commit `5bb3ddf` is pushed to `origin/feat/demo-text-note`; no PR or merge was created. Remote `main` was verified at `5138f88`. The canonical app on port `4004` and `/letter` were not changed. Use `git status --short --branch` and `git log -1 --oneline --decorate` for the current tip.
 
-**Latest local pilot:** `feat/drop-arrival-alerts` adds opt-in, generic new-drop alerts. The profile/browser smoke talks to the real local subscription Edge Function, including CORS preflight and authenticated enable, account transfer/isolation, and disable. The local trigger fixture verified first-delivery queueing for Instant, Relay collection, and claim transitions; duplicate updates, drafts, and self-sends do not create alerts. `npm test` passes 325/325; lint, typecheck, local database lint, and the isolated 390×844 browser smoke pass. The smoke registers a synthetic push endpoint but does not dispatch it, so actual provider delivery, hosted scheduling, and OS notification taps are unverified. Existing Relay and photo/GIF journeys are documented below. Screen-reader and physical-device acceptance remain open.
+**Latest local pilot:** the no-account demo now includes a text note alongside its photo and GIF examples. It stays on this device, supports recipient reveal, reactions, and sender copy, preserves an unfinished photo draft and attachment, and makes no backend write. `npm test` passes 327/327; lint, typecheck, syntax, and diff checks pass. `npm run test:browser-text-demo` passed in isolated Edge at 360×844, 390×844, 430×844, 768×1024, and 1440×900. The isolated production build could not finish because this environment could not resolve `fonts.googleapis.com` for the existing `next/font/google` imports. Hosted Google sign-in remains unverified because no hosted Supabase project is configured.
 
 ## Run locally
 
@@ -67,7 +67,7 @@ To verify private-claim QR sharing, run `npm run test:browser-qr` with local Sup
 
 ## Try a demo without an account
 
-Choose **Try a demo drop** on Home, then pick the bundled photo or GIF. Home clarifies that the demo stays on this device and a Drop account is needed to send. The sample uses the existing recipient reveal, reaction, and sender-copy screens; it does not upload or send anything, and leaves the active draft untouched. Demo reactions persist on this device.
+Choose **Try a demo drop** on Home, then pick a bundled text note, photo, or GIF. Home clarifies that the demo stays on this device and a Drop account is needed to send. Each sample uses the existing recipient reveal, reaction, and sender-copy screens; it does not upload or send anything, and leaves the active draft untouched. Demo reactions persist on this device. Run `npm run test:browser-text-demo -- http://127.0.0.1:5004` against the local preview to verify the note flow at mobile, tablet, and desktop widths.
 
 After opening the sender copy, **Make one for a friend** starts a new blank, editable text drop. The sample message, reaction, media, and demo identity stay local; an unfinished draft and its attachment remain available. Sending still follows the normal account and recipient steps.
 

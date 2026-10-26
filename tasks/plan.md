@@ -6,6 +6,25 @@ Build Drop as a mobile-first private sharing app where a person can send a photo
 
 The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailbox, and relay foundations. Existing letters continue to work as text drops, and their routes and saved content remain readable. The build covers the end-to-end mobile flow: choose content, attach an image or GIF, choose a recipient, send, open, react, and optionally follow a relay.
 
+## Text-note no-account demo slice (2026-10-26)
+
+### Product hypothesis and limits
+
+Show a short, low-pressure text drop beside the photo and GIF previews so a first-time visitor can try each core format without signing in. The example note says “No reply needed”; this is a tone choice, not evidence that Drop has been validated with Gen Z users. Ask pilot users whether the note format and wording feel natural before expanding the demo.
+
+### Acceptance
+
+- [x] The chooser offers a text note with a distinct paper-card preview, while photo and GIF examples keep their existing paths.
+- [x] The text demo stores no attachment, stays local, supports reveal/reaction/sender copy, and does not replace an unfinished draft.
+- [x] Sample and local-demo detail pages hide generated record IDs from user-facing copy.
+- [x] Browser coverage checks the text note, reaction persistence, sender copy, draft plus attachment preservation, no backend writes, and overflow at 360, 390, 430, 768, and 1440 CSS pixels.
+- [x] `npm test` (327/327), lint, typecheck, browser-script syntax, and `git diff --check` pass.
+- [ ] Hosted Google sign-in and account-to-account send/open remain unverified because there is no hosted Supabase project.
+
+**Verification and environment:** `npm run test:browser-text-demo -- http://127.0.0.1:5004` passed in isolated Edge at all five widths; it made no non-read network requests and no cross-origin requests. An isolated production-build attempt stopped because `next/font/google` could not resolve `fonts.googleapis.com` in this restricted network. The running task preview on 5004 and canonical app on 4004 were kept separate.
+
+**Auth decision:** keep the existing Profile Google OAuth flow through Supabase. Adding Firebase would introduce a second identity provider without accelerating the app’s existing Supabase auth/RLS flow. No new dependency or paid service was added. Hosted Google OAuth still needs project/provider configuration and a real account check.
+
 ## Active pilot hypothesis — opt-in new-drop alerts (2026-10-26)
 
 ### Product signal and limits

@@ -2328,3 +2328,31 @@ Report the current remote state after retrying a transient push failure. Keep th
 ### Git and remaining gaps
 
 The feature and first documentation checkpoint are pushed to `origin/feat/drop-arrival-alerts`. This follow-up is documentation-only; it records the successful push and local preview evidence. No PR or merge was created. Hosted Supabase provisioning, secrets, scheduling, real push delivery, recipient research, screen-reader output, and device behavior remain open.
+
+## 2026-10-26 — Text-note no-account demo
+
+### Issue
+
+The no-account demo only showed photo and GIF drops, so visitors could not try the app’s text-note format before connecting an account.
+
+### Cause
+
+The chooser excluded `text`, and the local demo store required media MIME and size metadata for every sample.
+
+### Resolution
+
+Add a paper-style note card that reuses the local recipient, reaction, and sender-copy screens. Allow a text demo only when its note is nonblank and no media fields are present; leave attachment storage on the existing media-only path. Hide generated IDs on local demo and sample details.
+
+### Learning
+
+A demo should exercise the same user-facing flow as a real item while clearly marking its local-only boundary. Keep the item type explicit in storage validation so adding a media-free format does not create a fake attachment.
+
+### Verification
+
+- `npm test` passed 327/327; lint, typecheck, browser-script syntax, and `git diff --check` passed.
+- `npm run test:browser-text-demo -- http://127.0.0.1:5004` passed in isolated Edge at 360×844, 390×844, 430×844, 768×1024, and 1440×900. The reaction survived reload; sender copy opened; the existing photo draft and exact attachment remained available; the flow made no non-read or cross-origin requests and had no horizontal overflow.
+- An isolated production-build attempt failed because restricted DNS could not resolve `fonts.googleapis.com` for the existing `next/font/google` imports. No `.next` output in the active preview was changed.
+
+### Git and remaining gaps
+
+Code commit `5bb3ddf` (`feat: add a text note demo option`) is pushed to `origin/feat/demo-text-note`, based on `5b0bdc0`. Documentation is committed separately on the same branch. No PR or merge was created; remote `main` stayed at `5138f88`. Hosted Supabase Google OAuth, real account-to-account send/open, production build, screen-reader output, and physical-device behavior remain open. No Firebase dependency, paid tool, or hosted resource was added.
