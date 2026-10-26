@@ -389,3 +389,14 @@ test('migration keeps delivered-event creation idempotent and leases rows with s
   assert.match(migration, /grant\s+execute\s+on\s+function\s+public\.lease_drop_push_deliveries\(integer\)\s+to\s+service_role/i);
   assert.match(migration, /revoke\s+all\s+on\s+table\s+private\.drop_push_outbox\s+from\s+public\s*,\s*anon\s*,\s*authenticated/i);
 });
+
+test('endpoint transfer retires old-owner deliveries and leases only the current recipient', async () => {
+  const migration = await readFile(new URL('../supabase/migrations/20261026120000_drop_push_recipient_scoped_delivery.sql', import.meta.url), 'utf8');
+  const managerFunction = migration.split('create or replace function public.lease_drop_push_deliveries')[0];
+
+  assert.match(managerFunction, /select\s+s\.id\s+into\s+v_subscription_id[\s\S]*?where\s+s\.endpoint\s*=\s*p_endpoint/i);
+  assert.doesNotMatch(managerFunction, /for\s+update/i);
+  assert.match(migration, /delete\s+from\s+private\.drop_push_deliveries[\s\S]*?o\.recipient_id\s+is\s+distinct\s+from\s+p_user_id[\s\S]*?d\.state\s+in\s*\(\s*'pending'\s*,\s*'leased'\s*\)/i);
+  assert.match(migration, /update\s+private\.drop_push_deliveries\s+d\s+set\s+state\s*=\s*'dead'[\s\S]*?from\s+private\.drop_push_outbox\s+o\s*,\s*private\.drop_push_subscriptions\s+s[\s\S]*?o\.recipient_id\s+is\s+distinct\s+from\s+s\.user_id/i);
+  assert.match(migration, /join\s+private\.drop_push_outbox\s+o\s+on\s+o\.id\s*=\s*d\.event_id[\s\S]*?join\s+private\.drop_push_subscriptions\s+s\s+on\s+s\.id\s*=\s*d\.subscription_id[\s\S]*?o\.recipient_id\s*=\s*s\.user_id/i);
+});
