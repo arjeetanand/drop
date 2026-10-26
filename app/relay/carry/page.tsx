@@ -132,6 +132,7 @@ function CarryContent() {
         if (!navigator.clipboard) throw new Error('Clipboard unavailable');
         await navigator.clipboard.writeText(url);
       },
+      { title: 'A Drop to carry', text: 'I’d like you to carry this sealed Drop one step further. Accept if you’d like to join its journey.' },
     );
     if (result === 'shared') {
       setCopied(false);
@@ -206,8 +207,8 @@ function CarryContent() {
             <div className="mx-auto max-w-xl text-center">
               <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#2b45f7]/10 text-[#2b45f7]" aria-hidden="true"><QrCode className="h-6 w-6" /></span>
               <p className="eyebrow mt-6 text-[#2b45f7]">Secure pass</p>
-              <h1 className="mt-2 font-headline-md text-3xl leading-tight text-ink-navy sm:text-4xl">Let the next carrier scan.</h1>
-              <p className="mt-3 text-sm leading-relaxed text-on-surface-variant">This invite expires in ten minutes. Once they accept, this screen will confirm the handoff.</p>
+              <h1 className="mt-2 font-headline-md text-3xl leading-tight text-ink-navy sm:text-4xl">Invite one person to carry it next.</h1>
+              <p className="mt-3 text-sm leading-relaxed text-on-surface-variant">Share this one-time invite with the person you want to carry it next. It expires in ten minutes; whoever receives the link can accept first, and their accepted handoff becomes the next stop.</p>
               <div className="mx-auto mt-6 flex w-fit max-w-full items-center justify-center rounded-2xl border border-[rgba(16,42,67,.12)] bg-white p-3" role="img" aria-label="Secure QR invite for the next carrier">
                 {passUrl && <QRCodeSVG value={passUrl} size={220} level="M" includeMargin={false} />}
               </div>

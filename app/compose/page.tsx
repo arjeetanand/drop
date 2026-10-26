@@ -1265,7 +1265,7 @@ function Composer() {
                 ['relay', 'Make a journey', 'Let people carry it'],
               ] as const).map(([mode, label, copy]) => <button key={mode} type="button" aria-pressed={deliveryMode === mode} onClick={() => setDeliveryMode(mode)} className={cn('min-h-[74px] rounded-xl border px-3 py-2 text-left transition-colors', deliveryMode === mode ? 'border-[#2b45f7] bg-[#2b45f7]/[0.06]' : 'border-[rgba(16,42,67,.12)] bg-white/60 hover:bg-white')}><span className="block text-sm font-bold text-ink-navy">{label}</span><span className="mt-1 block text-[0.68rem] leading-snug text-on-surface-variant">{copy}</span></button>)}
             </div>
-            {deliveryMode === 'relay' && <p className="field-help mt-3">Their message stays private. You can follow the handoff from Journey.</p>}
+            {deliveryMode === 'relay' && <p className="field-help mt-3">One person carries it at a time. Follow each accepted handoff in Journey; the recipient opens the message after collecting it.</p>}
           </fieldset>
 
           {isText && <details className="rounded-2xl border border-[rgba(16,42,67,.12)] bg-white/55 p-4 sm:p-5">
