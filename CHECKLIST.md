@@ -2,6 +2,16 @@
 
 Updated: 2026-10-26
 
+## First-time sender profile and send (2026-10-26)
+
+- [x] Route first-time sender sign-in through profile setup only when the matching Supabase account has no profile; preserve the exact safe Compose draft return and recheck the active account after lookup.
+- [x] Associate inline email errors with the input using `aria-invalid` and `aria-describedby`.
+- [x] Add `npm run test:browser-first-sender`; pass demo → guest draft → email link → profile setup → same draft → explicit send → recipient open at 390×844.
+- [x] Verify no auto-send, exactly one delivered row, and exact cleanup of the drop, two local Auth users/profiles, Mailpit message, and temporary browser/app directories.
+- [x] Pass `npm test` (330/330), lint, typecheck, browser harness syntax, `git diff --check`, and Webpack production build (22 routes). Existing Browserslist and easing warnings remain.
+- [x] Push code commit `382cb92` to `origin/feat/demo-to-first-drop-starter`; documentation is committed separately on the same branch.
+- [ ] Configure hosted Supabase Google OAuth and verify sign-in plus account-to-account send/open. Firebase was not added; Drop already uses Supabase OAuth and session IDs.
+
 ## Format-matched demo-to-first-drop starter (2026-10-26)
 
 - [x] Make sender copy open a new blank editable draft in the sample's text, photo, or GIF format without copying sample content, recipient, reaction, or media.

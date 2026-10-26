@@ -2420,3 +2420,35 @@ For a sample-to-compose CTA, carry only the format choice into a new draft. Expl
 ### Git and remaining gaps
 
 Code commit `3f53f07` is pushed to `origin/feat/demo-to-first-drop-starter`, based on `dd41541` (`perf/demo-preview-assets`). No PR or merge was created. The isolated smoke used port `6004`, then stopped its owned process; ports `4004` and `5004` and `/letter` were untouched. Hosted Google OAuth and real account-to-account send/open remain unverified; no hosted project or credential was created or changed. No Firebase project, dependency, or paid service was added.
+
+## 2026-10-26 — First-time sender profile and send
+
+### Issue
+
+A new sender could sign in from a guest draft and return straight to Compose without creating an account profile. Compose showed a local default identity, so the first-use profile step was skipped.
+
+### Cause
+
+The auth callback preserved the guest draft path but did not check whether the signed-in account had a remote profile before navigating back to `/compose`.
+
+### Resolution
+
+- After guest-draft transfer, check the remote profile for Compose returns. Route to Profile only when the missing-profile state belongs to the exact callback account; preserve the encoded draft path for the existing “Back to your draft” action.
+- Recheck the active Supabase session after the profile lookup. If the account changed, use the existing safe draft recovery path.
+- Associate passwordless email errors with the input and add browser coverage for accessible errors, profile creation, exact draft return, explicit send, and recipient open.
+- Reuse the existing local stack: Supabase CLI/Docker, Mailpit, Node's built-in tests, and the Chrome DevTools Protocol harness. Keep Supabase Google OAuth; a Firebase identity layer would add provider configuration and identity integration.
+
+### Learning
+
+Preserving an auth return URL is not enough for first-time users. Check the authenticated account's profile before returning to a send journey, and bind that check to the same user ID so a draft cannot resume under a switched session.
+
+### Verification
+
+- `npm test` passed 330/330; lint, typecheck, browser harness syntax, and `git diff --check` passed.
+- `npm run build -- --webpack` passed with 22 routes. Existing Browserslist freshness and ambiguous Tailwind easing warnings remain.
+- `npm run test:browser-first-sender` passed at 390×844: local demo → guest draft → OTP error accessibility and retry → local email link → first profile → same account-owned draft → explicit recipient confirmation and exactly one send → recipient open/reveal. Exact disposable drop, two Auth/profile pairs, Mailpit message, and temporary directories were removed.
+- Hosted Google OAuth and hosted account-to-account behavior remain unverified. The browser firewall covers browser requests; it is not an OS-level egress sandbox for the Next.js process.
+
+### Git and remaining gaps
+
+Code commit `382cb92` is pushed to `origin/feat/demo-to-first-drop-starter`. The documentation update is a separate commit on the same branch. No PR or merge was created. `main`, ports `4004` and `5004`, and `/letter` were not modified. No Firebase project, new dependency, paid resource, or hosted credential was created or changed.

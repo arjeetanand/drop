@@ -2,6 +2,19 @@
 
 Updated: 2026-10-26
 
+## Latest checkpoint — first-time sender profile and send (2026-10-26)
+
+- Fixed the auth return so a new sender with no Supabase profile goes through profile setup before returning to the same safe `/compose?letter=...` draft. The callback confirms the profile belongs to the callback account and rechecks the current session after the lookup. Existing profiles and the recipient claim route keep their previous behavior.
+- Linked email sign-in errors to the input with `aria-invalid` and `aria-describedby`; added a browser case that injects one local OTP error and checks the error clears when the address is edited.
+- Added `npm run test:browser-first-sender`. At 390×844 it covers the local no-account demo, guest draft, real local email link, first profile save, exact draft recovery without auto-send, confirmed recipient, one delivered row, and recipient open/reveal. Exact disposable cleanup passed.
+- Verification: `npm test` passed 330/330; lint, typecheck, script syntax, and `git diff --check` passed. The Webpack build completed all 22 routes with the existing Browserslist and ambiguous easing warnings. The focused browser run passed with local Supabase and Mailpit. The browser request firewall blocks non-allowlisted browser origins; it is not an OS-level network sandbox for the Next.js process.
+- Git: code commit `382cb92` is pushed to `origin/feat/demo-to-first-drop-starter`. Documentation is committed and pushed separately on the same branch. No PR or merge was created; `main`, ports `4004`/`5004`, and `/letter` were not modified.
+- Auth/provider decision: the Google button already calls Supabase Google OAuth. Firebase would introduce separate project setup and token/identity integration with Supabase RLS. No Firebase project, new dependency, or paid resource was added. Hosted Google OAuth and hosted account-to-account behavior remain unverified.
+
+Run the focused smoke with local Supabase running and loopback `.env.local` configured: `npm run test:browser-first-sender`. It reserves port `6004` and cleans up its disposable fixtures. `./run.sh` remains the project's main-port launcher for `4004`; leave listeners owned by other checkouts alone.
+
+**Next:** configure the existing Supabase Google provider once hosted project credentials are available, then verify hosted first-time sign-in and two-account send/open. Keep this branch separate until an explicit merge request.
+
 ## Latest checkpoint — format-matched demo-to-first-drop starter (2026-10-26)
 
 - **Make one for a friend** now creates a blank editable draft in the demo's selected text, photo, or GIF format. It does not copy sample content, recipient, reaction, or media. Existing drafts and the original photo attachment remain intact.
