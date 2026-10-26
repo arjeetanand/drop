@@ -8,6 +8,14 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 
 ## Implementation Status — 2026-10-26
 
+### Latest checkpoint — known-recipient Instant photo/GIF browser journey (2026-10-26)
+
+- Added `npm run test:browser-instant-media` to exercise real Compose sends of the bundled PNG and GIF in Instant mode to a known recipient.
+- The local 390×844 journey verifies the exact delivered rows, media MIME/size/signature and final Storage paths, staged-object removal, no media-byte request before explicit Open, outsider download/signed-URL denial, recipient reactions, and sender feedback after reload. It also checks for overflow, browser errors, external origins, and exact disposable cleanup.
+- Verification passed: the isolated production build/browser journey, `npm test` (301/301), `npm run lint`, `npm run typecheck`, runner syntax/guard self-test/focused ESLint, and `git diff --check`. The smoke used only loopback Supabase and port `6004`; no reset, hosted request, or `4004` change occurred.
+- Code commit `f83053c` is pushed to `origin/test/media-claim-compose-e2e`. Verified remote refs: task branch `f83053c`, pilot branch `9b3ee7c`, and `main` `5138f88`. Draft PR #11 remains on the pilot branch at `9b3ee7c`; this task branch has no PR and no merge occurred.
+- Browser upload-retry coverage, hosted delivery/retention, native PWA sharing, screen-reader behavior, downloaded-webfont layout, and physical-device/camera behavior remain pending.
+
 ### Latest checkpoint — private photo/GIF claim from Compose (2026-10-26)
 
 - Added a real-browser acceptance path that creates the private photo and GIF claims in sender Compose instead of seeding claim rows or issuing them through backend helpers.

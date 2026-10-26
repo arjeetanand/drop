@@ -2,6 +2,15 @@
 
 Updated: 2026-10-26
 
+## Known-recipient Instant photo/GIF browser journey (2026-10-26)
+
+- [x] Add `npm run test:browser-instant-media` for sender Compose → Instant delivery → recipient Inbox/open/reaction with a PNG and GIF.
+- [x] Verify exact delivered-row and final-object metadata/signature, staged-object removal, no media-byte fetch before explicit Open, outsider download/signed-URL denial, sender reaction feedback after reload, and 390×844 overflow.
+- [x] Verify exact disposable Auth/profile/drop/reaction/Storage cleanup; the run used loopback Supabase and port `6004`, with no database reset, hosted request, or `4004` interruption.
+- [x] Pass isolated production build/browser run, `npm test` (301/301), `npm run lint`, `npm run typecheck`, script syntax/guard/focused ESLint, and `git diff --check`.
+- [x] Commit and push code `f83053c` to `origin/test/media-claim-compose-e2e`; confirm pilot branch `9b3ee7c` and `main` `5138f88` stayed unchanged. Draft PR #11 remains on the pilot branch; this task branch has no PR.
+- [ ] Add rendered-browser upload-retry coverage; finish hosted delivery/retention, screen-reader, installed-PWA, and physical-device/camera checks.
+
 ## Private photo/GIF claim browser journey (2026-10-26)
 
 - [x] Add `npm run test:browser-media-claim` to create photo and GIF claims from the sender’s actual Compose UI at 390×844, then complete first-use recipient setup, explicit claim/reveal, and outsider replay denial.

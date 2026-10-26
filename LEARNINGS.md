@@ -2161,3 +2161,31 @@ Test the real user entry point and isolate only surrounding setup: seed disposab
 ### Git and remaining gaps
 
 Code commit `7b24d99` is pushed to `origin/test/media-claim-compose-e2e`; this learning and the task documentation are saved in a separate follow-on commit. After the code push, remote `feat/pilot-integrated-preview` remained `9b3ee7c` and `main` remained `5138f88`. No merge or new PR was made, existing PR #11 was not changed, and its current status/checks were not refreshed. The existing app on `4004` returned HTTP 200 and was left untouched. No hosted project, billing, or hosted data changed; the approved hosted Free project, hosted account-to-account acceptance, screen-reader output, installed-PWA sharing, and physical-device/camera checks remain open.
+
+## 2026-10-26 — Verify known-recipient Instant photo/GIF delivery in a browser
+
+### Issue
+
+The repeatable browser suite covered direct Instant text delivery and media in separate Relay/private-claim journeys, but did not exercise the known-recipient photo/GIF path from sender Compose through recipient reaction.
+
+### Cause
+
+Coverage was organized by backend and journey type, leaving the core Instant media experience without a repeatable UI-level regression even though an older one-off photo/GIF send/open check existed.
+
+### Resolution
+
+Add `npm run test:browser-instant-media`. It sends a bundled PNG and GIF through authenticated Compose in Instant mode to a disposable known recipient, verifies the delivered rows and final media objects, confirms staging cleanup, opens each item through Inbox, checks the signed-in outsider cannot download or sign the exact object, and verifies recipient reactions and sender feedback after reload. The browser runner records Storage reads to prove media bytes are not fetched before explicit Open and removes only test-owned users, rows, reactions, and sender-prefix objects.
+
+### Learning
+
+Build browser assertions against accessible control structure, not an assumption that a button's full `innerText` equals its short label; Compose mode controls include helper text. Server-side media validation sanitizes PNG bytes, so compare persisted size with the finalized object metadata and enforce the configured limit instead of equating it to the selected fixture bytes. Normalize rendered label text when CSS applies uppercase transformation. Keep the privacy assertion at the byte-fetch boundary and scope outsider checks to the exact object under test.
+
+### Verification
+
+- `npm run test:browser-instant-media` passed its isolated production build and 390×844 photo/GIF sender→recipient→outsider flow. It verified one delivered Instant row per fixture, MIME/size/signature, staged-object absence, no media GET before Open, exact outsider denial, decoded recipient media, reactions, sender feedback after reload, no overflow/browser errors/external origins, and exact cleanup.
+- `npm test` passed 301/301; `npm run lint`, `npm run typecheck`, runner syntax, loopback/cleanup guard self-test, focused ESLint, and `git diff --check` passed. A read-only local query found zero remaining test accounts/profiles, and test port `6004` was free after the run.
+- Testing used the existing local Docker/Supabase stack only. No DB reset, hosted request, paid resource, or app-port-4004 change occurred. Upload retry is still not part of this rendered-browser journey; existing finalization tests cover retry behavior.
+
+### Git and remaining gaps
+
+Code commit `f83053c` is pushed to `origin/test/media-claim-compose-e2e`. Verified remote refs are task branch `f83053c`, pilot branch `9b3ee7c`, and `main` `5138f88`. Draft PR #11 remains on the pilot branch at `9b3ee7c`; this task branch has no PR, and no PR or merge was made. No Supabase Management API token is configured in the canonical `.env.local` or process environment, so no hosted project, billing, or hosted data changed. Hosted delivery/retention, screen-reader output, installed-PWA sharing, downloaded-webfont layout, and physical-device/camera acceptance remain open.

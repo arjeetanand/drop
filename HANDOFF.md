@@ -2,6 +2,17 @@
 
 Updated: 2026-10-26
 
+## Latest checkpoint — known-recipient Instant photo/GIF browser journey (2026-10-26)
+
+- `npm run test:browser-instant-media` sends the bundled PNG and GIF through the authenticated Compose flow in Instant mode to a known recipient. At 390×844 it verifies the delivered row and exact final media metadata/signature, removal of the staged object, no private media-byte request before explicit Open, outsider download/signed-URL denial, recipient reactions, and sender reaction feedback after reload.
+- The isolated production browser run passed with zero overflow, browser errors, or external origins. It cleaned exactly three disposable local accounts/profiles, two drops/reactions, sender-owned Storage objects, browser profiles, and the isolated app. No database reset, hosted request, or port-4004 action occurred.
+- `npm test` passed 301/301; `npm run lint`, `npm run typecheck`, runner syntax/guard/focused ESLint, and `git diff --check` passed. The smoke used loopback Supabase and test port `6004`.
+- Git checkpoint: code commit `f83053c` is pushed to `origin/test/media-claim-compose-e2e`. Verified remote refs are task branch `f83053c`, pilot branch `9b3ee7c`, and `main` `5138f88`. Draft PR #11 remains on the pilot branch at `9b3ee7c`; the task branch has no PR. No PR or merge was made.
+- The code review found no blocking issues. The runner does not exercise browser upload retry; existing finalization tests cover retry logic. Hosted delivery/retention, screen-reader output, installed-PWA sharing, downloaded-webfont layout, and physical-device/camera acceptance remain open. No Management API token is configured in the canonical `.env.local` or process environment, so no hosted resource or billing setting changed.
+- The app at `http://localhost:4004` is already running from the canonical `/Users/arjeetanand/projects/drop` checkout on `feat/pilot-integrated-preview` at `9b3ee7c`; Home and Compose returned HTTP 200. The task-worktree `run.sh` refused to replace that listener because it belongs to the canonical checkout; it was left untouched.
+
+**Next:** continue hosted project provisioning when a usable Management API token is available, then complete hosted and device acceptance. Refresh PR #11 before any merge; keep `main` unchanged until remaining gates pass and the user approves merging.
+
 ## Latest checkpoint — private photo/GIF claim from Compose (2026-10-26)
 
 - `npm run test:browser-media-claim` now creates a photo and GIF claim through the sender's rendered Compose UI, then verifies first-use recipient setup, explicit claim/reveal, and outsider replay denial at 390×844. It checks the exact final Storage object, media type/size/signature, sender status after reload, and no horizontal overflow, browser errors, or cross-origin browser traffic.

@@ -2,6 +2,15 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
+## Checkpoint — known-recipient Instant photo/GIF browser journey (2026-10-26)
+
+- [x] Drive a PNG and GIF through authenticated sender Compose in Instant mode to a known recipient; verify delivered rows, exact finalized metadata/signatures, and staged-object removal.
+- [x] Verify the sealed detail does not fetch media bytes before explicit Open, a signed-in outsider cannot download or sign either exact object, the recipient can open/react, and the sender sees reactions after reload.
+- [x] Pass the isolated production browser run at 390×844, exact disposable cleanup, `npm test` (301/301), lint, typecheck, runner syntax/guard/focused ESLint, and `git diff --check`.
+- [x] Push code commit `f83053c` to the existing `origin/test/media-claim-compose-e2e`; confirm pilot branch `9b3ee7c` and `main` `5138f88` stayed unchanged. Draft PR #11 remains on the pilot branch; no PR was created or merged.
+- [ ] Exercise media upload retry through the rendered browser; existing unit/local finalization coverage does not prove the browser retry journey.
+- [ ] Complete hosted account-to-account acceptance, screen-reader output, installed-PWA OS sharing, and physical-device/camera checks.
+
 ## Checkpoint — private photo/GIF claim browser journey from Compose (2026-10-26)
 
 - [x] Drive photo and GIF claim creation through the sender's rendered Compose UI; complete recipient profile setup, explicit claim/reveal, and outsider replay denial at 390×844.
