@@ -2,6 +2,14 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
+## Checkpoint — private photo/GIF claim browser journey from Compose (2026-10-26)
+
+- [x] Drive photo and GIF claim creation through the sender's rendered Compose UI; complete recipient profile setup, explicit claim/reveal, and outsider replay denial at 390×844.
+- [x] Validate the exact staged/final Storage objects and metadata, sender status after reload, mobile overflow, browser errors, external requests, and exact disposable cleanup.
+- [x] Pass `npm run test:browser-media-claim`, runner syntax/guard self-test, focused ESLint, and `git diff --check`. The test builds with local-only Google Font fixtures.
+- [x] Push code commit `7b24d99` to `origin/test/media-claim-compose-e2e`; verify the existing pilot and `main` refs stayed unchanged. The documentation checkpoint is separate; no PR was opened.
+- [ ] Verify the same flow against the approved hosted Free project and complete screen-reader, installed-PWA OS-share, and physical-device checks.
+
 ## Checkpoint — Compose starters, text wrapping, and GIF Relay browser acceptance (2026-10-26)
 
 - [x] Add optional starters for text/photo/GIF drafts; verify selection fills an editable field, keeps GIF attachment attached, preserves nonempty text, and never auto-sends.

@@ -2,6 +2,16 @@
 
 Updated: 2026-10-26
 
+## Latest checkpoint — private photo/GIF claim from Compose (2026-10-26)
+
+- `npm run test:browser-media-claim` now creates a photo and GIF claim through the sender's rendered Compose UI, then verifies first-use recipient setup, explicit claim/reveal, and outsider replay denial at 390×844. It checks the exact final Storage object, media type/size/signature, sender status after reload, and no horizontal overflow, browser errors, or cross-origin browser traffic.
+- Cleanup records safe staged writes under the newly created sender before strict upload-path assertions and recursively checks that sender's full `drop-media` prefix, including unexpected finalized object paths. The full run removed the exact test drops, Storage objects, three Auth users/profiles, browser profiles, and isolated app.
+- The isolated production build passed with local-only Google Font fixtures. Runner syntax, guard self-test, focused ESLint, and `git diff --check` passed. The test used the existing local loopback Supabase stack and port `6004`; it did not reset the database, call hosted Supabase, open the OS share sheet, or touch the main `4004` app.
+- Google Fonts are mapped to local Arial in this offline test build; actual webfont layout is not covered. Hosted delivery/retention, native installed-PWA sharing, screen-reader output, and physical-device/camera acceptance remain open.
+- Git checkpoint: code commit `7b24d99` is pushed to `origin/test/media-claim-compose-e2e`; this separate documentation update is committed and pushed after it. Remote refs were checked after the code push: `feat/pilot-integrated-preview` remained `9b3ee7c` and `main` remained `5138f88`. No merge or new PR was made; existing PR #11 was not changed, and its status was not refreshed. The existing app on `4004` returned HTTP 200 and was left untouched.
+
+**Next:** continue the hosted and device acceptance gates when scoped Management API access is available; refresh PR #11 and checks before any merge.
+
 ## Latest checkpoint — Compose starters and GIF Relay pilot verification (2026-10-26)
 
 - Added optional note/caption starters for text, photo, and GIF Compose; selection fills an editable field, preserves existing text and attachments, and never sends automatically. Wrapped unbroken subject, fragment, and message text on the opened-drop screen to prevent narrow-screen overflow.

@@ -2133,3 +2133,31 @@ For mobile content layouts, test real unbroken text as well as normal prose. `ov
 ### Git and remaining gaps
 
 Code commit `bce0f37` is pushed to `origin/feat/pilot-integrated-preview`. GitHub confirmed PR #11 open/draft at that code commit with base `main`; CI checks were not queried. Remote `main` remains `5138f88`; no merge to `main` occurred. No `SUPABASE_ACCESS_TOKEN` is configured locally and the Supabase connector is disabled by workspace admin, so no hosted project, billing, or hosted data changed. Hosted delivery/retention, screen-reader output, installed-PWA sharing, and physical-device/camera acceptance remain open.
+
+## 2026-10-26 — Create private photo/GIF claims through Compose
+
+### Issue
+
+The media-claim browser journey created claim rows through server helpers and uploaded media directly, so it did not prove that a sender could attach a photo or GIF, issue a private claim, and recover the resulting link from the real Compose screen.
+
+### Cause
+
+The previous browser coverage began after the sender flow. That left local draft persistence, the media picker, handleless claim choice, and the Compose submit action outside the end-to-end check. Its cleanup also only recognized the expected UUID upload path, so a failed strict assertion could leave a mis-keyed staged object behind.
+
+### Resolution
+
+Drive both photo and GIF creation through the authenticated sender's Compose UI at 390×844. Capture the generated share link with an isolated `navigator.share` stub, then verify the exact row, staged/final object, media signature, recipient first-use profile return, explicit claim/reveal, sender status after reload, and outsider replay denial. Record every safe write under the new disposable sender before strict path assertions. Recursively enumerate that account's `drop-media` prefix during cleanup so mis-keyed server-finalized objects are also removed. Add overflow checks to the first-use profile screen and use local-only Google Font fixtures for the isolated build.
+
+### Learning
+
+Test the real user entry point and isolate only surrounding setup: seed disposable accounts, but let Compose create the drafts and claims. Register cleanup ownership before asserting the expected request shape; otherwise the same regression that causes a test failure can hide the artifact from cleanup. Restrict any broader cleanup scan to an account created by the current test. Local Arial mocks keep this browser build offline, but do not prove production Google Font metrics. A `navigator.share` stub proves the link handoff into app code, not the operating-system share sheet.
+
+### Verification
+
+- `npm test` passed 301/301. `node --check scripts/browser-media-claim-e2e.mjs`, `node scripts/browser-media-claim-e2e.mjs --guard-self-test`, focused ESLint, and `git diff --check` passed.
+- `npm run test:browser-media-claim` passed its isolated production build and complete photo/GIF sender→recipient→outsider flow. The 390×844 run verified no horizontal overflow, browser console/runtime errors, or cross-origin browser requests, and confirmed cleanup of the exact drops, Storage objects, three disposable accounts/profiles, browser profiles, and isolated app. The runner used only local loopback Supabase and port 6004; it did not reset the database, call hosted Supabase, or touch the app on 4004.
+- An independent review confirmed the staged-upload cleanup issue is resolved and found no blocking findings. Hosted delivery, actual downloaded-webfont layout, native PWA share, screen-reader output, and physical-device/camera behavior were not verified.
+
+### Git and remaining gaps
+
+Code commit `7b24d99` is pushed to `origin/test/media-claim-compose-e2e`; this learning and the task documentation are saved in a separate follow-on commit. After the code push, remote `feat/pilot-integrated-preview` remained `9b3ee7c` and `main` remained `5138f88`. No merge or new PR was made, existing PR #11 was not changed, and its current status/checks were not refreshed. The existing app on `4004` returned HTTP 200 and was left untouched. No hosted project, billing, or hosted data changed; the approved hosted Free project, hosted account-to-account acceptance, screen-reader output, installed-PWA sharing, and physical-device/camera checks remain open.

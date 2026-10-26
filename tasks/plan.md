@@ -8,6 +8,15 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 
 ## Implementation Status — 2026-10-26
 
+### Latest checkpoint — private photo/GIF claim from Compose (2026-10-26)
+
+- Added a real-browser acceptance path that creates the private photo and GIF claims in sender Compose instead of seeding claim rows or issuing them through backend helpers.
+- Verified the 390×844 sender flow, fragment-only invite capture via a test-only share stub, exact staged/final Storage object and media signature, first-use recipient profile return, explicit claim/reveal, sender claim status after reload, and outsider replay denial.
+- Hardened cleanup to capture safe uploads under the unique disposable sender before strict path assertions, recursively enumerate its full `drop-media` prefix, and reject traversal/other-account paths. Google Font responses are local-only fixtures in the isolated build.
+- `npm run test:browser-media-claim` passed the isolated production build and full photo/GIF browser journey; syntax, guard self-test, focused ESLint, and `git diff --check` passed. No hosted project or `4004` app was touched.
+- Code commit `7b24d99` is pushed to `origin/test/media-claim-compose-e2e`; after that push the pilot branch stayed at `9b3ee7c` and `main` at `5138f88`. No merge or PR was made; the separate docs checkpoint follows.
+- The UI review scope is browser-only: native installed-PWA sharing, webfont-exact layout, hosted delivery/retention, screen-reader output, and physical-device/camera acceptance remain pending.
+
 ### Latest checkpoint — Compose starters, mobile wrapping, and GIF Relay acceptance (2026-10-26)
 
 - Added three optional text/photo/GIF starters for empty Composer notes and captions. Selecting a starter keeps the text editable, preserves a selected attachment, and does not send the drop.

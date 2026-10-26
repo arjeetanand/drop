@@ -2,6 +2,16 @@
 
 Updated: 2026-10-26
 
+## Private photo/GIF claim browser journey (2026-10-26)
+
+- [x] Add `npm run test:browser-media-claim` to create photo and GIF claims from the sender’s actual Compose UI at 390×844, then complete first-use recipient setup, explicit claim/reveal, and outsider replay denial.
+- [x] Verify exact staged/final Storage paths, final media MIME/size/signature, pending privacy, sender claimed status after reload, and exact disposable account/drop/profile/object cleanup.
+- [x] Make cleanup capture safe upload paths before strict UUID/prefix assertions and recursively enumerate the unique disposable sender's Storage prefix; refuse unsafe paths and other account IDs.
+- [x] Keep the isolated production build offline with local-only Google Font fixtures; pass production build and the full sender→recipient→outsider browser journey with no overflow, browser errors, cross-origin requests, or cleanup failure.
+- [x] Pass runner syntax, guard self-test, focused ESLint, and `git diff --check`.
+- [x] Commit and push code `7b24d99` to `origin/test/media-claim-compose-e2e`; verify the existing pilot branch stayed at `9b3ee7c` and `origin/main` stayed at `5138f88`. This is a separate branch; no PR was opened or merged.
+- [ ] Complete hosted two-account media claims, native installed-PWA sharing, screen-reader output, and physical-device/camera acceptance after the approved hosted project is available.
+
 ## Compose starters and GIF Relay pilot slice (2026-10-26)
 
 - [x] Add optional text/photo/GIF starters that fill only blank editable content, focus the field, preserve the attachment, and never send automatically.
