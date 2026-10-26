@@ -2597,3 +2597,57 @@ When a repository already has many active branches, push a verified status updat
 ### Git and remaining gaps
 
 The documentation commits `d9be59f` and `8e8134f` are on `origin/fix/drop-push-recipient-switch`; the local working branch remains `feat/drop-preview-continuity`. Google sign-in, hosted email delivery, hosted two-account acceptance, and scheduled cleanup remain gated as recorded above. The remote PR was not merged.
+
+## 2026-10-26 — keep the unavailable-account composer on the current draft
+
+### Issue
+
+The account-unavailable primary action returned to `/demo`, which reopened the sample chooser after a user had already created a draft.
+
+### Cause
+
+The fallback was treated as a demo restart, even though the composer already has a saved, draft-specific recipient-preview route.
+
+### Resolution
+
+Changed the fallback action to open `/compose/preview?letter={draftId}` after the existing save-before-navigation handler. The preview stays local and explicitly unsent. Added a polite status announcement for account-state changes and extended the browser smoke to assert the draft-specific URL and status semantics.
+
+### Learning
+
+When a backend is unavailable, keep the user in the work they just created and offer a safe local continuation that preserves its identifier and content.
+
+### Verification
+
+- `npm test`: 333/333 passed; `npm run lint` and `npm run typecheck` passed; browser-smoke syntax and `git diff --check` passed.
+- Chrome `--friend-draft-only` on `127.0.0.1:6004` timed out on Home because the configured Supabase account check remained “Checking your account…”. It did not exercise the updated fallback; no browser acceptance is claimed.
+
+### Git and remaining gaps
+
+Code commit `25f7581` is on local branch `feat/drop-preview-continuity`. The browser assertion is ready to cover the unavailable-account state once a no-backend instance is available. Hosted auth and delivery are unaffected.
+
+## 2026-10-26 — restore the Supabase CLI session without exposing its token
+
+### Issue
+
+The Supabase CLI reported `Access token not provided`, so it could not list or manage the approved Drop project.
+
+### Cause
+
+The active CLI had no saved management session; the earlier terminal context pointed to the unavailable OneDrive checkout. Edge also needed its Apple Events JavaScript setting for the approved authorization step.
+
+### Resolution
+
+The user enabled the Edge setting temporarily and the CLI sign-in completed in the existing Supabase dashboard session. The CLI stored its token in its own local config; it was not copied into the application `.env.local` or Git. A read-only project listing confirmed the active Free Drop project.
+
+### Learning
+
+Keep Supabase CLI management credentials separate from app URL/API keys. Use the CLI's secure local session store, and never copy the management token into the app environment or learning log.
+
+### Verification
+
+- `supabase projects list --output json` returned project `Drop`, ref `gdtodskvabewhebmpmgp`, in organization `sofucwhjqdyfensxlltl`, region `ap-south-1`, status `ACTIVE_HEALTHY`.
+- Edge's Apple Events checkbox is still checked because scripted menu interaction could not turn it off; the user has been asked to clear it physically. No project Auth settings or hosted resources were changed by this sign-in.
+
+### Git and remaining gaps
+
+The login itself changed no repository files. Code commit `25f7581` is on `feat/drop-preview-continuity`; these docs record the code and auth state separately. Push status is pending verification, and no merge is claimed here.

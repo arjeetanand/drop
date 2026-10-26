@@ -2,18 +2,27 @@
 
 Updated: 2026-10-26
 
+## Unavailable-account composer preview (2026-10-26)
+
+- [x] When account delivery is unavailable, route the primary composer action to the active draft's recipient preview; retain the draft ID and save before navigation.
+- [x] Announce the changing account state with a polite status region.
+- [x] Extend the browser smoke to check the preview URL and announcement when preview mode is active.
+- [x] Pass `npm test` (333/333), lint, typecheck, browser-smoke syntax, and `git diff --check`; commit code as `25f7581` on `feat/drop-preview-continuity`.
+- [ ] Render the unavailable-account flow in a no-backend browser. The Chrome attempt on 6004 timed out at Home with the configured Supabase account check still showing “Checking your account…”, so it did not reach the changed CTA.
+- [ ] Turn off Edge’s temporary “Allow JavaScript from Apple Events” setting with a physical click; scripted menu interaction left it checked.
+
 ## Hosted Free Supabase setup (2026-10-26)
 
 - [x] Create `Drop` in the verified Free organization `Drop App Free`; request no paid compute size or add-ons.
 - [x] Save the app URL, anon key, service-role key, and database password in ignored `.env.local` with mode `600`.
 - [x] Apply all 25 migrations and confirm a second dry run has zero pending migrations.
 - [x] Verify the hosted `drop-media` bucket exists and is private; confirm the organization plan reports Free.
-- [ ] **Blocked:** add `project_admin_write` to a project-scoped Management API token, then configure the Auth callback allow-list and matching Google provider credentials. The current Auth settings have Google disabled; keep the Firebase bridge flag false.
+- [ ] Configure the Auth callback allow-list and matching Google provider credentials. The earlier scoped token's Auth update returned 403 for missing `project_admin_write`; the new CLI session lists the project, but its Auth-settings write access has not been tested. Google is disabled; keep the Firebase bridge flag false until configured.
 - [ ] **Blocked:** configure hosted SMTP and verify a real sign-up/email-link flow.
 - [ ] **Approval required:** deploy `cleanup-expired-drop-media` with JWT verification disabled and its separate high-entropy request secret, then create the three Vault secrets and hourly schedule. Automatic 30-day physical cleanup is not active until this is verified.
 - [ ] Run hosted two-account text and media send/open journeys; no hosted browser acceptance has passed.
 
-**Verified in this run:** `npm test` 333/333, lint, typecheck, and the production Webpack build using a temporary local font-response fixture. An ordinary build was blocked by unavailable Google Fonts network access. Edge could not launch because the local app bundle lacks its executable, so its Apple Events setting remains unchanged.
+**Recent verification:** the production Webpack build previously passed using a temporary local font-response fixture; an ordinary build was blocked by unavailable Google Fonts network access. In this turn, the CLI sign-in completed in the user's Supabase dashboard session, and `supabase projects list` confirmed `Drop` is active in the Free organization. The browser-smoke attempt and current Edge checkbox state are recorded above; the Google provider, hosted email delivery, and Auth redirect configuration were not changed.
 
 ## Push alert account-switch isolation (2026-10-26)
 
