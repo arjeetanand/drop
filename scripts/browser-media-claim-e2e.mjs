@@ -2,9 +2,9 @@
 
 import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
-import { randomBytes, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:net';
-import { cp, mkdir, mkdtemp, readFile, rm, symlink } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { join, relative, resolve, sep } from 'node:path';
@@ -20,6 +20,8 @@ const APP_TIMEOUT_MS = 60_000;
 const BROWSER_TIMEOUT_MS = 45_000;
 const STEP_TIMEOUT_MS = 30_000;
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
+const UUID_V4_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const SAFE_STORAGE_SEGMENT_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
 const BROWSER_HOST_RESOLVER_RULES = 'MAP * ~NOTFOUND, EXCLUDE 127.0.0.1, EXCLUDE localhost, EXCLUDE ::1';
 const active = new AbortController();
 const allowedOrigins = new Set([APP_ORIGIN]);
@@ -150,6 +152,9 @@ class BrowserSession {
     this.spawnError = null;
     this.externalOrigins = new Set();
     this.failedLocalRequests = [];
+    this.storageObjectRequests = [];
+    this.expectedMediaUpload = null;
+    this.uncleanableStorageWrite = false;
     this.consoleErrors = 0;
     this.runtimeExceptions = 0;
     this.appNavigationPaths = [];
@@ -190,6 +195,12 @@ class BrowserSession {
       this.pageCdp.send('Runtime.enable'),
       this.pageCdp.send('Network.enable'),
       this.pageCdp.send('Fetch.enable', { patterns: [{ urlPattern: '*', requestStage: 'Request' }] }),
+      this.pageCdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 390,
+        height: 844,
+        deviceScaleFactor: 1,
+        mobile: true,
+      }),
       this.pageCdp.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }] }),
     ]);
   }
@@ -215,6 +226,25 @@ class BrowserSession {
       let parsed;
       try { parsed = new URL(request.url); } catch { return; }
       if (/^https?:$/.test(parsed.protocol) && !allowedOrigins.has(parsed.origin)) this.externalOrigins.add(parsed.origin);
+      if (parsed.pathname.includes('/storage/v1/object/')) {
+        let pathname = parsed.pathname;
+        try { pathname = decodeURIComponent(pathname); } catch { /* Keep the encoded path if malformed. */ }
+        const method = request.method || 'GET';
+        this.storageObjectRequests.push({ method, origin: parsed.origin, pathname });
+        const expected = this.expectedMediaUpload;
+        const bucketPrefix = `/storage/v1/object/${BUCKET}/`;
+        if (this.name === 'sender'
+          && expected
+          && ['POST', 'PUT'].includes(method)) {
+          if (parsed.origin !== supabaseUrl.origin || !pathname.startsWith(bucketPrefix)) {
+            this.uncleanableStorageWrite = true;
+          } else {
+            const objectPath = pathname.slice(bucketPrefix.length);
+            if (isSafeOwnedStorageObjectPath(objectPath, expected.senderId)) storagePaths.add(objectPath);
+            else this.uncleanableStorageWrite = true;
+          }
+        }
+      }
     });
     cdp.on('Network.webSocketCreated', ({ url }) => {
       try {
@@ -345,6 +375,14 @@ function baseAppEnvironment() {
   };
 }
 
+function isSafeOwnedStorageObjectPath(path, ownerId) {
+  if (typeof path !== 'string' || typeof ownerId !== 'string' || path.length > 2048) return false;
+  const segments = path.split('/');
+  return segments.length >= 2
+    && segments[0] === ownerId
+    && segments.every((segment) => SAFE_STORAGE_SEGMENT_PATTERN.test(segment));
+}
+
 function guardSelfTest() {
   assert.equal(requireLocalSupabaseUrl('http://127.0.0.1:54321').origin, 'http://127.0.0.1:54321');
   assert.equal(requireLocalSupabaseUrl('http://localhost:54321/').hostname, 'localhost');
@@ -359,6 +397,11 @@ function guardSelfTest() {
     'http://127.0.0.1:54321/path',
   ]) assert.throws(() => requireLocalSupabaseUrl(value));
   assert.throws(() => readLocalSupabaseConfig(`NEXT_PUBLIC_SUPABASE_URL=https://example.test\nNEXT_PUBLIC_SUPABASE_ANON_KEY=not-read\nSUPABASE_SERVICE_ROLE_KEY=not-read`));
+  const ownerId = 'b8b8d9a1-80a8-48ee-96c0-0f991c450561';
+  assert.equal(isSafeOwnedStorageObjectPath(`${ownerId}/pending/draft-1234/media-1234/not-a-uuid`, ownerId), true, 'Cleanup must recognize safe test-owned paths even when an attempt ID violates the strict upload assertion.');
+  assert.equal(isSafeOwnedStorageObjectPath('a8b8d9a1-80a8-48ee-96c0-0f991c450561/pending/draft-1234/media-1234/attempt-1', ownerId), false, 'Cleanup must refuse objects owned by another account.');
+  assert.equal(isSafeOwnedStorageObjectPath(`${ownerId}/pending/../outside`, ownerId), false, 'Cleanup must refuse traversal paths.');
+  assert.equal(isSafeOwnedStorageObjectPath(`${ownerId}/pending/bad%2Fpath`, ownerId), false, 'Cleanup must refuse ambiguous encoded path segments.');
   assert.equal(APP_PORT, 6004, 'The test server must remain on the mapped browser QA port.');
   const sampleClaimUrl = new URL(claimUrl({ token: 'a'.repeat(64) }));
   assert.equal(sampleClaimUrl.hash, `#token=${'a'.repeat(64)}`, 'The claim capability must use the supported token fragment parameter.');
@@ -425,7 +468,16 @@ async function makeIsolatedProject() {
 async function startTemporaryApp() {
   const projectRoot = await makeIsolatedProject();
   const nextCli = resolve(PROJECT_ROOT, 'node_modules/next/dist/bin/next');
-  const buildEnvironment = baseAppEnvironment();
+  const fontMockPath = join(temporaryRoot, 'mock-google-fonts.cjs');
+  const localFontFace = (family) => `@font-face {\n  font-family: '${family}';\n  src: local('Arial');\n}`;
+  const fontResponses = {
+    'https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap': localFontFace('Inter'),
+    'https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&display=swap': localFontFace('Playfair Display'),
+    'https://fonts.googleapis.com/css2?family=Literata:wght@400;500;600&display=swap': localFontFace('Literata'),
+    'https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap': localFontFace('Courier Prime'),
+  };
+  await writeFile(fontMockPath, `module.exports = ${JSON.stringify(fontResponses)};\n`, { flag: 'wx' });
+  const buildEnvironment = { ...baseAppEnvironment(), NEXT_FONT_GOOGLE_MOCKED_RESPONSES: fontMockPath };
   console.log('[browser-media-claim-e2e] Building the isolated production app.');
   app = spawn(process.execPath, [nextCli, 'build', '--webpack'], {
     cwd: projectRoot,
@@ -449,9 +501,13 @@ async function startTemporaryApp() {
       .replaceAll(localValues.NEXT_PUBLIC_SUPABASE_ANON_KEY, '[redacted anon key]')
       .replaceAll(localValues.SUPABASE_SERVICE_ROLE_KEY, '[redacted service-role key]')
       .trim();
-    if (buildProcess.pid) await stopOwnedProcess(buildProcess, 'isolated production build');
-    app = null;
-    throw new Error(`The isolated local production build ${reason}.${safeOutput ? ` Build output: ${safeOutput}` : ''}`);
+    let stopError = null;
+    if (buildProcess.pid) {
+      try { await stopOwnedProcess(buildProcess, 'isolated production build'); }
+      catch (error) { stopError = error; }
+    }
+    if (!stopError) app = null;
+    throw new Error(`The isolated local production build ${reason}.${safeOutput ? ` Build output: ${safeOutput}` : ''}${stopError ? ` Process cleanup could not be confirmed: ${stopError.message}` : ''}`);
   }
   await stopOwnedProcess(buildProcess, 'isolated production build');
 
@@ -540,63 +596,137 @@ async function signInWithMagicLink(session, account) {
     && ${browserTextIncludes(`Connected as ${account.email}.`)}`), 'local magic-link sign-in');
 }
 
-async function issueMediaInvite(account, payloadKind, bytes) {
-  const letterId = `pilot-media-${payloadKind}-${randomUUID()}`;
-  disposableDrops.push({ letterId, senderId: account.id });
-  const uploadId = randomUUID();
-  const stagedPath = `${account.id}/pending/${letterId}/${uploadId}`;
-  const mediaPath = `${account.id}/${letterId}/${uploadId}`;
-  const mediaMimeType = payloadKind === 'gif' ? 'image/gif' : 'image/png';
-  const subject = `Pilot ${payloadKind === 'gif' ? 'GIF' : 'photo'} ${randomUUID().slice(0, 8)}`;
-  const content = `A private ${payloadKind === 'gif' ? 'GIF' : 'photo'} caption ${randomUUID()}.`;
-  const token = randomBytes(32).toString('hex');
-  storagePaths.add(stagedPath);
+async function issueMediaInviteThroughCompose(session, payloadKind) {
+  const isGif = payloadKind === 'gif';
+  const filePath = resolve(PROJECT_ROOT, isGif ? 'public/demo-cat.gif' : 'public/demo-cat.png');
+  const fixtureBytes = await readFile(filePath);
+  const mediaMimeType = isGif ? 'image/gif' : 'image/png';
+  assert.ok(fixtureBytes.length > 0 && fixtureBytes.length <= 8 * 1024 * 1024, `The local ${payloadKind} fixture must fit the app media limit.`);
+  const suffix = randomUUID().replaceAll('-', '').slice(0, 12);
+  const subject = `Pilot private ${isGif ? 'GIF' : 'photo'} ${suffix}`;
+  const content = `MEDIA_CLAIM_SENTINEL_${payloadKind.toUpperCase()}_${randomUUID()}`;
+
+  await session.navigate(`${APP_ORIGIN}/compose?new=1`);
+  await session.waitFor(() => session.evaluate(`location.pathname === '/compose'
+    && Boolean(document.querySelector('#drop-recipient'))
+    && Boolean(document.querySelector('#drop-subject'))
+    && Boolean(document.querySelector('#drop-content'))`), `rendered ${payloadKind} private-claim Compose form`);
+  await session.waitFor(() => session.evaluate(`${browserTextIncludes('Your account is ready.')}`), 'connected sender account in private-claim Compose');
+  await assertMobileNoHorizontalOverflow(session, 'Sender Compose form');
+  assert.equal(await clickButton(session, isGif ? 'A GIF' : 'A photo'), true, `Could not select ${payloadKind} in Compose.`);
+  await session.waitFor(() => session.evaluate('Boolean(document.querySelector("#drop-media"))'), `${payloadKind} file input`);
+  await setInputFile(session, '#drop-media', filePath);
+  await session.waitFor(() => session.evaluate(`${browserTextIncludes('Saved privately on this device')}`), `${payloadKind} attachment saved on the device`);
+  await session.waitFor(() => session.evaluate(`(() => {
+    const image = [...document.querySelectorAll('img[alt]')].find((item) => item.getAttribute('alt') === ${JSON.stringify(isGif ? 'Attached GIF' : 'Attached photo')});
+    return Boolean(image && image.getBoundingClientRect().width > 0 && image.getBoundingClientRect().height > 0);
+  })()`), `sender ${payloadKind} preview`);
+  await fillByKeyboard(session, '#drop-subject', subject);
+  await fillByKeyboard(session, '#drop-content', content);
+  assert.equal(await clickButton(session, 'Share without a handle'), true, 'Could not select the private claim flow in Compose.');
+  await session.waitFor(() => session.evaluate(`Boolean(document.querySelector('#unaddressed-claim-title'))
+    && ${browserHasEnabledButton('Share private link')}`), `enabled private ${payloadKind} link action`);
+  await assertMobileNoHorizontalOverflow(session, `Sender private ${payloadKind} link panel`);
+
+  const draft = await session.evaluate(`(() => {
+    const prefix = 'dear-exe:active-letter:v1:account:';
+    const keys = Object.keys(localStorage).filter((key) => key.startsWith(prefix));
+    if (keys.length !== 1) return null;
+    try {
+      const value = JSON.parse(localStorage.getItem(keys[0]) || 'null');
+      return value ? { id: value.id || null, mediaUploadId: value.mediaUploadId || null, payloadKind: value.payloadKind || null } : null;
+    } catch { return null; }
+  })()`);
+  assert.match(draft?.id || '', /^draft-[a-f0-9-]{36}$/i, `The rendered ${payloadKind} draft did not have a cleanable ID.`);
+  assert.ok(UUID_V4_PATTERN.test(draft?.mediaUploadId || ''), `The rendered ${payloadKind} draft did not retain a media upload ID.`);
+  assert.equal(draft.payloadKind, payloadKind, `Compose must persist the selected ${payloadKind} format.`);
+
+  const letterId = draft.id;
+  const mediaUploadId = draft.mediaUploadId;
+  const mediaPath = `${sender.id}/${letterId}/${mediaUploadId}`;
+  const pendingPrefix = `${sender.id}/pending/${letterId}/${mediaUploadId}`;
+  const disposable = { letterId, senderId: sender.id, subject, content, mediaUploadId, pendingPrefix };
+  disposableDrops.push(disposable);
   storagePaths.add(mediaPath);
+  session.expectedMediaUpload = { senderId: sender.id, letterId, mediaUploadId };
+  const requestOffset = session.storageObjectRequests.length;
 
-  const { error: uploadError } = await account.client.storage.from(BUCKET).upload(
-    stagedPath,
-    new Blob([bytes], { type: mediaMimeType }),
-    { contentType: mediaMimeType, upsert: false },
-  );
-  if (uploadError) throw new Error(`Could not upload the disposable local ${payloadKind} fixture.`);
+  await stubNativeShareForTest(session);
+  assert.equal(await clickButton(session, 'Share private link'), true, `Could not issue the private ${payloadKind} invite from Compose.`);
+  await session.waitFor(() => session.evaluate(`(() => {
+    const params = new URLSearchParams(location.search);
+    return location.pathname === '/sent'
+      && params.get('claim') === '1'
+      && params.get('share') === 'shared'
+      && params.get('letter') === ${JSON.stringify(letterId)};
+  })()`), `sender ${payloadKind} private-claim receipt from Compose`, 15_000);
 
-  const finalizeResponse = await fetch(`${APP_ORIGIN}/api/drop-media/finalize`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${account.accessToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ stagedPath, payloadKind }),
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (finalizeResponse.status !== 200) throw new Error(`The isolated media-finalize route rejected the local ${payloadKind} fixture (HTTP ${finalizeResponse.status}).`);
-  const media = await finalizeResponse.json();
-  assert.equal(media.mediaPath, mediaPath, 'Finalization must bind media to this disposable drop.');
-  assert.equal(media.mediaMimeType, mediaMimeType);
-  assert.ok(Number.isInteger(media.mediaSizeBytes) && media.mediaSizeBytes > 0 && media.mediaSizeBytes <= 8 * 1024 * 1024);
+  const rawInviteUrl = await session.evaluate(`(() => {
+    const value = window.__dropBrowserE2EShareUrl || window.sessionStorage.getItem('drop-browser-e2e-share-url') || '';
+    try { window.sessionStorage.removeItem('drop-browser-e2e-share-url'); } catch { /* This isolated browser profile is removed after the smoke. */ }
+    return value;
+  })()`);
+  assert.equal(typeof rawInviteUrl, 'string', 'Compose did not return the private link to the isolated test.');
+  let inviteUrl;
+  try { inviteUrl = new URL(rawInviteUrl); }
+  catch { throw new Error('Compose did not create a valid local private claim link.'); }
+  assert.ok(allowedOrigins.has(inviteUrl.origin), 'The private claim link must use the isolated app origin.');
+  assert.ok(inviteUrl.pathname === '/claim', 'The private link must use the supported claim route.');
+  assert.ok(inviteUrl.search === '', 'The bearer capability must stay out of query parameters.');
+  assert.ok(inviteUrl.username === '' && inviteUrl.password === '', 'The private link must not contain URL credentials.');
+  const token = new URLSearchParams(inviteUrl.hash.slice(1)).get('token') || '';
+  assert.ok(/^[a-f0-9]{64}$/i.test(token), 'The private link must carry the expected fragment capability.');
 
-  const { data: issuedId, error: issueError } = await account.client.rpc('issue_drop_media_claim_invite', {
-    p_letter_id: letterId,
-    p_subject: subject,
-    p_content: content,
-    p_payload_kind: payloadKind,
-    p_media_path: media.mediaPath,
-    p_media_mime_type: media.mediaMimeType,
-    p_media_size_bytes: media.mediaSizeBytes,
-    p_token: token,
-  });
-  if (issueError || issuedId !== letterId) {
-    throw new Error(`The local ${payloadKind} invite could not be issued. Confirm local media cleanup scheduling and applied migrations.`);
-  }
+  const bucketPrefix = `/storage/v1/object/${BUCKET}/`;
+  const storageWrites = session.storageObjectRequests.slice(requestOffset).filter((request) =>
+    ['POST', 'PUT'].includes(request.method) && request.pathname.startsWith(bucketPrefix));
+  assert.equal(storageWrites.length, 1, `The Compose ${payloadKind} action must upload exactly one staged media object.`);
+  const stagedPath = storageWrites[0].pathname.slice(bucketPrefix.length);
+  assert.ok(storageWrites[0].origin === supabaseUrl.origin, 'The Compose media upload must use validated local Supabase.');
+  assert.ok(stagedPath.startsWith(`${pendingPrefix}/`), 'The staged media path must match the UI draft and stable upload ID.');
+  const attemptId = stagedPath.slice(`${pendingPrefix}/`.length);
+  assert.ok(UUID_V4_PATTERN.test(attemptId), 'The staged media path must have one unique upload attempt ID.');
+  storagePaths.add(stagedPath);
+  session.expectedMediaUpload = null;
+
+  const { data, error } = await admin.from('letters')
+    .select('id,sender_id,recipient_id,status,delivery_mode,subject,content,payload_kind,media_path,media_mime_type,media_size_bytes')
+    .eq('id', letterId)
+    .eq('sender_id', sender.id);
+  assert.equal(error, null, `Admin read of the disposable local ${payloadKind} claim failed.`);
+  assert.equal(data?.length, 1, `Expected exactly one sender-owned local ${payloadKind} claim row.`);
+  assert.equal(data[0].recipient_id, null);
+  assert.equal(data[0].status, 'claim_pending');
+  assert.equal(data[0].delivery_mode, 'instant');
+  assert.equal(data[0].subject, subject);
+  assert.equal(data[0].content, content);
+  assert.equal(data[0].payload_kind, payloadKind);
+  assert.equal(data[0].media_path, mediaPath);
+  assert.equal(data[0].media_mime_type, mediaMimeType);
+  assert.ok(Number.isInteger(data[0].media_size_bytes) && data[0].media_size_bytes > 0 && data[0].media_size_bytes <= 8 * 1024 * 1024);
+
+  const { data: storedMedia, error: storageError } = await admin.storage.from(BUCKET).download(mediaPath);
+  assert.ifError(storageError);
+  assert.ok(storedMedia, `The exact final ${payloadKind} Storage object must exist.`);
+  assert.equal(storedMedia.type, mediaMimeType);
+  assert.equal(storedMedia.size, data[0].media_size_bytes, 'Drop metadata must match the exact final Storage object size.');
+  const signature = Buffer.from(await storedMedia.slice(0, isGif ? 6 : 8).arrayBuffer()).toString('hex');
+  assert.ok(isGif ? /^474946383[79]61$/i.test(signature) : /^89504e470d0a1a0a$/i.test(signature), `The final ${payloadKind} object must retain a valid media signature.`);
+  await assertStorageObjectMissing(stagedPath, `The temporary staged ${payloadKind} object should be missing after finalization.`);
+
   const fixture = {
     letterId,
     token,
     payloadKind,
     subject,
     content,
-    mediaPath: media.mediaPath,
-    mediaSizeBytes: media.mediaSizeBytes,
-    mediaMimeType: media.mediaMimeType,
-    senderId: account.id,
+    mediaPath,
+    mediaSizeBytes: data[0].media_size_bytes,
+    mediaMimeType,
+    senderId: sender.id,
   };
   fixtures.push(fixture);
+  console.log(`[browser-media-claim-e2e] PASS sender issued a private ${payloadKind} claim through Compose; exact final Storage object is valid.`);
   return fixture;
 }
 
@@ -680,6 +810,40 @@ function browserHasButton(label) {
   return `Array.from(document.querySelectorAll('button')).some((item) => item.innerText.replace(/\\s+/g, ' ').trim().toLocaleLowerCase() === ${JSON.stringify(label.toLocaleLowerCase())})`;
 }
 
+function browserHasEnabledButton(label) {
+  return `Array.from(document.querySelectorAll('button')).some((item) => item.innerText.replace(/\\s+/g, ' ').trim().toLocaleLowerCase() === ${JSON.stringify(label.toLocaleLowerCase())} && !item.disabled)`;
+}
+
+async function assertMobileNoHorizontalOverflow(session, name) {
+  const dimensions = await session.evaluate(`(() => {
+    const width = document.documentElement.clientWidth;
+    const offenders = [...document.body.querySelectorAll('*')].map((element) => {
+      const rect = element.getBoundingClientRect();
+      return {
+        tag: element.tagName.toLocaleLowerCase(),
+        id: element.id || '',
+        left: Math.round(rect.left),
+        right: Math.round(rect.right),
+        width: Math.round(rect.width),
+      };
+    }).filter((element) => element.left < -1 || element.right > width + 1).slice(0, 8);
+    return {
+      width,
+      height: window.innerHeight,
+      viewport: window.innerWidth,
+      scroll: document.documentElement.scrollWidth,
+      offenders,
+    };
+  })()`);
+  assert.deepEqual(
+    { width: dimensions?.width, height: dimensions?.height, viewport: dimensions?.viewport },
+    { width: 390, height: 844, viewport: 390 },
+    `${name} must use the 390×844 mobile viewport.`,
+  );
+  assert.ok(dimensions.scroll <= 391,
+    `${name} has horizontal overflow at the 390px mobile viewport: scroll=${dimensions?.scroll}, offenders=${JSON.stringify(dimensions?.offenders || [])}.`);
+}
+
 async function fillByKeyboard(session, selector, value) {
   const focused = await session.evaluate(`(() => {
     const field = document.querySelector(${JSON.stringify(selector)});
@@ -695,6 +859,79 @@ async function fillByKeyboard(session, selector, value) {
   await session.waitFor(() => session.evaluate(`document.querySelector(${JSON.stringify(selector)})?.value === ${JSON.stringify(value)}`), `value in ${selector}`);
 }
 
+async function setInputFile(session, selector, filePath) {
+  const { root } = await session.pageCdp.send('DOM.getDocument', { depth: -1, pierce: true });
+  const { nodeId } = await session.pageCdp.send('DOM.querySelector', { nodeId: root.nodeId, selector });
+  assert.ok(nodeId, `Could not find the rendered file input ${selector}.`);
+  await session.pageCdp.send('DOM.setFileInputFiles', { nodeId, files: [filePath] });
+}
+
+async function stubNativeShareForTest(session) {
+  const installed = await session.evaluate(`(() => {
+    Object.defineProperty(navigator, 'share', {
+      configurable: true,
+      value: async (details) => {
+        if (!details || typeof details.url !== 'string') throw new TypeError('Share URL missing.');
+        window.__dropBrowserE2EShareUrl = details.url;
+        try { window.sessionStorage.setItem('drop-browser-e2e-share-url', details.url); } catch { /* The isolated page value remains available. */ }
+      },
+    });
+    return typeof navigator.share === 'function';
+  })()`);
+  assert.equal(installed, true, 'The isolated sender browser must capture the link without opening a native share sheet.');
+}
+
+async function storageObjectExists(path) {
+  const segments = String(path).split('/');
+  assert.ok(segments.length > 0 && segments.every((segment) => segment && segment !== '.' && segment !== '..'), 'Storage verification needs a relative object path.');
+  const objectPath = segments.map((segment) => encodeURIComponent(segment)).join('/');
+  const url = new URL(`/storage/v1/object/${encodeURIComponent(BUCKET)}/${objectPath}`, supabaseUrl);
+  assert.ok(url.origin === supabaseUrl.origin && allowedOrigins.has(url.origin), 'Storage verification must remain on the validated local Supabase origin.');
+  const serviceRoleKey = localValues.SUPABASE_SERVICE_ROLE_KEY;
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` },
+    redirect: 'error',
+    signal: AbortSignal.timeout(5_000),
+  });
+  if (response.ok) {
+    await response.body?.cancel();
+    return true;
+  }
+  let payload = null;
+  try { payload = await response.json(); } catch { await response.body?.cancel().catch(() => undefined); }
+  if (response.status === 404
+    || (response.status === 400 && payload?.statusCode === '404' && payload?.error === 'not_found' && payload?.code === 'NoSuchKey')) return false;
+  throw new Error(`Local Storage returned unexpected HTTP ${response.status} while verifying a test object.`);
+}
+
+async function assertStorageObjectMissing(path, description) {
+  assert.equal(await storageObjectExists(path), false, description);
+}
+
+async function collectStorageObjectsBelow(prefix, ownerId, depth = 0) {
+  if (depth > 12) throw new Error('The disposable sender storage prefix exceeded the cleanup depth limit.');
+  if (prefix !== ownerId && !isSafeOwnedStorageObjectPath(prefix, ownerId)) {
+    throw new Error('The disposable sender storage prefix was unsafe.');
+  }
+  const pageSize = 100;
+  let offset = 0;
+  while (true) {
+    const { data, error } = await admin.storage.from(BUCKET).list(prefix, { limit: pageSize, offset });
+    if (error) throw error;
+    const objects = data || [];
+    for (const object of objects) {
+      if (!SAFE_STORAGE_SEGMENT_PATTERN.test(object.name || '')) throw new Error('A listed Storage entry had an unsafe name.');
+      const path = `${prefix}/${object.name}`;
+      if (!isSafeOwnedStorageObjectPath(path, ownerId)) throw new Error('A listed Storage entry escaped the disposable sender prefix.');
+      if (object.id === null && object.metadata === null) await collectStorageObjectsBelow(path, ownerId, depth + 1);
+      else storagePaths.add(path);
+    }
+    if (objects.length < pageSize) return;
+    offset += objects.length;
+  }
+}
+
 function claimUrl(fixture) {
   const url = new URL('/claim', APP_ORIGIN);
   url.hash = new URLSearchParams({ token: fixture.token }).toString();
@@ -702,6 +939,7 @@ function claimUrl(fixture) {
 }
 
 async function assertClaimPageSealed(session, fixture, phase) {
+  await assertMobileNoHorizontalOverflow(session, `${phase} private claim page`);
   const state = await session.evaluate(`(() => ({
     path: location.pathname,
     body: String(document.body.innerText || '').replace(/\\s+/g, ' ').trim().toLocaleLowerCase(),
@@ -723,6 +961,7 @@ async function setUpRecipientProfile(session) {
   await session.waitFor(() => session.evaluate(`location.pathname === '/profile'
     && new URLSearchParams(location.search).get('invite') === '1'
     && ${browserTextIncludes('Set your handle, then claim.')}`), 'first-use claim profile setup');
+  await assertMobileNoHorizontalOverflow(session, 'First-use recipient profile setup');
   await fillByKeyboard(session, '#display-name', recipient.displayName);
   await fillByKeyboard(session, '#username', recipient.username);
   assert.equal(await clickButton(session, 'Save & sync handle'), true, 'Could not save the first-use recipient profile.');
@@ -754,6 +993,7 @@ async function claimAndRenderMedia(session, fixture, { navigateToInvite = true }
   await session.waitFor(() => session.evaluate(`${browserHasButton('Open received drop')}`), `${fixture.payloadKind} open action`);
   assert.equal(await clickButton(session, 'Open received drop'), true, `Could not open the claimed ${fixture.payloadKind} drop.`);
   await session.waitFor(() => session.evaluate(`${browserTextIncludes(fixture.content, "document.querySelector('#letter-body')?.innerText")}`), `${fixture.payloadKind} caption`);
+  await assertMobileNoHorizontalOverflow(session, `Opened ${fixture.payloadKind} drop`);
   const rendered = await session.waitFor(async () => {
     const result = await session.evaluate(`(() => {
       const image = document.querySelector('#letter-body img');
@@ -786,6 +1026,7 @@ async function denyOutsiderInBrowser(session, fixture) {
     && ${browserHasButton('Claim this drop')}`), `outsider ${fixture.payloadKind} invite replay page`);
   assert.equal(await clickButton(session, 'Claim this drop'), true, 'The signed-in outsider should attempt the consumed bearer link.');
   await session.waitFor(() => session.evaluate(`location.pathname === '/claim' && Boolean(document.querySelector('[role="alert"]'))`), `outsider ${fixture.payloadKind} denial`);
+  await assertMobileNoHorizontalOverflow(session, `Outsider ${fixture.payloadKind} denial`);
   const state = await session.evaluate(`({ path: location.pathname, hasCaption: ${browserTextIncludes(fixture.content)}, images: document.querySelectorAll('img').length, alert: document.querySelector('[role="alert"]')?.innerText || '' })`);
   assert.equal(state.path, '/claim');
   assert.equal(state.hasCaption, false);
@@ -829,6 +1070,7 @@ async function assertSenderClaimedAfterReload(session, fixture) {
   await session.navigate(`${APP_ORIGIN}/letter/${encodeURIComponent(fixture.letterId)}?view=sender`);
   await session.waitFor(() => session.evaluate(`location.pathname === ${JSON.stringify(`/letter/${fixture.letterId}`)}
     && ${browserTextIncludes(`Claimed by ${recipient.displayName}`)}`), `sender restored ${fixture.payloadKind} claim status after reload`);
+  await assertMobileNoHorizontalOverflow(session, `Sender ${fixture.payloadKind} claim status`);
   await session.pageCdp.send('Page.reload');
   await session.waitFor(() => session.evaluate(`location.pathname === ${JSON.stringify(`/letter/${fixture.letterId}`)}
     && ${browserTextIncludes(`Claimed by ${recipient.displayName}`)}`), `sender persisted ${fixture.payloadKind} claim status after browser reload`);
@@ -860,41 +1102,84 @@ async function cleanup() {
   for (const [child, label] of [...sessions.map((session) => [session.browser, `isolated ${session.name} browser`]), [app, 'isolated Next app']]) {
     if (!child) continue;
     try { await stopOwnedProcess(child, label); }
-    catch {
+    catch (error) {
       cleanupFailed = true;
       processesStopped = false;
-      console.error(`[browser-media-claim-e2e] CLEANUP FAILED: could not stop this smoke's ${label}.`);
+      console.error(`[browser-media-claim-e2e] CLEANUP FAILED: could not stop this smoke's ${label}${error?.message ? ` (${error.message})` : ''}.`);
     }
   }
 
   if (admin) {
     for (const fixture of disposableDrops) {
       try {
-        const { data: deleted, error } = await admin.from('letters').delete()
-          .eq('id', fixture.letterId)
-          .eq('sender_id', fixture.senderId)
-          .select('id');
-        const { data: remaining, error: verifyError } = await admin.from('letters').select('id')
+        const { data: exactRow, error: exactError } = await admin.from('letters').select('id, subject, content')
           .eq('id', fixture.letterId)
           .eq('sender_id', fixture.senderId)
           .maybeSingle();
-        if (error || verifyError || (deleted?.length || 0) > 1 || remaining) {
+        if (exactError) throw exactError;
+        let ownedRow = exactRow;
+        if (ownedRow && (ownedRow.subject !== fixture.subject || ownedRow.content !== fixture.content)) {
+          throw new Error('The exact test draft ID is occupied by a row without the unique test markers.');
+        }
+        if (!ownedRow) {
+          const { data: markerRows, error: markerError } = await admin.from('letters').select('id, subject, content')
+            .eq('sender_id', fixture.senderId)
+            .eq('subject', fixture.subject)
+            .eq('content', fixture.content)
+            .limit(2);
+          if (markerError || (markerRows?.length || 0) > 1) throw markerError || new Error('The unique test markers matched multiple rows.');
+          ownedRow = markerRows?.[0] || null;
+        }
+        if (ownedRow) {
+          const { data: deleted, error } = await admin.from('letters').delete()
+            .eq('id', ownedRow.id)
+            .eq('sender_id', fixture.senderId)
+            .eq('subject', fixture.subject)
+            .eq('content', fixture.content)
+            .select('id');
+          if (error || deleted?.length !== 1 || deleted[0].id !== ownedRow.id) throw error || new Error('The exact marked test drop was not deleted.');
+        }
+        const { data: remainingExact, error: verifyExactError } = await admin.from('letters').select('id')
+          .eq('id', fixture.letterId)
+          .eq('sender_id', fixture.senderId)
+          .maybeSingle();
+        const { data: remainingMarkers, error: verifyMarkerError } = await admin.from('letters').select('id')
+          .eq('sender_id', fixture.senderId)
+          .eq('subject', fixture.subject)
+          .eq('content', fixture.content)
+          .limit(2);
+        if (verifyExactError || verifyMarkerError || remainingExact || (remainingMarkers?.length || 0) > 0) {
           cleanupFailed = true;
           console.error('[browser-media-claim-e2e] CLEANUP FAILED: an exact disposable drop row remains or could not be verified absent.');
         }
       } catch {
         cleanupFailed = true;
-        console.error('[browser-media-claim-e2e] CLEANUP FAILED: could not remove an exact disposable drop row.');
+        console.error('[browser-media-claim-e2e] CLEANUP FAILED: could not remove the ID- or unique-marker-matched disposable drop row.');
       }
+    }
+    if (sender?.id && createdUserIds.includes(sender.id)) {
+      try {
+        await collectStorageObjectsBelow(sender.id, sender.id);
+      } catch {
+        cleanupFailed = true;
+        console.error('[browser-media-claim-e2e] CLEANUP FAILED: could not enumerate the unique disposable sender Storage prefix.');
+      }
+    }
+    if (sessions.some((session) => session.uncleanableStorageWrite)) {
+      cleanupFailed = true;
+      console.error('[browser-media-claim-e2e] CLEANUP FAILED: a Storage write could not be matched to an exact disposable sender object path.');
     }
     if (storagePaths.size > 0) {
       try {
         const paths = [...storagePaths];
-        const { error } = await admin.storage.from(BUCKET).remove(paths);
-        if (error && !/not found|does not exist/i.test(error.message)) throw error;
+        const presentPaths = [];
+        for (const path of paths) if (await storageObjectExists(path)) presentPaths.push(path);
+        if (presentPaths.length > 0) {
+          const { error } = await admin.storage.from(BUCKET).remove(presentPaths);
+          if (error) throw error;
+        }
         for (const path of paths) {
-          const { data, error: verifyError } = await admin.storage.from(BUCKET).download(path);
-          if (data || !verifyError) throw new Error('A disposable object remains.');
+          await assertStorageObjectMissing(path, 'A disposable object remains or Storage returned an unexpected response.');
         }
       } catch {
         cleanupFailed = true;
@@ -941,7 +1226,7 @@ async function stopOwnedProcess(child, label) {
   try {
     if (process.platform === 'win32') child.kill('SIGTERM');
     else process.kill(-child.pid, 'SIGTERM');
-  } catch (error) { if (error?.code !== 'ESRCH') throw new Error(`Could not stop ${label}.`); }
+  } catch (error) { if (error?.code !== 'ESRCH') throw new Error(`Could not stop ${label}${error?.code ? ` (${error.code})` : ''}.`); }
   if (await waitForOwnedProcessExit(child, 10_000)) return;
   try {
     if (process.platform === 'win32') child.kill('SIGKILL');
@@ -1034,20 +1319,20 @@ async function main() {
     assert.equal(initialRecipientProfile, null, 'The new recipient should complete first-use profile setup in the browser.');
     outsider = await createAccount('outsider', { createProfile: true });
 
-    currentStep = 'issuing local photo and GIF claim fixtures';
-    const photo = await issueMediaInvite(sender, 'image', await readFile(resolve(PROJECT_ROOT, 'public/demo-cat.png')));
-    const gif = await issueMediaInvite(sender, 'gif', await readFile(resolve(PROJECT_ROOT, 'public/demo-cat.gif')));
+    currentStep = 'starting isolated sender and recipient browsers';
+    const senderSession = await createBrowserSession('sender', sender);
+    const recipientSession = await createBrowserSession('recipient', recipient);
+    const outsiderSession = await createBrowserSession('outsider', outsider);
+
+    currentStep = 'issuing local photo and GIF claim drops through the sender Compose UI';
+    const photo = await issueMediaInviteThroughCompose(senderSession, 'image');
+    const gif = await issueMediaInviteThroughCompose(senderSession, 'gif');
     for (const fixture of fixtures) {
       await assertPendingForSender(fixture);
       await assertUnavailable(recipient, fixture, 'Before profile setup');
       await assertUnavailable(outsider, fixture, 'Before claim');
     }
-    console.log('[browser-media-claim-e2e] PASS local fixtures are sender-owned and hidden from recipient and outsider accounts.');
-
-    currentStep = 'starting isolated sender and recipient browsers';
-    const senderSession = await createBrowserSession('sender', sender);
-    const recipientSession = await createBrowserSession('recipient', recipient);
-    const outsiderSession = await createBrowserSession('outsider', outsider);
+    console.log('[browser-media-claim-e2e] PASS Compose-created private photo/GIF drops are sender-owned and hidden from recipient and outsider accounts.');
 
     currentStep = 'checking the sender waiting state';
     await senderSession.navigate(`${APP_ORIGIN}/letter/${encodeURIComponent(photo.letterId)}?view=sender`);
