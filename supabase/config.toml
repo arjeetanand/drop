@@ -52,3 +52,9 @@ file_size_limit = "8MiB"
 
 [functions.cleanup-expired-drop-media]
 verify_jwt = false
+
+[functions.manage-drop-push-subscription]
+verify_jwt = true
+
+[functions.dispatch-drop-push]
+verify_jwt = false

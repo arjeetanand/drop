@@ -25,6 +25,66 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(self.clients.claim());
 });
 
+self.addEventListener('push', (event) => {
+  let payload;
+  try {
+    payload = event.data?.json();
+  } catch {
+    return;
+  }
+  if (!isDropArrivalPayload(payload)) return;
+
+  event.waitUntil(self.registration.showNotification('A Drop is in your Inbox', {
+    body: 'Open when you’re ready.',
+    tag: payload.tag,
+    renotify: false,
+    data: { type: 'drop-arrived' },
+  }));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  const data = event.notification.data;
+  if (!isDropArrivalTag(event.notification.tag) || data?.type !== 'drop-arrived') return;
+
+  event.notification.close();
+  event.waitUntil(openMailboxFromNotification());
+});
+
+async function openMailboxFromNotification() {
+  const mailboxUrl = new URL('/mailbox', self.location.origin);
+  const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+
+  for (const client of windows) {
+    let clientUrl;
+    try {
+      clientUrl = new URL(client.url);
+    } catch {
+      continue;
+    }
+    if (clientUrl.origin !== self.location.origin) continue;
+
+    try {
+      const mailboxClient = await client.navigate(mailboxUrl.href);
+      return await (mailboxClient || client).focus();
+    } catch {
+      // Try another same-origin app window before opening a new one.
+    }
+  }
+
+  return self.clients.openWindow(mailboxUrl.href);
+}
+
+function isDropArrivalTag(value) {
+  return typeof value === 'string'
+    && /^drop-arrival-[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function isDropArrivalPayload(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  return value.type === 'drop-arrived'
+    && isDropArrivalTag(value.tag);
+}
+
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   const url = new URL(request.url);

@@ -4,6 +4,8 @@ import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, ArrowRight, Check, Copy, LogIn, LogOut, Share2 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { DropPushNotificationSettings } from '@/components/DropPushNotificationSettings';
+import { disableDropPushForCurrentAccount } from '@/lib/dropPushNotifications';
 import { getRemoteProfileState, saveRemoteProfile, type SaveRemoteProfileResult } from '@/lib/letterBackend';
 import { normalizeDropRecipient } from '@/lib/dropValidation';
 import { getSupabaseBrowserClient, isSupabaseAuthConfigured } from '@/lib/supabaseBrowser';
@@ -441,6 +443,14 @@ function ProfileContent() {
     setAccountNotice('Signing out…');
     setAccountNoticeIsError(false);
     try {
+      const pushDisabled = await disableDropPushForCurrentAccount();
+      if (!pushDisabled.ok) {
+        setAccountNotice('Could not turn off alerts on this device. You’re still signed in; please try again before signing out.');
+        setAccountNoticeIsError(true);
+        setSignOutLoading(false);
+        return;
+      }
+
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
       setAccountStatus('signed-out');
@@ -875,6 +885,9 @@ function ProfileContent() {
               <p className="body-copy mt-4 text-sm">
                 Drafts save on this device. Sign in with Google or email to send and receive private drops and keep your profile across devices.
               </p>
+              {accountStatus === 'signed-in' && remoteUserId && (
+                <DropPushNotificationSettings userId={remoteUserId} />
+              )}
               <p className="meta mt-5" role="status" aria-live="polite">{accountStatusText}</p>
               {supabaseAuthConfigured && accountStatus !== 'unavailable' ? (
                 <>
