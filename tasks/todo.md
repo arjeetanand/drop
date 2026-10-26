@@ -2,6 +2,15 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
+## Completed locally — photo/GIF send recovery
+
+- [x] Keep the same draft and attachment after a one-shot upload failure; expose **Retry send** only after the recipient is checked again.
+- [x] Give ambiguous committed sends a direct **Check Sent** action that does not resubmit automatically.
+- [x] Extend the local 390×844 browser journey to prove photo/GIF retry creates one row and one final object, confirms staged cleanup, and handles a lost insert response without duplication.
+- [x] Pass the full unit suite, lint, typecheck, focused production browser journey, cleanup/diff checks; update the learning log and handoff.
+- [ ] Apply migration `20261026100000_drop_staged_media_delete_visibility.sql` to the approved hosted Free project and verify hosted media cleanup after project provisioning.
+- [ ] Complete hosted account-to-account acceptance, screen-reader output, installed-PWA OS sharing, and physical-device/camera checks.
+
 ## Checkpoint — Home PWA install/share onboarding (2026-10-26)
 
 - [x] Explain Home's install-dependent photo/GIF sharing and expose the browser's install prompt only when available.

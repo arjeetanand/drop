@@ -2217,3 +2217,31 @@ Describe progressive web app sharing as a browser/device capability, not a unive
 ### Git and remaining gaps
 
 Code commit `4242fa0` is pushed to `origin/feat/pwa-share-onboarding`. Verified remote refs are feature branch `4242fa0`, pilot branch `9b3ee7c`, previous task branch `6a47d27`, and `main` `5138f88`. No PR was opened or changed and no merge occurred. No hosted project or billing resource was used or changed. Actual installed-PWA/OS share behavior, screen-reader output, hosted delivery/retention, and physical-device/camera checks remain open.
+
+## 2026-10-26 — Make photo/GIF send recovery actionable and prove cleanup
+
+### Issue
+
+A failed media finalization appeared retryable in Compose, but the rendered browser journey had not proved that the same draft could be retried safely. The first injected PNG failure also left its staging object behind even though the Storage `remove()` request returned HTTP 200.
+
+### Cause
+
+The authenticated Storage `DELETE` policy allowed owners to delete their own unlinked pending objects, but no applicable `SELECT` policy made those rows visible to the Storage API's bulk delete query. PostgreSQL row-level security therefore let the request complete while deleting zero matching rows. The app also lacked a clear UI distinction between a safe upload retry and an uncertain insert result.
+
+### Resolution
+
+Add a narrowly scoped Storage `SELECT` policy for an authenticated owner’s unlinked `drop-media/pending/` object only while `storage.allow_only_operation('object.delete_many')` is true. In Compose, retain the draft/attachment on safe upload errors, require recipient confirmation again before **Retry send**, and lock the submit action after uncertain sends while linking directly to the Sent filter. The migration is applied locally; it remains pending for hosted Supabase.
+
+### Learning
+
+An HTTP success from Storage `remove()` is not proof that the object is gone. Verify the exact object is absent after cleanup, and grant only the operation-scoped row visibility that the cleanup query needs. For send recovery, keep the retry identity stable and require a fresh recipient check; do not automatically repeat an insert after its outcome becomes uncertain.
+
+### Verification
+
+- `npm run test:browser-instant-media` passed on local loopback Supabase at 390×844. A synthetic pre-finalize 503 for both PNG and GIF verified failed-stage cleanup, recipient recheck, same draft/media IDs, exactly one delivered row/final media object per retry, and outsider denial. Existing Open/reaction checks still passed.
+- A committed letters POST whose successful response was reset, followed by one synthetic status-lookup outage, rendered **Check Sent** and opened the Sent filter with exactly one row and no second POST. The run reported no browser/runtime errors or external origins and removed its exact test accounts, rows, and Storage objects.
+- `npm test` passed 301/301; lint, typecheck, runner syntax, loopback/cleanup guard, and `git diff --check` passed. No DB reset or test on `4004` occurred.
+
+### Git and remaining gaps
+
+Code commit `71b1f5b` is pushed to `origin/feat/media-send-recovery` from a task branch based on `45b1d04`. The branch is unmerged and has no PR. The migration has not been applied to hosted Supabase; hosted project provisioning/two-account delivery, screen-reader output, installed-PWA sharing, and physical-device/camera checks remain open. No hosted token or paid resource was used.

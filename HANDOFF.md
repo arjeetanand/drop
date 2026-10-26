@@ -2,7 +2,18 @@
 
 Updated: 2026-10-26
 
-## Latest checkpoint — Home PWA install/share onboarding (2026-10-26)
+## Latest checkpoint — photo/GIF send recovery (2026-10-26)
+
+- Compose now keeps the draft, caption, and selected media after a safe upload failure, requires recipient confirmation again, and labels the next action **Retry send**. If the insert may have committed, it disables resubmission and offers **Check Sent**; Mailbox opens with Sent selected.
+- The browser journey found a real Storage cleanup issue: `remove()` returned HTTP 200 with an empty result while the staged object remained. The new migration grants an authenticated owner visibility of only their unlinked pending objects during the Storage `object.delete_many` operation. It was applied to local Supabase without resetting the database.
+- `npm run test:browser-instant-media` passed on the isolated production build at 390×844. PNG and GIF staged cleanup/retry, one final object and row each, outsider denial, no media-byte request before Open, recipient reactions, sender feedback, and the lost committed text-send response all passed. The ambiguous-send path produced one POST and one Sent row. Exact disposable cleanup completed; ports `6004` and its temporary root were clear.
+- `npm test` passed 301/301; lint, typecheck, runner syntax/loopback guard, and `git diff --check` passed. Review found no confirmed security/privacy or logic blocker; one duplicated retry instruction was removed before the final browser run.
+- Git code checkpoint: commit `71b1f5b` is pushed to `origin/feat/media-send-recovery`, based on `45b1d04`. The branch is unmerged and has no PR. No main change was made. The app on `4004` and hosted Supabase were untouched; only the local Supabase stack was used. No access token was needed.
+- Hosted migration/application and hosted two-account/retention acceptance, screen-reader output, installed-PWA sharing, and physical-device/camera behavior remain open.
+
+**Next:** apply the migration to the approved hosted Free project once that project is provisioned, then run hosted acceptance. Keep this feature branch separate until review/merge is requested.
+
+## Previous checkpoint — Home PWA install/share onboarding (2026-10-26)
 
 - Home now explains that sending a photo or GIF from another app requires installation and appears in the system share picker only where the browser/device supports it. It offers the browser install prompt when available, a manual browser-menu guide otherwise, and an always-visible Compose attachment fallback.
 - `npm run test:browser-pwa-share-onboarding` passed an isolated production build and Chrome check at 390px. It verified the manifest photo/GIF share target, active worker, install guidance, mocked user-triggered prompt, installed copy, Compose fallback, zero overflow, no browser errors/external requests, and cleanup. It needs no Supabase backend and leaves `4004` alone. Synthetic events do not verify actual OS installation/share behavior.

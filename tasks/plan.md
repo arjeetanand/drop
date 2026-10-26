@@ -8,6 +8,22 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 
 ## Implementation Status — 2026-10-26
 
+### Completed locally — photo/GIF send recovery
+
+**Product research signal:** Ofcom's 2025 UK adult media survey found that 40% of 16–24-year-olds with multiple social profiles used one for close friends and another for a wider circle. This supports preserving Drop's explicit one-to-one/private audience choice; it does not prove demand for Drop itself. [Ofcom report, p. 25](https://www.ofcom.org.uk/siteassets/resources/documents/research-and-data/media-literacy-research/adults/adults-media-use-and-attitudes-2025/adults-media-use-and-attitudes-report-2025.pdf?v=396240)
+
+**Description:** Make media-send failure states actionable without changing the private one-to-one delivery model. Keep the same draft, caption, recipient, and attachment after an upload failure. Require the existing recipient confirmation again, then label the primary action **Retry send**. For an ambiguous post-insert result, show **Check Sent** and never auto-submit again.
+
+**Acceptance criteria:**
+- [x] At 390×844, a failed photo/GIF upload keeps the same draft and attachment preview, announces what happened, and offers **Retry send** after the recipient is checked again.
+- [x] A successful retry leaves exactly one delivered row and one finalized media object; staged objects from the failed attempt are removed.
+- [x] A simulated committed send with a lost response shows **Check Sent**; following it shows the single sent drop without a second submission.
+- [x] Existing open/reaction behavior still passes, media bytes remain unopened until **Open**, and fixture cleanup removes only test-owned rows and objects.
+
+**Verification:** `npm run test:browser-instant-media` passed against local loopback Supabase on port `6004`, plus `npm test` (301/301), lint, typecheck, and runner syntax/guard/diff checks. The focused run used an isolated production build at 390×844 and completed exact disposable-data cleanup.
+
+**Resolution:** Retry retains the same draft, media upload ID, caption, and attachment, and requires recipient confirmation again. An uncertain insert locks resubmission and links directly to the Sent filter. The browser run exposed that Storage `remove()` returned HTTP 200 with no removed rows because pending objects were not visible through an applicable SELECT policy. Migration `supabase/migrations/20261026100000_drop_staged_media_delete_visibility.sql` grants narrowly scoped owner visibility only during `object.delete_many`; it was applied to the local Supabase database and proven by the PNG/GIF cleanup checks. The hosted database has not received this migration.
+
 ### Latest checkpoint — Home PWA install/share onboarding (2026-10-26)
 
 - Added a Home onboarding card that explains the install requirement for sharing photos/GIFs from other apps, uses the browser-provided install prompt when available, gives a manual browser-menu guide when it is not, and keeps the in-app Compose attachment path visible.
