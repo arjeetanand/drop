@@ -2301,3 +2301,30 @@ A passing browser test with an intercepted/stubbed API cannot prove browser CORS
 ### Git and remaining gaps
 
 Code commit `08e794a` is on `feat/drop-arrival-alerts`, based on `8b39850`. Documentation was recorded separately after the code checkpoint. The branch push is still pending because `github.com` could not be resolved. The hosted Free project, secrets, migration/deployment, dispatcher schedule, real push delivery, recipient research, screen-reader output, and physical-device checks remain open. No hosted credentials or project values were added to Git; `.env.local` stayed ignored.
+
+## 2026-10-26 — Record the successful alert-pilot push
+
+### Issue
+
+The first remote lookup could not resolve `github.com`, leaving the tested alert feature committed locally but not yet shared to its task branch.
+
+### Cause
+
+The sandboxed Git request hit a transient DNS/network failure. The local branch and commits were intact; no force push or remote history rewrite was needed.
+
+### Resolution
+
+Retry the normal upstream push after the network request was authorized. GitHub created `origin/feat/drop-arrival-alerts`, and `git ls-remote` confirmed the remote head matched local commit `0625df4`.
+
+### Learning
+
+Report the current remote state after retrying a transient push failure. Keep the feature branch separate and do not infer PR creation from GitHub's pull-request URL hint.
+
+### Verification
+
+- `git push -u origin feat/drop-arrival-alerts` succeeded; `git ls-remote origin refs/heads/feat/drop-arrival-alerts` returned `0625df4dd98691560b5eb35b7188958c33507a4c`.
+- The local app returned HTTP 200 on `5004` for `/` and `/profile`; the canonical app returned HTTP 200 on `4004`. Listener CWDs confirmed that `5004` serves `/private/tmp/drop-media-claim-compose-e2e` and `4004` serves `/Users/arjeetanand/projects/drop`.
+
+### Git and remaining gaps
+
+The feature and first documentation checkpoint are pushed to `origin/feat/drop-arrival-alerts`. This follow-up is documentation-only; it records the successful push and local preview evidence. No PR or merge was created. Hosted Supabase provisioning, secrets, scheduling, real push delivery, recipient research, screen-reader output, and device behavior remain open.
