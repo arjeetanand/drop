@@ -484,6 +484,7 @@ async function assertComposerActionTray(cdp, viewport, step) {
         const controlRect = control.getBoundingClientRect();
         return {
           label: control.getAttribute('aria-label') || control.innerText || control.textContent || '',
+          href: control.getAttribute('href'),
           width: controlRect.width,
           height: controlRect.height,
           top: controlRect.top,
@@ -491,13 +492,19 @@ async function assertComposerActionTray(cdp, viewport, step) {
           disabled: control.disabled === true,
         };
       }),
+      accountStatusIsAnnounced: Boolean(document.querySelector('p[role="status"][aria-atomic="true"]')),
     };
   })()`);
   assert.ok(state, `${step}: the composer action tray was not rendered.`);
   assert.ok(state.width > 0 && state.height > 0, `${step}: the composer action tray is not visible.`);
   assert.ok(state.controls.some(({ label }) => label.includes('Preview as recipient')), `${step}: preview should retain its accessible name.`);
   assert.ok(state.controls.some(({ label }) => /^(Save draft|Saved)$/.test(label)), `${step}: save should retain its accessible name.`);
-  assert.ok(state.controls.some(({ label }) => /^(Send drop|Connect to send|Account options)$/i.test(label)), `${step}: the primary action should remain available under the existing account gate (found: ${state.controls.map(({ label }) => JSON.stringify(label)).join(', ')}).`);
+  assert.ok(state.controls.some(({ label }) => /^(Send drop|Connect to send|Account options|Preview this drop)$/i.test(label)), `${step}: the primary action should remain available under the existing account gate (found: ${state.controls.map(({ label }) => JSON.stringify(label)).join(', ')}).`);
+  const unavailablePreview = state.controls.find(({ label }) => /^Preview this drop$/i.test(label));
+  if (unavailablePreview) {
+    assert.match(unavailablePreview.href || '', /^\/compose\/preview\?letter=.+$/, `${step}: preview mode should open this draft's recipient preview.`);
+    assert.equal(state.accountStatusIsAnnounced, true, `${step}: account-state changes should be announced to assistive technology.`);
+  }
 
   if (viewport.width <= 1023) {
     assert.equal(state.position, 'fixed', `${step}: the tray should stay reachable while the form scrolls.`);
