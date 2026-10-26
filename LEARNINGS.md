@@ -2103,3 +2103,33 @@ Seed disposable accounts and profiles, but drive the feature under test through 
 ### Git and remaining gaps
 
 Code commit `f92a78c` (`test: create Relay drops through sender Compose`) was created on `feat/pilot-relay-compose-e2e` and pushed to the existing remote branch `feat/pilot-integrated-preview`. No merge to `main` occurred. GitHub API DNS failed during the post-push status refresh; the last observed PR #11 state was open/draft at `5f9562a`, and `main` was last verified at `5138f88`. No usable Supabase Management API token was available in this task, so no hosted project or billing/resource change occurred. Hosted delivery/retention and screen-reader, installed-PWA sharing, physical camera, and device acceptance remain open.
+
+## 2026-10-26 — Add gentle Compose starters and protect mobile text wrapping
+
+### Issue
+
+An empty note or media caption gave people no starting point. The expanded GIF Relay browser journey also exposed that a long unbroken caption could widen the opened-drop screen beyond the 390px viewport.
+
+### Cause
+
+The Composer showed a blank editable field without optional examples for text, photo, or GIF drops. On the detail page, unbroken user content kept its intrinsic width inside a flex row, so the card and fixed navigation expanded horizontally.
+
+### Resolution
+
+Add three optional starters per format. A choice fills and focuses the editable note/caption only when it is blank; existing text and selected media remain unchanged and no send occurs. Add `min-width: 0` and `overflow-wrap: anywhere` to fragment text, and wrapping to the subject and opened message, so ordinary prose stays natural while long tokens wrap.
+
+### Learning
+
+Keep suggestions warm and easy to edit rather than using forced slang or engagement pressure. Research supports the product fit for private, supportive communication, but does not prove that a prompt feature improves outcomes: Ofcom reported that 72% of 13–17-year-olds using social/messaging apps said those apps help them feel closer to friends most or all of the time, and 54% said they send supportive messages; Pew reported 57% of U.S. Snapchat-using teens message daily and about two-thirds named keeping up with friends/family as a major reason ([Ofcom 2025](https://www.ofcom.org.uk/siteassets/resources/documents/research-and-data/media-literacy-research/children/childrens-media-use-and-attitudes-report-2025/childrens-media-literacy-report-2025.pdf), [Pew Research Center 2026](https://www.pewresearch.org/internet/2026/04/15/teens-experiences-on-tiktok-instagram-and-snapchat/)).
+
+For mobile content layouts, test real unbroken text as well as normal prose. `overflow-wrap: anywhere` addresses the min-content width that `break-words` alone may leave in a flex child.
+
+### Verification
+
+- `npm test` passed 301/301; `npx tsc --noEmit --incremental false`, focused ESLint, `node --check scripts/browser-relay-e2e.mjs`, Relay guard self-test, and `git diff --check` passed.
+- `npm run test:browser-relay` passed the isolated production build and full text/GIF sender→carrier→recipient journey at 390×844. It verified starter visibility, focus, no auto-send, retained GIF attachment, GIF MIME/signature/size, exact staged/final Storage paths, carrier and pre-collection recipient privacy, post-collection reduced-motion render, no overflow/browser errors/failed requests/cross-origin requests, and exact local cleanup. Missing Storage objects are accepted only for HTTP 404 or the precise local `NoSuchKey` not-found response.
+- Visual screenshots of the blank starter row, editable selected starter, and opened GIF are saved outside the repository under `/private/tmp/drop-pilot-final-evidence.Lyw5xo/`. The existing app on port 4004 stayed running; the isolated test used port 6004 and did not reset the database or contact hosted Supabase.
+
+### Git and remaining gaps
+
+Code commit `bce0f37` is pushed to `origin/feat/pilot-integrated-preview`. GitHub confirmed PR #11 open/draft at that code commit with base `main`; CI checks were not queried. Remote `main` remains `5138f88`; no merge to `main` occurred. No `SUPABASE_ACCESS_TOKEN` is configured locally and the Supabase connector is disabled by workspace admin, so no hosted project, billing, or hosted data changed. Hosted delivery/retention, screen-reader output, installed-PWA sharing, and physical-device/camera acceptance remain open.

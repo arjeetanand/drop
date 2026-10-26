@@ -2,6 +2,16 @@
 
 Updated: 2026-10-26
 
+## Latest checkpoint — Compose starters and GIF Relay pilot verification (2026-10-26)
+
+- Added optional note/caption starters for text, photo, and GIF Compose; selection fills an editable field, preserves existing text and attachments, and never sends automatically. Wrapped unbroken subject, fragment, and message text on the opened-drop screen to prevent narrow-screen overflow.
+- Extended `npm run test:browser-relay` to exercise sender-created GIF Relay end to end, including exact final/staged Storage checks, private media before collection, post-collection render, confirmed not-found cleanup, and starter selection/focus/attachment preservation. Optional 390×844 screenshots are in `/private/tmp/drop-pilot-final-evidence.Lyw5xo/`.
+- Verification passed: `npm test` (301/301), TypeScript, focused ESLint, smoke syntax and loopback guard, `git diff --check`, and the isolated production browser journey. The text and GIF Relay runs had no overflow, browser errors, failed requests, or cross-origin browser traffic. The 4004 app remained available; test data, Storage objects, and browser profiles were cleaned.
+- Code commit `bce0f37` is pushed to `origin/feat/pilot-integrated-preview`. GitHub confirmed PR #11 is open/draft at this code commit with base `main`; its CI checks were not queried. Remote `main` remains `5138f88`; no merge occurred. A separate docs commit follows.
+- Hosted Supabase is still blocked: `.env.local` and the process environment have no `SUPABASE_ACCESS_TOKEN`, the Supabase ChatGPT connector is disabled by workspace admin, and the earlier pasted credential was not reused. No hosted project, billing, or hosted data changed. Hosted delivery/retention, actual screen-reader output, installed-PWA sharing, and physical device/camera checks remain open.
+
+**Next:** add a fresh scoped Supabase Management API token to the canonical checkout's local `.env.local` (do not paste it into chat) to provision the approved Free project, then complete hosted acceptance. Refresh PR #11 state/checks before any merge; keep `main` unchanged until the remaining gates pass and the user approves merging.
+
 ## Latest checkpoint — secure Relay browser journey (2026-10-26)
 
 - `npm run test:browser-relay` now starts with a signed-in sender creating the text Relay drop through Compose, confirms the selected Relay mode and recipient, and reads back the exact dispatched row. The rest of the flow accepts the UUIDv4 fragment invite as a carrier, confirms location is never called, verifies subject/body privacy, rejects a fresh replay, refreshes the sender Journey, then collects and reveals the drop as the recipient.

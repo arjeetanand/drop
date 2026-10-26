@@ -8,6 +8,16 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 
 ## Implementation Status — 2026-10-26
 
+### Latest checkpoint — Compose starters, mobile wrapping, and GIF Relay acceptance (2026-10-26)
+
+- Added three optional text/photo/GIF starters for empty Composer notes and captions. Selecting a starter keeps the text editable, preserves a selected attachment, and does not send the drop.
+- Fixed long unbroken subjects, revealed fragments, and opened message text expanding the detail card beyond the mobile viewport. The Relay browser regression keeps a long sentinel and verifies the 390×844 page now wraps it.
+- Extended `npm run test:browser-relay` through sender GIF Compose, media finalization, carrier privacy, sealed recipient state, explicit collection, and rendered reduced-motion GIF. Exact Storage paths, metadata, signed object origin, confirmed not-found responses, test data cleanup, and screenshots are covered.
+- Verification passed: `npm test` (301/301), `npx tsc --noEmit --incremental false`, focused ESLint, runner syntax/guard, `git diff --check`, and full isolated local text/GIF Relay browser run with a production build. Screenshots are at `/private/tmp/drop-pilot-final-evidence.Lyw5xo/`.
+- Code commit `bce0f37` was pushed to `origin/feat/pilot-integrated-preview`. GitHub confirmed PR #11 is open/draft at that code commit with base `main`; CI checks were not queried. Remote `main` remains `5138f88`; no merge occurred. Docs follow in a separate commit.
+- Hosted Free project provisioning remains blocked because no `SUPABASE_ACCESS_TOKEN` is configured in `.env.local` or the process environment and the Supabase connector is disabled by workspace admin. No hosted project or billing/resource setting changed.
+- Remaining pilot gates: hosted two-account delivery/retention, screen-reader output, installed-PWA system sharing, and physical-device/camera behavior.
+
 ### Latest checkpoint — secure Relay browser journey (2026-10-26)
 
 - Added `npm run test:browser-relay` for the secure server-backed Relay flow. The isolated 390×844 browser run creates an invite from the sender UI, verifies fragment-only UUIDv4, accepts from a carrier while geolocation is denied and unused, checks sealed subject/body and one-time replay denial, refreshes sender Journey, and collects/reveals in recipient Mailbox.

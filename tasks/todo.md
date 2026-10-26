@@ -2,6 +2,15 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
+## Checkpoint — Compose starters, text wrapping, and GIF Relay browser acceptance (2026-10-26)
+
+- [x] Add optional starters for text/photo/GIF drafts; verify selection fills an editable field, keeps GIF attachment attached, preserves nonempty text, and never auto-sends.
+- [x] Wrap unbroken subject, fragment, and message content; pass the 390×844 detail-page overflow regression.
+- [x] Pass expanded `npm run test:browser-relay` with UI-created text and GIF drops, carrier/recipient privacy, recipient collection/reveal, exact Storage validation/cleanup, and zero browser overflow/errors/external requests.
+- [x] Pass `npm test` (301/301), TypeScript, focused lint, smoke syntax/guard, `git diff --check`, and isolated production build. Review three 390×844 screenshots in `/private/tmp/drop-pilot-final-evidence.Lyw5xo/`.
+- [x] Commit `bce0f37` and push to existing `feat/pilot-integrated-preview`; GitHub confirms PR #11 is open/draft at that code commit and remote `main` remains `5138f88`. CI checks were not queried; docs follow separately.
+- [ ] Add a scoped `SUPABASE_ACCESS_TOKEN` locally to provision the approved Free project; complete hosted delivery/retention, screen-reader, installed-PWA sharing, and physical-device/camera checks.
+
 ## Checkpoint — secure Relay browser journey (2026-10-26)
 
 - [x] Add `npm run test:browser-relay` on isolated test port `6004`; restrict Node Supabase calls to exact loopback origin and reject redirects.
