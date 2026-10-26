@@ -5,6 +5,7 @@ import { Sidebar } from '@/components/Sidebar';
 import { MainContent } from '@/components/MainContent';
 import { LocalAccountProvider } from '@/components/LocalAccountProvider';
 import { ShareTargetServiceWorker } from '@/components/ShareTargetServiceWorker';
+import { DropClaimHandoffPruner } from '@/components/DropClaimHandoffPruner';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -52,6 +53,7 @@ export default function RootLayout({
           Skip to content
         </a>
         <LocalAccountProvider>
+          <DropClaimHandoffPruner />
           <ShareTargetServiceWorker />
           <div className="min-h-screen bg-[#f7f4ee] text-slate-900">
             <Sidebar />

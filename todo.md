@@ -2,6 +2,21 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
+## Current Checkpoint — 2026-10-26 (Local Supabase fixture-target guard)
+
+- [x] Add fail-closed listener, Docker endpoint, and matching service-container checks before the six fixture-writing Supabase smokes. Reject lookalike remote SSH tunnel arguments.
+- [x] Pass `npm test` (298/298), lint, no-incremental TypeScript, JavaScript syntax, and diff checks.
+- [x] Pass the 390×844 QR browser smoke and `npm run test:local-supabase`; both verified exact disposable fixture cleanup.
+- [x] Push tested code commit `f8c709d` to `origin/feat/pilot-integrated-preview`; PR #11 remains open/draft at that code head and `main` remains `5138f88`.
+- [ ] Obtain a scoped Management API token, verify the Free hosted project, and complete hosted delivery/retention plus screen-reader and physical-device acceptance.
+
+## Previous Checkpoint — 2026-10-26 (Repeatable private-claim QR smoke)
+
+- [x] Add and push `npm run test:browser-qr` in code commits `9e764e8` and `2a9cf49`; verify QR issuance, privacy, accessible hide/show, draft reset, redirect-denying loopback Supabase calls, and exact cleanup.
+- [x] Pass the QR browser smoke, 288/288 unit tests, lint, typecheck, JavaScript syntax, and diff checks. The browser lacks `BarcodeDetector`; manual pixel decode evidence is recorded separately.
+- [x] Update the existing `feat/pilot-integrated-preview` branch. PR #11 remains open/draft at `2a9cf49`; `main` remains at `5138f88`; port 4004 remains in service and 6004 was released.
+- [ ] Verify hosted account-to-account delivery and scheduled physical deletion when the Free Drop project is accessible; complete screen-reader, installed-PWA share, and physical-device/camera checks.
+
 ## Current Checkpoint — 2026-10-24 (Local cleanup migration and media claim recovery)
 
 - [x] Remove the unsupported index on managed `storage.objects`; keep the cleanup scan ordered and cursor-based.

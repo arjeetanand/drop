@@ -1328,3 +1328,808 @@ When localhost is unavailable, first check whether the app process is running. A
 ### Git and remaining gaps
 
 No application code or environment file changed. This issue-resolution record is on `chore/docker-runtime-recovery`; see the branch's latest Git commit for the exact SHA and the final task report for push status. Hosted Supabase behavior, real aged-object deletion, screen-reader use, and physical-device checks remain open.
+
+## 2026-10-25 — Add private, durable recipient unread state
+
+### Issue
+
+Delivered drops looked the same whether or not the recipient had opened them, and that status needed to stay private from senders while surviving reloads.
+
+### Cause
+
+The mailbox had no durable recipient-owned read marker. Local-only state could not reliably sync across sessions, and an in-flight read response could otherwise be applied after the signed-in account changed.
+
+### Resolution
+
+- Add a private read-state table and authenticated recipient-scoped RPCs for marking and reading delivered-drop markers. Use server timestamps and make mark calls idempotent; deny sender and outsider access.
+- Add “New” on eligible received cards and an unread Inbox count on desktop and mobile. Mark only after the full drop opens, preserve read state through stale refreshes, and bind asynchronous updates to the account that started them.
+- Add unit and rollback-only SQL checks plus disposable local Supabase and authenticated browser smoke coverage.
+- Fix the browser smoke's cleared-badge wait to locate the visible card independently from its unread badge; the earlier predicate had coupled card visibility to the badge that the feature intentionally removes.
+
+### Learning
+
+For account-scoped asynchronous state, capture the active account when work starts and verify it is still current before applying the result. Browser checks for an element that changes state should locate the stable parent independently from the changing state marker.
+
+### Verification
+
+- `npm test`: 280/280 passed; `npm run lint`, `npm exec tsc -- --noEmit --incremental false`, browser-smoke syntax, and `git diff --check` passed.
+- `npm run test:local-supabase` passed all 9 groups, including marker persistence/idempotence and sender/outsider denial. The rollback-only SQL fixture passed on a disposable local database.
+- Authenticated local Edge smoke passed on mobile 390×844 and desktop 1440×900: sign-in, “New” indicators, full drop open, successful mark RPC, both markers cleared, and persisted state after reload. Cleanup confirmed zero disposable users/drops and no 5004 listener or temporary profile.
+- The isolated Webpack production build passed. No hosted Supabase project or key was used; no files in `/letter` changed.
+
+### Git and remaining gaps
+
+Code commit `a416d81` is pushed to `origin/feat/recipient-unread-state`. Project notes are being recorded in a separate follow-up commit on the same branch. No PR was opened for this branch; PR #7 remains open for its QR browser check. A second authenticated recipient session, hosted migration/API, screen-reader, and physical-device checks remain pending.
+
+## 2026-10-25 — Verify local send, unread state, and reactions across two accounts
+
+### Issue
+
+The unread indicator had been checked in an authenticated browser flow, but the local app still needed one end-to-end check that starts with a sender composing and ends with the sender seeing a recipient's reaction.
+
+### Cause
+
+Unit and database checks could validate each operation without proving that two signed-in browser sessions could complete the same send, open, read, and reaction journey through the rendered app.
+
+### Resolution
+
+- Added a guarded browser smoke that signs in two disposable local accounts, sends a text drop from Compose, checks unread Home state at mobile and desktop sizes, opens it from Inbox, and submits 🫶.
+- Confirmed the sender mailbox receives the live reaction and still displays it after reload.
+- Tightened exact read-RPC response correlation and cleanup assertions; stopped only the harness-owned browser process group, avoiding an inherited Edge updater pipe that had kept the runner alive.
+- Added failure diagnostics for unread-state checks that report fixture visibility and card state without printing private drop content.
+
+### Learning
+
+An end-to-end feature check should follow one exact fixture identifier through the UI and backend, then prove the fixture is gone. Correlating a read response to the expected drop and asserting cleanup absence catches false positives that a successful click or generic HTTP status cannot.
+
+### Verification
+
+- `npm test`: 281/281 passed. `npm run lint`, `npm run typecheck`, both browser-smoke syntax checks, the harness guard self-test, and `git diff --check` passed.
+- The full isolated browser smoke passed on mobile 390×844 and desktop 1440×900: sender sign-in and Compose send; recipient sign-in, unread Home, Inbox open, read-marker clearing, and 🫶 reaction; sender live update and persisted reaction after reload. Both browser sessions had no console errors, runtime exceptions, failed local requests, or non-loopback requests.
+- Cleanup verified the exact disposable drop, reaction, auth users, and profiles were absent and removed the temporary project and browser profiles. Local Supabase Auth and the main app returned HTTP 200. The production build was not rerun because app source did not change.
+
+### Git and remaining gaps
+
+Code commit `5fd64f7` is pushed to `origin/feat/recipient-unread-e2e`; this log and the README, checklist, plan, and handoff are recorded in a separate documentation commit on the same branch. No PR was opened. PR #7 remains open for its separate QR browser check. Same-recipient synchronization in a second browser session, hosted migration/API behavior, screen-reader output, and physical-device behavior remain unverified. No hosted Supabase resource was used or changed; the local-only `.env.local` values were used for the smoke and were not modified or committed.
+
+## 2026-10-25 — Verify recipient unread sync in a second browser session
+
+### Issue
+
+The read marker worked in the recipient's active browser, but the same account's already-open second session also needed to clear its unread badge from server state without reloading.
+
+### Cause
+
+The first cross-session browser attempt used Next's development server. Its HMR document replacement during dynamic-route compilation looked like a product reload and made the no-reload assertion ambiguous. The isolated production build also needed Webpack because Turbopack rejects the temporary project's symlinked `node_modules` path.
+
+### Resolution
+
+- Build the isolated smoke app with `next build --webpack` and serve it with `next start` on port 6004.
+- Add a third isolated browser profile for the same recipient. Correlate the refresh request to the exact disposable drop, require a successful response containing its parseable `read_at`, then verify the still-open Home UI clears “New” without document replacement.
+- Remove the development-route warmup; retain only a short stable Home baseline after recipient sign-in.
+- Restart Drop with the ownership-checked `./run.sh start` command and verify Docker and local Supabase through the approved local runtime context. No socket permission or global Docker setting changed.
+
+### Learning
+
+Use a production server for checks that depend on document identity. For account synchronization, prove the same fixture ID appears in the post-write server response and then verify the UI changes in the already-open second session.
+
+### Verification
+
+- `npm test`: 281/281 passed. `node --check scripts/browser-send-react-smoke.mjs`, `npx eslint scripts/browser-send-react-smoke.mjs`, and `git diff --check` passed.
+- The full authenticated production browser smoke passed: sender Compose send; the same recipient unread in two separate sessions at 390×844 and 1440×900; exact read marker and subsequent read-state response; no-reload badge clearing; recipient 🫶 reaction; sender live and reloaded reaction; loopback-only browser requests; and exact disposable-data cleanup.
+- Docker server version 29.5.2 and local Supabase containers were running. After `./run.sh start`, Drop, Supabase Auth, and Mailpit returned HTTP 200 on ports 4004, 54321, and 54324.
+
+### Git and remaining gaps
+
+Code commit `0e672f3` is pushed to `origin/feat/recipient-unread-e2e`; this learning and its README, checklist, plan, and handoff updates are recorded separately on the same branch. No PR is open for this branch. PR #7 remains open for its separate QR browser check. Hosted migration/API behavior, screen-reader output, and physical-device checks remain open. No hosted Supabase resource changed; `.env.local` was not committed, and `/letter` was not changed.
+
+
+## 2026-10-25 — Clarify Home account requirement for sending
+
+### Issue
+
+Home placed “No sign-in” beneath the local demo action without stating that account-backed sending needs a Drop account. A first-time user could mistake the demo for the normal send path.
+
+### Cause
+
+The Home helper described only the demo's local behavior; the account requirement appeared later in Compose.
+
+### Resolution
+
+Changed the Home helper to “Demo stays on this device · a Drop account is needed to send.” Added a browser assertion on the Home demo and prompt entry paths.
+
+### Learning
+
+When a local demo and a real account-backed action share the same entry screen, explain the boundary beside the demo CTA before the user enters the flow.
+
+### Verification
+
+- `npm test`: 281/281 passed; `npm run lint`, `npx tsc --noEmit --incremental false`, `node --check scripts/browser-demo-smoke.mjs`, and `git diff --check` passed.
+- The isolated Chrome prompt smoke passed at 360×844, 390×844, 430×844, and 1440×900, including the new disclosure assertion, keyboard prompt-to-draft behavior, and attachment preservation. It reported zero cross-origin requests.
+- The full GIF flow passed at 360×844 and 390×844. A later viewport timed out waiting for the Home entrance animation although the page content, including the disclosure, was rendered. The test runner diagnosis remains pending.
+
+### Git and remaining gaps
+
+Code commit `64f29b5` is on branch `fix/pilot-send-account-disclosure`; this record and the README, checklist, and handoff updates are in a separate commit on the same branch. Hosted Supabase sending, screen-reader output, physical-device behavior, and the full-flow animation wait remain unverified. No secret was read or recorded, no hosted resource changed, and `/letter` was not modified.
+
+## 2026-10-25 — Stabilize the production demo browser smoke
+
+### Issue
+
+The full production browser smoke intermittently stopped after reload or viewport changes, leaving the GIF, reaction-persistence, and sender-copy journey without reliable coverage.
+
+### Cause
+
+The runner required every `main.page-enter` animation to report `playState === "finished"`. A timeout snapshot showed the Home route and content were loaded while headless Chrome kept the finite CSS animation at `currentTime: 0`. A touch dispatch also timed out on the post-reload path at 360px. These failures came from the automation timing/input gates; the route content and app state were present.
+
+### Resolution
+
+Wait for the route content and page shell, then allow a named 420ms settle above the current 380ms CSS duration. Include animation state in timeout diagnostics. Use keyboard activation for post-reload reveal, open, and sender-copy actions while keeping touch in the initial 360px flow.
+
+### Learning
+
+Browser acceptance should wait for route-specific content and a bounded visual settle, not make a functional flow depend on headless animation timelines. Keep touch coverage in a stable first-run path and use deterministic keyboard input for the flaky post-reload path.
+
+### Verification
+
+- `npm test`: 281/281 passed. Lint, no-incremental TypeScript, browser-smoke syntax and targeted ESLint, and `git diff --check` passed. The production build passed with 22 routes.
+- The isolated production Chrome smoke passed GIF at 360×844, 390×844, 430×844, and 1440×900; photo/reaction reload at 390×844; prompt-to-editable-draft with attachment preservation; and handleless claim plus saved-claim recovery at all four widths. It reported zero cross-origin requests and no horizontal overflow.
+- Mobile and desktop screenshots were visually reviewed. Independent read-only review found no blocker in the harness change.
+
+### Git and remaining gaps
+
+Code commit `36f557d` is pushed to `fix/pilot-send-account-disclosure`; this log and the README, checklist, plan, and handoff are in the following documentation commit on that branch. Nothing was merged; PR #7 remains open for its QR browser check. Hosted account-to-account behavior, screen-reader output, physical-device behavior, and the system share sheet remain unverified. No hosted resource changed, and `/letter` was not modified.
+
+## 2026-10-25 — Preserve PWA share imports across account switches
+
+### Issue
+
+An account switch during an in-flight share-target import could make rollback act on the newly active account or lose the staged handoff before a retry. The browser smoke also required observing an intermediate shareImport URL even when a successful import had already navigated to its canonical letter route.
+
+### Cause
+
+The async composer import outlives the account state that began it. Rollback must use the captured account and draft identity, and browser assertions must verify the completed import state instead of assuming a specific transition timing.
+
+### Resolution
+
+- Capture the importing account and existing draft/media context; scope rollback operations to those identities, preserve the handoff when persistence fails, and return a typed retry-safe error when attachment cleanup cannot be confirmed.
+- Add regression coverage for account switches, persistence failures, and preserving the previous draft/media.
+- Update the production browser smoke to accept either the still-pending handoff URL or an already-completed canonical route, then require the expected letter route and content.
+- The candidate already contained the manifest, service-worker share target, and multipart handler. Integrated only the relevant account-switch rollback follow-up from feat/pwa-share-acceptance; skipped unrelated stale changes.
+
+### Learning
+
+For async work that writes user-scoped data, capture the owner at operation start and use that owner for every commit and rollback step. A browser smoke may accommodate route timing, but it must assert the final route and imported content so a failed import cannot pass.
+
+### Verification
+
+- Focused unit tests passed 46/46; full npm test passed 286/286. npm run lint, no-incremental TypeScript, browser-smoke syntax and targeted ESLint, and git diff --check passed.
+- Production build passed with npm run build -- --webpack using a temporary, test-only local-font response fixture because Google Fonts DNS was unavailable in the sandbox. The fixture was removed and is not part of the product branch. The unmocked build was blocked by fonts.googleapis.com DNS resolution.
+- The production share-target browser smoke passed on 127.0.0.1:6004: synthetic PNG multipart import, opaque redirect, new local draft, caption and empty recipient, retry after injected persistence failures, existing-draft preservation, same-ID replay, and responsive widths 375×844, 390×844, 844×390, and 1440×900. It reported no cross-origin requests or overflow.
+- The smoke did not verify PWA installation or the operating-system share sheet. No hosted project was used.
+
+### Git and remaining gaps
+
+Code commit ff9c2ff is pushed to origin/feat/pilot-pwa-share; this learning and project notes are being committed separately on that branch. The temporary font fixture and node_modules symlink were removed and are not committed. No main merge, PR creation, or PR #7 change was made. OS share-sheet/install behavior, screen-reader output, physical-device checks, and hosted account-to-account behavior remain open. /letter and .env.local were not changed.
+
+## 2026-10-25 — Improve pilot photo/GIF accessibility
+
+### Issue
+
+Home's small send-requirement helper did not meet the 4.5:1 text-contrast target. Composer media alternatives became empty when the sender also entered a note, and the clipped file input could receive keyboard focus while its picker surface was below or behind the fixed action tray without a visible cue.
+
+### Cause
+
+The Home helper used a translucent white treatment with insufficient contrast over cobalt. Media `alt` text was derived from the note and therefore disappeared when that note was nonempty. The visually styled picker had no focus-visible surface treatment, and the fixed action tray could obscure the focused control.
+
+### Resolution
+
+- Raise the helper's white opacity and add a browser assertion against its rendered computed colors.
+- Use the meaningful type-specific fallbacks “Attached photo” and “Attached GIF” consistently in composer, recipient preview, and received view, independent of note/message text.
+- Add a 3px mint focus outline to the picker surface for `:focus-visible`; when keyboard focus reaches the clipped file input, scroll the picker into view above the fixed actions.
+- Add unit and browser regressions for both media labels, contrast, keyboard focus/visibility, media names in each view, and share-import route interactivity.
+
+### Learning
+
+A media note is supplemental text, not a replacement for identifying the attachment. For custom file pickers with clipped inputs, verify both the focused control's accessible name and the visible, unobscured surface where the user can act.
+
+### Verification
+
+- `npm test`: 287/287 passed; `npm run lint`, `npm run typecheck`, `node --check scripts/browser-demo-smoke.mjs`, and staged `git diff --cached --check` passed.
+- `DROP_BROWSER_SCREENSHOT_DIR=/private/tmp/drop-a11y-evidence node scripts/browser-demo-smoke.mjs http://127.0.0.1:6004 --accessibility-only` passed in isolated Chrome at 320×740 and 390×844. Computed contrast measured 4.62:1. Keyboard Tab reached photo/GIF inputs; the focus-visible picker outline was 3px and clear of the fixed action tray. The accessibility tree retained “Attached photo” and “Attached GIF” in composer, recipient preview, and received samples with nonempty accompanying text. There was no horizontal overflow or cross-origin request.
+- `node scripts/browser-demo-smoke.mjs http://127.0.0.1:6004 --share-target-only` passed, including the post-canonical-route `aria-busy=false` and enabled compose-control assertion. The lifecycle check did not reproduce a stuck composer, so no app fix was needed.
+- Screenshots were reviewed in `/private/tmp/drop-a11y-evidence`. The local test server was stopped and port 6004 released. These checks do not establish actual screen-reader output or physical-device behavior.
+
+### Git and remaining gaps
+
+Code commit `ca29555` is on branch `fix/pilot-a11y-accessibility`, based on `feat/pilot-integrated-preview` at `da358a5`. README, checklist, plan, handoff, and this learning record are being committed separately on the same branch. Screen-reader, physical-device, hosted-send, and OS share-sheet installation checks remain open. No hosted Supabase resource was used, `.env.local` was not read, `/letter` and `main` were not changed, and PR #7 remains untouched.
+
+## 2026-10-25 — Keep composer actions reachable on mobile
+
+### Issue
+
+On short phone viewports, Compose actions competed with the bottom navigation and could require extra scrolling. The Next.js development badge also obscured part of the local mobile navigation.
+
+### Cause
+
+The action controls were in normal page flow while app navigation occupied a fixed bottom region. The dev-only badge was an additional overlay in the same area. A transformed page entrance could also change how fixed descendants attach to the viewport.
+
+### Resolution
+
+- Place Preview, Save, Delete, and Send/Connect in a compact fixed action tray on mobile, offset for the safe area and navigation; retain normal document flow on desktop and preserve the existing account/send gate.
+- Keep the mobile entry animation opacity-only so the tray remains viewport-fixed, and disable the Next.js dev badge that obscured navigation.
+- Keep browser-smoke output generic so the same isolated harness can run Edge.
+
+### Learning
+
+When a mobile screen has both a fixed tab bar and a primary action tray, test the tray while the page scrolls and reserve space for the tab bar plus safe area. Avoid transformed ancestors around viewport-fixed controls.
+
+### Verification
+
+- `npm test` passed 286/286; lint, no-incremental TypeScript, browser-smoke syntax, and `git diff --check` passed on the dedicated mobile-action branch.
+- Real Edge checks passed at 320×740, 360×844, 390×844, 430×844, 768×1024, and 1440×900. The checks covered scroll stability, navigation clearance, touch target size, overflow, keyboard focus, and account gating. The 390px screenshot is `/private/tmp/drop-composer-action-tray-qa-final/mobile-390-prompt-composer.png`.
+- The integrated candidate carries patch-equivalent code commits `0686651` and `6485ef0`; the dedicated branch commits were `4ca8900` and `b404014`.
+
+### Git and remaining gaps
+
+The dedicated code commits were pushed on `feat/pilot-mobile-composer-actions`; the integrated candidate is `feat/pilot-integrated-preview` and its push state is recorded in the latest handoff checkpoint. Hosted account-to-account behavior, PWA installation/system sharing, actual screen-reader output, and physical-device checks remain open. `/letter` and credentials were not changed.
+
+## 2026-10-25 — Verify first-time email sign-up through Mailpit
+
+### Issue
+
+The existing authenticated claim browser tests created users through Supabase Admin APIs, leaving the public email sign-up and first-profile journey unverified.
+
+### Cause
+
+Admin-created fixtures bypass the actual email form, magic-link delivery, auth callback, and first-use profile save that a new recipient must complete.
+
+### Resolution
+
+- Add `npm run test:browser-first-signup` to run an isolated browser against loopback Supabase and local Mailpit.
+- Submit the public email form, open the exact local magic link in the same browser, save the first profile, and independently read it through the local admin API.
+- Delete the exact test account/profile and matching Mailpit message; do not reset the database or contact a hosted project.
+
+### Learning
+
+For first-use account journeys, API-provisioned users are not a substitute for a browser-driven email sign-in. Follow the real callback and profile setup, then prove the disposable fixture was cleaned up.
+
+### Verification
+
+- On source branch `feat/pilot-first-signup-smoke` at `de887cd`, `npm run test:browser-first-signup` passed the public form → Mailpit link → auth callback → profile save/readback flow; exact Auth user, profile, and email were removed.
+- The same test commit was integrated into `feat/pilot-integrated-preview` as `d49aaf3`. The app suite passed 287/287, lint and TypeScript passed, and the smoke script passed `node --check`.
+- The combined new-user-to-pending-claim return journey is not yet covered by this standalone sign-up smoke.
+
+### Git and remaining gaps
+
+`feat/pilot-integrated-preview` is at `723d45f` after the following accessibility fix. The candidate is not pushed yet. Hosted delivery/deletion, actual screen-reader output, physical-device/PWA share-sheet behavior, and the new-user claim return journey remain open. No hosted service, `/letter`, or credential file was changed.
+
+## 2026-10-25 — Announce the composer send state
+
+### Issue
+
+While a drop was sending, the composer fieldset was disabled and the submit button announced progress, but the containing form still exposed `aria-busy="false"`.
+
+### Cause
+
+Form-level busy semantics included deletion and PWA import but omitted the existing `sending` state.
+
+### Resolution
+
+Include `sending` in the form's `aria-busy` expression so assistive technology sees the same busy interval as the disabled controls.
+
+### Learning
+
+Keep aggregate busy semantics synchronized with every state that disables a form. A visible live label does not replace form-level status semantics.
+
+### Verification
+
+- `npm test` passed 287/287, `npm run lint`, `npm run typecheck`, and `git diff --check` passed.
+- `npm run build -- --webpack` completed TypeScript and all 22 routes on the updated source.
+- This confirms the markup builds; spoken screen-reader output still requires real assistive-technology verification.
+
+### Git and remaining gaps
+
+The one-line source fix is commit `723d45f` on `feat/pilot-integrated-preview`; it has not been pushed. Hosted acceptance, the combined new-user claim journey, screen-reader, physical-device, and OS-share checks remain open.
+
+## 2026-10-25 — Separate production-build evidence by bundler
+
+### Issue
+
+A fresh `npm run build` rerun could not complete in the isolated environment even though the candidate had an earlier successful Turbopack build.
+
+### Cause
+
+The sandboxed Turbopack run could not fetch Google Fonts. Retrying in the approved local runtime resolved the font fetch but Turbopack failed while binding a worker port with `Operation not permitted`.
+
+### Resolution
+
+Run the repository's production Webpack build for final verification. Keep both the prior Turbopack success and this current environment-specific failure in the handoff; do not imply they are the same result.
+
+### Learning
+
+Record the exact bundler and environment boundary for build results. A passing Webpack build validates compilation and routes but does not erase a failed current Turbopack rerun.
+
+### Verification
+
+- `npm run build -- --webpack` passed after the composer fix, compiling, type-checking, and generating all 22 routes. It emitted existing Browserslist freshness and ambiguous Tailwind easing warnings.
+- The failed Turbopack attempt reported worker-port `Operation not permitted`; no product source change was made to suppress it.
+
+### Git and remaining gaps
+
+No build configuration or dependency changed. The application fix is in `723d45f` on `feat/pilot-integrated-preview`; docs and integration notes remain uncommitted and the branch is not pushed. Hosted, screen-reader, physical-device, and OS-share acceptance remain open.
+
+## 2026-10-25 — Verify QR copy below fixed navigation
+
+### Issue
+
+A QR browser screenshot showed explanatory text partly behind the fixed bottom navigation, raising a concern that the copy was clipped on mobile.
+
+### Cause
+
+The screenshot captured an intermediate scroll position. The page has trailing padding for fixed navigation, so the content moves fully above it at the document end.
+
+### Resolution
+
+No code change was needed. The authenticated QR page was checked at maximum scroll and the explanation and navigation bounds were compared.
+
+### Learning
+
+For fixed-navigation layouts, check suspected overlap at maximum scroll before changing padding. An intermediate screenshot can look clipped even when the page has enough trailing space.
+
+### Verification
+
+- At 390×844, the browser reported `scrollY=maxScrollY=596`, explanation bottom `413.09375px`, fixed-nav top `783.8125px`, and computed bottom padding `88px`.
+- The authenticated QR/link decoder check passed and its disposable drop, account, and profile were removed. Port 5004 was released; no request went to port 4004 or a hosted service.
+
+### Git and remaining gaps
+
+This was a verification-only check on `feat/pilot-mobile-composer-actions`; PR #7 remains open as requested. A physical camera scan and hosted claim, screen-reader output, and real-device checks remain open.
+
+## 2026-10-25 — Recheck the PWA request-guard interruption
+
+### Issue
+
+One production share-target browser run completed its functional assertions, then reported `Fetch.continueRequest: Invalid InterceptionId` at the final network-guard check.
+
+### Cause
+
+The error did not identify a request and could not be reproduced, so the specific CDP interception lifecycle cause remains unknown. The evidence did not establish an application request failure or a cross-origin request.
+
+### Resolution
+
+Keep the cross-origin firewall strict and do not suppress an unclassified interception error. Repeat the same production share-target flow in isolation and only change the guard if a reproducible request and failure state are identified.
+
+### Learning
+
+A one-off browser-protocol error is inconclusive. Repeat the focused production flow and preserve the security assertion instead of weakening it to turn a flaky check green.
+
+### Verification
+
+- The production `--share-target-only` flow passed nine consecutive isolated runs at port 6004 against the `4a3b342` candidate build. All manifest, multipart import, replay/reload, sent-draft preservation, responsive checks, and Auth/REST/Storage guards passed; each run reported zero blocked cross-origin attempts.
+- One earlier sandboxed Chrome launch failed before DevTools startup; the approved local browser run then completed all nine passes. The test server stopped and port 6004 was released.
+
+### Git and remaining gaps
+
+No code change or commit was justified. `feat/pilot-integrated-preview` remains at `4a3b342` pending its documentation commit and push. PWA installation and operating-system sharing, hosted delivery, physical-device behavior, and screen-reader output remain open. Port 4004, `.env.local`, hosted Supabase, and `/letter` were untouched.
+
+## 2026-10-25 — Run the configured build inside the isolated checkout
+
+### Issue
+
+The repository's configured `npm run build` initially stopped before compilation with a Turbopack error saying the `node_modules` symlink pointed outside the filesystem root.
+
+### Cause
+
+This temporary worktree borrowed dependencies through a symlink to the canonical checkout. Turbopack rejects an external dependency symlink when discovering project routes.
+
+### Resolution
+
+Install the locked dependencies inside the isolated worktree with `npm ci --offline`, then run the configured `npm run build`. Remove the temporary dependency/build output and restore the generated `next-env.d.ts` afterward.
+
+### Learning
+
+Use an in-checkout dependency tree for the configured Turbopack build. A failure caused by temporary worktree wiring does not establish a source or build defect.
+
+### Verification
+
+- `npm ci --offline` installed 655 packages from the local cache and reported zero vulnerabilities; it made no package or lockfile change.
+- The unmodified configured `npm run build` (Next.js 16.3.2, Turbopack) passed compilation, TypeScript, and all 22 route generations. It emitted only the existing outdated Browserslist data warning.
+- Temporary `node_modules` and `.next` outputs were removed and `next-env.d.ts` restored from the candidate commit.
+
+### Git and remaining gaps
+
+This was a build-environment correction only. The code remains on `feat/pilot-integrated-preview` at `4a3b342`; no dependency change or build-script edit was made. Hosted, PWA installation, screen-reader, and physical-device acceptance remain open.
+
+## 2026-10-25 — Clarify superseded candidate Git status
+
+### Issue
+
+The preceding PWA and build entries accurately describe checks performed at `4a3b342`, but their present-tense Git summaries became stale after integration continued.
+
+### Cause
+
+The later signup-smoke and composer accessibility commits advanced the same candidate branch after those entries were appended.
+
+### Resolution
+
+Keep the historical verification SHAs as written and use this clarification for current status: `feat/pilot-integrated-preview` is at `723d45f`, including the public signup-smoke commit `d49aaf3`; the branch is 24 commits ahead of refreshed `origin/main` (`5138f88`), not pushed, and not merged.
+
+### Learning
+
+In an append-only learning log, preserve old evidence but add a dated clarification when later work changes the present-tense branch or commit status.
+
+### Verification
+
+- `git fetch origin` completed successfully; `git rev-list --left-right --count origin/main...HEAD` returned `0 24` and `git rev-parse --short HEAD` returned `723d45f`.
+- These commands refreshed only local remote-tracking refs; no remote branch was changed.
+
+### Git and remaining gaps
+
+This is a documentation clarification on the uncommitted `feat/pilot-integrated-preview` worktree. The full new-user-to-private-claim journey, hosted verification, screen-reader output, physical-device behavior, and OS share sheet remain open.
+
+## 2026-10-25 — Publish one integrated pilot candidate for review
+
+### Issue
+
+Pilot work had accumulated across feature branches, while the current integration candidate and its documentation still described the branch as local and unpublished. That made it hard to tell which branch was the latest reviewable version.
+
+### Cause
+
+Parallel work had been tested and integrated locally, but branch publication and a single review link had not yet been completed. The combined first-time-recipient claim journey was still under test.
+
+### Resolution
+
+Push `feat/pilot-integrated-preview` and open it as draft PR #11. Keep it unmerged and leave `main` and PR #7 unchanged. Update the README, checklist, plan, todo, and handoff to name the same branch, commit, PR, verification, and remaining gates.
+
+### Learning
+
+When parallel feature work is ready for review, publish one integration branch and point every status document to its exact Git tip and PR. Keep unfinished end-to-end journeys visible as pending gates instead of describing the pilot as fully accepted.
+
+### Verification
+
+- `git push -u origin feat/pilot-integrated-preview` created the remote branch; `git ls-remote` returned `b82f5e0d292bbeceea0bdce95624f30f0ee906af`.
+- `gh pr view 11` confirmed an open draft PR targeting `main` at the same head SHA. `git rev-list --left-right --count origin/main...HEAD` returned `0 25` before this documentation commit.
+- Candidate checks already passed: 287/287 unit tests, lint, typecheck, smoke-script syntax, diff check, and Webpack production build. Local authenticated send/read/reaction, media-claim, PWA, standalone signup, and combined new-recipient claim flows passed.
+- The combined signup-to-private-claim browser flow passed after two harness issues were corrected. The first attempt used a seeded `/compose` draft. A later run waited for `/profile` immediately after email callback, but the app correctly returned to `/claim?handoff=…` first and exposed a “Choose a Drop handle” link. After following it, another run reached the claim action but a case-sensitive assertion did not account for `.button-primary` CSS text transformation. The harness now follows the intended route and compares rendered labels case-insensitively; the final run passed signup, profile sync, same-claim return, explicit reveal/open, and outsider/replay denial. Exact local users, profiles, claim, and Mailpit message were removed. No app-source change was required.
+
+### Git and remaining gaps
+
+Before this note is committed, `feat/pilot-integrated-preview` is pushed and tracked at `b82f5e0`, with draft PR #11 open and unmerged. The canonical app checkout still serves the prior branch on port 4004. Hosted delivery and actual 30-day cleanup, installed-PWA/system sharing, spoken screen-reader output, and physical-device/QR-camera checks remain unverified; no hosted Drop project exists.
+
+## 2026-10-25 — Run the integrated pilot from the canonical checkout
+
+### Issue
+
+The review branch was ready, but the stable local URL still ran the older composer branch, so the pilot was not yet available from the user's normal project directory.
+
+### Cause
+
+The integrated branch was checked out in a preview worktree while `/Users/arjeetanand/projects/drop` remained on `feat/pilot-mobile-composer-actions`.
+
+### Resolution
+
+Preserve the previous branch and preview worktree, detach the clean preview at the tested commit, and check out `feat/pilot-integrated-preview` in the canonical folder. Keep the existing ignored `.env.local` there; verify its presence without reading or copying values. Start only the project-owned server through `./run.sh`.
+
+### Learning
+
+For a local handoff, move the verified branch into the canonical checkout and keep the preview worktree recoverable. When the sandbox blocks the known local port, use the existing ownership-checking run script with the needed runtime permission, then verify the HTTP response and listener's project directory.
+
+### Verification
+
+- Before switching, listener PID 91892 had cwd `/Users/arjeetanand/projects/drop` and the expected Node executable. The canonical checkout was clean on the old feature branch.
+- The integrated branch was pushed at `7dad439`; the preview worktree was detached at that commit and preserved. The canonical checkout now reports `feat/pilot-integrated-preview`, and `.env.local` is present and ignored.
+- An ordinary sandboxed start failed with `listen EPERM` on 4004. The same `./run.sh start` succeeded with local runtime permission. Listener PID 33831 has cwd `/Users/arjeetanand/projects/drop`; a loopback request returned HTTP 200.
+
+### Git and remaining gaps
+
+This documentation follow-up is being added on the pushed `feat/pilot-integrated-preview` branch; PR #11 remains open and draft. The hosted Free project is not configured, so hosted delivery and actual 30-day Storage deletion remain unverified. Spoken screen-reader output, installed-PWA/OS sharing, physical-device behavior, and physical camera QR scanning also remain open.
+
+## 2026-10-26 — Show the same private claim invite as a QR code
+
+### Issue
+
+The mobile private-claim flow exposed a bearer URL for copy/share, but no on-screen scan code for a nearby recipient.
+
+### Cause
+
+The ready-link panel did not render a QR representation of the issued invite.
+
+### Resolution
+
+Render a QR for the same issued invite used by copy/share on both handleless and confirmed-missing-handle paths. Clear it when draft/account context changes so a previous recipient cannot scan a stale drop. Keep the bearer-link disclosure visible: anyone holding the code can claim until the invite expires.
+
+### Learning
+
+For a QR affordance, derive the code from the already-issued canonical invite rather than creating another credential. Treat account and draft changes as invalidation events, and expose the recipient/privacy consequences beside the code.
+
+### Verification
+
+- On isolated local Chrome at 390×844, authenticated sign-in led to a private text invite; the QR rendered and received focus, and the 64-hex bearer token remained in the URL fragment.
+- Hide/show preserved the same invite. Decoding the captured QR matched the displayed invite exactly; the claim row remained pending with no recipient. Anonymous RLS read returned no rows.
+- The browser saw one local RPC, no blocked cross-origin requests, no console errors/page exceptions, and the scroll-to-end explanation stayed above fixed navigation. Exact test drop, Auth user, and profile were removed.
+- Combined code branch passed 288/288 unit tests, lint, typecheck, diff check, and a 22-route Webpack production build.
+
+### Git and remaining gaps
+
+QR code commits are `98cb6aa` and `f8cbde3` on local `pilot/combined-verification`, based on `f0c015a`. The isolated browser run itself used `pilot/qr-integration` at the same QR code tree before the handoff-pruner commit. These commits have not yet been transferred to the canonical candidate or pushed. Physical camera scanning and hosted behavior remain unverified.
+
+## 2026-10-26 — Prune expired claim handoffs after app restart
+
+### Issue
+
+If the tab that created a 10-minute claim handoff closed before its timer fired, the stale localStorage token could remain until the claim route was visited again.
+
+### Cause
+
+Physical cleanup depended on the claim route or the timer in the originating tab; no route-independent sweep ran when Drop started or returned to the foreground.
+
+### Resolution
+
+Mount a client-side pruner in the root layout. It removes expired or malformed records on startup and on `pageshow`/`focus`, while preserving the existing 10-minute logical TTL, opaque handoff ID, and bearer claim semantics. If Drop stays closed, cleanup waits until the next visit.
+
+### Learning
+
+For browser-local records with short logical TTLs, combine the existing open-tab timer with an app-start/foreground sweep. Do not imply background deletion while the app is closed.
+
+### Verification
+
+- Regression coverage proves startup removes expired records, preserves a still-live handoff, removes one that expires while backgrounded when focus returns, and unregisters listeners on unmount.
+- The combined branch passed 288/288 tests, lint, typecheck, diff check, and a 22-route Webpack production build.
+
+### Git and remaining gaps
+
+Code commit `2eb4071` is on local `pilot/combined-verification`, based on `f0c015a`. No hosted service or browser test is needed for this browser-storage lifecycle fix; browser cleanup after a closed tab occurs only on the next Drop visit. Push and canonical integration remain pending.
+
+## 2026-10-25 — Verify the 30-day staged-media cleanup worker locally
+
+### Issue
+
+The pending-media retention policy existed, but physical deletion of an aged staged object through the worker had not been proven end to end.
+
+### Cause
+
+Earlier verification covered policy and cleanup logic without running the real local Edge Function against staged Storage objects of different ages.
+
+### Resolution
+
+Create two disposable local Storage objects, age only one exact metadata row to 31 days, invoke the cleanup worker through the local Docker network, and verify the older object was deleted through the Storage API while the recent object remained. Remove both test objects, only the exact test tombstone, and restore the scan cursor.
+
+### Learning
+
+A worker unit test does not prove object deletion. Test age selection and the actual Storage API effect with a narrow disposable fixture, then verify both removal and retention and restore cursor/tombstone state.
+
+### Verification
+
+- Read-only preflight found no pending cleanup jobs, aged candidates, or preexisting aged unlinked objects. A deliberately wrong worker secret returned 401 before processing.
+- The worker reported `stagedScanned=1`, `stagedRemoved=1`, `stagedRetried=0`; the aged object disappeared and the recent object still returned HTTP 200.
+- Exact cleanup ended with zero fixture objects, zero fixture tombstones, and the initial null cursor restored. No SQL deletion from `storage.objects`, hosted resource, migration, port 4004, or `/letter` was used.
+
+### Git and remaining gaps
+
+Evidence is recorded in `docs/pilot-retention-verification.md`. This verifies local Supabase Storage and Edge Function behavior only. Hosted migrations, worker deployment/secrets, hourly schedule, and real hosted deletion remain unverified.
+
+## 2026-10-26 — Move the verified pilot into the canonical checkout
+
+### Issue
+
+The QR and expired-handoff fixes passed in an isolated branch, while the canonical app checkout and stable local URL were still on the earlier pilot commit.
+
+### Cause
+
+The tests and build were intentionally isolated under `/private/tmp` because the canonical checkout and its Git metadata are outside the normal writable workspace.
+
+### Resolution
+
+Fast-forward the exact tested branch into canonical `feat/pilot-integrated-preview`, keep the previous main branch untouched, then start Drop with its existing ownership-checking `run.sh` and verify the listener cwd and local service endpoints.
+
+### Learning
+
+Use an isolated writable checkout for development, then transfer by fast-forward only after code review and combined checks. Verify the stable URL is served by the canonical path before telling the user the candidate is ready locally.
+
+### Verification
+
+- Canonical branch is clean at `d9d9823`; `npm test` passed 288/288, lint passed, `npx tsc --noEmit --incremental false` passed, and the commit diff check is clean.
+- The identical code tree passed `npm run build -- --webpack` and generated 22 routes. The normal canonical TypeScript command could not write `tsconfig.tsbuildinfo` under the restricted path, so the no-incremental check was used.
+- Canonical `./run.sh start` serves port 4004 with HTTP 200; process cwd is `/Users/arjeetanand/projects/drop`. Local Auth and Mailpit returned HTTP 200. The local Supabase Docker stack is running; no reset was performed.
+
+### Git and remaining gaps
+
+Local `feat/pilot-integrated-preview` is four commits ahead of the cached origin ref and has not been pushed; GitHub could not be refreshed. The candidate remains unmerged from `main`. Hosted Free project setup and two-account behavior, scheduled hosted deletion, QR smoke automation, screen-reader output, installed-PWA system share, and physical-device/camera scans remain open.
+
+## 2026-10-26 — Publish the tested pilot branch without merging
+
+### Issue
+
+The candidate had passed local checks and was running from the canonical checkout, but reviewers could not see the updated QR and claim-handoff fixes.
+
+### Cause
+
+The verified commits were local while GitHub access had previously failed DNS resolution.
+
+### Resolution
+
+Push only the tested `feat/pilot-integrated-preview` branch. Leave `main` and PR merge state unchanged, then refresh the target PR and branch refs rather than inferring remote status from the local push response.
+
+### Learning
+
+A successful push confirms the branch update, but not PR checks or merge readiness. Refresh the actual PR head, checks, the separate QR PR, and `main`; report exactly which remote evidence was observed.
+
+### Verification
+
+- Push advanced `origin/feat/pilot-integrated-preview` from `f0c015a` through code checkpoint `9781ed6`.
+- GitHub showed PR #11 open and draft at `9781ed6`, PR #7 open at unchanged head `dec1608`, and remote `main` at `5138f88`.
+- PR #11 reported GitGuardian Security Checks passing; no other checks were reported. Local tests/build evidence is recorded in the handoff.
+
+### Git and remaining gaps
+
+No merge occurred. The candidate still needs the repeatable QR browser smoke and hosted/device acceptance; the updated status docs are a follow-up commit on the same feature branch.
+
+## 2026-10-26 — Add repeatable private-claim QR browser smoke
+
+### Issue
+
+The QR UI had a prior manual browser proof, but there was no committed command to repeat the sender journey, accessibility checks, privacy assertions, and exact cleanup.
+
+### Cause
+
+The new isolated browser timed out before finishing local Auth navigation. A diagnostic run showed its local health request never got a response and the page target closed when the browser child used a temporary `HOME` directory.
+
+### Resolution
+
+Keep the browser's normal macOS process `HOME`, while retaining a dedicated temporary `--user-data-dir` and `TMPDIR`. Add a browser-side loopback health preflight and serialize navigation before polling the rendered route. The repeatable script now issues one handleless text claim, checks the pending row and anonymous denial, verifies the accessible focused QR and same-link hide/show behavior, clears state on a new draft, and verifies exact cleanup.
+
+### Learning
+
+On this macOS browser runtime, changing `HOME` can break loopback navigation even when the browser profile is explicitly isolated. Keep the user-data profile disposable, but preserve the process environment required by the browser. A health preflight makes the network prerequisite visible before creating fixtures.
+
+### Verification
+
+- `npm run test:browser-qr` passed at 390×844; the pending row had no recipient, anonymous read was denied, the labeled QR received focus, hide/show reused the same link/SVG, and a new draft cleared old state.
+- Cleanup verified the exact test drop, profile, Auth user, owned process groups, and temporary directory were removed. Port 4004 and hosted Supabase were untouched.
+- `npm test` passed 288/288; lint, typecheck, `node --check`, and `git diff --check` passed. QR pixel decoding was unavailable in this browser; the earlier manual decode is separate evidence. The app source was unchanged, so no new production build was run.
+
+### Git and remaining gaps
+
+Code commit `9e764e8` and security follow-up `2a9cf49` are pushed to `origin/feat/pilot-integrated-preview`. PR #11 remains open/draft at `2a9cf49`; remote `main` remains `5138f88`; no merge occurred. Hosted claim delivery/retention, camera/device behavior, installed-PWA OS sharing, and spoken screen-reader output remain open.
+
+## 2026-10-26 — Close the QR smoke's Supabase redirect boundary
+
+### Issue
+
+The first code review found that the local Supabase base URL was checked for loopback, but Node's health fetch and Supabase clients still followed HTTP redirects by default. A local Auth endpoint redirect could have sent a service-role request away from the configured loopback origin.
+
+### Cause
+
+The smoke relied on the configured URL without constraining every request made by the Supabase SDK or preventing redirect following.
+
+### Resolution
+
+Use one fetch wrapper for the health request and all three Supabase clients. It rejects any URL outside the exact validated loopback origin and sets `redirect: 'error'` before dispatch, keeping the service-role request on the local endpoint.
+
+### Learning
+
+Validate the destination for each privileged request, not only the configured base URL. Disable redirects when a test promises it will not contact hosted services.
+
+### Verification
+
+The QR browser smoke passed after the wrapper was applied; exact disposable cleanup was verified. The independent code review confirmed that the health fetch plus admin, anonymous, and password sign-in clients all use the wrapper. No hosted Supabase request was made.
+
+### Git and remaining gaps
+
+The fix is code commit `2a9cf49`, pushed with the smoke to `origin/feat/pilot-integrated-preview`. PR #11 remains open/draft, and `main` remains unchanged. Hosted delivery and physical/device acceptance remain open.
+
+## 2026-10-26 — Bind fixture smokes to local Supabase containers
+
+### Issue
+
+The fixture-writing smoke scripts treated a loopback Supabase URL as proof that the database was local, even though an SSH process owned the expected ports. A broad Rancher/Lima/socket substring check could also accept a remote SSH tunnel carrying those strings in unrelated arguments.
+
+### Cause
+
+A URL tells the test where it connects, but not who owns the listener or which Docker daemon published it. Process-marker substrings do not prove that an SSH tunnel belongs to Rancher Desktop.
+
+### Resolution
+
+Add one fail-closed preflight that checks the listener owner, active Docker endpoint, and expected `supabase_kong_*` or `supabase_inbucket_*` container before a smoke makes health requests or creates fixtures. Keep the Rancher exception limited to its exact Lima mux socket title. Cover remote-tunnel lookalikes and mismatched Docker endpoints with regression tests.
+
+### Learning
+
+Before a test writes data, verify the complete local chain: configured loopback URL, trusted listener, local Docker context, and matching service container. If any part cannot be inspected, stop before fixture creation.
+
+### Verification
+
+- `npm test` passed 298/298; lint, no-incremental TypeScript, JavaScript syntax checks for the helper and six smoke scripts, and `git diff --check` passed.
+- The 390×844 QR browser smoke passed its local issue/privacy/accessibility journey and removed its exact test drop, Auth user, profile, process groups, browser profile, and temp directory. QR decoding was unavailable.
+- `npm run test:local-supabase` passed the text/photo/GIF claim, send/read/reaction, relay collection, media finalization/retry, and exact cleanup checks for five disposable users plus temporary media. No database reset was run.
+- The application source did not change; no production build was run. The existing app on port 4004 was not restarted.
+
+### Git and remaining gaps
+
+Code commit `f8c709d` is pushed to `origin/feat/pilot-integrated-preview`; PR #11 was verified open/draft at that code head, and `main` remains `5138f88`. The project notes are committed separately. The Supabase CLI has no `SUPABASE_ACCESS_TOKEN`; local anon/service-role keys cannot create a hosted project. No hosted project, billing setting, or hosted data changed. Hosted two-account delivery/retention, screen-reader output, installed-PWA system sharing, and physical-device/camera checks remain open.
+
+## 2026-10-26 — Add a browser journey for secure Relay
+
+### Issue
+
+Relay handoff, route privacy, replay denial, and recipient collection had backend smoke coverage, but no repeatable real-browser run proving that the sender, carrier, and recipient screens worked together.
+
+### Cause
+
+The existing Relay checks called the RPCs directly. They did not create a carrier invite from the sender UI, accept it in a separate signed-in browser, refresh the sender Journey, or collect the recipient's sealed drop in Mailbox.
+
+### Resolution
+
+Add `scripts/browser-relay-e2e.mjs` and `npm run test:browser-relay`. The smoke uses an isolated production app and three disposable browser sessions at 390×844; validates the UUIDv4 bearer is fragment-only; denies geolocation and verifies the secure flow never calls it; checks carrier subject/body privacy, fresh replay denial, exactly one handoff with null coordinates, sender route refresh, and recipient collection/reveal. Node-side Supabase requests are restricted to the exact configured loopback origin and reject redirects. Browser traffic outside the local app/Supabase origins is blocked.
+
+### Learning
+
+Test contracts should match the rendered UI: the Relay capability is UUIDv4, CSS can change `innerText` casing, and “Open carrier view” is a link. Use the local service client only for fixture-internal row counts when authenticated table reads are intentionally unavailable. Keep UI assertions on the real signed-in sessions.
+
+### Verification
+
+- `npm run test:browser-relay` passed its isolated production build and 390×844 sender invite, carrier acceptance, no-geolocation, sealed-content, replay, one-handoff/null-coordinate, sender Journey, and recipient collect/reveal checks. Browser console/runtime errors, external browser requests, and horizontal overflow were absent; exact disposable cleanup completed.
+- `npm test` passed 298/298; lint, TypeScript, `node --check scripts/browser-relay-e2e.mjs`, the smoke guard self-test, and `git diff --check` passed.
+- The test used only verified local Rancher Desktop Supabase and port `6004`; the main app on `4004` remained running. No database reset or hosted request occurred.
+
+### Git and remaining gaps
+
+Code commit `57ce03a` is pushed to `origin/feat/pilot-integrated-preview`. GitHub verified PR #11 open/draft at `57ce03a`; remote `main` remains `5138f88`. The documentation update is committed separately. Hosted Free-project provisioning is still waiting on a Management API token in the task environment; hosted two-account delivery/retention, screen-reader output, installed-PWA sharing, and physical-device/camera acceptance remain open.
+
+## 2026-10-26 — Create Relay drops through Compose in the browser journey
+
+### Issue
+
+The Relay browser journey started from a database-seeded drop, so it skipped the sender's real Compose flow.
+
+### Cause
+
+The smoke used its service client to insert a pre-dispatched Relay row before any browser session opened. That proved handoff behavior but did not prove a signed-in sender could compose and send the drop.
+
+### Resolution
+
+Create the unique text Relay drop through the sender's 390×844 Compose UI. Assert the Relay option is selected, confirm the generated recipient handle, capture the UI draft ID for exact cleanup, and inspect only that row to verify sender, recipient, subject, body, text payload, dispatched status, and Relay mode before continuing the existing carrier and recipient journey.
+
+### Learning
+
+Seed disposable accounts and profiles, but drive the feature under test through its user interface. Use privileged reads only to verify the exact disposable row and privileged cleanup only for the test-owned records.
+
+### Verification
+
+- `npm run test:browser-relay` passed the isolated production build and full 390×844 Compose-to-invite-to-carrier-to-Journey-to-collection/reveal flow. No horizontal overflow, browser console/runtime errors, cross-origin browser requests, or cleanup failures were reported.
+- `npm test` passed 298/298; `npm run lint`, `npx tsc --noEmit --incremental false`, runner syntax, guard self-test, runner ESLint, and `git diff --check` passed.
+- The test used only the verified local Supabase stack and test port `6004`; it did not reset the database or contact hosted Supabase. The main app on `4004` was left running.
+
+### Git and remaining gaps
+
+Code commit `f92a78c` (`test: create Relay drops through sender Compose`) was created on `feat/pilot-relay-compose-e2e` and pushed to the existing remote branch `feat/pilot-integrated-preview`. No merge to `main` occurred. GitHub API DNS failed during the post-push status refresh; the last observed PR #11 state was open/draft at `5f9562a`, and `main` was last verified at `5138f88`. No usable Supabase Management API token was available in this task, so no hosted project or billing/resource change occurred. Hosted delivery/retention and screen-reader, installed-PWA sharing, physical camera, and device acceptance remain open.
+
+## 2026-10-26 — Add gentle Compose starters and protect mobile text wrapping
+
+### Issue
+
+An empty note or media caption gave people no starting point. The expanded GIF Relay browser journey also exposed that a long unbroken caption could widen the opened-drop screen beyond the 390px viewport.
+
+### Cause
+
+The Composer showed a blank editable field without optional examples for text, photo, or GIF drops. On the detail page, unbroken user content kept its intrinsic width inside a flex row, so the card and fixed navigation expanded horizontally.
+
+### Resolution
+
+Add three optional starters per format. A choice fills and focuses the editable note/caption only when it is blank; existing text and selected media remain unchanged and no send occurs. Add `min-width: 0` and `overflow-wrap: anywhere` to fragment text, and wrapping to the subject and opened message, so ordinary prose stays natural while long tokens wrap.
+
+### Learning
+
+Keep suggestions warm and easy to edit rather than using forced slang or engagement pressure. Research supports the product fit for private, supportive communication, but does not prove that a prompt feature improves outcomes: Ofcom reported that 72% of 13–17-year-olds using social/messaging apps said those apps help them feel closer to friends most or all of the time, and 54% said they send supportive messages; Pew reported 57% of U.S. Snapchat-using teens message daily and about two-thirds named keeping up with friends/family as a major reason ([Ofcom 2025](https://www.ofcom.org.uk/siteassets/resources/documents/research-and-data/media-literacy-research/children/childrens-media-use-and-attitudes-report-2025/childrens-media-literacy-report-2025.pdf), [Pew Research Center 2026](https://www.pewresearch.org/internet/2026/04/15/teens-experiences-on-tiktok-instagram-and-snapchat/)).
+
+For mobile content layouts, test real unbroken text as well as normal prose. `overflow-wrap: anywhere` addresses the min-content width that `break-words` alone may leave in a flex child.
+
+### Verification
+
+- `npm test` passed 301/301; `npx tsc --noEmit --incremental false`, focused ESLint, `node --check scripts/browser-relay-e2e.mjs`, Relay guard self-test, and `git diff --check` passed.
+- `npm run test:browser-relay` passed the isolated production build and full text/GIF sender→carrier→recipient journey at 390×844. It verified starter visibility, focus, no auto-send, retained GIF attachment, GIF MIME/signature/size, exact staged/final Storage paths, carrier and pre-collection recipient privacy, post-collection reduced-motion render, no overflow/browser errors/failed requests/cross-origin requests, and exact local cleanup. Missing Storage objects are accepted only for HTTP 404 or the precise local `NoSuchKey` not-found response.
+- Visual screenshots of the blank starter row, editable selected starter, and opened GIF are saved outside the repository under `/private/tmp/drop-pilot-final-evidence.Lyw5xo/`. The existing app on port 4004 stayed running; the isolated test used port 6004 and did not reset the database or contact hosted Supabase.
+
+### Git and remaining gaps
+
+Code commit `bce0f37` is pushed to `origin/feat/pilot-integrated-preview`. GitHub confirmed PR #11 open/draft at that code commit with base `main`; CI checks were not queried. Remote `main` remains `5138f88`; no merge to `main` occurred. No `SUPABASE_ACCESS_TOKEN` is configured locally and the Supabase connector is disabled by workspace admin, so no hosted project, billing, or hosted data changed. Hosted delivery/retention, screen-reader output, installed-PWA sharing, and physical-device/camera acceptance remain open.

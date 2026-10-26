@@ -9,7 +9,7 @@ import { normalizeDropRecipient, validateDropMedia } from '@/lib/dropValidation'
 import { createStagedDropMediaAttemptPath, isDropMediaFinalPath, resolveDropMediaPaths } from '@/lib/dropMediaStorage';
 import { mergeDropReactions, type DropReactionRow } from '@/lib/mergeDropReactions';
 import { matchesStoredDropMetadata, type DropSendIntent, type StoredDropSend } from '@/lib/dropSendRecovery';
-import { fetchAllPages, fetchPagedMailbox } from '@/lib/fetchAllPages';
+import { fetchAllPages, fetchInBatches, fetchPagedMailbox } from '@/lib/fetchAllPages';
 import { uniqueRecentDropRecipients, type RecentDropRecipient, type RecentDropRecipientRow } from '@/lib/recentDropRecipients';
 import { subscribeToDropInbox } from '@/lib/dropInboxRealtime';
 import { subscribeToDropReactions } from '@/lib/dropReactionRealtime';
@@ -351,9 +351,43 @@ export interface RemoteMailboxSnapshot {
   letters: MockLetter[];
   reactionsHydrated: boolean;
   claimStatusHydrated: boolean;
+  recipientReadStatesHydrated: boolean;
 }
 
 type SenderClaimedDropRow = { letter_id: string };
+type RecipientDropReadStateRow = { letter_id: string; read_at: string };
+
+async function readRecipientDropReadStates(
+  context: AuthenticatedContext,
+  letterIds: string[],
+): Promise<Map<string, string> | null> {
+  if (letterIds.length === 0) return new Map();
+
+  try {
+    const rows = await fetchInBatches(
+      letterIds,
+      async (batch) => {
+        try {
+          const { data, error } = await context.supabase
+            .rpc('get_recipient_drop_read_states', { p_letter_ids: batch })
+            .returns<RecipientDropReadStateRow[]>();
+          if (error || !Array.isArray(data)) return null;
+          if (data.some((row) => typeof row.letter_id !== 'string'
+            || typeof row.read_at !== 'string'
+            || !Number.isFinite(Date.parse(row.read_at)))) return null;
+          return data;
+        } catch {
+          return null;
+        }
+      },
+      250,
+    );
+    if (!rows) return null;
+    return new Map(rows.map((row) => [row.letter_id, row.read_at]));
+  } catch {
+    return null;
+  }
+}
 
 async function readSenderClaimedDropIds(context: AuthenticatedContext): Promise<string[] | null> {
   try {
@@ -457,23 +491,51 @@ export async function getRemoteLetters(): Promise<RemoteMailboxSnapshot | null> 
 
   if (!mailbox) return null;
   const letters = mailbox.letters.map((row) => rowToLetter(row, context.user.id));
-  const [claimedDropIds, recipientRelayRead] = await Promise.all([
+  const deliveredIncomingIds = letters
+    .filter((letter) => letter.direction === 'received' && letter.status === 'delivered')
+    .map((letter) => letter.id);
+  const [claimedDropIds, recipientRelayRead, recipientReadStates] = await Promise.all([
     readSenderClaimedDropIdsWithTimeout(context),
     context.supabase.rpc('get_recipient_relay_drops').returns<RecipientRelayDropRow[]>(),
+    withFallbackTimeout(
+      readRecipientDropReadStates(context, deliveredIncomingIds),
+      SENDER_CLAIM_STATUS_TIMEOUT_MS,
+      null,
+    ),
   ]);
   const claimedLetters = markSenderClaimedDrops(letters, claimedDropIds);
   const { data: recipientRelayRows, error: recipientRelayError } = recipientRelayRead;
   const recipientRelayDrops = recipientRelayError || !Array.isArray(recipientRelayRows)
     ? []
     : recipientRelayRows.map((row) => rowToRecipientRelayDrop(row as RecipientRelayDropRow));
-  const displayLetters = mailbox.reactions
+  const reactionLetters = mailbox.reactions
     ? mergeDropReactions(claimedLetters, mailbox.reactions)
     : claimedLetters;
+  const displayLetters = recipientReadStates
+    ? reactionLetters.map((letter) => letter.direction === 'received' && letter.status === 'delivered'
+      ? { ...letter, recipientReadAt: recipientReadStates.get(letter.id) ?? null }
+      : letter)
+    : reactionLetters;
   return {
     letters: [...displayLetters, ...recipientRelayDrops],
     reactionsHydrated: mailbox.reactions !== null,
     claimStatusHydrated: claimedDropIds !== null,
+    recipientReadStatesHydrated: recipientReadStates !== null,
   };
+}
+
+/** Persist a recipient-only read marker; the server verifies ownership and delivery. */
+export async function markRemoteDropRead(letterId: string): Promise<string | null> {
+  try {
+    const context = await getAuthenticatedClient();
+    if (!context) return null;
+    const { data, error } = await context.supabase
+      .rpc('mark_recipient_drop_read', { p_letter_id: letterId })
+      .returns<string>();
+    return !error && typeof data === 'string' && Number.isFinite(Date.parse(data)) ? data : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function collectRemoteRelayDrop(letterId: string): Promise<{ ok: boolean; error?: string }> {

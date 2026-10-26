@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { dropInboxTopic, subscribeToDropInbox } from '../lib/dropInboxRealtime.ts';
-import { getLiveInboxUpdate, mergeInboxLetters } from '../lib/liveInboxState.ts';
+import { applyRecipientDropRead, applyRecipientDropReadEvents, getLiveInboxUpdate, mergeInboxLetters } from '../lib/liveInboxState.ts';
 import { startVisibleDataRefresh } from '../lib/relayRouteRefresh.ts';
 
 function letter(id, direction, extra = {}) {
@@ -70,6 +70,42 @@ test('retains a known claimed badge when a later mailbox refresh cannot hydrate 
   const merged = mergeInboxLetters([], [refreshed], [previouslyClaimed]);
 
   assert.equal(merged[0].claimedViaInvite, true);
+});
+
+test('keeps durable read state across stale, null, or unavailable mailbox merges', () => {
+  const readAt = '2026-10-25T10:00:00.000Z';
+  const previouslyRead = letter('read', 'received', { recipientReadAt: readAt });
+  const staleUnread = letter('read', 'received', { recipientReadAt: null });
+  const unavailable = letter('read', 'received', { recipientReadAt: undefined });
+  const mergedStale = mergeInboxLetters([], [staleUnread], [], [previouslyRead]);
+  const mergedUnavailable = mergeInboxLetters([], [unavailable], [], [previouslyRead]);
+
+  assert.equal(mergedStale[0].recipientReadAt, readAt);
+  assert.equal(mergedUnavailable[0].recipientReadAt, readAt);
+  assert.equal(mergeInboxLetters([], [unavailable], [], [letter('read', 'received', { recipientReadAt: null })])[0].recipientReadAt, null);
+  assert.equal(mergeInboxLetters([], [letter('read', 'received', { recipientReadAt: '2026-10-25T11:00:00.000Z' })], [], [letter('read', 'received', { recipientReadAt: null })])[0].recipientReadAt, '2026-10-25T11:00:00.000Z');
+});
+
+test('applies a confirmed read event without replacing an existing timestamp', () => {
+  const previousAt = '2026-10-25T10:00:00.000Z';
+  const letters = [letter('drop', 'received', { recipientReadAt: null }), letter('other', 'received')];
+  const detail = { accountId: 'recipient-1', letterId: 'drop', readAt: '2026-10-25T11:00:00.000Z' };
+  const updated = applyRecipientDropRead(letters, detail);
+
+  assert.equal(updated[0].recipientReadAt, '2026-10-25T11:00:00.000Z');
+  assert.equal(updated[1].recipientReadAt, undefined);
+  assert.equal(applyRecipientDropRead([letter('drop', 'received', { recipientReadAt: previousAt })], detail)[0].recipientReadAt, previousAt);
+  const senderCopy = letter('drop', 'sent', { recipientReadAt: null });
+  assert.equal(applyRecipientDropRead([senderCopy], detail)[0].recipientReadAt, null);
+});
+
+test('replays a confirmed read event when its mailbox row arrives later', () => {
+  const detail = { accountId: 'recipient-1', letterId: 'drop', readAt: '2026-10-25T11:00:00.000Z' };
+  const snapshot = [letter('drop', 'received', { recipientReadAt: null })];
+  const replayed = applyRecipientDropReadEvents(snapshot, [detail]);
+
+  assert.equal(replayed[0].recipientReadAt, detail.readAt);
+  assert.equal(snapshot[0].recipientReadAt, null);
 });
 
 test('drop inbox subscription is private, user-scoped, signal-only, and removable', async () => {

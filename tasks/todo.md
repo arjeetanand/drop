@@ -2,6 +2,54 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
+## Checkpoint — Compose starters, text wrapping, and GIF Relay browser acceptance (2026-10-26)
+
+- [x] Add optional starters for text/photo/GIF drafts; verify selection fills an editable field, keeps GIF attachment attached, preserves nonempty text, and never auto-sends.
+- [x] Wrap unbroken subject, fragment, and message content; pass the 390×844 detail-page overflow regression.
+- [x] Pass expanded `npm run test:browser-relay` with UI-created text and GIF drops, carrier/recipient privacy, recipient collection/reveal, exact Storage validation/cleanup, and zero browser overflow/errors/external requests.
+- [x] Pass `npm test` (301/301), TypeScript, focused lint, smoke syntax/guard, `git diff --check`, and isolated production build. Review three 390×844 screenshots in `/private/tmp/drop-pilot-final-evidence.Lyw5xo/`.
+- [x] Commit `bce0f37` and separate docs commit `6a20dc4` and push both to existing `feat/pilot-integrated-preview`; GitHub confirms PR #11 remains open/draft on this branch and remote `main` remains `5138f88`. CI checks were not queried.
+- [ ] Add a scoped `SUPABASE_ACCESS_TOKEN` locally to provision the approved Free project; complete hosted delivery/retention, screen-reader, installed-PWA sharing, and physical-device/camera checks.
+
+## Checkpoint — secure Relay browser journey (2026-10-26)
+
+- [x] Add `npm run test:browser-relay` on isolated test port `6004`; restrict Node Supabase calls to exact loopback origin and reject redirects.
+- [x] Pass sender invite creation, carrier acceptance with geolocation denied/no call, carrier privacy, fresh replay denial, one-handoff/null-coordinate assertion, sender Journey refresh, and recipient collect/reveal at `390×844`.
+- [x] Verify exact local fixture/account/profile/process/browser cleanup; pass production build, 298 unit tests, lint, TypeScript, syntax, and diff checks.
+- [x] Push code commit `57ce03a` to the existing pilot branch; PR #11 stays open/draft and remote `main` remains unchanged at `5138f88`.
+- [ ] Provision the approved hosted Free project when the Management API token is available; finish hosted, screen-reader, installed-PWA sharing, and physical-device/camera checks.
+
+## Current integrated pilot candidate (2026-10-26)
+
+- [x] Add private-claim QR sharing and clear QR state on draft/account changes; code commits `98cb6aa` and `f8cbde3`.
+- [x] Prune expired claim handoffs at app startup and on page restore/focus; code commit `2eb4071`.
+- [x] Pass combined 288 unit tests, lint, typecheck, `git diff --check`, and Webpack production build (22 routes).
+- [x] Pass authenticated local QR browser verification at 390×844 and local aged staged-media deletion/recent-object retention proof.
+- [x] Add and pass `npm run test:browser-qr`; verify accessible issue/privacy/hide/show/reset and exact cleanup. Push code commits `9e764e8` and `2a9cf49` to the existing pilot branch; PR #11 remains open/draft and `main` is unchanged. Pixel decoding is still browser/physical-device dependent.
+- [x] Transfer the verified commits and task docs into canonical `feat/pilot-integrated-preview` at `d9d9823`; restart and verify the app at `http://localhost:4004`, local Auth, and Mailpit.
+- [x] Push the tested candidate through code checkpoint `9781ed6`; verify draft PR #11 stays open, PR #7 stays unchanged, and `main` is untouched. Keep PR #11 unmerged.
+- [ ] Complete hosted account-to-account delivery and scheduled deletion, installed-PWA OS share, spoken screen-reader, and physical device/QR-camera checks.
+
+
+## Checkpoint — local same-recipient unread sync and reaction browser flow (2026-10-25)
+
+- [x] Verify sender Compose, two independent recipient sessions, unread Home at 390×844 and 1440×900, Inbox open/read, recipient reaction, and sender live/reloaded reaction.
+- [x] Build and run an isolated production app; verify exact read-state RPC correlation and that the second recipient session clears “New” without a document reload.
+- [x] Pass 281 unit tests, changed-harness ESLint and syntax checks, `git diff --check`, and the complete authenticated local production browser run with exact disposable cleanup.
+- [x] Confirm Docker and local Supabase are running; restart Drop on port 4004 and verify app, Auth, and Mailpit HTTP 200.
+- [x] Push code commit `0e672f3` to `origin/feat/recipient-unread-e2e`; keep documentation in a separate follow-on commit.
+- [ ] Finish hosted, screen-reader, and physical-device checks. Keep PR #7 open until its separate QR browser check is complete.
+
+## Checkpoint — private, durable unread state (2026-10-25)
+
+- [x] Add recipient-only server read markers for delivered drops; deny sender and outsider access.
+- [x] Show a “New” marker on unread received cards and a private unread count on Inbox navigation across desktop and mobile.
+- [x] Mark read only after full content opens; keep the server timestamp idempotent and prevent stale refresh or account-switch responses from reverting state.
+- [x] Exclude samples, demos, sent/draft/claim-pending drops, signed-out state, and uncollected relay drops.
+- [x] Add unit and rollback-only SQL coverage; pass local Supabase smoke and authenticated local browser checks; update README, checklist, handoff, and learning log.
+- [x] Push code commit `a416d81` to `origin/feat/recipient-unread-state`.
+- [ ] Verify the same recipient's read state in a second authenticated browser session; complete hosted, screen-reader, and physical-device checks.
+
 ## Checkpoint — received-drop Drop back draft isolation (2026-10-24)
 
 - [x] Start Drop back from a received drop using a persisted fresh draft ID and the sender's normalized handle.

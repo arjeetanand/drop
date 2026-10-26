@@ -14,8 +14,11 @@ const DESKTOP_VIEWPORT = { name: 'desktop-1440', width: 1440, height: 900, devic
 const FLOW_VIEWPORTS = [...MOBILE_VIEWPORTS, DESKTOP_VIEWPORT];
 let activeViewport = MOBILE_VIEWPORTS[1];
 const STEP_TIMEOUT_MS = 20_000;
+// Keep just above .page-enter's 380ms duration in app/globals.css.
+const PAGE_ENTER_SETTLE_MS = 420;
 const LABELS = {
   homeDemo: 'Try a demo drop',
+  homeSendAccountDisclosure: 'Demo stays on this device · a Drop account is needed to send.',
   choosePhoto: 'Try a photo',
   chooseGif: 'Try a GIF',
   reveal: 'Reveal demo fragments',
@@ -231,6 +234,19 @@ function parseAppUrl(rawValue) {
 }
 
 function findChromeExecutable() {
+  const configuredExecutable = process.env.DROP_BROWSER_EXECUTABLE?.trim();
+  if (configuredExecutable) {
+    try {
+      if (configuredExecutable.includes('/') || configuredExecutable.includes('\\')) {
+        execFileSync(process.platform === 'win32' ? 'where.exe' : 'test', process.platform === 'win32' ? [configuredExecutable] : ['-x', configuredExecutable], { stdio: 'ignore' });
+        return configuredExecutable;
+      }
+      return execFileSync(process.platform === 'win32' ? 'where.exe' : 'which', [configuredExecutable], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim().split(/\r?\n/)[0];
+    } catch {
+      throw new Error('DROP_BROWSER_EXECUTABLE must name an installed, executable Chrome, Edge, or Chromium browser.');
+    }
+  }
+
   const candidates = process.platform === 'darwin'
     ? [
       '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -357,7 +373,24 @@ async function waitUntil(cdp, description, predicate, timeoutMs = STEP_TIMEOUT_M
     }
     await sleep(200, interrupted.signal);
   }
-  const snapshot = await evaluate(cdp, `({ pathname: location.pathname, readyState: document.readyState, title: document.title, bodyText: document.body?.innerText.slice(0, 500) || '' })`).catch(() => null);
+  const snapshot = await evaluate(cdp, `(() => {
+    const page = document.querySelector('main.page-enter');
+    return {
+      pathname: location.pathname,
+      readyState: document.readyState,
+      title: document.title,
+      bodyText: document.body?.innerText.slice(0, 500) || '',
+      pageEnter: page ? {
+        animation: getComputedStyle(page).animation,
+        animations: page.getAnimations().map((animation) => ({
+          playState: animation.playState,
+          currentTime: animation.currentTime,
+          playbackRate: animation.playbackRate,
+          timing: animation.effect?.getTiming(),
+        })),
+      } : null,
+    };
+  })()`).catch(() => null);
   throw new Error(`Timed out waiting for ${description}${lastError ? ` (${lastError.message})` : ''}${snapshot ? `; page=${JSON.stringify(snapshot)}` : ''}.`);
 }
 
@@ -404,6 +437,80 @@ async function assertNoHorizontalOverflow(cdp, step, expectedWidth = activeViewp
     Math.max(dimensions.documentWidth, dimensions.bodyWidth) <= dimensions.layoutWidth,
     `${step}: horizontal overflow detected (layout ${dimensions.layoutWidth}px, document ${dimensions.documentWidth}px, body ${dimensions.bodyWidth}px).`,
   );
+}
+
+async function assertComposerActionTray(cdp, viewport, step) {
+  const state = await evaluate(cdp, `(() => {
+    const tray = document.querySelector('.composer-action-tray');
+    const page = document.querySelector('.page-shell--composer');
+    const nav = Array.from(document.querySelectorAll('nav[aria-label="Primary navigation"]')).find((candidate) => {
+      const navRect = candidate.getBoundingClientRect();
+      return navRect.width > 0 && navRect.height > 0 && getComputedStyle(candidate).visibility !== 'hidden';
+    });
+    if (!tray || !page) return null;
+    const rect = tray.getBoundingClientRect();
+    const navRect = nav?.getBoundingClientRect();
+    const initialScrollY = window.scrollY;
+    const initialTrayTop = rect.top;
+    const initialTrayBottom = rect.bottom;
+    const previousScrollBehavior = document.documentElement.style.scrollBehavior;
+    document.documentElement.style.scrollBehavior = 'auto';
+    window.scrollTo(0, Math.max(0, document.documentElement.scrollHeight - window.innerHeight));
+    const scrolledTray = tray.getBoundingClientRect();
+    const scrolledScrollY = window.scrollY;
+    window.scrollTo(0, initialScrollY);
+    document.documentElement.style.scrollBehavior = previousScrollBehavior;
+    return {
+      position: getComputedStyle(tray).position,
+      pageTransform: getComputedStyle(page).transform,
+      width: rect.width,
+      height: rect.height,
+      top: rect.top,
+      right: rect.right,
+      bottom: rect.bottom,
+      viewportWidth: document.documentElement.clientWidth,
+      viewportHeight: document.documentElement.clientHeight,
+      navTop: navRect?.top ?? null,
+      scrollTest: {
+        scrollY: scrolledScrollY,
+        trayTop: scrolledTray.top,
+        trayBottom: scrolledTray.bottom,
+        initialTrayTop,
+        initialTrayBottom,
+      },
+      controls: Array.from(tray.querySelectorAll('a,button')).map((control) => {
+        const controlRect = control.getBoundingClientRect();
+        return {
+          label: control.getAttribute('aria-label') || control.innerText || control.textContent || '',
+          width: controlRect.width,
+          height: controlRect.height,
+          top: controlRect.top,
+          bottom: controlRect.bottom,
+          disabled: control.disabled === true,
+        };
+      }),
+    };
+  })()`);
+  assert.ok(state, `${step}: the composer action tray was not rendered.`);
+  assert.ok(state.width > 0 && state.height > 0, `${step}: the composer action tray is not visible.`);
+  assert.ok(state.controls.some(({ label }) => label.includes('Preview as recipient')), `${step}: preview should retain its accessible name.`);
+  assert.ok(state.controls.some(({ label }) => /^(Save draft|Saved)$/.test(label)), `${step}: save should retain its accessible name.`);
+  assert.ok(state.controls.some(({ label }) => /^(Send drop|Connect to send|Account options)$/i.test(label)), `${step}: the primary action should remain available under the existing account gate (found: ${state.controls.map(({ label }) => JSON.stringify(label)).join(', ')}).`);
+
+  if (viewport.width <= 1023) {
+    assert.equal(state.position, 'fixed', `${step}: the tray should stay reachable while the form scrolls.`);
+    assert.equal(state.pageTransform, 'none', `${step}: the page shell must not establish a containing block for the fixed tray.`);
+    assert.ok(state.top >= 0 && state.right <= viewport.width && state.bottom <= viewport.height, `${step}: the tray should fit inside the viewport (${JSON.stringify(state)}).`);
+    assert.ok(typeof state.navTop === 'number' && state.bottom < state.navTop, `${step}: the tray should clear the fixed bottom navigation (${JSON.stringify(state)}).`);
+    assert.ok(state.scrollTest.scrollY > 0, `${step}: the browser should have enough page content to verify tray persistence while scrolling.`);
+    assert.ok(Math.abs(state.scrollTest.trayTop - state.scrollTest.initialTrayTop) < 1, `${step}: the tray should stay at the same viewport position after scrolling (${JSON.stringify(state.scrollTest)}).`);
+    assert.ok(state.scrollTest.trayBottom < state.navTop, `${step}: the tray should continue to clear navigation after scrolling.`);
+    for (const control of state.controls) {
+      assert.ok(control.height >= 44, `${step}: ${control.label} should have a 44px or larger touch target (${control.height}px).`);
+    }
+  } else {
+    assert.notEqual(state.position, 'fixed', `${step}: desktop actions should remain in the form layout.`);
+  }
 }
 
 async function assertResponsiveWidths(cdp, step) {
@@ -479,13 +586,11 @@ async function assertNoFrameworkOverlay(cdp, step) {
   assert.equal(overlayText, '', `${step}: framework error overlay text was visible (${overlayText}).`);
 }
 
-async function waitForPageEnter(cdp, step) {
-  await waitUntil(cdp, `${step} entrance animation`, async () => (
-    await evaluate(cdp, `(() => {
-      const page = document.querySelector('main.page-enter');
-      return Boolean(page) && page.getAnimations().every((animation) => animation.playState === 'finished');
-    })()`)
+async function waitForPageShell(cdp, step) {
+  await waitUntil(cdp, `${step} page shell`, async () => (
+    await evaluate(cdp, 'Boolean(document.querySelector("main.page-enter"))')
   ));
+  await sleep(PAGE_ENTER_SETTLE_MS, interrupted.signal);
 }
 
 async function activateFlowControl(cdp, { keyboard, name, selector, expectedTag, expectedHref }) {
@@ -519,10 +624,10 @@ async function runDemoFlow(cdp, {
 
   await setViewport(cdp, viewport);
   await cdp.send('Page.navigate', { url: appUrl.href });
-  await waitUntil(cdp, `Home with “${LABELS.homeDemo}”`, async () => (
-    await evaluate(cdp, `${normalizedVisibleText(LABELS.homeDemo)} && location.pathname === '/'`)
+  await waitUntil(cdp, `Home with “${LABELS.homeDemo}” and account disclosure`, async () => (
+    await evaluate(cdp, `${normalizedVisibleText(LABELS.homeDemo)} && ${normalizedVisibleText(LABELS.homeSendAccountDisclosure)} && location.pathname === '/'`)
   ));
-  await waitForPageEnter(cdp, 'Home');
+  await waitForPageShell(cdp, 'Home');
   if (verifyFreshDraft) {
     const seeded = await evaluate(cdp, `(async () => {
       const draft = ${JSON.stringify(PROMPT_ACTIVE_DRAFT)};
@@ -561,6 +666,7 @@ async function runDemoFlow(cdp, {
   await waitUntil(cdp, `the demo chooser with “${optionLabel}”`, async () => (
     await evaluate(cdp, `${normalizedVisibleText(optionLabel)} && location.pathname === '/demo'`)
   ));
+  await waitForPageShell(cdp, 'Demo chooser');
   await assertNoFrameworkOverlay(cdp, 'Demo chooser');
   await checkWidth('Demo chooser');
   await capture('chooser');
@@ -569,6 +675,7 @@ async function runDemoFlow(cdp, {
   await waitUntil(cdp, 'the recipient demo route', async () => (
     await evaluate(cdp, `${normalizedVisibleText('See your drop as the recipient.')} && /^\\/letter\\/[^/]+$/.test(location.pathname)`)
   ));
+  await waitForPageShell(cdp, 'Recipient preview');
   const recipientPath = await evaluate(cdp, 'location.pathname');
   await assertNoFrameworkOverlay(cdp, 'Recipient preview');
   await assertNoHorizontalOverflow(cdp, 'Recipient preview', viewport.width);
@@ -610,16 +717,16 @@ async function runDemoFlow(cdp, {
     ));
     await assertNoFrameworkOverlay(cdp, 'Recipient demo after reload');
     await assertNoHorizontalOverflow(cdp, 'Recipient demo after reload', viewport.width);
-    await activateFlowControl(cdp, { keyboard, name: LABELS.reveal, expectedTag: 'BUTTON' });
+    await activateFlowControl(cdp, { keyboard: true, name: LABELS.reveal, expectedTag: 'BUTTON' });
     await waitUntil(cdp, `“${LABELS.open}” after reload`, async () => (
       await evaluate(cdp, `${normalizedVisibleText(LABELS.open)} && !document.querySelector('#letter-fragments')?.innerText.includes('confidential fragment')`)
     ));
-    await activateFlowControl(cdp, { keyboard, name: LABELS.open, expectedTag: 'BUTTON' });
+    await activateFlowControl(cdp, { keyboard: true, name: LABELS.open, expectedTag: 'BUTTON' });
     await waitUntil(cdp, 'the persisted reaction after reload', async () => (
       await evaluate(cdp, `document.querySelector(${JSON.stringify(`[aria-label="${LABELS.reaction}"]`)})?.getAttribute('aria-pressed') === 'true'`)
     ));
     await assertNoHorizontalOverflow(cdp, 'Reaction persisted after reload', viewport.width);
-    await activateFlowControl(cdp, { keyboard, name: 'See your sender copy', expectedTag: 'A' });
+    await activateFlowControl(cdp, { keyboard: true, name: 'See your sender copy', expectedTag: 'A' });
   }
 
   await waitUntil(cdp, `sender copy${verifyFreshDraft ? '' : ' with the saved reaction'}`, async () => (
@@ -643,13 +750,13 @@ async function runDemoFlow(cdp, {
       return { scrollY: window.scrollY, top: bounds.top, bottom: bounds.bottom, height: window.innerHeight };
     })()`);
     assert.ok(friendActionScroll && friendActionScroll.top >= 0 && friendActionScroll.bottom <= friendActionScroll.height, `The “${LABELS.makeForFriend}” action should be scrolled into view for the screenshot; found ${JSON.stringify(friendActionScroll)}.`);
-    await waitForPageEnter(cdp, 'Sender copy');
+    await waitForPageShell(cdp, 'Sender copy');
     await captureScreenshot(cdp, screenshotDir, `${viewport.name}-friend-draft-cta`);
     await activateFlowControl(cdp, { keyboard, name: LABELS.makeForFriend, expectedTag: 'BUTTON' });
     await waitUntil(cdp, 'a fresh editable composer opened from the demo', async () => (
       await evaluate(cdp, `location.pathname === '/compose' && Boolean(document.querySelector('#drop-content'))`)
     ));
-    await waitForPageEnter(cdp, 'Fresh draft from demo');
+    await waitForPageShell(cdp, 'Fresh draft from demo');
     const state = await evaluate(cdp, `(() => {
       const active = JSON.parse(localStorage.getItem('dear-exe:active-letter:v1') || 'null');
       const drafts = JSON.parse(localStorage.getItem('dear-exe:letter-drafts:v1') || '[]');
@@ -929,8 +1036,8 @@ async function runClaimRecoveryFlow(cdp, {
 async function runWritingPromptFlow(cdp, { appUrl, viewport, keyboard, screenshotDir }) {
   await setViewport(cdp, viewport);
   await cdp.send('Page.navigate', { url: appUrl.href });
-  await waitUntil(cdp, 'Home before starting a prompted draft', async () => (
-    await evaluate(cdp, `${normalizedVisibleText('Use this thought')} && location.pathname === '/'`)
+  await waitUntil(cdp, 'Home with the send account disclosure before starting a prompted draft', async () => (
+    await evaluate(cdp, `${normalizedVisibleText('Use this thought')} && ${normalizedVisibleText(LABELS.homeSendAccountDisclosure)} && location.pathname === '/'`)
   ));
 
   const seeded = await evaluate(cdp, `(async () => {
@@ -1020,8 +1127,17 @@ async function runWritingPromptFlow(cdp, { appUrl, viewport, keyboard, screensho
   })()`);
   assert.equal(existingAttachment.name, 'demo-cat.png', 'The unfinished media draft attachment should remain in private local storage.');
   assert.ok(existingAttachment.size > 0, 'The unfinished media draft attachment bytes should remain intact.');
+  await assertComposerActionTray(cdp, viewport, 'Prompt composer');
   if (screenshotDir && (viewport.width === 390 || !viewport.mobile)) {
     await captureScreenshot(cdp, screenshotDir, `${viewport.name}-prompt-composer`);
+  }
+
+  if (viewport.width === 390) {
+    await focusControlWithKeyboard(cdp, {
+      name: 'Preview as recipient',
+      selector: 'a[aria-label="Preview as recipient"]',
+      expectedTag: 'A',
+    });
   }
 
   await cdp.send('Page.reload', { ignoreCache: true });
@@ -1033,6 +1149,165 @@ async function runWritingPromptFlow(cdp, { appUrl, viewport, keyboard, screensho
   ));
   await assertNoFrameworkOverlay(cdp, 'Prompt draft after reload');
   await assertNoHorizontalOverflow(cdp, 'Prompt draft after reload', viewport.width);
+}
+
+function parseCssColor(value) {
+  const parts = value.match(/rgba?\(([^)]+)\)/i)?.[1]?.split(',').map((part) => Number.parseFloat(part.trim()));
+  assert.ok(parts && parts.length >= 3 && parts.slice(0, 3).every(Number.isFinite), `Could not parse rendered color ${value}.`);
+  return [parts[0], parts[1], parts[2], parts[3] ?? 1];
+}
+
+function getContrastRatio(foregroundCss, backgroundCss) {
+  const [fr, fg, fb, alpha] = parseCssColor(foregroundCss);
+  const [br, bg, bb] = parseCssColor(backgroundCss);
+  const foreground = [fr, fg, fb].map((channel, index) => channel * alpha + [br, bg, bb][index] * (1 - alpha));
+  const luminance = (channels) => channels
+    .map((channel) => {
+      const normalized = channel / 255;
+      return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+    })
+    .reduce((sum, channel, index) => sum + channel * [0.2126, 0.7152, 0.0722][index], 0);
+  const first = luminance(foreground);
+  const second = luminance([br, bg, bb]);
+  return (Math.max(first, second) + 0.05) / (Math.min(first, second) + 0.05);
+}
+
+async function setInputFile(cdp, selector, filePath) {
+  const { root } = await cdp.send('DOM.getDocument', { depth: -1, pierce: true });
+  const { nodeId } = await cdp.send('DOM.querySelector', { nodeId: root.nodeId, selector });
+  assert.ok(nodeId, `Could not find file input ${selector}.`);
+  await cdp.send('DOM.setFileInputFiles', { nodeId, files: [filePath] });
+}
+
+async function assertAccessibleMedia(cdp, expectedName, step) {
+  const rendered = await evaluate(cdp, `(() => {
+    const image = [...document.querySelectorAll('img[alt]')].find((item) => item.getAttribute('alt') === ${JSON.stringify(expectedName)});
+    return image ? { alt: image.getAttribute('alt'), visible: image.getBoundingClientRect().width > 0 && image.getBoundingClientRect().height > 0 } : null;
+  })()`);
+  assert.ok(rendered?.visible, `${step}: expected a rendered img with alt="${expectedName}".`);
+  const { nodes } = await cdp.send('Accessibility.getFullAXTree');
+  const imageNode = nodes.find((node) => !node.ignored && node.role?.value === 'image' && node.name?.value === expectedName);
+  assert.ok(imageNode, `${step}: the accessibility tree should expose an image named “${expectedName}”.`);
+}
+
+async function runAccessibilityFlow(cdp, { appUrl, screenshotDir }) {
+  await cdp.send('Accessibility.enable');
+  const viewports = [320, 390].map((width) => ({ name: `mobile-${width}`, width, height: width === 320 ? 740 : 844, deviceScaleFactor: 1, mobile: true }));
+  const noteText = 'A small note to send with this attachment.';
+  const mediaCases = [
+    { kind: 'image', button: 'A photo', file: join(PROJECT_ROOT, 'public/demo-cat.png'), name: 'Attached photo' },
+    { kind: 'gif', button: 'A GIF', file: join(PROJECT_ROOT, 'public/demo-cat.gif'), name: 'Attached GIF' },
+  ];
+
+  for (const viewport of viewports) {
+    await setViewport(cdp, viewport);
+    await cdp.send('Page.navigate', { url: appUrl.href });
+    await waitUntil(cdp, 'Home account requirement at the requested mobile width', async () => (
+      await evaluate(cdp, `${normalizedVisibleText(LABELS.homeSendAccountDisclosure)} && location.pathname === '/'`)
+    ));
+    await waitForPageShell(cdp, 'Home contrast check');
+    const colors = await evaluate(cdp, `(() => {
+      const note = [...document.querySelectorAll('p')].find((item) => item.textContent.replace(/\\s+/g, ' ').trim() === ${JSON.stringify(LABELS.homeSendAccountDisclosure)});
+      const background = note?.parentElement;
+      return note && background ? {
+        foreground: getComputedStyle(note).color,
+        background: getComputedStyle(background).backgroundColor,
+        fontSize: getComputedStyle(note).fontSize,
+        viewportWidth: window.innerWidth,
+      } : null;
+    })()`);
+    assert.ok(colors, `Home send requirement should render at ${viewport.width}px.`);
+    const ratio = getContrastRatio(colors.foreground, colors.background);
+    assert.ok(ratio >= 4.5, `Home send requirement contrast should be at least 4.5:1, got ${ratio.toFixed(3)}:1 from ${JSON.stringify(colors)}.`);
+    await assertNoHorizontalOverflow(cdp, `Home at ${viewport.width}px`, viewport.width);
+    if (screenshotDir) await captureScreenshot(cdp, screenshotDir, `${viewport.name}-home-contrast`);
+    console.log(`[browser-accessibility] PASS Home send requirement has ${ratio.toFixed(2)}:1 rendered contrast at ${viewport.width}px (${colors.foreground} over ${colors.background}).`);
+
+    for (const media of mediaCases) {
+      await cdp.send('Page.navigate', { url: new URL('/compose?new=1', appUrl).href });
+      await waitUntil(cdp, `${media.button} composer`, async () => (
+        await evaluate(cdp, `location.pathname === '/compose' && Boolean(document.querySelector('#drop-content')) && Boolean([...document.querySelectorAll('button')].find((button) => button.textContent.replace(/\\s+/g, ' ').trim() === ${JSON.stringify(media.button)}))`)
+      ));
+      await waitForPageShell(cdp, `${media.button} composer`);
+      await focusControlWithKeyboard(cdp, { selector: '#drop-content', expectedTag: 'TEXTAREA' });
+      await cdp.send('Input.insertText', { text: noteText });
+      await waitUntil(cdp, 'nonempty composer note', async () => (
+        await evaluate(cdp, `document.querySelector('#drop-content')?.value === ${JSON.stringify(noteText)}`)
+      ));
+      await activateFlowControl(cdp, { keyboard: true, name: media.button, expectedTag: 'BUTTON' });
+      await waitUntil(cdp, `${media.button} file input`, async () => await evaluate(cdp, 'Boolean(document.querySelector("#drop-media"))'));
+      let fileInputFocused = false;
+      for (let tabCount = 0; tabCount < 8 && !fileInputFocused; tabCount += 1) {
+        await cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9, nativeVirtualKeyCode: 9 });
+        await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9, nativeVirtualKeyCode: 9 });
+        fileInputFocused = await evaluate(cdp, 'document.activeElement === document.querySelector("#drop-media")');
+      }
+      const focus = await evaluate(cdp, `(() => {
+        const input = document.querySelector('#drop-media');
+        const surface = document.querySelector('.media-picker-surface');
+        const style = surface ? getComputedStyle(surface) : null;
+        const rect = surface?.getBoundingClientRect();
+        const actionTray = document.querySelector('.composer-action-tray')?.getBoundingClientRect();
+        return {
+          inputFocused: document.activeElement === input,
+          keyboardFocusVisible: Boolean(input?.matches(':focus-visible')),
+          outlineStyle: style?.outlineStyle || '',
+          outlineWidth: style?.outlineWidth || '',
+          outlineColor: style?.outlineColor || '',
+          surfaceVisible: Boolean(rect && rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.top < window.innerHeight),
+          surfaceObscuredByActions: Boolean(rect && actionTray && rect.bottom > actionTray.top && rect.top < actionTray.bottom),
+        };
+      })()`);
+      console.log(`[browser-accessibility] Focus state ${media.button} at ${viewport.width}px: ${JSON.stringify(focus)}.`);
+      assert.equal(focus.inputFocused, true, `${media.button}: Tab should focus the clipped file input.`);
+      assert.equal(focus.keyboardFocusVisible, true, `${media.button}: keyboard focus should match :focus-visible.`);
+      assert.equal(focus.outlineStyle, 'solid', `${media.button}: the visible picker surface should show an outline.`);
+      assert.equal(focus.outlineWidth, '3px', `${media.button}: the picker outline should be 3px wide.`);
+      assert.equal(focus.surfaceVisible, true, `${media.button}: the focused picker surface should remain visible in the viewport.`);
+      assert.equal(focus.surfaceObscuredByActions, false, `${media.button}: the focused picker surface should stay clear of the fixed composer actions.`);
+      if (screenshotDir) await captureScreenshot(cdp, screenshotDir, `${viewport.name}-${media.kind}-picker-keyboard-focus`);
+      console.log(`[browser-accessibility] PASS ${media.button} clipped input has a visible ${focus.outlineWidth} keyboard focus outline at ${viewport.width}px.`);
+
+      await setInputFile(cdp, '#drop-media', media.file);
+      await waitUntil(cdp, `${media.name} in composer`, async () => await evaluate(cdp, `Boolean(document.querySelector('img[alt=${JSON.stringify(media.name)}]'))`));
+      await waitUntil(cdp, 'saved composer attachment state', async () => await evaluate(cdp, normalizedVisibleText('Saved privately on this device')));
+      await assertAccessibleMedia(cdp, media.name, `${media.kind} in composer`);
+      const composerState = await evaluate(cdp, `({ note: document.querySelector('#drop-content')?.value || '', href: document.querySelector('a[aria-label="Preview as recipient"]')?.href || '' })`);
+      assert.equal(composerState.note, noteText, `${media.kind}: nonempty composer text should remain alongside the attachment.`);
+      assert.ok(composerState.href.includes('/compose/preview?letter='), `${media.kind}: preview link should identify the current draft.`);
+      if (screenshotDir) await captureScreenshot(cdp, screenshotDir, `${viewport.name}-${media.kind}-composer-media`);
+
+      await focusControlWithKeyboard(cdp, { selector: 'a[aria-label="Preview as recipient"]', expectedTag: 'A' });
+      await activateFocusedControl(cdp, 'Enter');
+      await waitUntil(cdp, `${media.name} in recipient preview`, async () => await evaluate(cdp, `location.pathname === '/compose/preview' && Boolean(document.querySelector('img[alt=${JSON.stringify(media.name)}]'))`));
+      await assertNoHorizontalOverflow(cdp, `${media.kind} recipient preview at ${viewport.width}px`, viewport.width);
+      await assertAccessibleMedia(cdp, media.name, `${media.kind} in recipient preview with a note`);
+      const previewNote = await evaluate(cdp, `Boolean(document.body.innerText.includes(${JSON.stringify(noteText)}))`);
+      assert.equal(previewNote, true, `${media.kind}: the recipient preview should render the nonempty note beside the attachment.`);
+      await evaluate(cdp, `document.querySelector('img[alt=${JSON.stringify(media.name)}]')?.scrollIntoView({ behavior: 'instant', block: 'center' }); true`);
+      if (screenshotDir) await captureScreenshot(cdp, screenshotDir, `${viewport.name}-${media.kind}-recipient-preview`);
+      console.log(`[browser-accessibility] PASS ${media.name} remains exposed in composer and recipient preview with nonempty note at ${viewport.width}px.`);
+    }
+
+    for (const letter of [
+      { id: 'incoming-1', name: 'Attached photo' },
+      { id: 'incoming-gif', name: 'Attached GIF' },
+    ]) {
+      await cdp.send('Page.navigate', { url: new URL(`/letter/${letter.id}`, appUrl).href });
+      await waitUntil(cdp, `sample received drop ${letter.id}`, async () => await evaluate(cdp, `location.pathname === ${JSON.stringify(`/letter/${letter.id}`)} && ${normalizedVisibleText('Reveal sample fragments')}`));
+      await activateFlowControl(cdp, { keyboard: true, name: 'Reveal sample fragments', expectedTag: 'BUTTON' });
+      await waitUntil(cdp, 'sample drop open action', async () => await evaluate(cdp, normalizedVisibleText('Open sample drop')));
+      await activateFlowControl(cdp, { keyboard: true, name: 'Open sample drop', expectedTag: 'BUTTON' });
+      await waitUntil(cdp, `${letter.name} in received drop`, async () => await evaluate(cdp, `Boolean(document.querySelector('img[alt=${JSON.stringify(letter.name)}]'))`));
+      await assertNoHorizontalOverflow(cdp, `${letter.id} received view at ${viewport.width}px`, viewport.width);
+      await assertAccessibleMedia(cdp, letter.name, `${letter.name} in received sample with nonempty message`);
+      const receivedMessage = await evaluate(cdp, `Boolean(document.body.innerText.includes(${JSON.stringify(letter.id === 'incoming-1' ? 'I kept the blue hour for you.' : 'A tiny loop from the walk home.')}))`);
+      assert.equal(receivedMessage, true, `${letter.id}: the received view should render its nonempty message beside the attachment.`);
+      await evaluate(cdp, `document.querySelector('img[alt=${JSON.stringify(letter.name)}]')?.scrollIntoView({ behavior: 'instant', block: 'center' }); true`);
+      if (screenshotDir) await captureScreenshot(cdp, screenshotDir, `${viewport.name}-${letter.id}-received-media`);
+      console.log(`[browser-accessibility] PASS ${letter.name} is exposed in the received drop with a nonempty message at ${viewport.width}px.`);
+    }
+  }
 }
 
 async function runRecipientlessClaimChoiceFlow(cdp, { appUrl, viewport, keyboard }) {
@@ -1192,6 +1467,8 @@ async function runShareTargetFlow(cdp, { appUrl, screenshotDir, getPageLoadEvent
   assert.equal(previousDraftBeforeShare.active?.id, SHARE_TARGET_PREVIOUS_DRAFT.id, 'The previous local draft should be active before the share import.');
   assert.equal(previousDraftBeforeShare.content, SHARE_TARGET_PREVIOUS_DRAFT.content, 'The previous draft should have saved text before the share import.');
   assert.equal(previousDraftBeforeShare.subject, SHARE_TARGET_PREVIOUS_DRAFT.subject, 'The previous draft should have its original subject before the share import.');
+  const previousActiveSnapshot = JSON.stringify(previousDraftBeforeShare.active);
+  assert.equal(await evaluate(cdp, `sessionStorage.setItem('__dropSharePriorActiveSnapshot', ${JSON.stringify(previousActiveSnapshot)}); true`), true);
   const previousAttachment = await evaluate(cdp, `(async () => {
     const database = await new Promise((resolve, reject) => {
       const request = indexedDB.open('dear-exe-draft-media', 1);
@@ -1212,6 +1489,77 @@ async function runShareTargetFlow(cdp, { appUrl, screenshotDir, getPageLoadEvent
   assert.equal(previousAttachment.name, 'demo-cat.png', 'The pre-existing draft attachment should be available before sharing.');
   assert.ok(previousAttachment.size > 0, 'The pre-existing attachment should contain image bytes.');
   assert.equal(await evaluate(cdp, `navigator.serviceWorker.controller?.state === 'activated'`), true, 'The composer document should remain controlled by the active worker.');
+
+  const failureHookAdded = await cdp.send('Page.addScriptToEvaluateOnNewDocument', {
+    source: `(() => {
+      const failureKey = '__dropShareDraftPersistenceFailureOnce';
+      const attachmentCommitKey = '__dropShareAttachmentCommitBeforeDraftFailure';
+      const activeWriteCountKey = '__dropShareImportedActiveWriteCount';
+      const startFailureKey = '__dropShareStartNewDraftVerificationFailureOnce';
+      const priorActiveKey = '__dropSharePriorActiveSnapshot';
+      const blankDraftKey = '__dropShareBlankDraftWriteObserved';
+      const originalPut = IDBObjectStore.prototype.put;
+      const originalSetItem = Storage.prototype.setItem;
+      const originalGetItem = Storage.prototype.getItem;
+      IDBObjectStore.prototype.put = function (...args) {
+        const handoffId = new URL(location.href).searchParams.get('shareImport');
+        const attachment = args[0];
+        if (sessionStorage.getItem(failureKey) === 'armed'
+          && this.name === 'attachments'
+          && this.transaction?.db?.name === 'dear-exe-draft-media'
+          && attachment?.name === ${JSON.stringify(SHARE_TARGET_FILENAME)}) {
+          this.transaction.addEventListener('complete', () => {
+            Reflect.apply(originalSetItem, sessionStorage, [attachmentCommitKey, handoffId || '']);
+          }, { once: true });
+        }
+        return Reflect.apply(originalPut, this, args);
+      };
+      Storage.prototype.setItem = function (key, value) {
+        if (this === window.localStorage && key === 'dear-exe:active-letter:v1'
+          && sessionStorage.getItem(startFailureKey) === 'armed') {
+          let draft = null;
+          try { draft = JSON.parse(value); } catch { /* Ignore unrelated local values. */ }
+          if (draft?.status === 'draft' && !String(draft.content || '').trim()
+            && !(draft.recipient || '').trim() && !draft.mediaUploadId) {
+            const previousActive = JSON.parse(sessionStorage.getItem(priorActiveKey) || 'null');
+            if (draft.id !== previousActive?.id) {
+              const result = Reflect.apply(originalSetItem, this, [key, value]);
+              Reflect.apply(originalSetItem, sessionStorage, [blankDraftKey, draft.id]);
+              return result;
+            }
+          }
+        }
+        if (this === window.localStorage
+          && key === 'dear-exe:active-letter:v1'
+          && sessionStorage.getItem(failureKey) === 'armed') {
+          const handoffId = new URL(location.href).searchParams.get('shareImport');
+          let draft = null;
+          try { draft = JSON.parse(value); } catch { /* Ignore unrelated local values. */ }
+          if (handoffId && draft?.mediaUploadId === handoffId && draft.payloadKind === 'image') {
+            const count = Number(sessionStorage.getItem(activeWriteCountKey) || '0') + 1;
+            Reflect.apply(originalSetItem, sessionStorage, [activeWriteCountKey, String(count)]);
+            if (count === 2 && sessionStorage.getItem(attachmentCommitKey) === handoffId) {
+              Reflect.apply(originalSetItem, sessionStorage, [failureKey, 'consumed-after-attachment-commit']);
+              throw new Error('Simulated imported draft persistence failure after attachment commit.');
+            }
+          }
+        }
+        return Reflect.apply(originalSetItem, this, [key, value]);
+      };
+      Storage.prototype.getItem = function (key) {
+        if (this === window.localStorage && key === 'dear-exe:active-letter:v1'
+          && sessionStorage.getItem(startFailureKey) === 'armed'
+          && sessionStorage.getItem(blankDraftKey)) {
+          const previousActive = sessionStorage.getItem(priorActiveKey);
+          Reflect.apply(originalSetItem, sessionStorage, [startFailureKey, 'consumed-after-active-write']);
+          return previousActive;
+        }
+        return Reflect.apply(originalGetItem, this, [key]);
+      };
+    })();`,
+  });
+  assert.ok(failureHookAdded.identifier, 'The smoke should install a one-time post-commit draft-persistence failure for the cleanup retry check.');
+  assert.equal(await evaluate(cdp, `sessionStorage.setItem('__dropShareDraftPersistenceFailureOnce', 'armed'); true`), true);
 
   const beforeImportBlockedRequests = getBlockedRequestCount();
   captureShareRequests(true);
@@ -1252,9 +1600,159 @@ async function runShareTargetFlow(cdp, { appUrl, screenshotDir, getPageLoadEvent
   assert.equal(submittedForm.method.toUpperCase(), 'POST');
   assert.equal(submittedForm.enctype, 'multipart/form-data');
   assert.equal(new URL(submittedForm.action).pathname, '/share-target');
-  await waitUntil(cdp, 'the imported share draft and its canonical composer route', async () => (
+  await waitUntil(cdp, 'the share import route after the injected post-commit persistence failure', async () => (
     getPageLoadEvents() > previousLoadEvents
-      && await evaluate(cdp, `location.pathname === '/compose' && Boolean(document.querySelector('#drop-content')) && new URL(location.href).searchParams.has('letter')`)
+      && await evaluate(cdp, `location.pathname === '/compose' && Boolean(document.querySelector('#drop-content')) && new URL(location.href).searchParams.has('shareImport')`)
+  ));
+  await waitUntil(cdp, 'the committed attachment followed by a one-time draft persistence failure', async () => (
+    await evaluate(cdp, `sessionStorage.getItem('__dropShareDraftPersistenceFailureOnce') === 'consumed-after-attachment-commit'
+      && sessionStorage.getItem('__dropShareAttachmentCommitBeforeDraftFailure') === new URL(location.href).searchParams.get('shareImport')
+      && sessionStorage.getItem('__dropShareImportedActiveWriteCount') === '2'
+      && (document.querySelector('[role="alert"]')?.innerText || '').includes('new draft could not be saved')`)
+  ));
+  await sleep(500, interrupted.signal);
+  const failedImportState = await evaluate(cdp, `(async () => {
+    const active = JSON.parse(localStorage.getItem('dear-exe:active-letter:v1') || 'null');
+    const attachments = await new Promise((resolve, reject) => {
+      const request = indexedDB.open('dear-exe-draft-media', 1);
+      request.onsuccess = () => {
+        const database = request.result;
+        const transaction = database.transaction('attachments', 'readonly');
+        const store = transaction.objectStore('attachments');
+        const values = store.getAll();
+        const previous = store.get(${JSON.stringify(SHARE_TARGET_PREVIOUS_DRAFT.id)});
+        transaction.oncomplete = () => {
+          database.close();
+          resolve({
+            values: values.result,
+            previous: previous.result ? { name: previous.result.name, size: previous.result.blob?.size || 0 } : null,
+          });
+        };
+        transaction.onerror = () => { database.close(); reject(transaction.error); };
+      };
+      request.onerror = () => reject(request.error);
+    });
+    const handoffId = new URL(location.href).searchParams.get('shareImport');
+    const handoffDatabase = await new Promise((resolve, reject) => {
+      const request = indexedDB.open('drop-share-target-handoffs', 1);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    let handoffRemains = false;
+    try {
+      handoffRemains = await new Promise((resolve, reject) => {
+        const transaction = handoffDatabase.transaction('handoffs', 'readonly');
+        const request = transaction.objectStore('handoffs').get(handoffId);
+        request.onsuccess = () => resolve(Boolean(request.result));
+        request.onerror = () => reject(request.error);
+      });
+    } finally {
+      handoffDatabase.close();
+    }
+    return {
+      active,
+      content: document.querySelector('#drop-content')?.value || '',
+      alert: document.querySelector('[role="alert"]')?.innerText || '',
+      url: location.href,
+      importedAttachments: attachments.values.filter((attachment) => attachment?.name === ${JSON.stringify(SHARE_TARGET_FILENAME)}).length,
+      previousAttachment: attachments.previous,
+      handoffRemains,
+      fault: sessionStorage.getItem('__dropShareDraftPersistenceFailureOnce'),
+      attachmentCommit: sessionStorage.getItem('__dropShareAttachmentCommitBeforeDraftFailure'),
+      importedActiveWriteCount: sessionStorage.getItem('__dropShareImportedActiveWriteCount'),
+    };
+  })()`);
+  const failedHandoffId = new URL(failedImportState.url).searchParams.get('shareImport');
+  assert.equal(failedImportState.fault, 'consumed-after-attachment-commit', 'The smoke should fail draft persistence only after the attachment transaction commits.');
+  assert.equal(failedImportState.attachmentCommit, failedHandoffId);
+  assert.equal(failedImportState.importedActiveWriteCount, '2', 'The injected failure should target the second imported-draft active write, after attachment save.');
+  assert.match(failedImportState.alert, /new draft could not be saved/);
+  assert.equal(failedImportState.active?.id, SHARE_TARGET_PREVIOUS_DRAFT.id, 'A failed share import must restore the previously active draft.');
+  assert.equal(failedImportState.active?.content, SHARE_TARGET_PREVIOUS_DRAFT.content, 'A failed share import must preserve the prior active draft content.');
+  assert.equal(failedImportState.content, SHARE_TARGET_PREVIOUS_DRAFT.content, 'The visible composer should keep showing the prior draft after import failure.');
+  assert.equal(failedImportState.importedAttachments, 0, 'Rollback should remove the attachment that committed before draft persistence failed.');
+  assert.deepEqual(failedImportState.previousAttachment, { name: 'demo-cat.png', size: previousAttachment.size }, 'Rollback should preserve the earlier draft attachment.');
+  assert.equal(failedImportState.handoffRemains, true, 'The failed import should retain its handoff so the user can retry.');
+  assert.match(failedHandoffId || '', SHARE_IMPORT_ID);
+
+  await evaluate(cdp, `document.querySelector('[role="alert"]')?.scrollIntoView({ block: 'center' }); true`);
+  await captureScreenshot(cdp, screenshotDir, 'mobile-390-share-target-post-commit-rollback');
+  assert.equal(await evaluate(cdp, `sessionStorage.setItem('__dropShareStartNewDraftVerificationFailureOnce', 'armed'); true`), true);
+  const draftCreationFailureLoadEvents = getPageLoadEvents();
+  await cdp.send('Page.reload', { ignoreCache: true });
+  await waitUntil(cdp, 'reload before the active-draft verification failure check', async () => (
+    getPageLoadEvents() > draftCreationFailureLoadEvents
+      && await evaluate(cdp, `location.pathname === '/compose' && new URL(location.href).searchParams.get('shareImport') === ${JSON.stringify(failedHandoffId)}`)
+  ));
+  await waitUntil(cdp, 'the startNewLetter active-draft verification failure and rollback', async () => (
+    await evaluate(cdp, `sessionStorage.getItem('__dropShareStartNewDraftVerificationFailureOnce') === 'consumed-after-active-write'
+      && Boolean(sessionStorage.getItem('__dropShareBlankDraftWriteObserved'))
+      && (document.querySelector('[role="alert"]')?.innerText || '').includes('new draft could not be verified')`)
+  ));
+  const draftCreationFailureState = await evaluate(cdp, `(async () => {
+    const active = JSON.parse(localStorage.getItem('dear-exe:active-letter:v1') || 'null');
+    const handoffId = new URL(location.href).searchParams.get('shareImport');
+    const handoffDatabase = await new Promise((resolve, reject) => {
+      const request = indexedDB.open('drop-share-target-handoffs', 1);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    let handoffRemains = false;
+    try {
+      handoffRemains = await new Promise((resolve, reject) => {
+        const transaction = handoffDatabase.transaction('handoffs', 'readonly');
+        const request = transaction.objectStore('handoffs').get(handoffId);
+        request.onsuccess = () => resolve(Boolean(request.result));
+        request.onerror = () => reject(request.error);
+      });
+    } finally {
+      handoffDatabase.close();
+    }
+    const mediaDatabase = await new Promise((resolve, reject) => {
+      const request = indexedDB.open('dear-exe-draft-media', 1);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    let importedAttachments = 0;
+    try {
+      importedAttachments = await new Promise((resolve, reject) => {
+        const transaction = mediaDatabase.transaction('attachments', 'readonly');
+        const request = transaction.objectStore('attachments').getAll();
+        request.onsuccess = () => resolve(request.result.filter((attachment) => attachment?.name === ${JSON.stringify(SHARE_TARGET_FILENAME)}).length);
+        request.onerror = () => reject(request.error);
+      });
+    } finally {
+      mediaDatabase.close();
+    }
+    return {
+      active,
+      content: document.querySelector('#drop-content')?.value || '',
+      failedBlankDraftId: sessionStorage.getItem('__dropShareBlankDraftWriteObserved'),
+      handoffRemains,
+      importedAttachments,
+    };
+  })()`);
+  assert.equal(draftCreationFailureState.active?.id, SHARE_TARGET_PREVIOUS_DRAFT.id, 'A post-write blank-draft verification failure must restore the previous active draft.');
+  assert.notEqual(draftCreationFailureState.active?.id, draftCreationFailureState.failedBlankDraftId, 'The failed blank draft must not remain active.');
+  assert.equal(draftCreationFailureState.content, SHARE_TARGET_PREVIOUS_DRAFT.content, 'The composer should keep showing the previous draft after blank-draft verification fails.');
+  assert.equal(draftCreationFailureState.handoffRemains, true, 'A failed blank-draft verification must keep the share available to retry.');
+  assert.equal(draftCreationFailureState.importedAttachments, 0, 'The blank-draft failure must not create an imported attachment.');
+  await evaluate(cdp, `document.querySelector('[role="alert"]')?.scrollIntoView({ block: 'center' }); true`);
+  await captureScreenshot(cdp, screenshotDir, 'mobile-390-share-target-start-draft-rollback');
+
+  const retryLoadEvents = getPageLoadEvents();
+  await cdp.send('Page.reload', { ignoreCache: true });
+  await waitUntil(cdp, 'reload before retrying the preserved share handoff', async () => (
+    getPageLoadEvents() > retryLoadEvents
+      && await evaluate(cdp, `(() => {
+        const parameters = new URL(location.href).searchParams;
+        return location.pathname === '/compose'
+          && (parameters.get('shareImport') === ${JSON.stringify(failedHandoffId)}
+            || (parameters.has('letter') && !parameters.has('shareImport')));
+      })()`)
+  ));
+  await waitUntil(cdp, 'the imported share draft and its canonical composer route after retry', async () => (
+    await evaluate(cdp, `location.pathname === '/compose' && Boolean(document.querySelector('#drop-content')) && new URL(location.href).searchParams.has('letter')`)
   ));
   await waitUntil(cdp, 'the shared text and image preview in the fresh composer draft', async () => (
     await evaluate(cdp, `document.querySelector('#drop-content')?.value === ${JSON.stringify(SHARE_TARGET_CAPTION)}
@@ -1375,6 +1873,16 @@ async function runShareTargetFlow(cdp, { appUrl, screenshotDir, getPageLoadEvent
   assert.deepEqual(importedState.queryKeys, ['letter'], 'Only the stable draft ID should remain in the URL query.');
   assert.equal(importedState.url.includes(SHARE_TARGET_CAPTION), false, 'Shared text should not appear in the URL.');
   assert.equal(importedState.url.includes(SHARE_TARGET_FILENAME), false, 'The shared filename should not appear in the URL.');
+  const importedComposerInteractivity = await evaluate(cdp, `(() => {
+    const form = document.querySelector('form.composer-form');
+    const editor = document.querySelector('#drop-content');
+    return {
+      ariaBusy: form?.getAttribute('aria-busy') ?? null,
+      editorEnabled: Boolean(editor && !editor.disabled && !editor.readOnly),
+    };
+  })()`);
+  assert.equal(importedComposerInteractivity.ariaBusy, 'false', `The canonical share-import composer should stop reporting busy before replay: ${JSON.stringify(importedComposerInteractivity)}.`);
+  assert.equal(importedComposerInteractivity.editorEnabled, true, `The canonical share-import composer should leave the normal text control enabled before replay: ${JSON.stringify(importedComposerInteractivity)}.`);
   await assertNoFrameworkOverlay(cdp, 'Share-target imported composer');
   await assertNoHorizontalOverflow(cdp, 'Share-target composer at 390px', 390);
   await setViewport(cdp, { name: 'mobile-375', width: 375, height: 844, deviceScaleFactor: 1, mobile: true });
@@ -1468,9 +1976,14 @@ async function runShareTargetFlow(cdp, { appUrl, screenshotDir, getPageLoadEvent
   const replayUrl = new URL('/compose', appUrl);
   replayUrl.searchParams.set('shareImport', handoffId);
   await cdp.send('Page.navigate', { url: replayUrl.href });
-  await waitUntil(cdp, 'a full navigation to the replayed share-import route', async () => (
+  await waitUntil(cdp, 'a full navigation to the replayed share import or its completed canonical draft route', async () => (
     getPageLoadEvents() > replayLoadEvents
-      && await evaluate(cdp, `location.pathname === '/compose' && new URL(location.href).searchParams.get('shareImport') === ${JSON.stringify(handoffId)}`)
+      && await evaluate(cdp, `(() => {
+        const parameters = new URL(location.href).searchParams;
+        return location.pathname === '/compose'
+          && (parameters.get('shareImport') === ${JSON.stringify(handoffId)}
+            || (parameters.has('letter') && !parameters.has('shareImport')));
+      })()`)
   ));
   let lastReplaySnapshot;
   try {
@@ -1753,7 +2266,8 @@ async function runShareTargetFlow(cdp, { appUrl, screenshotDir, getPageLoadEvent
 
 async function main() {
   if (process.argv.includes('--help') || process.argv.includes('-h')) {
-    console.log('Usage: node scripts/browser-demo-smoke.mjs [http://127.0.0.1:4004] [--claim-recovery-only|--prompt-only|--friend-draft-only|--share-target-only|--drop-back-only]');
+    console.log('Usage: node scripts/browser-demo-smoke.mjs [http://127.0.0.1:4004] [--claim-recovery-only|--prompt-only|--friend-draft-only|--share-target-only|--drop-back-only|--accessibility-only]');
+    console.log('Set DROP_BROWSER_EXECUTABLE to select an installed Chrome, Edge, or Chromium executable.');
     return;
   }
 
@@ -1763,7 +2277,8 @@ async function main() {
   const friendDraftOnly = args.includes('--friend-draft-only');
   const shareTargetOnly = args.includes('--share-target-only');
   const dropBackOnly = args.includes('--drop-back-only');
-  assert.ok([claimRecoveryOnly, promptOnly, friendDraftOnly, shareTargetOnly, dropBackOnly].filter(Boolean).length <= 1, 'Choose only one focused browser-smoke mode.');
+  const accessibilityOnly = args.includes('--accessibility-only');
+  assert.ok([claimRecoveryOnly, promptOnly, friendDraftOnly, shareTargetOnly, dropBackOnly, accessibilityOnly].filter(Boolean).length <= 1, 'Choose only one focused browser-smoke mode.');
   const appUrl = parseAppUrl(args.find((argument) => !argument.startsWith('--')) || DEFAULT_APP_URL);
   if (typeof WebSocket !== 'function') throw new Error('This smoke check needs a Node runtime with the built-in WebSocket API.');
   const screenshotDir = screenshotDirectoryFromEnv();
@@ -1794,7 +2309,7 @@ async function main() {
   try {
     const hostnameForResolver = appUrl.hostname.replace(/^\[|\]$/g, '');
     const resolverRule = `MAP * ~NOTFOUND, EXCLUDE ${hostnameForResolver}`;
-    console.log(`[browser-demo-smoke] Starting isolated Chrome: ${chromeExecutable}`);
+    console.log(`[browser-demo-smoke] Starting isolated browser: ${chromeExecutable}`);
     chrome = spawn(chromeExecutable, [
       '--headless=new',
       '--remote-debugging-port=0',
@@ -1821,13 +2336,13 @@ async function main() {
     });
 
     const devTools = await waitForDevTools(profileDir, chrome, () => spawnError, interrupted.signal);
-    console.log('[browser-demo-smoke] Chrome DevTools is ready.');
+    console.log('[browser-demo-smoke] Browser DevTools is ready.');
     const versionInfo = await requestJson(`http://127.0.0.1:${devTools.port}/json/version`);
     assert.equal(typeof versionInfo.webSocketDebuggerUrl, 'string', 'Chrome did not expose its DevTools WebSocket URL.');
     browserCdp = await CdpConnection.connect(devTools.browserWebSocketUrl, interrupted.signal);
 
     const target = await requestJson(`http://127.0.0.1:${devTools.port}/json/new?about:blank`, { method: 'PUT' });
-    console.log('[browser-demo-smoke] Connected to the isolated Chrome page.');
+    console.log('[browser-demo-smoke] Connected to the isolated browser page.');
     pageTargetId = target.id;
     assert.equal(typeof target.webSocketDebuggerUrl, 'string', 'Chrome did not create an isolated page target.');
     pageCdp = await CdpConnection.connect(target.webSocketDebuggerUrl, interrupted.signal);
@@ -1835,9 +2350,11 @@ async function main() {
     pageCdp.on('Runtime.exceptionThrown', ({ exceptionDetails }) => {
       pageExceptions.push(exceptionDetails.exception?.description || exceptionDetails.text || 'Unknown browser exception');
     });
-    pageCdp.on('Runtime.consoleAPICalled', ({ type, args = [] }) => {
+    pageCdp.on('Runtime.consoleAPICalled', ({ type, args = [], stackTrace }) => {
       if (type !== 'error') return;
-      pageConsoleErrors.push(args.map((argument) => argument.value ?? argument.description ?? '').filter(Boolean).join(' '));
+      const message = args.map((argument) => argument.value ?? argument.description ?? '').filter(Boolean).join(' ');
+      const frames = stackTrace?.callFrames?.map((frame) => `${frame.url}:${frame.lineNumber + 1}:${frame.columnNumber + 1}`).join(' <- ');
+      pageConsoleErrors.push(frames ? `${message} (${frames})` : message);
     });
 
     pageCdp.on('Network.requestWillBeSent', ({ request, redirectResponse }) => {
@@ -1924,10 +2441,14 @@ async function main() {
     ]);
     await setViewport(pageCdp, MOBILE_VIEWPORTS[1]);
 
-    console.log(`[browser-demo-smoke] Chrome: ${chromeExecutable}`);
-    const flowName = dropBackOnly ? 'drop-back-only' : shareTargetOnly ? 'share-target-only' : claimRecoveryOnly ? 'claim-recovery' : promptOnly ? 'prompt-only' : friendDraftOnly ? 'friend-draft-only' : 'full';
-    const flowViewports = friendDraftOnly || shareTargetOnly || dropBackOnly ? [MOBILE_VIEWPORTS[1]] : FLOW_VIEWPORTS;
+    console.log(`[browser-demo-smoke] Browser: ${chromeExecutable}`);
+    const flowName = accessibilityOnly ? 'accessibility-only' : dropBackOnly ? 'drop-back-only' : shareTargetOnly ? 'share-target-only' : claimRecoveryOnly ? 'claim-recovery' : promptOnly ? 'prompt-only' : friendDraftOnly ? 'friend-draft-only' : 'full';
+    const flowViewports = accessibilityOnly ? ['mobile-320', 'mobile-390'].map((name) => ({ name })) : friendDraftOnly || shareTargetOnly || dropBackOnly ? [MOBILE_VIEWPORTS[1]] : FLOW_VIEWPORTS;
     console.log(`[browser-demo-smoke] App: ${appUrl.origin}; ${flowName} flow viewports: ${flowViewports.map(({ name }) => name).join(', ')}.`);
+
+    if (accessibilityOnly) {
+      await runAccessibilityFlow(pageCdp, { appUrl, screenshotDir });
+    }
 
     if (dropBackOnly) {
       await runDropBackFlow(pageCdp, { appUrl, screenshotDir });
@@ -1969,7 +2490,7 @@ async function main() {
       console.log(`[browser-demo-smoke] PASS keyboard sender-copy to fresh editable text draft at ${viewport.width}×${viewport.height}; existing media draft and local demo remain preserved.`);
     }
 
-    if (!friendDraftOnly && !claimRecoveryOnly && !promptOnly && !shareTargetOnly && !dropBackOnly) {
+    if (!friendDraftOnly && !claimRecoveryOnly && !promptOnly && !shareTargetOnly && !dropBackOnly && !accessibilityOnly) {
       const screenshotSteps = new Set(['home', 'chooser', 'recipient', 'fragments-revealed', 'reaction-saved', 'sender-copy']);
       for (const viewport of FLOW_VIEWPORTS) {
         const keyboard = viewport.width !== 360;
@@ -1996,7 +2517,7 @@ async function main() {
       });
     }
 
-    if (!friendDraftOnly && !claimRecoveryOnly && !shareTargetOnly && !dropBackOnly) {
+    if (!friendDraftOnly && !claimRecoveryOnly && !shareTargetOnly && !dropBackOnly && !accessibilityOnly) {
       for (const viewport of FLOW_VIEWPORTS) {
         await runWritingPromptFlow(pageCdp, {
           appUrl,
@@ -2006,9 +2527,20 @@ async function main() {
         });
         console.log(`[browser-demo-smoke] PASS keyboard prompt-to-editable-draft flow and existing attachment preservation at ${viewport.width}×${viewport.height}${viewport.mobile ? '' : ' desktop'}.`);
       }
+
+      const tabletViewport = { name: 'tablet-768', width: 768, height: 1024, deviceScaleFactor: 1, mobile: true };
+      await setViewport(pageCdp, tabletViewport);
+      await assertComposerActionTray(pageCdp, tabletViewport, 'Prompt composer at 768px tablet width');
+      console.log('[browser-demo-smoke] PASS persistent composer actions clear the fixed navigation at 768×1024.');
+
+      const narrowViewport = { name: 'mobile-320', width: 320, height: 740, deviceScaleFactor: 1, mobile: true };
+      await setViewport(pageCdp, narrowViewport);
+      await assertComposerActionTray(pageCdp, narrowViewport, 'Prompt composer at 320px narrow mobile width');
+      await assertNoHorizontalOverflow(pageCdp, 'Prompt composer at 320px narrow mobile width', 320);
+      console.log('[browser-demo-smoke] PASS readable 44px actions fit at 320×740 without horizontal overflow.');
     }
 
-    if (!friendDraftOnly && !promptOnly && !shareTargetOnly && !dropBackOnly) {
+    if (!friendDraftOnly && !promptOnly && !shareTargetOnly && !dropBackOnly && !accessibilityOnly) {
       for (const viewport of FLOW_VIEWPORTS) {
         await runRecipientlessClaimChoiceFlow(pageCdp, {
           appUrl,
@@ -2038,12 +2570,12 @@ async function main() {
     assert.deepEqual(pageExceptions, [], `The browser reported JavaScript exceptions: ${JSON.stringify(pageExceptions)}.`);
     if (firewallFailure) throw new Error(`The browser network gate failed: ${firewallFailure.message}`);
 
-    if (!friendDraftOnly && !promptOnly && !shareTargetOnly && !dropBackOnly) {
+    if (!friendDraftOnly && !promptOnly && !shareTargetOnly && !dropBackOnly && !accessibilityOnly) {
       console.log('[browser-demo-smoke] PASS saved-claim recovery after reload, including the encoded detail route and fresh-link action at all mobile and desktop widths.');
       console.log('[browser-demo-smoke] PASS handleless claim disclosure, account readiness gate, and focus recovery at all mobile and desktop widths.');
       console.log('[browser-demo-smoke] PASS no Auth, REST, or Storage request during the saved-claim recovery flow.');
     }
-    if (!friendDraftOnly && !claimRecoveryOnly && !promptOnly && !shareTargetOnly && !dropBackOnly) {
+    if (!friendDraftOnly && !claimRecoveryOnly && !promptOnly && !shareTargetOnly && !dropBackOnly && !accessibilityOnly) {
       console.log('[browser-demo-smoke] PASS photo flow at 390×844, including saved reaction, reload persistence, and sender copy.');
       console.log('[browser-demo-smoke] PASS no horizontal overflow on Home and demo chooser at 360, 390, 430px and 1440×900.');
       console.log('[browser-demo-smoke] PASS no Auth, RPC, or Storage write request during the local demo.');

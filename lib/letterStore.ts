@@ -360,11 +360,14 @@ export async function copyGuestDraftToAccount(
 }
 
 /** Make a complete draft the active working letter for a focused flow such as dispatch. */
-export function setActiveLetterDraft(draft: LetterDraftState): LetterDraftState {
+export function setActiveLetterDraft(
+  draft: LetterDraftState,
+  accountId = getLocalAccountId(),
+): LetterDraftState {
   const next = hydrateDraft(draft);
   if (canUseStorage()) {
     try {
-      window.localStorage.setItem(localAccountStorageKey(STORAGE_KEY), JSON.stringify(next));
+      window.localStorage.setItem(localAccountStorageKey(STORAGE_KEY, accountId), JSON.stringify(next));
     } catch {
       // The caller can continue with the in-memory copy.
     }
