@@ -109,6 +109,7 @@ function Composer() {
   const [saved, setSaved] = useState(false);
   const [accountState, setAccountState] = useState<'checking' | 'connected' | 'signed-out' | 'unavailable'>('checking');
   const [sending, setSending] = useState(false);
+  const [sendRecovery, setSendRecovery] = useState<'retry' | 'check-sent' | null>(null);
   const [deleting, setDeleting] = useState(false);
   const deletingRef = useRef(false);
   const [error, setError] = useState('');
@@ -147,6 +148,7 @@ function Composer() {
       ? clearRecipientInviteProgressForDraft(activeDraft.id, accountId, activeDraft.recipientInviteProgress.username) ?? { ...activeDraft, recipientInviteProgress: undefined }
       : activeDraft;
     setDraft(current);
+    setSendRecovery(null);
     setInviteNotice('');
     setManualInviteUrl(current.recipientInviteProgress?.manualLinkAvailable ? `${window.location.origin}/invite` : '');
     setPrivateClaimUrl('');
@@ -929,7 +931,7 @@ function Composer() {
 
   const handleSend = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!complete || !confirmedRecipient || !draft || sending || deletingRef.current) return;
+    if (!complete || !confirmedRecipient || !draft || sending || deletingRef.current || sendRecovery === 'check-sent') return;
     if (payloadKind !== 'text') {
       const validationError = validateDropMedia(file);
       if (validationError) {
@@ -939,6 +941,7 @@ function Composer() {
     }
     setError('');
     setNotice('');
+    setSendRecovery(null);
     setSending(true);
     const accountId = getLocalAccountId();
     let next = makeDraft();
@@ -954,12 +957,15 @@ function Composer() {
       const result = await syncDropToBackend(next, confirmedRecipient.id, accountId, file || undefined);
       if (!isCurrentLocalAccount(accountId)) return;
       if (!result.ok) {
-        setError(result.error || 'This drop could not be sent. Your draft is safe to retry.');
+        const failureCopy = result.error || 'This drop could not be sent. Your draft is still here.';
+        setError(result.recovery === 'retry' ? `${failureCopy} Check the recipient again to retry.` : failureCopy);
+        setSendRecovery(result.recovery ?? null);
         setRecipientCheck({ status: 'idle', username: null });
         setInviteNotice('');
         setSending(false);
         return;
       }
+      setSendRecovery(null);
       const status = deliveryMode === 'instant' ? 'delivered' : 'dispatched';
       const sent = completeSuccessfulSend(next, accountId, status, result.dispatchedAt ?? new Date().toISOString(), {
         mediaPath: result.mediaPath,
@@ -968,6 +974,7 @@ function Composer() {
       });
       if (!sent) {
         setError('Drop was sent, but this device could not save its receipt. Check Sent before trying again.');
+        setSendRecovery('check-sent');
         setSending(false);
         return;
       }
@@ -975,7 +982,8 @@ function Composer() {
       router.push(buildSentReceiptPath({ kind: 'delivery', letterId: sent.id, mode: deliveryMode }));
     } catch {
       if (!isCurrentLocalAccount(accountId)) return;
-      setError('Something interrupted the send. Your draft is still here—try again.');
+      setError('The send status is unclear. Your saved drop and attachment are still here. Check Sent before sending again.');
+      setSendRecovery('check-sent');
       setRecipientCheck({ status: 'idle', username: null });
       setSending(false);
     }
@@ -1279,7 +1287,10 @@ function Composer() {
             </div>
           </details>}
 
-          {error && <p className="notice error-notice" role="alert">{error}</p>}
+          {sendRecovery === 'check-sent' ? <div className="notice error-notice" role="alert">
+            <p>{error || 'The send status is unclear. Your saved drop and attachment are still here.'}</p>
+            <Link href="/mailbox?filter=sent" onClick={saveBeforeLeaving} aria-label="Check Sent" className="mt-3 inline-flex min-h-11 items-center font-bold underline decoration-current underline-offset-4">Check Sent <ArrowRightIcon /></Link>
+          </div> : error && <p className="notice error-notice" role="alert">{error}</p>}
           {notice && !error && <p className="notice" role="status">{notice}</p>}
 
           <div className={`composer-action-tray${deletableDraft ? ' composer-action-tray--with-delete' : ''}`} role="group" aria-label="Drop actions">
@@ -1289,7 +1300,7 @@ function Composer() {
                 <button type="button" onClick={handleSave} aria-label={saveLabel} className="button-secondary composer-action-save !min-h-12 !rounded-xl"><span className="hidden sm:inline">{saveLabel}</span><span className="sm:hidden" aria-hidden="true">{saved ? 'Saved' : 'Save'}</span></button>
                 {deletableDraft && <button type="button" onClick={handleDelete} disabled={deleting || sending || attachmentSaving} aria-label={deleting ? 'Deleting draft' : 'Delete draft'} className="button-secondary composer-action-delete !min-h-12 !rounded-xl !border-[#e6c7bd] !text-[#9e4038] disabled:opacity-45"><Trash2 className="h-4 w-4" aria-hidden="true" /><span className="hidden sm:inline">{deleting ? 'Deleting…' : 'Delete draft'}</span><span className="sm:hidden" aria-hidden="true">{deleting ? 'Deleting…' : 'Delete'}</span></button>}
               </div>
-              {accountState === 'connected' ? <button type="submit" disabled={!complete || sending || deleting || attachmentSaving || shareImporting} className="button-primary composer-action-primary !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white disabled:opacity-45"><span aria-live="polite" aria-atomic="true">{sending ? sendProgressLabel : 'Send drop'}</span> <Send className="h-4 w-4" aria-hidden="true" /></button> : <Link href={profileHref} onClick={saveBeforeLeaving} aria-disabled={shareImporting || deleting || attachmentSaving || Boolean(file && !attachmentSaved)} className="button-primary composer-action-primary !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white">{accountState === 'unavailable' ? 'Account options' : 'Connect to send'} <Send className="h-4 w-4" aria-hidden="true" /></Link>}
+              {accountState === 'connected' ? <button type="submit" disabled={!complete || sending || deleting || attachmentSaving || shareImporting || sendRecovery === 'check-sent'} className="button-primary composer-action-primary !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white disabled:opacity-45"><span aria-live="polite" aria-atomic="true">{sending ? sendProgressLabel : sendRecovery === 'check-sent' ? 'Check Sent first' : sendRecovery === 'retry' && complete ? 'Retry send' : 'Send drop'}</span> <Send className="h-4 w-4" aria-hidden="true" /></button> : <Link href={profileHref} onClick={saveBeforeLeaving} aria-disabled={shareImporting || deleting || attachmentSaving || Boolean(file && !attachmentSaved)} className="button-primary composer-action-primary !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white">{accountState === 'unavailable' ? 'Account options' : 'Connect to send'} <Send className="h-4 w-4" aria-hidden="true" /></Link>}
             </div>
           </div>
           </fieldset>

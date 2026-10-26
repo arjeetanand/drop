@@ -1129,7 +1129,9 @@ export async function claimDropInvite(token: string): Promise<{ ok: boolean; err
   }
 }
 
-export async function syncDropToBackend(draft: LetterDraftState, confirmedRecipientId: string, expectedAccountId: string | null, mediaFile?: File): Promise<{ ok: boolean; error?: string; mediaPath?: string; mediaMimeType?: string; mediaSizeBytes?: number; dispatchedAt?: string }> {
+export type DropSendRecovery = 'retry' | 'check-sent';
+
+export async function syncDropToBackend(draft: LetterDraftState, confirmedRecipientId: string, expectedAccountId: string | null, mediaFile?: File): Promise<{ ok: boolean; error?: string; recovery?: DropSendRecovery; mediaPath?: string; mediaMimeType?: string; mediaSizeBytes?: number; dispatchedAt?: string }> {
   if (!expectedAccountId) return { ok: false, error: 'Connect an account in Your profile before sending a private drop.' };
   const context = await getAuthenticatedClient();
   if (!context) return { ok: false, error: 'Connect an account in Your profile before sending a private drop.' };
@@ -1154,7 +1156,7 @@ export async function syncDropToBackend(draft: LetterDraftState, confirmedRecipi
   if (!mediaFile) {
     const previous = await readExistingDrop(context, draft.id);
     if (previous.state === 'unavailable') {
-      return { ok: false, error: 'I could not confirm whether this drop was already sent. Check Sent before retrying.' };
+      return { ok: false, error: 'I could not confirm whether this drop was already sent. Check Sent before retrying.', recovery: 'check-sent' };
     }
     if (previous.state === 'found') {
       const retryIntent: DropSendIntent = {
@@ -1173,7 +1175,7 @@ export async function syncDropToBackend(draft: LetterDraftState, confirmedRecipi
       if (matchesStoredDropMetadata(toStoredDropSend(previous.row), retryIntent) && previous.row.dispatched_at) {
         return { ok: true, dispatchedAt: previous.row.dispatched_at };
       }
-      return { ok: false, error: 'This draft ID is already tied to a different drop. Check Sent before sending this edit.' };
+      return { ok: false, error: 'This draft ID is already tied to a different drop. Check Sent before sending this edit.', recovery: 'check-sent' };
     }
   }
   const initialRecipient = await resolveDropRecipient(context, recipientUsername);
@@ -1229,14 +1231,19 @@ export async function syncDropToBackend(draft: LetterDraftState, confirmedRecipi
       const validMediaPath = result?.mediaPath === expectedPath || isDropMediaFinalPath(result?.mediaPath, context.user.id, draft.id);
       if (!response.ok || !result || typeof result.mediaPath !== 'string' || !validMediaPath || typeof result.mediaMimeType !== 'string' || typeof result.mediaSizeBytes !== 'number') {
         await removeStagedMedia();
-        return { ok: false, error: result?.error || (error ? 'The image did not finish uploading. Your draft is still here—try again.' : 'The image could not be validated. Your draft is still here—try again.') };
+        const safelyRetryable = Boolean(error) || response.status >= 500 || response.ok;
+        return {
+          ok: false,
+          error: result?.error || (error ? 'The image did not finish uploading. Your draft and attachment are still here.' : 'The image could not be validated. Your draft and attachment are still here.'),
+          ...(safelyRetryable ? { recovery: 'retry' as const } : {}),
+        };
       }
       mediaPath = result.mediaPath;
       mediaMimeType = result.mediaMimeType;
       mediaSizeBytes = result.mediaSizeBytes;
     } catch {
       await removeStagedMedia();
-      return { ok: false, error: 'The image could not be validated. Your draft is still here—try again.' };
+      return { ok: false, error: 'The image send was interrupted before Drop could confirm the upload. Your draft and attachment are still here.', recovery: 'retry' };
     }
   }
   const cleanupUploadedMedia = async (removeFinal = true) => {
@@ -1288,11 +1295,11 @@ export async function syncDropToBackend(draft: LetterDraftState, confirmedRecipi
   }
   if (existing.state === 'conflict') {
     await cleanupUploadedMedia(mediaPath !== existing.mediaPath);
-    return { ok: false, error: 'This draft ID is already tied to a different drop. Check Sent before sending this edit.' };
+    return { ok: false, error: 'This draft ID is already tied to a different drop. Check Sent before sending this edit.', recovery: 'check-sent' };
   }
   if (existing.state === 'unavailable') {
     await cleanupUploadedMedia();
-    return { ok: false, error: 'I could not confirm whether this drop was already sent. Check Sent before retrying.' };
+    return { ok: false, error: 'I could not confirm whether this drop was already sent. Check Sent before retrying.', recovery: 'check-sent' };
   }
 
   const profileState = await getRemoteProfileForContext(context);
@@ -1391,7 +1398,7 @@ export async function syncDropToBackend(draft: LetterDraftState, confirmedRecipi
     }
     if (recovery.state === 'conflict') {
       await cleanupUploadedMedia(mediaPath !== recovery.mediaPath && recovery.senderId === context.user.id);
-      return { ok: false, error: 'This draft ID is already tied to a different drop. Check Sent before sending this edit.' };
+      return { ok: false, error: 'This draft ID is already tied to a different drop. Check Sent before sending this edit.', recovery: 'check-sent' };
     }
     await cleanupUploadedMedia(false);
     return {
@@ -1399,6 +1406,7 @@ export async function syncDropToBackend(draft: LetterDraftState, confirmedRecipi
       error: recovery.state === 'missing'
         ? 'I could not confirm whether this drop was already sent. Check Sent before retrying.'
         : 'The send could not be confirmed yet. Your draft and attachment are still here—check Sent before retrying.',
+      recovery: 'check-sent',
     };
   }
 

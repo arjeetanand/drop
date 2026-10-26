@@ -136,6 +136,12 @@ class BrowserSession {
     this.consoleErrors = 0;
     this.runtimeExceptions = 0;
     this.expectedStorageOwner = null;
+    this.finalizeFault = null;
+    this.ambiguousSendFault = null;
+    this.lettersPostIdsByFetchRequest = new Map();
+    this.lettersPostIdsByNetworkRequest = new Map();
+    this.expectedFailedNetworkIds = new Set();
+    this.intentionalFailedRequests = [];
   }
 
   async launch() {
@@ -153,9 +159,11 @@ class BrowserSession {
     const target = await requestJson(`http://127.0.0.1:${devTools.port}/json/new?about:blank`, { method: 'PUT' });
     this.pageCdp = await CdpConnection.connect(target.webSocketDebuggerUrl, active.signal);
     this.observeNetwork();
+    const fetchPatterns = [{ urlPattern: '*', requestStage: 'Request' }];
+    if (supabaseUrl) fetchPatterns.push({ urlPattern: `${supabaseUrl.origin}/rest/v1/letters*`, requestStage: 'Response' });
     await Promise.all([
       this.pageCdp.send('Page.enable'), this.pageCdp.send('Runtime.enable'), this.pageCdp.send('Network.enable'),
-      this.pageCdp.send('Fetch.enable', { patterns: [{ urlPattern: '*', requestStage: 'Request' }] }),
+      this.pageCdp.send('Fetch.enable', { patterns: fetchPatterns }),
       this.pageCdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true }),
       this.pageCdp.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }] }),
     ]);
@@ -209,18 +217,102 @@ class BrowserSession {
       } catch { this.externalOrigins.add('invalid-websocket-origin'); }
     });
     cdp.on('Network.loadingFailed', ({ requestId, errorText }) => {
+      if (this.expectedFailedNetworkIds.delete(requestId)) {
+        this.intentionalFailedRequests.push({ requestId, errorText });
+        return;
+      }
       if (errorText !== 'net::ERR_ABORTED') this.failedLocalRequests.push({ requestId, errorText });
     });
     cdp.on('Runtime.exceptionThrown', () => { this.runtimeExceptions += 1; });
     cdp.on('Runtime.consoleAPICalled', ({ type }) => { if (type === 'error') this.consoleErrors += 1; });
-    cdp.on('Fetch.requestPaused', ({ requestId, request }) => {
-      let origin = '';
-      try { origin = new URL(request.url).origin; } catch { /* Non-HTTP requests remain blocked. */ }
-      const decision = allowedOrigins.has(origin)
-        ? cdp.send('Fetch.continueRequest', { requestId })
-        : cdp.send('Fetch.failRequest', { requestId, errorReason: 'BlockedByClient' });
-      void decision.catch((error) => active.abort(error));
+    cdp.on('Fetch.requestPaused', (params) => {
+      void this.handlePausedRequest(params).catch((error) => active.abort(error));
     });
+  }
+
+  async handlePausedRequest({ requestId, request, responseStatusCode, networkId }) {
+    let url;
+    try { url = new URL(request.url); } catch { /* Non-HTTP requests remain blocked. */ }
+    if (!url || !allowedOrigins.has(url.origin)) {
+      await this.pageCdp.send('Fetch.failRequest', { requestId, errorReason: 'BlockedByClient' });
+      return;
+    }
+
+    const responseStage = Number.isInteger(responseStatusCode);
+    const isLettersRequest = url.origin === supabaseUrl?.origin && url.pathname === '/rest/v1/letters';
+    if (!responseStage && isLettersRequest && request.method === 'POST' && this.ambiguousSendFault) {
+      const postedId = readLettersPostId(request);
+      if (postedId === this.ambiguousSendFault.letterId) {
+        this.ambiguousSendFault.postCount += 1;
+        this.lettersPostIdsByFetchRequest.set(requestId, postedId);
+        if (networkId) this.lettersPostIdsByNetworkRequest.set(networkId, postedId);
+      }
+    }
+
+    if (!responseStage && isLettersRequest && request.method === 'GET' && this.ambiguousSendFault?.lookupArmed) {
+      const requestedId = new URLSearchParams(url.search).get('id')?.replace(/^eq\./, '');
+      if (requestedId === this.ambiguousSendFault.letterId) {
+        this.ambiguousSendFault.lookupRequestCount += 1;
+      }
+      if (requestedId === this.ambiguousSendFault.letterId && !this.ambiguousSendFault.lookupInjected) {
+        this.ambiguousSendFault.lookupInjected = true;
+        this.ambiguousSendFault.lookupCount += 1;
+        const headers = [
+          { name: 'Content-Type', value: 'application/json' },
+          { name: 'Access-Control-Allow-Origin', value: APP_ORIGIN },
+          { name: 'Access-Control-Allow-Credentials', value: 'true' },
+          { name: 'Vary', value: 'Origin' },
+        ];
+        await this.pageCdp.send('Fetch.fulfillRequest', {
+          requestId,
+          responseCode: 503,
+          responseHeaders: headers,
+          body: Buffer.from(JSON.stringify({ code: 'DROP_TEST_UNAVAILABLE', message: 'Synthetic test-only lookup outage.' })).toString('base64'),
+        });
+        return;
+      }
+    }
+
+    if (!responseStage && url.origin === APP_ORIGIN && url.pathname === '/api/drop-media/finalize'
+      && request.method === 'POST' && this.finalizeFault) {
+      let body;
+      try { body = JSON.parse(request.postData || 'null'); } catch { body = null; }
+      const prefix = `${this.finalizeFault.senderId}/pending/${this.finalizeFault.letterId}/${this.finalizeFault.mediaUploadId}/`;
+      if (body?.payloadKind === this.finalizeFault.payloadKind && typeof body.stagedPath === 'string'
+        && body.stagedPath.startsWith(prefix) && isSafeOwnedStorageObjectPath(body.stagedPath, this.finalizeFault.senderId)) {
+        this.finalizeFault.attempts.push(body.stagedPath);
+        if (!this.finalizeFault.failureInjected) {
+          this.finalizeFault.failureInjected = true;
+          await this.pageCdp.send('Fetch.fulfillRequest', {
+            requestId,
+            responseCode: 503,
+            responseHeaders: [{ name: 'Content-Type', value: 'application/json' }],
+            body: Buffer.from(JSON.stringify({ error: 'Synthetic test-only pre-finalize failure.' })).toString('base64'),
+          });
+          return;
+        }
+      }
+    }
+
+    if (responseStage && isLettersRequest && request.method === 'POST' && this.ambiguousSendFault
+      && !this.ambiguousSendFault.responseLost) {
+      const postedId = readLettersPostId(request)
+        || this.lettersPostIdsByFetchRequest.get(requestId)
+        || (networkId ? this.lettersPostIdsByNetworkRequest.get(networkId) : null);
+      if (postedId === this.ambiguousSendFault.letterId) {
+        this.ambiguousSendFault.postResponseCount += 1;
+        this.ambiguousSendFault.postResponseStatus = responseStatusCode;
+        if (responseStatusCode >= 200 && responseStatusCode < 300) {
+          this.ambiguousSendFault.lookupArmed = true;
+          this.ambiguousSendFault.responseLost = true;
+          if (networkId) this.expectedFailedNetworkIds.add(networkId);
+          await this.pageCdp.send('Fetch.failRequest', { requestId, errorReason: 'ConnectionReset' });
+          return;
+        }
+      }
+    }
+
+    await this.pageCdp.send('Fetch.continueRequest', { requestId });
   }
 
   async evaluate(expression) {
@@ -256,6 +348,16 @@ function parseEnv(source) {
     values[name] = quoted ? (quoted[1] ?? quoted[2]) : raw.replace(/\s+#.*$/, '').trim();
   }
   return values;
+}
+
+function readLettersPostId(request) {
+  try {
+    const body = JSON.parse(request.postData || 'null');
+    const row = Array.isArray(body) ? body[0] : body;
+    return typeof row?.id === 'string' ? row.id : null;
+  } catch {
+    return null;
+  }
 }
 
 function requireLocalSupabaseUrl(raw) {
@@ -662,17 +764,57 @@ async function sendMediaThroughCompose(session, payloadKind) {
   fixtures.push(fixture);
   storagePaths.add(fixture.mediaPath);
   session.expectedStorageOwner = sender.id;
+  session.finalizeFault = {
+    senderId: sender.id,
+    letterId: draft.id,
+    mediaUploadId: draft.mediaUploadId,
+    payloadKind,
+    failureInjected: false,
+    attempts: [],
+  };
   assert.equal(await clickButton(session, 'send drop'), true, 'Could not submit Send drop from Compose.');
+  await session.waitFor(() => session.evaluate(`document.body.innerText.includes('Synthetic test-only pre-finalize failure.')
+    && Array.from(document.querySelectorAll('button')).some((button) => /^check handle$/i.test(button.innerText.replace(/\s+/g, ' ').trim()) && !button.disabled)`), `${payloadKind} safe finalize failure and recipient recheck action`);
+  assert.equal(session.finalizeFault.failureInjected, true, `The ${payloadKind} first finalize request must be failed before reaching the local finalizer.`);
+  assert.equal(session.finalizeFault.attempts.length, 1, `The ${payloadKind} first send should reach finalize exactly once before the injected failure.`);
+  const retryBeforeRecheck = await session.evaluate(`Array.from(document.querySelectorAll('button')).some((button) => button.innerText.replace(/\s+/g, ' ').trim().toLocaleLowerCase() === 'retry send')`);
+  assert.equal(retryBeforeRecheck, false, 'Retry send must wait until the recipient is checked again.');
+  const draftAfterFailure = await readDraft(session);
+  assert.equal(draftAfterFailure?.id, draft.id, 'The failed media attempt must preserve the original draft ID.');
+  assert.equal(draftAfterFailure?.mediaUploadId, draft.mediaUploadId, 'The failed media attempt must preserve its final upload ID.');
+  assert.equal(draftAfterFailure?.payloadKind, payloadKind, 'The failed media attempt must preserve the selected media type.');
+
+  const stagedPrefix = `${sender.id}/pending/${draft.id}/${draft.mediaUploadId}/`;
+  const failedStageWrites = session.storageWrites.filter((item) => item.objectPath.startsWith(stagedPrefix));
+  assert.equal(failedStageWrites.length, 1, `The first ${payloadKind} attempt should create one unique staged object.`);
+  const failedStagePath = failedStageWrites[0].objectPath;
+  assert.ok(failedStagePath.slice(stagedPrefix.length).length > 0 && isSafeOwnedStorageObjectPath(failedStagePath, sender.id));
+  storagePaths.add(failedStagePath);
+  fixture.stagedPaths = [failedStagePath];
+  await assertStorageObjectMissing(failedStagePath, `The failed ${payloadKind} attempt must remove its staged object before retry.`);
+  await assertStorageObjectMissing(fixture.mediaPath, `The failed ${payloadKind} attempt must not create the final media object.`);
+
+  const failedViewport = await session.evaluate('({ width: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth })');
+  assert.equal(failedViewport.width, 390);
+  assert.ok(failedViewport.scroll <= failedViewport.width + 1, `The ${payloadKind} failure and retry guidance overflows the 390px viewport.`);
+  assert.equal(await clickButton(session, 'check handle'), true, `Could not recheck the ${payloadKind} recipient after the failed upload.`);
+  await session.waitFor(() => session.evaluate(`document.body.innerText.includes(${JSON.stringify(`Recipient confirmed: ${recipient.displayName} (@${recipient.username})`)})`), `${payloadKind} recipient recheck before retry`);
+  const draftBeforeRetry = await readDraft(session);
+  assert.equal(draftBeforeRetry?.id, draft.id, 'Rechecking the recipient must keep the original draft ID.');
+  assert.equal(draftBeforeRetry?.mediaUploadId, draft.mediaUploadId, 'Rechecking the recipient must keep the original upload ID.');
+  assert.equal(await clickButton(session, 'retry send'), true, `Could not retry the same ${payloadKind} draft after recipient recheck.`);
   await session.waitFor(() => session.evaluate(`location.pathname === '/sent' && new URL(location.href).searchParams.get('letter') === ${JSON.stringify(fixture.letterId)}`), 'Compose send receipt');
   session.expectedStorageOwner = null;
 
-  const stagedPrefix = `${sender.id}/pending/${draft.id}/${draft.mediaUploadId}/`;
   const stagedWrites = session.storageWrites.filter((item) => item.objectPath.startsWith(stagedPrefix));
-  assert.equal(stagedWrites.length, 1, `The ${payloadKind} action should upload one unique staged object.`);
-  const stagedPath = stagedWrites[0].objectPath;
-  assert.ok(stagedPath.slice(stagedPrefix.length).length > 0 && isSafeOwnedStorageObjectPath(stagedPath, sender.id));
-  fixture.stagedPath = stagedPath;
-  storagePaths.add(stagedPath);
+  assert.equal(stagedWrites.length, 2, `The failed and retried ${payloadKind} flow should upload exactly two unique staged objects.`);
+  const stagedPaths = stagedWrites.map((item) => item.objectPath);
+  assert.equal(new Set(stagedPaths).size, 2, `The retried ${payloadKind} upload must use a fresh staging attempt path.`);
+  assert.ok(stagedPaths.every((path) => path.slice(stagedPrefix.length).length > 0 && isSafeOwnedStorageObjectPath(path, sender.id)));
+  fixture.stagedPaths = stagedPaths;
+  for (const path of stagedPaths) storagePaths.add(path);
+  assert.deepEqual(session.finalizeFault.attempts, stagedPaths, `The failed and successful ${payloadKind} attempts should each reach the finalizer once, in upload order.`);
+  session.finalizeFault = null;
 
   const { data, error } = await admin.from('letters')
     .select('id,sender_id,recipient_id,status,delivery_mode,subject,content,payload_kind,media_path,media_mime_type,media_size_bytes')
@@ -701,8 +843,137 @@ async function sendMediaThroughCompose(session, payloadKind) {
   assert.equal(stored.size, data[0].media_size_bytes);
   const signature = Buffer.from(await stored.slice(0, isGif ? 6 : 8).arrayBuffer()).toString('hex');
   assert.ok(isGif ? /^474946383[79]61$/i.test(signature) : /^89504e470d0a1a0a$/i.test(signature));
-  await assertStorageObjectMissing(stagedPath, `The finalized ${payloadKind} should have no remaining staged object.`);
-  console.log(`[browser-instant-media-e2e] PASS Compose sent one known-recipient Instant ${payloadKind} drop with validated media metadata.`);
+  for (const path of stagedPaths) await assertStorageObjectMissing(path, `The finalized ${payloadKind} should have no remaining staged object.`);
+  console.log(`[browser-instant-media-e2e] PASS Compose recovered a pre-finalize ${payloadKind} failure after recipient recheck and sent one validated media drop.`);
+  return fixture;
+}
+
+async function sendTextWithAmbiguousCommit(session) {
+  const subject = `Ambiguous send ${randomUUID().slice(0, 8)}`;
+  const content = `AMBIGUOUS_COMMIT_${randomUUID()}`;
+  await session.navigate(`${APP_ORIGIN}/compose?new=1`);
+  await session.waitFor(() => session.evaluate(`location.pathname === '/compose'
+    && Boolean(document.querySelector('#drop-recipient'))
+    && Boolean(document.querySelector('#drop-subject'))
+    && Boolean(document.querySelector('#drop-content'))`), 'ambiguous-send Compose form');
+  await session.waitFor(() => session.evaluate(`document.body.innerText.includes('Your account is ready.')`), 'connected sender account for ambiguous-send test');
+  const selectedMode = await session.evaluate(`Array.from(document.querySelectorAll('button')).some((button) => button.querySelector('span')?.innerText.trim() === 'Instant' && button.getAttribute('aria-pressed') === 'true')`);
+  assert.equal(selectedMode, true, 'Instant delivery must be selected before the ambiguous text send.');
+  await fill(session, '#drop-recipient', recipient.username);
+  await session.waitFor(() => session.evaluate(`Array.from(document.querySelectorAll('button')).some((button) => /^check(?:\\s|$)/i.test(button.innerText.trim()) && !button.disabled)`), 'enabled recipient check for ambiguous-send test');
+  assert.equal(await clickButton(session, 'check handle'), true, 'Could not check the ambiguous-send recipient.');
+  await session.waitFor(() => session.evaluate(`document.body.innerText.includes(${JSON.stringify(`Recipient confirmed: ${recipient.displayName} (@${recipient.username})`)})`), 'confirmed recipient for ambiguous-send test');
+  await fill(session, '#drop-subject', subject);
+  await fill(session, '#drop-content', content);
+  const draft = await session.waitFor(async () => {
+    const value = await readDraft(session);
+    return value?.payloadKind === 'text' && value.id ? value : null;
+  }, 'text draft ID for ambiguous-send test');
+  assert.match(draft.id || '', /^draft-[a-f0-9-]{36}$/i);
+  const fixture = {
+    letterId: draft.id,
+    senderId: sender.id,
+    recipientId: recipient.id,
+    payloadKind: 'text',
+    subject,
+    content,
+  };
+  fixtures.push(fixture);
+  session.ambiguousSendFault = {
+    letterId: fixture.letterId,
+    postCount: 0,
+    postResponseCount: 0,
+    postResponseStatus: null,
+    responseLost: false,
+    lookupArmed: false,
+    lookupInjected: false,
+    lookupCount: 0,
+    lookupRequestCount: 0,
+  };
+
+  assert.equal(await clickButton(session, 'send drop'), true, 'Could not submit the ambiguous text drop.');
+  try {
+    await session.waitFor(() => session.evaluate(`Array.from(document.querySelectorAll('a')).some((link) => link.getAttribute('aria-label') === 'Check Sent')
+      && Array.from(document.querySelectorAll('button[type="submit"]')).some((button) => button.disabled && button.innerText.replace(/\\s+/g, ' ').toLocaleLowerCase().includes('check sent first'))`), 'locked send with explicit Check Sent recovery action');
+  } catch (error) {
+    const ui = await session.evaluate(`({
+      href: location.href,
+      alerts: Array.from(document.querySelectorAll('[role="alert"]')).map((item) => item.innerText.replace(/\\s+/g, ' ').trim()),
+      links: Array.from(document.querySelectorAll('a')).map((item) => ({ label: item.getAttribute('aria-label'), text: item.innerText.replace(/\\s+/g, ' ').trim() })).slice(-8),
+      submit: Array.from(document.querySelectorAll('button[type="submit"]')).map((button) => ({ text: button.innerText.replace(/\\s+/g, ' ').trim(), disabled: button.disabled })),
+    })`);
+    const fault = { ...session.ambiguousSendFault };
+    throw new Error(`${error.message} Ambiguous-send diagnostic: ${JSON.stringify({ fault, intentionalFailures: session.intentionalFailedRequests, failedRequests: session.failedLocalRequests, ui })}`);
+  }
+  await session.waitFor(() => session.intentionalFailedRequests.length === 1, 'the committed insert response loss');
+
+  const fault = session.ambiguousSendFault;
+  assert.equal(fault.postCount, 1, 'The uncertain text send must issue exactly one letters POST.');
+  assert.equal(fault.postResponseCount, 1, 'The letters POST must receive exactly one server response before the connection is cut.');
+  assert.ok(fault.postResponseStatus >= 200 && fault.postResponseStatus < 300, 'The lost response must follow a successful server commit response.');
+  assert.equal(fault.responseLost, true);
+  assert.equal(fault.lookupArmed, true);
+  assert.equal(fault.lookupInjected, true, 'Only the post-commit follow-up lookup should receive the synthetic outage.');
+  assert.equal(fault.lookupCount, 1, 'The follow-up lookup outage must be injected exactly once.');
+  assert.equal(fault.lookupRequestCount, 1, 'The committed draft must receive exactly one post-commit status lookup.');
+  assert.equal(session.intentionalFailedRequests.length, 1, 'The browser must record exactly the one intentional lost response.');
+  assert.ok(session.intentionalFailedRequests[0].errorText !== 'net::ERR_ABORTED');
+
+  const draftAfterUnclearSend = await readDraft(session);
+  assert.equal(draftAfterUnclearSend?.id, fixture.letterId, 'The uncertain-send recovery must preserve the same draft ID.');
+  assert.equal(draftAfterUnclearSend?.payloadKind, 'text');
+  const beforeCheckSent = await session.evaluate(`({
+    viewport: { width: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth },
+    href: Array.from(document.querySelectorAll('a')).find((link) => link.getAttribute('aria-label') === 'Check Sent')?.href || null,
+  })`);
+  assert.equal(beforeCheckSent.viewport.width, 390);
+  assert.ok(beforeCheckSent.viewport.scroll <= beforeCheckSent.viewport.width + 1, 'The ambiguous-send recovery action overflows the 390px viewport.');
+  assert.equal(new URL(beforeCheckSent.href).pathname, '/mailbox');
+  assert.equal(new URL(beforeCheckSent.href).searchParams.get('filter'), 'sent');
+
+  const { data: committedBeforeNavigation, error: committedReadError } = await admin.from('letters')
+    .select('id,sender_id,recipient_id,status,delivery_mode,subject,content,payload_kind')
+    .eq('id', fixture.letterId)
+    .eq('sender_id', sender.id);
+  assert.ifError(committedReadError);
+  assert.equal(committedBeforeNavigation?.length, 1, 'The server must contain exactly one committed drop before the user checks Sent.');
+  assert.deepEqual(committedBeforeNavigation[0], {
+    id: fixture.letterId,
+    sender_id: sender.id,
+    recipient_id: recipient.id,
+    status: 'delivered',
+    delivery_mode: 'instant',
+    subject,
+    content,
+    payload_kind: 'text',
+  });
+
+  const clicked = await session.evaluate(`(() => {
+    const link = Array.from(document.querySelectorAll('a')).find((item) => item.getAttribute('aria-label') === 'Check Sent');
+    if (!link || new URL(link.href).pathname !== '/mailbox' || new URL(link.href).searchParams.get('filter') !== 'sent') return false;
+    link.click();
+    return true;
+  })()`);
+  assert.equal(clicked, true, 'Could not activate the explicit Check Sent recovery link.');
+  await session.waitFor(() => session.evaluate(`location.pathname === '/mailbox'
+    && new URLSearchParams(location.search).get('filter') === 'sent'
+    && Array.from(document.querySelectorAll('[aria-label="Filter drops"] button')).some((button) => button.getAttribute('aria-pressed') === 'true' && /^sent\\b/i.test(button.innerText.trim()))
+    && Array.from(document.querySelectorAll('a')).filter((link) => new URL(link.href).pathname === ${JSON.stringify(`/letter/${fixture.letterId}`)}).length === 1`), 'Sent view with exactly one committed drop row');
+  const sentView = await session.evaluate(`({
+    matchingRows: Array.from(document.querySelectorAll('a')).filter((link) => new URL(link.href).pathname === ${JSON.stringify(`/letter/${fixture.letterId}`)}).length,
+    subjectMentions: document.body.innerText.split(${JSON.stringify(subject)}).length - 1,
+    sentSelected: Array.from(document.querySelectorAll('[aria-label="Filter drops"] button')).some((button) => button.getAttribute('aria-pressed') === 'true' && /^sent\\b/i.test(button.innerText.trim())),
+    width: document.documentElement.clientWidth,
+    scroll: document.documentElement.scrollWidth,
+  })`);
+  assert.deepEqual(sentView, { matchingRows: 1, subjectMentions: 1, sentSelected: true, width: 390, scroll: 390 });
+  assert.equal(fault.postCount, 1, 'Checking Sent must not resubmit the letters POST.');
+  const { data: committedAfterNavigation, error: finalReadError } = await admin.from('letters')
+    .select('id').eq('id', fixture.letterId).eq('sender_id', sender.id);
+  assert.ifError(finalReadError);
+  assert.equal(committedAfterNavigation?.length, 1, 'The recovery path must leave exactly one server row.');
+  session.ambiguousSendFault = null;
+  console.log('[browser-instant-media-e2e] PASS ambiguous text commit showed Check Sent, opened the Sent filter, and retained exactly one row after one POST.');
   return fixture;
 }
 
@@ -776,7 +1047,11 @@ async function assertStorageObjectMissing(path, message) {
   assert.equal(url.origin, supabaseUrl.origin);
   const key = localValues.SUPABASE_SERVICE_ROLE_KEY;
   const response = await fetch(url, { headers: { apikey: key, Authorization: `Bearer ${key}` }, redirect: 'error', signal: AbortSignal.timeout(5_000) });
-  if (response.ok) { await response.body?.cancel(); assert.fail(message); }
+  if (response.ok) {
+    const details = [response.headers.get('content-type'), response.headers.get('content-length') ? `${response.headers.get('content-length')} bytes` : null].filter(Boolean).join(', ');
+    await response.body?.cancel();
+    assert.fail(`${message} Storage returned HTTP ${response.status}${details ? ` (${details})` : ''} for owned key ${path.split('/').slice(1).join('/')}.`);
+  }
   let payload;
   try { payload = await response.json(); } catch { await response.body?.cancel().catch(() => undefined); }
   assert.ok(response.status === 404 || (response.status === 400 && payload?.statusCode === '404' && payload?.error === 'not_found' && payload?.code === 'NoSuchKey'), 'Storage must confirm a missing staged object.');
@@ -975,6 +1250,8 @@ async function main() {
     await assertOutsiderCannotRead(photo);
     const gif = await sendMediaThroughCompose(senderSession, 'gif');
     await assertOutsiderCannotRead(gif);
+    currentStep = 'recovering an ambiguous text send through the Sent filter';
+    await sendTextWithAmbiguousCommit(senderSession);
     currentStep = 'opening and reacting to both media drops from recipient Inbox';
     await openAndReact(recipientSession, photo);
     await openAndReact(recipientSession, gif);

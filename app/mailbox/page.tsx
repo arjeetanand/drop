@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Mail, PenLine, Search, X } from 'lucide-react';
 import { LiveDropCue, LiveDropStatus } from '@/components/LiveDropCue';
@@ -16,6 +16,11 @@ export default function Mailbox() {
   const [activeTab, setActiveTab] = useState<MailboxFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const requestedFilter = new URLSearchParams(window.location.search).get('filter');
+    if (requestedFilter === 'sent') setActiveTab('sent');
+  }, []);
 
   const clearSearch = () => {
     setSearchQuery('');
