@@ -149,3 +149,15 @@ Updated: 2026-10-26
 - [ ] Verify the installed PWA share target and OS share sheet in a browser/device that supports the required flow.
 - [ ] Check screen-reader announcements and physical-device keyboard/safe-area behavior.
 - [ ] Validate two-account photo/GIF claims and actual 30-day Storage cleanup against the approved Free Supabase project.
+
+## Social Relay identity and feasibility pilot (2026-10-26)
+
+- [x] Keep direct delivery available and explain Relay as one accepted handoff at a time, with recipient collection ending the route.
+- [x] Label carrier names as self-entered and unverified; disclose that the one-time invite is not bound to an account and its first receiver can accept.
+- [x] Document product identity, occasion-based use, platform API limits, opt-in pilot scope, and measures in `docs/social-relay-pilot.md`.
+- [x] Extend the Relay browser smoke to exercise two text carriers, one-time replay denial, sender route refresh, recipient collection, and generic share-sheet copy.
+- [x] Pass `npm test` (301/301), `npm run typecheck`, focused ESLint, browser script syntax, and `git diff --check`.
+- [x] Pass the full isolated text/GIF Relay browser journey before the final bearer-link disclosure copy was added.
+- [ ] Rerun the final browser journey with the bearer-link disclosure assertions. Port 6004 is occupied by an active `next-server` in `/private/tmp/drop-local-demo-cleanup`; it was left untouched.
+- [ ] Run the opt-in human value/usability pilot and verify native OS sharing, screen-reader output, and physical-device behavior.
+- [x] Commit code as `b9fb0f5` on `codex/social-relay-pilot`, based on `feat/pilot-integrated-preview`; push the feature branch. No merge to `main`.

@@ -592,3 +592,13 @@ Updated: 2026-10-26
 ## Run locally
 
 From /Users/arjeetanand/projects/drop, run npm ci, then ./run.sh. Drop uses http://localhost:4004; ./run.sh stop stops the project-owned process. The local Supabase smoke environment uses port 5004 and browser QA is reserved port 6004. Code commit `88f9b11` is pushed to `origin/feat/media-orphan-reconciliation`; this handoff and learning update are committed separately on that branch. The branch is not merged and has no pull request.
+
+## Latest checkpoint — Social Relay identity and feasibility pilot (2026-10-26)
+
+- The task branch is `codex/social-relay-pilot`, based on `feat/pilot-integrated-preview` at `9b3ee7c`. Code commit `b9fb0f5` is pushed to `origin/codex/social-relay-pilot`; it has not been merged. The PR target is the pilot branch, never `main`.
+- Relay copy now describes the sequential journey and recipient collection, identifies carrier names as self-entered and unverified, and says anyone receiving the one-time link can accept it first. The share-sheet message asks the next carrier to opt in.
+- `docs/social-relay-pilot.md` records the positioning, platform feasibility limits, opt-in pilot scope, and success measures. Direct delivery remains the better path when speed matters; Relay's proposed advantage is an occasion-based journey people choose to carry.
+- `npm test` passed 301/301; typecheck, focused ESLint, browser script syntax, and `git diff --check` passed. The full local browser run passed for a two-carrier text route, replay denial, sender refresh, recipient collection, and the existing GIF journey before the final bearer-link disclosure and its new assertions were added.
+- The final browser rerun stopped during initialization because port 6004 belongs to an active `next-server` with working directory `/private/tmp/drop-local-demo-cleanup`. It was left running. The app process on port 4004 belongs to this checkout and returned HTTP 200.
+- GitHub CLI reports its saved token is invalid, but `git push` succeeded using the configured Git credential. Open a PR from `codex/social-relay-pilot` into `feat/pilot-integrated-preview`; keep it unmerged. No main branch changes were made.
+- Remaining product risks: no social graph is read, carrier identities are not verified, and a bearer invite can be accepted by its first recipient. No human participant study, platform API integration, native share-sheet, screen-reader, or physical-device test was run.

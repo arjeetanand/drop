@@ -2133,3 +2133,34 @@ For mobile content layouts, test real unbroken text as well as normal prose. `ov
 ### Git and remaining gaps
 
 Code commit `bce0f37` is pushed to `origin/feat/pilot-integrated-preview`. GitHub confirmed PR #11 open/draft at that code commit with base `main`; CI checks were not queried. Remote `main` remains `5138f88`; no merge to `main` occurred. No `SUPABASE_ACCESS_TOKEN` is configured locally and the Supabase connector is disabled by workspace admin, so no hosted project, billing, or hosted data changed. Hosted delivery/retention, screen-reader output, installed-PWA sharing, and physical-device/camera acceptance remain open.
+
+## 2026-10-26 — Clarify Drop Relay identity and handoff feasibility
+
+### Issue
+
+The product idea implied a social follower graph and named friend-of-friend paths. The existing Relay instead uses one-use links and records carrier-provided names, so the journey could suggest verified relationships or a guaranteed recipient that it does not establish.
+
+### Cause
+
+The interface described a “name” and a next carrier without explaining what identity evidence the route has or who can accept a forwarded link. The browser journey covered only one accepted carrier.
+
+### Resolution
+
+- Explain the one-person-at-a-time route, recipient collection, and optional nature of the journey.
+- Label carrier names as self-entered, explain that names are not Drop-account verified, and disclose that anyone receiving a one-time bearer link can accept it first.
+- Add opt-in generic share-sheet messages and extend the browser smoke through two carriers, replay denial, sender route refresh, and recipient collection.
+- Record product positioning, social API limits, pilot boundaries, and measures in `docs/social-relay-pilot.md`.
+
+### Learning
+
+Describe the identity evidence a social route actually records. A one-use link prevents replay after acceptance, but it does not bind the invite to the intended recipient or prove a friendship.
+
+### Verification
+
+- `npm test`: 301/301 passed. `npm run typecheck`, focused ESLint, `node --check scripts/browser-relay-e2e.mjs`, and `git diff --check` passed.
+- The isolated production browser journey passed end to end for two text carriers, one-time replay denial, sender route refresh, recipient collection, and the existing GIF journey before the final bearer-link disclosure copy was added.
+- A final browser rerun after that copy/assertion update could not start because port 6004 was occupied by an active `next-server` in `/private/tmp/drop-local-demo-cleanup`. The process was left untouched.
+
+### Git and remaining gaps
+
+Code commit `b9fb0f5` (`feat: clarify Drop Relay pilot journey`) is on and pushed from `codex/social-relay-pilot`, based on `feat/pilot-integrated-preview`. No merge to `main` occurred. `gh auth status` reports an invalid saved token; the Git push succeeded, and the PR into the pilot branch still needs to be opened. Human value testing, external platform integration, native sharing, screen-reader output, and physical-device behavior remain unverified.

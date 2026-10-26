@@ -1,6 +1,6 @@
 # Drop
 
-Drop is a mobile-first way to send a friend a photo, meme, GIF, or personal note as a private drop. Sending is instant by default; a human relay is an optional journey.
+Drop is a mobile-first way to send a private note, photo, meme, or GIF. Send it instantly, or invite people to carry it one handoff at a time and follow its journey.
 
 The append-only engineering learning log is in [LEARNINGS.md](./LEARNINGS.md); it records solved issues, causes, verification evidence, and Git checkpoints.
 
@@ -22,6 +22,8 @@ Open `http://localhost:4004`. Run `./run.sh` again to restart Drop, or `./run.sh
 The local Supabase backend runs in Docker through the Supabase CLI (`npm run supabase:start`); the Next.js app runs as a local Node process through `run.sh`. The main local endpoints are app `4004`, Supabase API `54321`, Studio `54323`, and Mailpit `54324`. Use `npm run supabase:stop` to stop this project's local Supabase stack.
 
 ## Secure Relay browser journey
+
+Relay is an opt-in, one-person-at-a-time journey. Each carrier chooses whether to accept and whom to invite next; the route records accepted handoffs, while the message and media stay sealed until the recipient collects the drop. Carrier names are self-entered and are not verified against Drop accounts. The pilot does not import followers or infer relationships from social platforms; see [the social Relay pilot brief](./docs/social-relay-pilot.md).
 
 Run `npm run test:browser-relay` with local Supabase running and `.env.local` configured for loopback. The smoke builds an isolated production app on test port `6004` and drives sender, carrier, and recipient sessions at `390×844`. It preserves the text Relay flow and adds a GIF Relay drop created through Compose. It checks optional caption starters, editable focus, no auto-send, and attachment preservation; validates the exact final and staged Storage objects; confirms the carrier and uncollected recipient cannot see or request private media; then collects and opens the GIF. It also checks fragment-only UUIDv4 invites, replay denial, location unused, sender Journey refresh, confirmed Storage cleanup, no overflow/browser errors/cross-origin requests, and exact disposable account/drop/profile/browser cleanup. It does not reset the database, contact hosted Supabase, or stop the main app on `4004`. Set `DROP_BROWSER_SCREENSHOT_DIR` to an empty path outside the repo to save synthetic mobile screenshots. Browser smokes share port `6004`; run them serially.
 
