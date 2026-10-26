@@ -23,7 +23,8 @@ type DemoOptionBase = {
 
 type DemoOption = (DemoOptionBase & { kind: 'text' }) | (DemoOptionBase & {
   kind: Exclude<DropPayloadKind, 'text'>;
-  image: string;
+  sourceImage: string;
+  previewImage: string;
   fileName: string;
   mimeType: string;
 });
@@ -44,7 +45,8 @@ const demoOptions: DemoOption[] = [
     eyebrow: 'A still little moment',
     title: 'The blue hour',
     description: 'A tiny photo drop to open, react to, and send back to yourself.',
-    image: '/demo-cat.png',
+    sourceImage: '/demo-cat.png',
+    previewImage: '/demo-cat-preview.webp',
     fileName: 'drop-demo-photo.png',
     mimeType: 'image/png',
     subject: 'The blue hour',
@@ -56,7 +58,8 @@ const demoOptions: DemoOption[] = [
     eyebrow: 'A moment on loop',
     title: 'The world doing its thing',
     description: 'A tiny loop from the walk home. This made me think of you.',
-    image: '/demo-cat.gif',
+    sourceImage: '/demo-cat.gif',
+    previewImage: '/demo-cat-loop-preview.webp',
     fileName: 'drop-demo-loop.gif',
     mimeType: 'image/gif',
     subject: 'The world doing its thing',
@@ -102,7 +105,7 @@ export default function DemoPage() {
     try {
       let file: File | undefined;
       if (option.kind !== 'text') {
-        const response = await fetch(option.image, { cache: 'force-cache' });
+        const response = await fetch(option.sourceImage, { cache: 'force-cache' });
         if (!response.ok) throw new Error('The sample file could not be loaded.');
         const blob = await response.blob();
         file = new File([blob], option.fileName, { type: option.mimeType, lastModified: Date.now() });
@@ -163,7 +166,7 @@ export default function DemoPage() {
                       </div>
                     </div>
                   ) : (
-                    <Image src={option.image} alt="A tiny cat taking a curious look at the camera" fill sizes="(max-width: 639px) 100vw, 50vw" unoptimized className="object-cover" />
+                    <Image src={option.previewImage} alt="A tiny cat taking a curious look at the camera" fill sizes="(max-width: 639px) 100vw, 50vw" unoptimized className="object-cover" />
                   )}
                   <span className="absolute left-3 top-3 rounded-full bg-[#fffaf2]/95 px-3 py-1.5 font-mono text-[0.62rem] font-bold uppercase tracking-[0.12em] text-ink-navy">{option.kind === 'gif' ? 'GIF loop' : option.kind === 'text' ? 'Text note' : 'Photo drop'}</span>
                 </div>

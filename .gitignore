@@ -21,6 +21,8 @@ public/
 public/*
 !public/demo-cat.png
 !public/demo-cat.gif
+!public/demo-cat-preview.webp
+!public/demo-cat-loop-preview.webp
 !public/service-worker.js
 !public/icons/
 public/icons/*

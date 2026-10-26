@@ -12,6 +12,8 @@
     "test:browser-qr": "node scripts/browser-qr-smoke.mjs",
     "test:browser-relay": "node scripts/browser-relay-e2e.mjs",
     "test:browser-text-demo": "node scripts/browser-demo-smoke.mjs --text-demo-only",
+    "test:browser-demo-assets": "node scripts/browser-demo-smoke.mjs --demo-assets-only",
+    "assets:demo-previews": "node scripts/generate-demo-previews.mjs",
     "test:browser-drop-push": "node scripts/browser-drop-push-smoke.mjs",
     "test:browser-pwa-share-onboarding": "node scripts/browser-instant-media-e2e.mjs --onboarding-only",
     "supabase:start": "supabase start",

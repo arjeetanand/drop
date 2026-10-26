@@ -95,7 +95,7 @@ export default function HomeDesk() {
             </Link>
           ) : (
             <Link href="/letter/incoming-1" className="group relative min-h-[250px] overflow-hidden rounded-[1.5rem] bg-[#f1d5c5] p-5 text-ink-navy shadow-[0_12px_30px_rgba(16,42,67,.07)] sm:min-h-[300px] md:min-h-0">
-              <Image src="/demo-cat.png" alt="A tiny cat taking a curious look at the camera" fill sizes="(max-width: 767px) 100vw, 34vw" className="object-cover transition-transform duration-500 group-hover:scale-[1.03]" priority />
+              <Image src="/demo-cat-preview.webp" alt="A tiny cat taking a curious look at the camera" fill sizes="(max-width: 767px) 100vw, 34vw" className="object-cover transition-transform duration-500 group-hover:scale-[1.03]" priority />
               <span className="absolute left-4 top-4 rounded-full bg-[#fffaf2]/95 px-3 py-1.5 font-mono text-[0.62rem] font-bold uppercase tracking-[0.12em] text-ink-navy">Sample drop · not received</span>
               <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#15213f]/75 via-[#15213f]/25 to-transparent px-5 pb-5 pt-20 text-white">
                 <span className="block font-mono text-[0.62rem] uppercase tracking-[0.12em] text-white/75">Example from Mina Vale · nothing sent</span>

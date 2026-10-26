@@ -1040,6 +1040,119 @@ async function runClaimRecoveryFlow(cdp, {
   }
 }
 
+async function runDemoAssetsFlow(cdp, { appUrl, imageRequests, screenshotDir, getBlockedRequestCount }) {
+  const viewport = MOBILE_VIEWPORTS[1];
+  const clearImageRequests = () => imageRequests.clear();
+  const imageDetails = (path) => [...imageRequests.values()].find((request) => request.path === path);
+  const waitForImage = async (path, step) => waitUntil(cdp, `${step} response for ${path}`, async () => {
+    const request = imageDetails(path);
+    return request?.status === 200 && Number.isFinite(request.encodedDataLength) ? request : null;
+  });
+  const openSelectedMediaDemo = async (payloadLabel) => {
+    await activateFlowControl(cdp, { keyboard: false, name: LABELS.reveal, expectedTag: 'BUTTON' });
+    await waitUntil(cdp, 'the revealed demo open action', async () => (
+      await evaluate(cdp, `${normalizedVisibleText(LABELS.open)} && !document.querySelector('#letter-fragments')?.innerText.includes('confidential fragment')`)
+    ));
+    await activateFlowControl(cdp, { keyboard: false, name: LABELS.open, expectedTag: 'BUTTON' });
+    await waitUntil(cdp, `the opened ${payloadLabel} sample`, async () => (
+      await evaluate(cdp, `Boolean(document.querySelector('#letter-body img')?.complete && document.querySelector('#letter-body img')?.naturalWidth > 0)
+        && document.querySelector('#letter-body')?.innerText.toLocaleLowerCase().includes(${JSON.stringify(payloadLabel.toLocaleLowerCase())})
+        && Boolean(document.querySelector(${JSON.stringify(`[aria-label="${LABELS.reaction}"]`)}))`)
+    ));
+    await assertNoFrameworkOverlay(cdp, `Opened ${payloadLabel} sample`);
+    await assertNoHorizontalOverflow(cdp, `Opened ${payloadLabel} sample`, viewport.width);
+  };
+  const assertNoOriginalSamples = (step) => {
+    const originals = [...imageRequests.values()].filter((request) => ['/demo-cat.png', '/demo-cat.gif'].includes(request.path));
+    assert.deepEqual(originals, [], `${step} downloaded an original sample before its button was selected.`);
+  };
+
+  await cdp.send('Network.setCacheDisabled', { cacheDisabled: true });
+  await setViewport(cdp, viewport);
+  clearImageRequests();
+  const blockedBeforeHome = getBlockedRequestCount();
+  await cdp.send('Page.navigate', { url: appUrl.href });
+  await waitUntil(cdp, `Home with “${LABELS.homeDemo}”`, async () => (
+    await evaluate(cdp, `${normalizedVisibleText(LABELS.homeDemo)} && location.pathname === '/'`)
+  ));
+  await waitForPageShell(cdp, 'Demo asset Home');
+  await waitUntil(cdp, 'the Home photo preview', async () => (
+    await evaluate(cdp, `(() => { const image = document.querySelector('a[href="/letter/incoming-1"] img'); return Boolean(image?.complete && image.naturalWidth > 0 && new URL(image.currentSrc || image.src).pathname === '/demo-cat-preview.webp'); })()`)
+  ));
+  await waitForImage('/demo-cat-preview.webp', 'Home');
+  assertNoOriginalSamples('Home');
+  await assertNoHorizontalOverflow(cdp, 'Home demo image', viewport.width);
+  if (screenshotDir) await captureScreenshot(cdp, screenshotDir, 'demo-assets-home');
+  assert.equal(getBlockedRequestCount(), blockedBeforeHome, 'Home should not attempt cross-origin requests during the local demo preview.');
+  console.log('[browser-demo-smoke] PASS Home loaded the compact photo preview without fetching the original.');
+
+  clearImageRequests();
+  const blockedBeforeChooser = getBlockedRequestCount();
+  await cdp.send('Page.navigate', { url: new URL('/demo', appUrl).href });
+  await waitUntil(cdp, 'the photo and GIF demo options', async () => (
+    await evaluate(cdp, `${normalizedVisibleText('Try a photo drop')} && ${normalizedVisibleText('Try a GIF drop')} && location.pathname === '/demo'`)
+  ));
+  await waitForPageShell(cdp, 'Demo chooser');
+  await evaluate(cdp, `document.querySelectorAll('main article img')[1]?.scrollIntoView({ block: 'center', behavior: 'instant' })`);
+  await waitUntil(cdp, 'both chooser previews loaded', async () => (
+    await evaluate(cdp, `Array.from(document.querySelectorAll('main article img')).length === 2 && Array.from(document.querySelectorAll('main article img')).every(image => image.complete && image.naturalWidth > 0)`)
+  ));
+  await waitForImage('/demo-cat-preview.webp', 'Chooser photo');
+  await waitForImage('/demo-cat-loop-preview.webp', 'Chooser GIF poster');
+  assertNoOriginalSamples('Demo chooser before selection');
+  const chooserRequests = [...imageRequests.values()].filter((request) => request.path.endsWith('.webp'));
+  assert.deepEqual(chooserRequests.map((request) => request.path).sort(), ['/demo-cat-loop-preview.webp', '/demo-cat-preview.webp']);
+  const chooserBytes = chooserRequests.reduce((total, request) => total + request.encodedDataLength, 0);
+  assert.ok(chooserBytes <= 160 * 1024, `Chooser previews transferred ${chooserBytes} bytes, over the 160 KiB budget.`);
+  await assertNoHorizontalOverflow(cdp, 'Demo chooser previews', viewport.width);
+  await evaluate(cdp, 'window.scrollTo({ top: 0, behavior: "instant" })');
+  if (screenshotDir) await captureScreenshot(cdp, screenshotDir, 'demo-assets-chooser');
+  assert.equal(getBlockedRequestCount(), blockedBeforeChooser, 'The demo chooser should not attempt cross-origin requests.');
+  console.log(`[browser-demo-smoke] PASS chooser loaded both WebP previews (${chooserBytes} bytes) without fetching either original.`);
+
+  clearImageRequests();
+  console.log('[browser-demo-smoke] Selecting the photo sample.');
+  await activateFlowControl(cdp, { keyboard: false, name: 'Try a photo drop', expectedTag: 'BUTTON' });
+  await waitUntil(cdp, 'the photo demo recipient route', async () => (
+    await evaluate(cdp, `/^\\/letter\\/[^/]+$/.test(location.pathname) && ${normalizedVisibleText('See your drop as the recipient.')}`)
+  ));
+  await waitForImage('/demo-cat.png', 'Photo selection');
+  assert.equal(imageDetails('/demo-cat.png')?.contentType, 'image/png');
+  assert.equal(imageDetails('/demo-cat.png')?.method, 'GET');
+  assert.equal(imageDetails('/demo-cat.png')?.origin, appUrl.origin);
+  assert.equal(imageDetails('/demo-cat.gif'), undefined, 'The photo demo should not fetch the GIF source.');
+  await assertNoFrameworkOverlay(cdp, 'Photo demo selection');
+  console.log('[browser-demo-smoke] PASS photo selection fetched the original PNG with image/png.');
+  await openSelectedMediaDemo('Photo');
+  console.log('[browser-demo-smoke] PASS selected photo opened in the local recipient view.');
+
+  clearImageRequests();
+  console.log('[browser-demo-smoke] Selecting the GIF sample.');
+  await cdp.send('Page.navigate', { url: new URL('/demo', appUrl).href });
+  await waitUntil(cdp, 'the demo chooser before GIF selection', async () => (
+    await evaluate(cdp, `${normalizedVisibleText('Try a GIF drop')} && location.pathname === '/demo'`)
+  ));
+  await waitForPageShell(cdp, 'Demo chooser before GIF selection');
+  await evaluate(cdp, `document.querySelectorAll('main article img')[1]?.scrollIntoView({ block: 'center', behavior: 'instant' })`);
+  await waitForImage('/demo-cat-loop-preview.webp', 'GIF poster');
+  assertNoOriginalSamples('Demo chooser before GIF selection');
+  await activateFlowControl(cdp, { keyboard: false, name: 'Try a GIF drop', expectedTag: 'BUTTON' });
+  await waitUntil(cdp, 'the GIF demo recipient route', async () => (
+    await evaluate(cdp, `/^\\/letter\\/[^/]+$/.test(location.pathname) && ${normalizedVisibleText('See your drop as the recipient.')}`)
+  ));
+  await waitForImage('/demo-cat.gif', 'GIF selection');
+  assert.equal(imageDetails('/demo-cat.gif')?.contentType, 'image/gif');
+  assert.equal(imageDetails('/demo-cat.gif')?.method, 'GET');
+  assert.equal(imageDetails('/demo-cat.gif')?.origin, appUrl.origin);
+  assert.equal(imageDetails('/demo-cat.png'), undefined, 'The GIF demo should not fetch the photo source.');
+  await assertNoFrameworkOverlay(cdp, 'GIF demo selection');
+  console.log('[browser-demo-smoke] PASS GIF selection fetched the original animation with image/gif.');
+  await openSelectedMediaDemo('GIF');
+  console.log('[browser-demo-smoke] PASS selected GIF opened in the local recipient view.');
+
+  console.log(`[browser-demo-smoke] PASS Home uses its WebP preview; the chooser downloads ${chooserBytes} preview bytes; the original PNG and GIF download only after the matching sample is selected.`);
+}
+
 async function runWritingPromptFlow(cdp, { appUrl, viewport, keyboard, screenshotDir }) {
   await setViewport(cdp, viewport);
   await cdp.send('Page.navigate', { url: appUrl.href });
@@ -2273,7 +2386,7 @@ async function runShareTargetFlow(cdp, { appUrl, screenshotDir, getPageLoadEvent
 
 async function main() {
   if (process.argv.includes('--help') || process.argv.includes('-h')) {
-    console.log('Usage: node scripts/browser-demo-smoke.mjs [http://127.0.0.1:4004] [--claim-recovery-only|--prompt-only|--friend-draft-only|--text-demo-only|--share-target-only|--drop-back-only|--accessibility-only]');
+    console.log('Usage: node scripts/browser-demo-smoke.mjs [http://127.0.0.1:4004] [--claim-recovery-only|--prompt-only|--friend-draft-only|--text-demo-only|--demo-assets-only|--share-target-only|--drop-back-only|--accessibility-only]');
     console.log('Set DROP_BROWSER_EXECUTABLE to select an installed Chrome, Edge, or Chromium executable.');
     return;
   }
@@ -2283,10 +2396,11 @@ async function main() {
   const promptOnly = args.includes('--prompt-only');
   const friendDraftOnly = args.includes('--friend-draft-only');
   const textDemoOnly = args.includes('--text-demo-only');
+  const demoAssetsOnly = args.includes('--demo-assets-only');
   const shareTargetOnly = args.includes('--share-target-only');
   const dropBackOnly = args.includes('--drop-back-only');
   const accessibilityOnly = args.includes('--accessibility-only');
-  assert.ok([claimRecoveryOnly, promptOnly, friendDraftOnly, textDemoOnly, shareTargetOnly, dropBackOnly, accessibilityOnly].filter(Boolean).length <= 1, 'Choose only one focused browser-smoke mode.');
+  assert.ok([claimRecoveryOnly, promptOnly, friendDraftOnly, textDemoOnly, demoAssetsOnly, shareTargetOnly, dropBackOnly, accessibilityOnly].filter(Boolean).length <= 1, 'Choose only one focused browser-smoke mode.');
   const appUrl = parseAppUrl(args.find((argument) => !argument.startsWith('--')) || DEFAULT_APP_URL);
   if (typeof WebSocket !== 'function') throw new Error('This smoke check needs a Node runtime with the built-in WebSocket API.');
   const screenshotDir = screenshotDirectoryFromEnv();
@@ -2299,9 +2413,11 @@ async function main() {
   let pageCdp;
   let firewallFailure;
   let capturingRecoveryBackendRequests = false;
+  let capturingDemoImageRequests = false;
   const blockedOrigins = new Set();
   const forbiddenRequests = [];
   const recoveryBackendRequests = [];
+  const demoImageRequests = new Map();
   const pageConsoleErrors = [];
   const pageExceptions = [];
   let blockedRequestCount = 0;
@@ -2367,7 +2483,7 @@ async function main() {
       pageConsoleErrors.push(frames ? `${message} (${frames})` : message);
     });
 
-    pageCdp.on('Network.requestWillBeSent', ({ request, redirectResponse }) => {
+    pageCdp.on('Network.requestWillBeSent', ({ requestId, request, redirectResponse }) => {
       let requestUrl;
       try {
         requestUrl = new URL(request.url);
@@ -2376,6 +2492,16 @@ async function main() {
       }
       const method = (request.method || 'GET').toUpperCase();
       const path = requestUrl.pathname;
+      if (capturingDemoImageRequests && /^\/demo-cat(?:-loop)?(?:-preview)?\.(?:png|gif|webp)$/.test(path)) {
+        demoImageRequests.set(requestId, {
+          path,
+          method,
+          origin: requestUrl.origin,
+          status: null,
+          contentType: '',
+          encodedDataLength: null,
+        });
+      }
       if (capturingTextDemoRequests && !['GET', 'HEAD', 'OPTIONS'].includes(method)) {
         textDemoWrites.push({ method, path, origin: requestUrl.origin });
       }
@@ -2413,7 +2539,12 @@ async function main() {
       }
     });
 
-    pageCdp.on('Network.responseReceived', ({ response }) => {
+    pageCdp.on('Network.responseReceived', ({ requestId, response }) => {
+      const imageRequest = demoImageRequests.get(requestId);
+      if (imageRequest) {
+        imageRequest.status = response.status;
+        imageRequest.contentType = Object.entries(response.headers || {}).find(([name]) => name.toLowerCase() === 'content-type')?.[1] || '';
+      }
       if (!capturingShareImportRequests) return;
       let responseUrl;
       try {
@@ -2424,6 +2555,11 @@ async function main() {
       if (responseUrl.pathname === '/share-target') {
         shareTargetRedirects.push({ path: responseUrl.pathname, status: response.status, location: response.headers?.location || response.headers?.Location || '' });
       }
+    });
+
+    pageCdp.on('Network.loadingFinished', ({ requestId, encodedDataLength }) => {
+      const imageRequest = demoImageRequests.get(requestId);
+      if (imageRequest) imageRequest.encodedDataLength = encodedDataLength;
     });
 
     pageCdp.on('Fetch.requestPaused', ({ requestId, request }) => {
@@ -2455,9 +2591,20 @@ async function main() {
     await setViewport(pageCdp, MOBILE_VIEWPORTS[1]);
 
     console.log(`[browser-demo-smoke] Browser: ${chromeExecutable}`);
-    const flowName = accessibilityOnly ? 'accessibility-only' : dropBackOnly ? 'drop-back-only' : shareTargetOnly ? 'share-target-only' : claimRecoveryOnly ? 'claim-recovery' : promptOnly ? 'prompt-only' : textDemoOnly ? 'text-demo-only' : friendDraftOnly ? 'friend-draft-only' : 'full';
-    const flowViewports = accessibilityOnly ? ['mobile-320', 'mobile-390'].map((name) => ({ name })) : textDemoOnly ? TEXT_DEMO_VIEWPORTS : friendDraftOnly || shareTargetOnly || dropBackOnly ? [MOBILE_VIEWPORTS[1]] : FLOW_VIEWPORTS;
+    const flowName = accessibilityOnly ? 'accessibility-only' : dropBackOnly ? 'drop-back-only' : shareTargetOnly ? 'share-target-only' : claimRecoveryOnly ? 'claim-recovery' : demoAssetsOnly ? 'demo-assets-only' : promptOnly ? 'prompt-only' : textDemoOnly ? 'text-demo-only' : friendDraftOnly ? 'friend-draft-only' : 'full';
+    const flowViewports = accessibilityOnly ? ['mobile-320', 'mobile-390'].map((name) => ({ name })) : textDemoOnly ? TEXT_DEMO_VIEWPORTS : friendDraftOnly || shareTargetOnly || dropBackOnly || demoAssetsOnly ? [MOBILE_VIEWPORTS[1]] : FLOW_VIEWPORTS;
     console.log(`[browser-demo-smoke] App: ${appUrl.origin}; ${flowName} flow viewports: ${flowViewports.map(({ name }) => name).join(', ')}.`);
+
+    if (demoAssetsOnly) {
+      capturingDemoImageRequests = true;
+      await runDemoAssetsFlow(pageCdp, {
+        appUrl,
+        imageRequests: demoImageRequests,
+        screenshotDir,
+        getBlockedRequestCount: () => blockedRequestCount,
+      });
+      capturingDemoImageRequests = false;
+    }
 
     if (accessibilityOnly) {
       await runAccessibilityFlow(pageCdp, { appUrl, screenshotDir });
@@ -2526,7 +2673,7 @@ async function main() {
       console.log('[browser-demo-smoke] PASS the text-note demo makes no backend write request.');
     }
 
-    if (!friendDraftOnly && !textDemoOnly && !claimRecoveryOnly && !promptOnly && !shareTargetOnly && !dropBackOnly && !accessibilityOnly) {
+    if (!friendDraftOnly && !textDemoOnly && !demoAssetsOnly && !claimRecoveryOnly && !promptOnly && !shareTargetOnly && !dropBackOnly && !accessibilityOnly) {
       const screenshotSteps = new Set(['home', 'chooser', 'recipient', 'fragments-revealed', 'reaction-saved', 'sender-copy']);
       for (const viewport of FLOW_VIEWPORTS) {
         const keyboard = viewport.width !== 360;
@@ -2553,7 +2700,7 @@ async function main() {
       });
     }
 
-    if (!friendDraftOnly && !textDemoOnly && !claimRecoveryOnly && !shareTargetOnly && !dropBackOnly && !accessibilityOnly) {
+    if (!friendDraftOnly && !textDemoOnly && !demoAssetsOnly && !claimRecoveryOnly && !shareTargetOnly && !dropBackOnly && !accessibilityOnly) {
       for (const viewport of FLOW_VIEWPORTS) {
         await runWritingPromptFlow(pageCdp, {
           appUrl,
@@ -2576,7 +2723,7 @@ async function main() {
       console.log('[browser-demo-smoke] PASS readable 44px actions fit at 320×740 without horizontal overflow.');
     }
 
-    if (!friendDraftOnly && !textDemoOnly && !promptOnly && !shareTargetOnly && !dropBackOnly && !accessibilityOnly) {
+    if (!friendDraftOnly && !textDemoOnly && !demoAssetsOnly && !promptOnly && !shareTargetOnly && !dropBackOnly && !accessibilityOnly) {
       for (const viewport of FLOW_VIEWPORTS) {
         await runRecipientlessClaimChoiceFlow(pageCdp, {
           appUrl,
@@ -2606,12 +2753,12 @@ async function main() {
     assert.deepEqual(pageExceptions, [], `The browser reported JavaScript exceptions: ${JSON.stringify(pageExceptions)}.`);
     if (firewallFailure) throw new Error(`The browser network gate failed: ${firewallFailure.message}`);
 
-    if (!friendDraftOnly && !textDemoOnly && !promptOnly && !shareTargetOnly && !dropBackOnly && !accessibilityOnly) {
+    if (!friendDraftOnly && !textDemoOnly && !demoAssetsOnly && !promptOnly && !shareTargetOnly && !dropBackOnly && !accessibilityOnly) {
       console.log('[browser-demo-smoke] PASS saved-claim recovery after reload, including the encoded detail route and fresh-link action at all mobile and desktop widths.');
       console.log('[browser-demo-smoke] PASS handleless claim disclosure, account readiness gate, and focus recovery at all mobile and desktop widths.');
       console.log('[browser-demo-smoke] PASS no Auth, REST, or Storage request during the saved-claim recovery flow.');
     }
-    if (!friendDraftOnly && !textDemoOnly && !claimRecoveryOnly && !promptOnly && !shareTargetOnly && !dropBackOnly && !accessibilityOnly) {
+    if (!friendDraftOnly && !textDemoOnly && !demoAssetsOnly && !claimRecoveryOnly && !promptOnly && !shareTargetOnly && !dropBackOnly && !accessibilityOnly) {
       console.log('[browser-demo-smoke] PASS photo flow at 390×844, including saved reaction, reload persistence, and sender copy.');
       console.log('[browser-demo-smoke] PASS no horizontal overflow on Home and demo chooser at 360, 390, 430px and 1440×900.');
       console.log('[browser-demo-smoke] PASS no Auth, RPC, or Storage write request during the local demo.');
