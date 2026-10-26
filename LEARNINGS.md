@@ -2356,3 +2356,36 @@ A demo should exercise the same user-facing flow as a real item while clearly ma
 ### Git and remaining gaps
 
 Code commit `5bb3ddf` (`feat: add a text note demo option`) is pushed to `origin/feat/demo-text-note`, based on `5b0bdc0`. Documentation is committed separately on the same branch. No PR or merge was created; remote `main` stayed at `5138f88`. Hosted Supabase Google OAuth, real account-to-account send/open, production build, screen-reader output, and physical-device behavior remain open. No Firebase dependency, paid tool, or hosted resource was added.
+
+## 2026-10-26 — Separate compact demo previews from media payloads
+
+### Issue
+
+The Home sample card requested the full 2.3 MB PNG as a priority image, and the photo/GIF chooser displayed the same full files used to create demo attachments. A visitor could incur megabytes of image transfer before choosing a sample.
+
+### Cause
+
+Each media option had a single image path for both its display and payload. The global Next Image configuration serves local images unoptimized, so the 2.3 MB PNG and 920 KB GIF were not resized by the app.
+
+### Resolution
+
+- Generate a display-only 840×630 WebP photo (46,286 B) and 280×280 static GIF poster (20,854 B) with the existing `sharp` dependency. Keep the original PNG and animated GIF unchanged as payloads.
+- Store distinct preview and source paths in each demo option. Home and chooser display previews; `startDemo()` fetches the original only after the matching sample is selected.
+- Enforce preview dimensions and size budgets in the generator and unit test. Add an isolated browser smoke that checks requested asset paths, transfer size, MIME types, opened media, cross-origin requests, and mobile overflow.
+- Keep the existing Supabase Google OAuth for the pilot. The Firebase-to-Supabase path requires another project integration, a trusted `authenticated` claim, and changes to session/UUID-bound app flows, so it does not speed up the current setup. See the [Supabase Google OAuth](https://supabase.com/docs/guides/auth/social-login/auth-google) and [Firebase Auth integration](https://supabase.com/docs/guides/auth/third-party/firebase-auth) docs.
+
+### Learning
+
+Keep preview assets separate from source media whenever a screen must show a representative image before the user chooses to process or attach the full payload. Measure bytes in the browser, since file-size budgets alone omit request headers and cache behavior. Reuse the existing identity provider when the backend, RLS policies, and user IDs depend on its session model; a second provider can expand the migration rather than remove setup work.
+
+### Verification
+
+- `npm test` passed 328/328; lint, typecheck, browser script syntax, and `git diff --check` passed.
+- `npm run test:browser-demo-assets -- http://127.0.0.1:5004` passed in isolated Chrome at 390×844. Home and chooser requested no original media before selection; the chooser transferred 67,704 B; selecting the photo and GIF fetched only their same-origin source files with `image/png` and `image/gif`; both opened in the recipient view. The network gate reported zero cross-origin requests.
+- `npm run test:browser-text-demo -- http://127.0.0.1:5004` passed at 360×844, 390×844, 430×844, 768×1024, and 1440×900. Reaction reload, sender copy, active draft/attachment preservation, and zero backend writes passed.
+- An isolated Webpack production build passed with 22 routes. Existing warnings remain for outdated Browserslist data and the ambiguous easing class. Browser screenshots were reviewed at 390px for Home and the chooser.
+- The first unit test invocation caught a file-URL/path mismatch and was corrected. The browser harness first had a Home link selector mismatch; when extending selected-media open assertions, keyboard focus timed out in mobile emulation, so the focused smoke uses touch as its 390px interaction. The final browser run passed.
+
+### Git and remaining gaps
+
+Code commit `7740912` (`perf: add compact media previews to the demo`) is pushed to `origin/perf/demo-preview-assets`, based on `73e1474` (`feat/demo-text-note`). The checklist, plan, README, handoff, and this learning entry are committed separately on that branch. No PR or merge was created, and this task did not modify `main`. Current `.env.local` points to the local Supabase loopback; hosted Google sign-in and account-to-account send/open remain unverified. No Firebase project, new dependency, paid service, credential, or hosted resource was created or changed.

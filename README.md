@@ -6,9 +6,9 @@ The append-only engineering learning log is in [LEARNINGS.md](./LEARNINGS.md); i
 
 ## Branch status and latest checkpoint
 
-The active task branch is `feat/demo-text-note`, based on `feat/drop-arrival-alerts` at `5b0bdc0`. Code commit `5bb3ddf` is pushed to `origin/feat/demo-text-note`; no PR or merge was created. Remote `main` was verified at `5138f88`. The canonical app on port `4004` and `/letter` were not changed. Use `git status --short --branch` and `git log -1 --oneline --decorate` for the current tip.
+The active task branch is `perf/demo-preview-assets`, based on `feat/demo-text-note` at `73e1474`. Code commit `7740912` is pushed to `origin/perf/demo-preview-assets`; no PR or merge was created. This task did not modify `main`, the canonical app on port `4004`, or `/letter`. Use `git status --short --branch` and `git log -1 --oneline --decorate` for the current tip.
 
-**Latest local pilot:** the no-account demo now includes a text note alongside its photo and GIF examples. It stays on this device, supports recipient reveal, reactions, and sender copy, preserves an unfinished photo draft and attachment, and makes no backend write. `npm test` passes 327/327; lint, typecheck, syntax, and diff checks pass. `npm run test:browser-text-demo` passed in isolated Edge at 360×844, 390×844, 430×844, 768×1024, and 1440×900. The isolated production build could not finish because this environment could not resolve `fonts.googleapis.com` for the existing `next/font/google` imports. Hosted Google sign-in remains unverified because no hosted Supabase project is configured.
+**Latest local pilot:** the no-account demo includes text, photo, and GIF examples. Home and chooser use display-only WebP previews (46,286 B photo, 20,854 B GIF poster); the original 2,302,534 B PNG and 920,382 B animated GIF are fetched only after selection. The isolated chooser transferred 67,704 B for both previews, about 98% below the two full source files. `npm test` passes 328/328; lint, typecheck, syntax, and diff checks pass. The asset browser smoke passed at 390×844, and the text-demo flow passed at 360, 390, 430, 768, and 1440 CSS pixels. An isolated production build passed with 22 routes; the only warnings were the existing stale Browserslist data and ambiguous easing utility. Hosted Google sign-in remains unverified; the current local environment points to Supabase loopback.
 
 ## Run locally
 
@@ -67,7 +67,7 @@ To verify private-claim QR sharing, run `npm run test:browser-qr` with local Sup
 
 ## Try a demo without an account
 
-Choose **Try a demo drop** on Home, then pick a bundled text note, photo, or GIF. Home clarifies that the demo stays on this device and a Drop account is needed to send. Each sample uses the existing recipient reveal, reaction, and sender-copy screens; it does not upload or send anything, and leaves the active draft untouched. Demo reactions persist on this device. Run `npm run test:browser-text-demo -- http://127.0.0.1:5004` against the local preview to verify the note flow at mobile, tablet, and desktop widths.
+Choose **Try a demo drop** on Home, then pick a bundled text note, photo, or GIF. Home clarifies that the demo stays on this device and a Drop account is needed to send. Each sample uses the existing recipient reveal, reaction, and sender-copy screens; it does not upload or send anything, and leaves the active draft untouched. Demo reactions persist on this device. Run `npm run test:browser-text-demo -- http://127.0.0.1:5004` to verify the text flow from mobile through desktop, or `npm run test:browser-demo-assets -- http://127.0.0.1:5004` to check preview transfer timing and the selected original media. Regenerate the display-only WebP assets with `npm run assets:demo-previews`; this keeps the PNG and animated GIF payloads intact.
 
 After opening the sender copy, **Make one for a friend** starts a new blank, editable text drop. The sample message, reaction, media, and demo identity stay local; an unfinished draft and its attachment remain available. Sending still follows the normal account and recipient steps.
 

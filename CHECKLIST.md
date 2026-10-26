@@ -9,8 +9,18 @@ Updated: 2026-10-26
 - [x] Pass `npm test` (327/327), lint, typecheck, browser-script syntax, and `git diff --check`.
 - [x] Pass the isolated Edge text-demo flow at 360×844, 390×844, 430×844, 768×1024, and 1440×900; verify reaction reload, sender copy, draft preservation, zero write requests, and zero cross-origin requests.
 - [x] Commit code as `5bb3ddf` and push `feat/demo-text-note`; keep `main`, the canonical app at 4004, and `/letter` unchanged.
-- [ ] Retry production build when Google Fonts DNS/network is available; the isolated build failed fetching the existing Google font imports.
-- [ ] Configure hosted Supabase Google OAuth and verify real account-to-account sending; no hosted project exists yet.
+- [x] Pass the isolated production build for the current task source with 22 routes; retain the existing Browserslist and easing-class warnings in the handoff.
+- [ ] Configure hosted Supabase Google OAuth and verify real account-to-account sending; current local credentials point to loopback and hosted sign-in has not been checked.
+
+## Compact demo media previews (2026-10-26)
+
+- [x] Use separate display-only WebP previews on Home and the chooser; fetch the original PNG/GIF only after selecting its sample.
+- [x] Generate an 840×630 photo preview (46,286 B) and a static 280×280 GIF poster (20,854 B) with the existing `sharp` dependency; preserve the original PNG and 24-frame GIF payload files.
+- [x] Pass `npm test` (328/328), lint, typecheck, browser-script syntax, `git diff --check`, and isolated Webpack production build (22 routes).
+- [x] Pass the isolated 390×844 browser flow: 67,704 B transferred for both chooser previews, no original-media request before selection, correct `image/png` and `image/gif` source responses after selection, and both opened in the recipient view.
+- [x] Re-run the text-note smoke at 360×844, 390×844, 430×844, 768×1024, and 1440×900.
+- [x] Commit code as `7740912` and push `perf/demo-preview-assets`; no PR or merge was created.
+- [ ] Configure and verify hosted Google sign-in and two-account delivery. Firebase was assessed but not added because direct Firebase auth would require extra Supabase configuration and a broad identity/schema migration.
 
 ## Opt-in new-drop alert pilot (2026-10-26)
 

@@ -23,7 +23,28 @@ Show a short, low-pressure text drop beside the photo and GIF previews so a firs
 
 **Verification and environment:** `npm run test:browser-text-demo -- http://127.0.0.1:5004` passed in isolated Edge at all five widths; it made no non-read network requests and no cross-origin requests. An isolated production-build attempt stopped because `next/font/google` could not resolve `fonts.googleapis.com` in this restricted network. The running task preview on 5004 and canonical app on 4004 were kept separate.
 
-**Auth decision:** keep the existing Profile Google OAuth flow through Supabase. Adding Firebase would introduce a second identity provider without accelerating the app’s existing Supabase auth/RLS flow. No new dependency or paid service was added. Hosted Google OAuth still needs project/provider configuration and a real account check.
+**Auth decision:** keep the existing Profile Google OAuth flow through Supabase for this pilot. The Profile already calls Supabase `signInWithOAuth({ provider: 'google' })` and the callback establishes the Supabase session, which preserves the UUID account IDs used by profiles, drops, RLS, and server handlers. Supabase supports Firebase as a third-party auth provider, but that route needs a Firebase project, a Supabase third-party-auth integration, and a `role: authenticated` claim; Drop would also need a broad session and identity migration. That is more setup than configuring Google OAuth in the existing Supabase provider. No Firebase dependency or hosted project was created. ([Supabase Google OAuth](https://supabase.com/docs/guides/auth/social-login/auth-google), [Supabase Firebase Auth integration](https://supabase.com/docs/guides/auth/third-party/firebase-auth))
+
+## Low-bandwidth demo media previews (2026-10-26)
+
+### Product hypothesis and limits
+
+Keep the photo/GIF-first visual preview while reducing the first-visit transfer for the local demo. A lightweight image can make the chooser feel faster on mobile connections; it does not establish performance across production devices or networks.
+
+### Implementation
+
+Use separate local preview paths for display and source paths for selected demo payloads. The Home hero uses an 840×630 WebP made from the photo; the chooser uses that preview and a static 280×280 WebP poster made from the first GIF frame. On selection, the existing full PNG or animated GIF is fetched and saved as the demo attachment. `scripts/generate-demo-previews.mjs` uses the already-installed `sharp` package and enforces per-file size budgets; `tests/demoPreviewAssets.test.mjs` protects dimensions, format, static GIF poster, and combined size.
+
+### Acceptance
+
+- [x] Home and chooser display only the compact preview files; originals are fetched only after the corresponding choice.
+- [x] Original PNG/GIF files and their MIME types remain unchanged for demo attachment creation.
+- [x] The actual chooser transferred 67,704 bytes for both WebP previews in the isolated browser, compared with 3,222,916 bytes for both originals.
+- [x] Unit tests, the 390×844 image network/open flow, five-width text-demo regression, lint/typecheck, and the 22-route isolated production build pass.
+
+**Verification and environment:** the network smoke confirmed no original PNG/GIF request before choice, same-origin `image/png` and `image/gif` responses after selection, both samples opening in the recipient view, and no cross-origin attempts. The isolated browser profile touched only local demo data. The build ran in a source copy, without running the production build against the active preview's `.next` directory; the 5004 preview remains available.
+
+**Auth follow-up:** the current `.env.local` Supabase URL is loopback. No Google provider credentials or Firebase config exist in this checkout. Keep Supabase OAuth for the pilot: the app already uses its Supabase session model, while Firebase third-party auth requires a new project integration, a trusted role claim, and compatibility work for Drop's UUID-backed account model and server token checks. Hosted sign-in and account-to-account delivery remain unverified.
 
 ## Active pilot hypothesis — opt-in new-drop alerts (2026-10-26)
 

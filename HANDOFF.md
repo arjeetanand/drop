@@ -2,6 +2,17 @@
 
 Updated: 2026-10-26
 
+## Latest checkpoint — low-bandwidth demo media previews (2026-10-26)
+
+- Home and `/demo` now display two small WebP assets: 46,286 B at 840×630 for the sample photo and 20,854 B at 280×280 for a static GIF poster. The original 2,302,534 B PNG and 920,382 B animated GIF remain as the selected demo payloads and are fetched only after the matching choice.
+- The image generator uses the existing `sharp` dependency and checks per-file budgets. A unit regression checks WebP format, dimensions, static poster, and combined size. No dependency or external image service was added.
+- Verification: `npm test` passed 328/328; lint, typecheck, browser-script syntax, and `git diff --check` passed. The isolated Chrome network smoke at 390×844 recorded 67,704 B for chooser previews, zero original requests before choice, same-origin `image/png`/`image/gif` fetches after the matching selection, and both samples opened in recipient view. It recorded zero cross-origin requests. The text-demo smoke passed at 360×844, 390×844, 430×844, 768×1024, and 1440×900.
+- The isolated Webpack production build passed with 22 routes. Existing warnings remain for outdated Browserslist data and the ambiguous easing class. The build ran in a source copy, without running the production build against the live preview's `.next` directory; the 5004 preview remains available.
+- Git: code commit `7740912` is pushed to `origin/perf/demo-preview-assets`, based on `73e1474` (`feat/demo-text-note`). No PR or merge was created. This task did not change `main`, the canonical app on 4004, or `/letter`.
+- Auth review: keep the current Supabase OAuth code path for the pilot. The local `.env.local` points to loopback; hosted Google sign-in was not available to test. Direct Firebase auth would need more provider setup, identity/session changes, and UUID compatibility work, so it would slow rather than speed up this pilot. No Firebase project, new dependency, or paid service was created.
+
+**Next:** use the existing Supabase Google provider when hosted project credentials are available; complete hosted sign-in and two-account send/open checks. Gather pilot feedback on the no-account note and demo choices.
+
 ## Latest checkpoint — local text-note demo (2026-10-26)
 
 - Added a local-only text-note card to `/demo` alongside photo and GIF examples. The note opens through the same recipient reveal, reaction, and sender-copy flow; text samples create no attachment record, backend request, or media upload.
