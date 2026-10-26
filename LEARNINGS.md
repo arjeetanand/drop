@@ -2245,3 +2245,31 @@ An HTTP success from Storage `remove()` is not proof that the object is gone. Ve
 ### Git and remaining gaps
 
 Code commit `71b1f5b` is pushed to `origin/feat/media-send-recovery` from a task branch based on `45b1d04`. The branch is unmerged and has no PR. The migration has not been applied to hosted Supabase; hosted project provisioning/two-account delivery, screen-reader output, installed-PWA sharing, and physical-device/camera checks remain open. No hosted token or paid resource was used.
+
+## 2026-10-26 — Reconcile media-retry acceptance status
+
+### Issue
+
+The rendered-browser media retry had passed, but the root `CHECKLIST.md` and the older known-recipient section in `tasks/todo.md` still showed it as open. This made the pilot's latest status look older than the code and handoff.
+
+### Cause
+
+The recovery work landed on a later task branch and updated `tasks/plan.md` and `HANDOFF.md`; the earlier task checklist entries were not reconciled.
+
+### Resolution
+
+Mark the rendered-browser retry item complete with the evidence commit, align the matching `tasks/todo.md` item, and update the README and handoff to summarize the latest local acceptance.
+
+### Learning
+
+When a later branch closes an earlier acceptance item, update the original checklist and any duplicated active task entry. Cite the tested behavior and commit so readers can tell which branch supplied the evidence.
+
+### Verification
+
+- The existing `npm run test:browser-instant-media` result recorded for commit `71b1f5b` covers same-draft PNG/GIF retry, fresh recipient confirmation, exact staged cleanup, one final object/row, and no resubmission after an uncertain send. It was not rerun for this documentation-only correction.
+- This turn, `npm run test:browser-pwa-share-onboarding` passed at 390px and completed isolated cleanup without Supabase or touching port `4004`.
+- The first onboarding attempt was stopped by the sandbox's loopback bind restriction; after confirming port `6004` was free, a narrowly scoped local test run passed. This was an environment gate, not an app failure.
+
+### Git and remaining gaps
+
+Documentation changes are on `feat/media-send-recovery`, based on `5b2620e`; the documentation commit is recorded in the handoff. Hosted project provisioning, hosted delivery/retention, screen-reader output, actual installed-PWA sharing, and physical-device/camera acceptance remain open. No credential was minted or reused and no hosted resource was changed.

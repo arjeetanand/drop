@@ -17,7 +17,8 @@ Updated: 2026-10-26
 - [x] Verify exact disposable Auth/profile/drop/reaction/Storage cleanup; the run used loopback Supabase and port `6004`, with no database reset, hosted request, or `4004` interruption.
 - [x] Pass isolated production build/browser run, `npm test` (301/301), `npm run lint`, `npm run typecheck`, script syntax/guard/focused ESLint, and `git diff --check`.
 - [x] Commit and push code `f83053c` to `origin/test/media-claim-compose-e2e`; confirm pilot branch `9b3ee7c` and `main` `5138f88` stayed unchanged. Draft PR #11 remains on the pilot branch; this task branch has no PR.
-- [ ] Add rendered-browser upload-retry coverage; finish hosted delivery/retention, screen-reader, installed-PWA, and physical-device/camera checks.
+- [x] Exercise media upload retry through the rendered browser: injected PNG/GIF finalize failures retained the same draft/upload IDs, required recipient recheck, removed staged objects, and produced one final row/object per retry; a lost committed response did not resubmit (`npm run test:browser-instant-media`, 390×844, `71b1f5b`).
+- [ ] Finish hosted delivery/retention, screen-reader, installed-PWA, and physical-device/camera checks.
 
 ## Private photo/GIF claim browser journey (2026-10-26)
 
