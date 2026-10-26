@@ -393,9 +393,16 @@ test('migration keeps delivered-event creation idempotent and leases rows with s
 test('endpoint transfer retires old-owner deliveries and leases only the current recipient', async () => {
   const migration = await readFile(new URL('../supabase/migrations/20261026120000_drop_push_recipient_scoped_delivery.sql', import.meta.url), 'utf8');
   const managerFunction = migration.split('create or replace function public.lease_drop_push_deliveries')[0];
+  const enablePath = managerFunction.split("if p_action = 'enable' then")[1]?.split("if p_action = 'disable' then")[0] || '';
+  const disablePath = managerFunction.split("if p_action = 'disable' then")[1] || '';
+  const finishFunction = migration.split('create or replace function public.finish_drop_push_delivery')[1]?.split('create or replace function public.lease_drop_push_deliveries')[0] || '';
 
-  assert.match(managerFunction, /select\s+s\.id\s+into\s+v_subscription_id[\s\S]*?where\s+s\.endpoint\s*=\s*p_endpoint/i);
-  assert.doesNotMatch(managerFunction, /for\s+update/i);
+  assert.match(enablePath, /select\s+s\.id\s+into\s+v_subscription_id[\s\S]*?where\s+s\.endpoint\s*=\s*p_endpoint\s+for\s+update/i);
+  assert.ok(enablePath.indexOf('for update') < enablePath.indexOf('delete from private.drop_push_deliveries'));
+  assert.ok(enablePath.indexOf('delete from private.drop_push_deliveries') < enablePath.indexOf('insert into private.drop_push_subscriptions'));
+  assert.match(disablePath, /select\s+s\.id\s+into\s+v_subscription_id[\s\S]*?for\s+update/i);
+  assert.ok(disablePath.indexOf('delete from private.drop_push_deliveries') < disablePath.indexOf('delete from private.drop_push_subscriptions'));
+  assert.match(finishFunction, /if\s+p_outcome\s*=\s*'gone'[\s\S]*?for\s+update\s+of\s+s[\s\S]*?for\s+update;/i);
   assert.match(migration, /delete\s+from\s+private\.drop_push_deliveries[\s\S]*?o\.recipient_id\s+is\s+distinct\s+from\s+p_user_id[\s\S]*?d\.state\s+in\s*\(\s*'pending'\s*,\s*'leased'\s*\)/i);
   assert.match(migration, /update\s+private\.drop_push_deliveries\s+d\s+set\s+state\s*=\s*'dead'[\s\S]*?from\s+private\.drop_push_outbox\s+o\s*,\s*private\.drop_push_subscriptions\s+s[\s\S]*?o\.recipient_id\s+is\s+distinct\s+from\s+s\.user_id/i);
   assert.match(migration, /join\s+private\.drop_push_outbox\s+o\s+on\s+o\.id\s*=\s*d\.event_id[\s\S]*?join\s+private\.drop_push_subscriptions\s+s\s+on\s+s\.id\s*=\s*d\.subscription_id[\s\S]*?o\.recipient_id\s*=\s*s\.user_id/i);

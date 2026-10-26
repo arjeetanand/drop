@@ -107,6 +107,8 @@ declare
   v_b_count integer;
   v_a_leased integer;
   v_a_state text;
+  v_b_delivery_id bigint;
+  v_b_lease_token uuid;
 begin
   select pg_catalog.count(*) into v_b_count
   from public.lease_drop_push_deliveries(25) leased
@@ -115,6 +117,13 @@ begin
   if v_b_count <> 1 then
     raise exception 'recipient B did not receive exactly its own queued alert';
   end if;
+
+  select delivery.id, delivery.lease_token
+    into v_b_delivery_id, v_b_lease_token
+  from private.drop_push_deliveries delivery
+  join private.drop_push_outbox outbox on outbox.id = delivery.event_id
+  where outbox.recipient_id = '33333333-3333-4333-8333-333333333333'
+    and delivery.state = 'leased';
 
   select pg_catalog.count(*) into v_a_leased
   from private.drop_push_deliveries delivery
@@ -131,6 +140,53 @@ begin
   where outbox.letter_id = 'push-switch-a-pending';
   if v_a_state is distinct from 'dead' then
     raise exception 'stale recipient A alert was not retired by the lease cleanup';
+  end if;
+
+  if not public.finish_drop_push_delivery(v_b_delivery_id, v_b_lease_token, 'gone') then
+    raise exception 'provider-gone completion could not remove B subscription';
+  end if;
+  if exists (
+    select 1 from private.drop_push_subscriptions
+    where endpoint = 'https://fcm.googleapis.com/fcm/send/drop-account-switch-test'
+  ) then
+    raise exception 'provider-gone completion left the subscription behind';
+  end if;
+end
+$$;
+
+select public.manage_drop_push_subscription(
+  'enable',
+  '33333333-3333-4333-8333-333333333333',
+  'https://fcm.googleapis.com/fcm/send/drop-account-switch-test',
+  pg_catalog.repeat('E', 87),
+  pg_catalog.repeat('F', 22)
+);
+
+insert into public.letters (id, sender_id, recipient_id, subject, content, status, delivered_at)
+values
+  ('push-switch-b-disabled', '11111111-1111-4111-8111-111111111111', '33333333-3333-4333-8333-333333333333', 'B disabled', 'private', 'delivered', pg_catalog.now());
+
+select public.manage_drop_push_subscription(
+  'disable',
+  '33333333-3333-4333-8333-333333333333',
+  'https://fcm.googleapis.com/fcm/send/drop-account-switch-test'
+);
+
+do $$
+begin
+  if exists (
+    select 1 from private.drop_push_subscriptions
+    where endpoint = 'https://fcm.googleapis.com/fcm/send/drop-account-switch-test'
+  ) then
+    raise exception 'explicit disable left the subscription behind';
+  end if;
+  if exists (
+    select 1
+    from private.drop_push_deliveries delivery
+    join private.drop_push_outbox outbox on outbox.id = delivery.event_id
+    where outbox.letter_id = 'push-switch-b-disabled'
+  ) then
+    raise exception 'explicit disable left pending delivery rows behind';
   end if;
 end
 $$;
