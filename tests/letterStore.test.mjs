@@ -615,6 +615,50 @@ test('a prompt starts a separate draft without replacing an empty media draft', 
   }
 });
 
+test('a fresh demo starter carries only its selected format and preserves the current draft', () => {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const values = new Map();
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { localStorage: { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) } },
+  });
+  try {
+    setLocalAccountId('demo-format-starter-account');
+    const existing = saveLetterDraft({
+      id: 'draft-demo-format-starter-existing',
+      subject: 'Keep this unfinished photo',
+      content: 'My own note stays editable.',
+      payloadKind: 'image',
+      mediaUploadId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+    });
+
+    for (const payloadKind of ['image', 'gif']) {
+      const next = startNewLetter({ forceNew: true, requirePreserved: true, payloadKind });
+      const restored = getLetterDraftById(existing.id, 'demo-format-starter-account');
+
+      assert.notEqual(next.id, existing.id);
+      assert.equal(next.status, 'draft');
+      assert.equal(next.payloadKind, payloadKind);
+      assert.equal(next.recipient, '');
+      assert.equal(next.subject, '');
+      assert.equal(next.content, '');
+      assert.equal(next.localDemo, undefined);
+      assert.equal(next.mediaPath, undefined);
+      assert.equal(next.mediaMimeType, undefined);
+      assert.equal(next.mediaSizeBytes, undefined);
+      assert.equal(next.mediaUploadId, undefined);
+      assert.equal(isLetterDraftPersisted(next, 'demo-format-starter-account'), true);
+      assert.equal(restored?.content, existing.content);
+      assert.equal(restored?.payloadKind, 'image');
+      assert.equal(restored?.mediaUploadId, existing.mediaUploadId);
+    }
+  } finally {
+    setLocalAccountId(null);
+    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
+    else delete globalThis.window;
+  }
+});
+
 test('backfills and persists one media upload ID for a restored draft before private invite retries', () => {
   const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
   const values = new Map();

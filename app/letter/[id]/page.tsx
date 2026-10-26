@@ -125,6 +125,9 @@ export default function LetterArrivalPage() {
   const [dropBackNotice, setDropBackNotice] = useState('');
   const [dropBackStarting, setDropBackStarting] = useState(false);
   const dropBackStartingRef = useRef(false);
+  const [friendDraftNotice, setFriendDraftNotice] = useState('');
+  const [friendDraftStarting, setFriendDraftStarting] = useState(false);
+  const friendDraftStartingRef = useRef(false);
   const currentLetterRef = useRef<MockLetter | null>(null);
   const currentReactionRef = useRef<string | undefined>(undefined);
   const baselineReactionOnDirectReadRef = useRef(false);
@@ -618,6 +621,9 @@ export default function LetterArrivalPage() {
     && !letter.localDemo
     && letter.status === 'dispatched';
   const encodedLetterId = encodeURIComponent(letter.id);
+  const friendDraftFormat = letter.payloadKind === 'gif'
+    ? 'GIF'
+    : letter.payloadKind === 'image' ? 'photo' : 'text';
   const mediaExpiryLabel = formatMediaExpiryDate(letter.mediaExpiresAt);
   const dropBackUsername = isReceived && !letter.sample && letter.senderUsername
     ? letter.senderUsername
@@ -636,6 +642,27 @@ export default function LetterArrivalPage() {
       setDropBackStarting(false);
       setDropBackNotice('Drop back could not open because this device could not preserve your current draft. Your draft is unchanged. Try again.');
     }
+  };
+
+  const startFriendDraft = () => {
+    if (!letter.localDemo || friendDraftStartingRef.current) return;
+    friendDraftStartingRef.current = true;
+    setFriendDraftStarting(true);
+    setFriendDraftNotice('');
+    let freshDraft: ReturnType<typeof startNewLetter>;
+    try {
+      freshDraft = startNewLetter({
+        forceNew: true,
+        requirePreserved: true,
+        payloadKind: letter.payloadKind ?? 'text',
+      });
+    } catch {
+      friendDraftStartingRef.current = false;
+      setFriendDraftStarting(false);
+      setFriendDraftNotice('Your current draft could not be kept safely. It is still here; please try again.');
+      return;
+    }
+    router.push(`/compose?letter=${encodeURIComponent(freshDraft.id)}`);
   };
 
   if (relayInTransit) {
@@ -812,18 +839,17 @@ export default function LetterArrivalPage() {
                 </section>}
                 {letter.localDemo && senderView && <div className="mt-6 rounded-2xl border border-[rgba(16,42,67,.12)] bg-white/70 p-4 sm:p-5">
                   <p className="eyebrow text-[#2b45f7]">Make it yours</p>
-                  <p className="mt-2 text-sm leading-relaxed text-on-surface-variant">Start with a blank text drop. This demo&apos;s message, reaction, and media stay here.</p>
+                  <p className="mt-2 text-sm leading-relaxed text-on-surface-variant">Start a blank {friendDraftFormat} drop. Nothing from this demo is copied, and your saved drafts stay here.</p>
                   <button
                     type="button"
-                    onClick={() => {
-                      const freshDraft = startNewLetter({ forceNew: true });
-                      router.push(`/compose?letter=${encodeURIComponent(freshDraft.id)}`);
-                    }}
-                    className="button-primary mt-4 w-full !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#fcfaf6]"
+                    onClick={startFriendDraft}
+                    disabled={friendDraftStarting}
+                    className="button-primary mt-4 w-full !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#fcfaf6] disabled:cursor-wait disabled:opacity-60"
                   >
-                    Make one for a friend
+                    {friendDraftStarting ? `Opening your ${friendDraftFormat} drop…` : 'Make one for a friend'}
                     <ArrowRight className="h-4 w-4" aria-hidden="true" />
                   </button>
+                  {friendDraftNotice && <p className="notice error-notice mt-4" role="status" aria-live="polite">{friendDraftNotice}</p>}
                 </div>}
                 {letter.localDemo && <Link href={senderView ? `/letter/${encodedLetterId}` : `/letter/${encodedLetterId}?view=sender`} className="button-secondary mt-6 w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f9d7a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#fcfaf6]">
                   {senderView ? 'Open recipient demo' : letter.reaction ? 'See your sender copy' : 'Skip to sender copy'}

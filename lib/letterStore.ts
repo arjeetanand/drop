@@ -504,7 +504,11 @@ function saveLetterHistory(letters: MockLetter[], accountId = getLocalAccountId(
   }
 }
 
-export function startNewLetter(options: { forceNew?: boolean; requirePreserved?: boolean } = {}): LetterDraftState {
+export function startNewLetter(options: {
+  forceNew?: boolean;
+  requirePreserved?: boolean;
+  payloadKind?: DropPayloadKind;
+} = {}): LetterDraftState {
   const accountId = getLocalAccountId();
   const current = getLetterDraft(accountId);
 
@@ -524,7 +528,7 @@ export function startNewLetter(options: { forceNew?: boolean; requirePreserved?:
   saveLetterHistory([...history, draftAsLetter(current)], accountId);
   if (!options.requirePreserved) saveDraftHistory([...draftHistory, current], accountId);
 
-  const next = blankDraft();
+  const next = { ...blankDraft(), payloadKind: options.payloadKind ?? 'text' };
   if (canUseStorage()) {
     try {
       window.localStorage.setItem(localAccountStorageKey(STORAGE_KEY, accountId), JSON.stringify(next));

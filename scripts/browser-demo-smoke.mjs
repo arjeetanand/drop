@@ -746,8 +746,10 @@ async function runDemoFlow(cdp, {
 
   if (verifyFreshDraft) {
     const demoId = await evaluate(cdp, `decodeURIComponent(location.pathname.split('/').pop() || '')`);
+    const expectedFormatLabel = payload === 'photo' ? 'photo' : payload === 'gif' ? 'GIF' : 'text';
+    const expectedStarterCopy = `Start a blank ${expectedFormatLabel} drop. Nothing from this demo is copied, and your saved drafts stay here.`;
     await waitUntil(cdp, `the “${LABELS.makeForFriend}” action`, async () => (
-      await evaluate(cdp, `${normalizedVisibleText(LABELS.makeForFriend)} && new URL(location.href).searchParams.get('view') === 'sender'`)
+      await evaluate(cdp, `${normalizedVisibleText(LABELS.makeForFriend)} && ${normalizedVisibleText(expectedStarterCopy)} && new URL(location.href).searchParams.get('view') === 'sender'`)
     ));
     const friendActionScroll = await evaluate(cdp, `(() => {
       const button = Array.from(document.querySelectorAll('button')).find((node) => (node.innerText || node.textContent || '').toLocaleLowerCase().includes(${JSON.stringify(LABELS.makeForFriend.toLocaleLowerCase())}));
@@ -770,6 +772,7 @@ async function runDemoFlow(cdp, {
       const history = JSON.parse(localStorage.getItem('dear-exe:letter-history:v1') || '[]');
       const editor = document.querySelector('#drop-content');
       const url = new URL(location.href);
+      const formatFieldset = Array.from(document.querySelectorAll('fieldset')).find((fieldset) => fieldset.querySelector('legend')?.innerText.includes('Then, what are we sending?'));
       return {
         path: location.pathname,
         routeId: url.searchParams.get('letter'),
@@ -778,6 +781,11 @@ async function runDemoFlow(cdp, {
         demo: history.find((letter) => letter.id === ${JSON.stringify(demoId)}) || null,
         editorValue: editor?.value ?? null,
         editorEditable: Boolean(editor && !editor.disabled && !editor.readOnly),
+        selectedFormatLabels: Array.from(formatFieldset?.querySelectorAll('button[aria-pressed="true"]') || [])
+          .map((button) => (button.innerText || button.textContent || '').replace(/\\s+/g, ' ').trim())
+          .filter((label) => ['A note', 'A photo', 'A GIF'].includes(label)),
+        mediaInputLabel: document.querySelector('#drop-media')?.getAttribute('aria-label') || null,
+        mediaPickerHint: document.querySelector('.media-picker-surface label')?.innerText.replace(/\\s+/g, ' ').trim() || null,
         scrollY: window.scrollY,
       };
     })()`);
@@ -787,7 +795,12 @@ async function runDemoFlow(cdp, {
     assert.equal(state.active?.recipient, '');
     assert.equal(state.active?.subject, '');
     assert.equal(state.active?.content, '', 'The new draft must not contain demo text.');
-    assert.equal(state.active?.payloadKind, 'text', 'The new draft should start as a text drop.');
+    const expectedPayloadKind = payload === 'photo' ? 'image' : payload;
+    assert.equal(state.active?.payloadKind, expectedPayloadKind, 'The new draft should keep only the demo’s selected format.');
+    const expectedFormatButtonLabel = payload === 'photo' ? 'A photo' : payload === 'gif' ? 'A GIF' : 'A note';
+    assert.deepEqual(state.selectedFormatLabels, [expectedFormatButtonLabel], 'The composer should visibly select the matching content format.');
+    assert.equal(state.mediaInputLabel, payload === 'text' ? null : `Choose a ${payload === 'gif' ? 'GIF' : 'photo'}`, 'Only a selected media format should render its matching accessible picker.');
+    assert.equal(state.mediaPickerHint, payload === 'text' ? null : payload === 'gif' ? 'Tap to add a GIF JPG, PNG, WebP, or GIF · up to 8 MB' : 'Tap to add a photo or meme JPG, PNG, WebP, or GIF · up to 8 MB');
     assert.equal(state.active?.localDemo, undefined, 'The new draft must not carry demo identity.');
     assert.equal(state.active?.reaction, undefined, 'The new draft must not carry the demo reaction.');
     assert.equal(state.active?.mediaPath, undefined);
@@ -2636,18 +2649,22 @@ async function main() {
     }
 
     if (friendDraftOnly) {
-      const viewport = MOBILE_VIEWPORTS[1];
-      await runDemoFlow(pageCdp, {
-        appUrl,
-        viewport,
-        payload: 'gif',
-        keyboard: true,
-        verifyFreshDraft: true,
-        screenshotDir,
-        screenshotSteps: new Set(['home', 'sender-copy']),
-        getPageLoadEvents: () => pageLoadEvents,
-      });
-      console.log(`[browser-demo-smoke] PASS keyboard sender-copy to fresh editable text draft at ${viewport.width}×${viewport.height}; existing media draft and local demo remain preserved.`);
+      for (const viewport of [MOBILE_VIEWPORTS[1], DESKTOP_VIEWPORT]) {
+        for (const payload of ['text', 'photo', 'gif']) {
+          await runDemoFlow(pageCdp, {
+            appUrl,
+            viewport,
+            payload,
+            keyboard: true,
+            verifyFreshDraft: true,
+            screenshotDir,
+            screenshotSteps: new Set(),
+            getPageLoadEvents: () => pageLoadEvents,
+          });
+          const format = payload === 'photo' ? 'photo' : payload === 'gif' ? 'GIF' : 'text';
+          console.log(`[browser-demo-smoke] PASS keyboard ${format} sender-copy creates a fresh blank ${format} draft at ${viewport.width}×${viewport.height}; prior draft/media and demo remain preserved.`);
+        }
+      }
     }
 
     if (textDemoOnly) {
