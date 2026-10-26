@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test:browser-first-signup": "node scripts/browser-first-signup-smoke.mjs",
+    "test:browser-first-sender": "node scripts/browser-first-signup-smoke.mjs --sender-first-only",
     "test:browser-qr": "node scripts/browser-qr-smoke.mjs",
     "test:browser-relay": "node scripts/browser-relay-e2e.mjs",
     "test:browser-text-demo": "node scripts/browser-demo-smoke.mjs --text-demo-only",

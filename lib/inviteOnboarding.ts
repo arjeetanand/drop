@@ -31,6 +31,21 @@ export function resolveAuthReturnPath(callbackPath: string | null, tabPath: stri
   return safeInternalPath(callbackPath, origin) || safeInternalPath(tabPath, origin);
 }
 
+export function firstUseProfileSetupRoute(
+  nextPath: string | null,
+  inviteContext: boolean,
+  profileStatus: 'missing' | 'found' | 'unavailable' | 'signed-out' | 'error',
+  profileAccountId: string | null,
+  signedInAccountId: string,
+): string | null {
+  const safeNextPath = safeInternalPath(nextPath, 'https://drop.invalid');
+  if (profileStatus !== 'missing'
+    || !signedInAccountId
+    || profileAccountId !== signedInAccountId
+    || safeNextPath?.split(/[?#]/, 1)[0] !== '/compose') return null;
+  return profileRoute(inviteContext, safeNextPath);
+}
+
 export function canEditInviteProfile(
   inviteContext: boolean,
   accountStatus: 'checking' | 'signed-out' | 'signed-in' | 'unavailable' | 'error',

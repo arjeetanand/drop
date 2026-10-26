@@ -909,6 +909,8 @@ function ProfileContent() {
                           id="account-email"
                           type="email"
                           value={emailAddress}
+                          aria-invalid={emailError ? 'true' : undefined}
+                          aria-describedby={emailError ? 'account-email-help account-email-error' : 'account-email-help'}
                           onChange={(event) => {
                             setEmailAddress(event.target.value);
                             setEmailLinkSent(false);
@@ -921,6 +923,7 @@ function ProfileContent() {
                           className="input-field mt-2 !min-h-12"
                           placeholder="you@example.com"
                         />
+                        {emailError && <p id="account-email-error" className="error-notice mt-2" role="alert">{emailError}</p>}
                       </div>
                       <button
                         type="submit"
@@ -930,8 +933,7 @@ function ProfileContent() {
                         {emailLoading ? 'Sending link…' : 'Continue with email'}
                       </button>
                       {emailLinkSent && <p className="field-help" role="status" aria-live="polite">Sign-in link sent. Check your inbox to continue.</p>}
-                      {emailError && <p className="error-notice" role="alert">{emailError}</p>}
-                      <p className="field-help">No password needed. If this is your first time, we’ll create your account after you confirm the link.</p>
+                      <p id="account-email-help" className="field-help">No password needed. If this is your first time, we’ll create your account after you confirm the link.</p>
                     </form>
                   </>}
                   {accountConnected && (

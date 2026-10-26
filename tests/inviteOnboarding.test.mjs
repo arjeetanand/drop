@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { authCallbackRoute, canEditInviteProfile, claimReturnAfterProfileSync, isClaimReturnPath, profileRoute, resolveAuthReturnPath } from '../lib/inviteOnboarding.ts';
+import { authCallbackRoute, canEditInviteProfile, claimReturnAfterProfileSync, firstUseProfileSetupRoute, isClaimReturnPath, profileRoute, resolveAuthReturnPath } from '../lib/inviteOnboarding.ts';
 import { copyProfileSharePayload, createProfileSharePayload } from '../lib/profileInviteShare.ts';
 import { shareInviteLink } from '../lib/shareInvite.ts';
 
@@ -23,6 +23,21 @@ test('prefers the return path carried by the current auth callback over stale ta
   assert.equal(resolveAuthReturnPath(currentClaim, '/compose?letter=stale', origin), currentClaim);
   assert.equal(resolveAuthReturnPath('//outside.test', currentClaim, origin), currentClaim);
   assert.equal(resolveAuthReturnPath('//outside.test', '//also-outside.test', origin), null);
+});
+
+test('routes a new sender through profile setup while preserving the authenticated draft return', () => {
+  const draftPath = '/compose?letter=draft-1';
+
+  assert.equal(firstUseProfileSetupRoute(draftPath, false, 'missing', 'account-1', 'account-1'),
+    '/profile?next=%2Fcompose%3Fletter%3Ddraft-1');
+  assert.equal(firstUseProfileSetupRoute(draftPath, true, 'missing', 'account-1', 'account-1'),
+    '/profile?invite=1&next=%2Fcompose%3Fletter%3Ddraft-1');
+  assert.equal(firstUseProfileSetupRoute(draftPath, false, 'missing', 'account-2', 'account-1'), null);
+  assert.equal(firstUseProfileSetupRoute(draftPath, false, 'found', 'account-1', 'account-1'), null);
+  assert.equal(firstUseProfileSetupRoute(draftPath, false, 'unavailable', null, 'account-1'), null);
+  assert.equal(firstUseProfileSetupRoute(draftPath, false, 'error', 'account-1', 'account-1'), null);
+  assert.equal(firstUseProfileSetupRoute('/claim?handoff=invite-1', false, 'missing', 'account-1', 'account-1'), null);
+  assert.equal(firstUseProfileSetupRoute('//outside.test/compose?letter=draft-1', false, 'missing', 'account-1', 'account-1'), null);
 });
 
 test('recognizes a claim return without matching unrelated routes or nested query values', () => {

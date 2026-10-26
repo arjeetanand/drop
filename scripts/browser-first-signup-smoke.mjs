@@ -20,6 +20,7 @@ const MAILPIT_API = `${MAILPIT_ORIGIN}/api/v1`;
 const STEP_TIMEOUT_MS = 60_000;
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
 const active = new AbortController();
+const senderFirstOnly = process.argv.includes('--sender-first-only');
 
 let temporaryRoot;
 let temporaryProject;
@@ -45,6 +46,8 @@ let localSupabaseOrigin = '';
 let localAnonKey = '';
 let cleanupFailed = false;
 let firewallFailure = false;
+let forceNextOtpError = false;
+let otpErrorInjected = false;
 let dropCleanupVerified = false;
 let dropCleanupDeleted = 0;
 let mailpitCleanupVerified = false;
@@ -357,9 +360,33 @@ async function requestJson(url, options = {}) {
 function observeNetwork(connection) {
   connection.on('Fetch.requestPaused', ({ requestId, request }) => {
     let origin = '';
-    try { origin = new URL(request.url).origin; } catch { /* Invalid URLs are blocked below. */ }
+    let parsed;
+    try {
+      parsed = new URL(request.url);
+      origin = parsed.origin;
+    } catch { /* Invalid URLs are blocked below. */ }
     const allowed = allowedOrigins.has(origin);
     if (!allowed) blockedExternalOrigins.add(origin || '[invalid-url]');
+    if (allowed && forceNextOtpError && parsed?.origin === localSupabaseOrigin
+      && parsed.pathname === '/auth/v1/otp' && request.method === 'POST') {
+      forceNextOtpError = false;
+      otpErrorInjected = true;
+      void connection.send('Fetch.fulfillRequest', {
+        requestId,
+        responseCode: 400,
+        responseHeaders: [
+          { name: 'content-type', value: 'application/json' },
+          { name: 'access-control-allow-origin', value: APP_ORIGIN },
+          { name: 'access-control-allow-credentials', value: 'true' },
+          { name: 'vary', value: 'Origin' },
+        ],
+        body: Buffer.from(JSON.stringify({ message: 'Synthetic local email sign-in error.' })).toString('base64'),
+      }).catch((error) => {
+        firewallFailure = true;
+        active.abort(new Error(`Could not inject the local OTP error safely: ${error.message}`));
+      });
+      return;
+    }
     const method = allowed ? 'Fetch.continueRequest' : 'Fetch.failRequest';
     const params = allowed ? { requestId } : { requestId, errorReason: 'BlockedByClient' };
     void connection.send(method, params).catch((error) => {
@@ -374,7 +401,7 @@ function observeNetwork(connection) {
   });
 }
 
-async function startBrowser(profileName) {
+async function startBrowser(profileName, viewport = null) {
   if (typeof WebSocket !== 'function') throw new Error('This smoke needs Node with the built-in WebSocket API.');
   const executable = findChromeExecutable();
   const profile = join(temporaryRoot, profileName);
@@ -419,6 +446,14 @@ async function startBrowser(profileName) {
     pageCdp.send('Network.enable'),
     pageCdp.send('Fetch.enable', { patterns: [{ urlPattern: '*', requestStage: 'Request' }] }),
   ]);
+  if (viewport) {
+    await pageCdp.send('Emulation.setDeviceMetricsOverride', {
+      width: viewport.width,
+      height: viewport.height,
+      deviceScaleFactor: 1,
+      mobile: true,
+    });
+  }
 }
 
 async function closeCurrentBrowser() {
@@ -698,13 +733,37 @@ async function fillBrowserInput(selector, value) {
   assert.equal(result, true, `The browser form field ${selector} must be available.`);
 }
 
-async function waitForNewProfileForm(expectedEmail = email) {
+async function waitForNewProfileForm(expectedEmail = email, timeoutMs = STEP_TIMEOUT_MS) {
   return waitFor(async () => evaluate(`location.origin === ${JSON.stringify(APP_ORIGIN)}
     && location.pathname === '/profile'
     && document.querySelector('#display-name') !== null
     && document.querySelector('#account-email') === null
     && document.body.innerText.includes(${JSON.stringify(`Connected as ${expectedEmail}.`)})
-    && !document.querySelector('#display-name').disabled`), 'the signed-in first-use profile form');
+    && !document.querySelector('#display-name').disabled`), 'the signed-in first-use profile form', timeoutMs);
+}
+
+async function waitForSenderProfileAfterMagicLink(expectedEmail) {
+  try {
+    return await waitForNewProfileForm(expectedEmail, 20_000);
+  } catch (error) {
+    let snapshot = { path: 'unavailable', title: '', controls: [], alerts: [], body: '' };
+    try {
+      snapshot = await evaluate(`(() => ({
+        path: location.pathname,
+        title: document.title,
+        controls: [...document.querySelectorAll('input,button,a')].map((item) => ({
+          id: item.id || '',
+          tag: item.tagName,
+          label: (item.innerText || item.getAttribute('aria-label') || item.getAttribute('placeholder') || '').replace(/\\s+/g, ' ').trim().slice(0, 90),
+          disabled: Boolean(item.disabled),
+        })).filter((item) => item.label || item.id).slice(0, 16),
+        alerts: [...document.querySelectorAll('[role="alert"],[role="status"]')]
+          .map((item) => item.innerText.replace(/\\s+/g, ' ').trim().slice(0, 160)).filter(Boolean).slice(0, 6),
+        body: document.body.innerText.replace(/\\s+/g, ' ').trim().slice(0, 700),
+      }))()`);
+    } catch { /* Keep the generic snapshot if the callback document is unavailable. */ }
+    throw new Error(`${error.message} Safe callback page state: ${JSON.stringify(snapshot)}`);
+  }
 }
 
 async function createTextClaimInvite() {
@@ -873,6 +932,249 @@ async function revealClaimedText(fixture, handoffId) {
   assert.equal(await evaluate(`document.body.innerText.includes(${JSON.stringify(fixture.subject)})`), true, 'The opened text drop must show its subject.');
 }
 
+async function inspectEmailFieldAccessibility() {
+  return evaluate(`(() => {
+    const input = document.querySelector('#account-email');
+    const form = input?.closest('form');
+    const ids = (input?.getAttribute('aria-describedby') || '').split(/\\s+/).filter(Boolean);
+    const descriptions = ids.map((id) => document.getElementById(id)?.innerText.replace(/\\s+/g, ' ').trim() || '').filter(Boolean);
+    const alert = form?.querySelector('[role="alert"]');
+    const label = document.querySelector('label[for="account-email"]');
+    return {
+      label: label?.innerText.replace(/\\s+/g, ' ').trim() || null,
+      invalid: input?.getAttribute('aria-invalid'),
+      describedBy: ids,
+      descriptionText: descriptions.join(' '),
+      alertId: alert?.id || null,
+      alertText: alert?.innerText.replace(/\\s+/g, ' ').trim() || null,
+      alertRole: alert?.getAttribute('role') || null,
+    };
+  })()`);
+}
+
+async function runFirstTimeSenderJourney(handle, displayName, bio) {
+  const recipient = await createDisposableAccount('outsider');
+  email = `drop-first-sender-${randomUUID().replaceAll('-', '').slice(0, 20)}@example.test`;
+  dropSubject = `A note for my person ${randomUUID().slice(0, 8)}`;
+  dropContent = `A small moment I wanted to send ${randomUUID()}.`;
+
+  await startBrowser('first-time-sender-browser', { width: 390, height: 844 });
+  await navigate(`${APP_ORIGIN}/demo`);
+  assert.deepEqual(await evaluate('({ width: window.innerWidth, height: window.innerHeight })'),
+    { width: 390, height: 844 }, 'The sender journey must run at the mobile pilot viewport.');
+  try {
+    await waitFor(async () => evaluate(`location.pathname === '/demo'
+      && [...document.querySelectorAll('button')].some((button) => button.innerText.replace(/\\s+/g, ' ').trim().toLocaleLowerCase() === 'try a note')`), 'the no-account demo chooser', 20_000);
+  } catch (error) {
+    let snapshot = { path: 'unavailable', title: '', buttons: [], body: '' };
+    try {
+      snapshot = await evaluate(`(() => ({
+        path: location.pathname,
+        title: document.title,
+        buttons: [...document.querySelectorAll('button')].map((button) => button.innerText.replace(/\\s+/g, ' ').trim()).filter(Boolean).slice(0, 12),
+        body: document.body.innerText.replace(/\\s+/g, ' ').trim().slice(0, 700),
+      }))()`);
+    } catch { /* Keep the generic snapshot if the browser document is unavailable. */ }
+    throw new Error(`${error.message} Safe demo page state: ${JSON.stringify(snapshot)}`);
+  }
+  await clickButton('Try a note');
+  await waitFor(async () => evaluate(`/^\\/letter\\/[^/]+$/.test(location.pathname)
+    && document.body.innerText.includes('See your drop as the recipient.')`), 'the rendered text demo');
+  await clickButton('Reveal demo fragments');
+  await waitFor(async () => evaluate(`[...document.querySelectorAll('button')]
+    .some((button) => button.innerText.replace(/\\s+/g, ' ').trim().toLocaleLowerCase() === 'open demo drop')`), 'the demo reveal confirmation');
+  await clickButton('Open demo drop');
+  await waitFor(async () => evaluate(`document.querySelector('#letter-body')?.innerText.includes(${JSON.stringify('I saved you the window seat. No reply needed — just wanted you to know I thought of you.')})`), 'the opened text demo');
+  await clickLink('Skip to sender copy');
+  await waitFor(async () => evaluate(`new URL(location.href).searchParams.get('view') === 'sender'
+    && document.body.innerText.includes('Your demo copy.')`), 'the same-device sender copy');
+  await clickButton('Make one for a friend');
+  await waitFor(async () => evaluate(`location.pathname === '/compose'
+    && Boolean(document.querySelector('#drop-recipient'))
+    && Boolean(document.querySelector('#drop-subject'))
+    && Boolean(document.querySelector('#drop-content'))`), 'the blank text draft started from the demo CTA');
+  const guestDraft = await evaluate(`(() => {
+    const id = new URLSearchParams(location.search).get('letter');
+    const active = JSON.parse(localStorage.getItem('dear-exe:active-letter:v1') || 'null');
+    return { id, active };
+  })()`);
+  assert.ok(guestDraft.id, 'The demo CTA must create a persisted draft route before sign-in.');
+  assert.equal(guestDraft.active?.id, guestDraft.id);
+  assert.equal(guestDraft.active?.payloadKind, 'text');
+  assert.equal(guestDraft.active?.status, 'draft');
+  assert.equal(guestDraft.active?.subject, '');
+  assert.equal(guestDraft.active?.content, '');
+  assert.equal(guestDraft.active?.recipient, '');
+
+  await fillBrowserInput('#drop-subject', dropSubject);
+  await fillBrowserInput('#drop-content', dropContent);
+  await fillBrowserInput('#drop-recipient', recipient.username);
+  await waitFor(async () => evaluate(`JSON.parse(localStorage.getItem('dear-exe:active-letter:v1') || 'null')?.content === ${JSON.stringify(dropContent)}`), 'the guest draft to save the sender’s own text');
+  await clickLink('Connect to send');
+  await waitFor(async () => evaluate(`location.pathname === '/profile'
+    && document.querySelector('#account-email') !== null
+    && (new URLSearchParams(location.search).get('next') || '').startsWith('/compose?letter=')`), 'the profile email sign-in route with the draft return path');
+  const profileReturn = await evaluate(`new URLSearchParams(location.search).get('next') || ''`);
+  const returnUrl = new URL(profileReturn, APP_ORIGIN);
+  assert.equal(returnUrl.pathname, '/compose');
+  assert.equal(returnUrl.searchParams.get('letter'), guestDraft.id, 'Sign-in must carry the exact current draft ID.');
+
+  const initialEmailA11y = await inspectEmailFieldAccessibility();
+  assert.equal(initialEmailA11y.label, 'Email address');
+  assert.match(initialEmailA11y.descriptionText, /No password needed/i, 'The email field must expose its passwordless sign-in guidance.');
+  assert.notEqual(initialEmailA11y.invalid, 'true');
+
+  await fillBrowserInput('#account-email', email);
+  forceNextOtpError = true;
+  await clickButton('Continue with email');
+  await waitFor(async () => otpErrorInjected, 'the isolated local OTP error injection');
+  const failedEmailA11y = await waitFor(async () => {
+    const state = await inspectEmailFieldAccessibility();
+    return state.alertText ? state : null;
+  }, 'the inline email sign-in error');
+  assert.equal(failedEmailA11y.label, 'Email address');
+  assert.equal(failedEmailA11y.invalid, 'true', 'An OTP error must mark the email field invalid.');
+  assert.equal(failedEmailA11y.alertRole, 'alert', 'An OTP error must be announced as an alert.');
+  assert.ok(failedEmailA11y.alertId, 'The inline OTP error needs an ID for its accessible description.');
+  assert.ok(failedEmailA11y.describedBy.includes(failedEmailA11y.alertId), 'The email field must reference the inline OTP error.');
+  assert.match(failedEmailA11y.descriptionText, /email|sign-in|link|try/i, 'The email field description should include the visible error.');
+  assert.equal(firewallFailure, false, 'The synthetic response must stay inside the allowed local-origin network guard.');
+  await fillBrowserInput('#account-email', `retry-${email}`);
+  const correctedEmailA11y = await inspectEmailFieldAccessibility();
+  assert.notEqual(correctedEmailA11y.invalid, 'true', 'Editing the email after an error should clear its invalid state.');
+  assert.equal(correctedEmailA11y.alertText, null, 'Editing the email should clear the old error announcement.');
+  assert.match(correctedEmailA11y.descriptionText, /No password needed/i);
+  await fillBrowserInput('#account-email', email);
+  const restoredEmailA11y = await inspectEmailFieldAccessibility();
+  assert.notEqual(restoredEmailA11y.invalid, 'true', 'The intended address should remain valid after correcting the first entry.');
+  assert.equal(restoredEmailA11y.alertText, null, 'Restoring the intended address should not restore the previous error.');
+
+  await clickButton('Continue with email');
+  await waitFor(async () => evaluate(`document.body.innerText.includes('Sign-in link sent. Check your inbox to continue.')`), 'the real local email-link request');
+  const mailMessage = await waitForMailpitMessage();
+  const newSenderUser = await waitFor(async () => findDisposableUser(email), 'the exact first-time sender Auth user');
+  userId = newSenderUser.id;
+  if (!createdUsers.some((candidate) => candidate.id === userId)) createdUsers.push({ id: userId, email });
+  sender = { id: userId, email };
+  const { data: profileBeforeSetup, error: profileBeforeSetupError } = await admin.from('profiles')
+    .select('id').eq('id', userId).maybeSingle();
+  assert.ifError(profileBeforeSetupError);
+  assert.equal(profileBeforeSetup, null, 'The first-time sender must have no profile before completing first-use setup.');
+  await navigate(await readMagicLinkFromMailpit());
+  await waitForSenderProfileAfterMagicLink(email);
+  const callbackReturn = await evaluate(`new URLSearchParams(location.search).get('next') || ''`);
+  const callbackReturnUrl = new URL(callbackReturn, APP_ORIGIN);
+  assert.equal(callbackReturnUrl.pathname, '/compose');
+  assert.equal(callbackReturnUrl.searchParams.get('letter'), guestDraft.id, 'The auth callback must carry the exact guest draft through first-use profile setup.');
+  console.log('[browser-first-signup-smoke] PASS first-time sender email link returned to first profile setup with the guest draft ID.');
+
+  await fillBrowserInput('#display-name', displayName);
+  await fillBrowserInput('#username', handle);
+  await fillBrowserInput('#bio', bio);
+  await clickButton('Save identity');
+  await waitFor(async () => evaluate(`document.body.innerText.includes('Saved on this device and synced to your account.')
+    && [...document.querySelectorAll('a')].some((link) => link.innerText.replace(/\\s+/g, ' ').trim().toLocaleLowerCase() === 'back to your draft')`), 'the synced first-time sender profile and safe draft-return link');
+  const { data: savedSenderProfile, error: savedSenderProfileError } = await admin.from('profiles')
+    .select('id, username, display_name, bio').eq('id', userId).maybeSingle();
+  assert.ifError(savedSenderProfileError);
+  assert.deepEqual(savedSenderProfile, { id: userId, username: handle, display_name: displayName, bio });
+  sender = { id: userId, email, username: handle, displayName };
+  await clickLink('Back to your draft');
+  await waitFor(async () => evaluate(`location.pathname === '/compose'
+    && new URLSearchParams(location.search).get('letter') === ${JSON.stringify(guestDraft.id)}
+    && document.body.innerText.includes('Your account is ready.')`), 'the same account-owned draft after first-time sender setup');
+  const accountDraft = await evaluate(`(() => {
+    const key = 'dear-exe:active-letter:v1:account:' + encodeURIComponent(${JSON.stringify(userId)});
+    try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch { return null; }
+  })()`);
+  assert.equal(accountDraft?.id, guestDraft.id);
+  assert.equal(accountDraft?.status, 'draft', 'The auth return must not send the draft automatically.');
+  assert.equal(accountDraft?.payloadKind, 'text');
+  assert.equal(accountDraft?.subject, dropSubject);
+  assert.equal(accountDraft?.content, dropContent);
+  assert.equal(accountDraft?.recipient, `@${recipient.username}`, 'The account draft must retain the canonical @handle recipient.');
+  assert.equal(await evaluate(`document.querySelector('#drop-recipient')?.value`), recipient.username,
+    'The composer should display the restored @handle without duplicating the prefix.');
+
+  const { data: beforeExplicitSend, error: beforeExplicitSendError } = await admin.from('letters')
+    .select('id').eq('sender_id', userId).eq('subject', dropSubject).eq('content', dropContent);
+  assert.ifError(beforeExplicitSendError);
+  assert.deepEqual(beforeExplicitSend, [], 'A saved draft must not become a delivered drop until the sender explicitly sends it.');
+  const recipientCheckLabel = await waitFor(async () => evaluate(`(() => {
+    const normalize = (value) => (value || '').replace(/\\s+/g, ' ').trim();
+    const labels = [...document.querySelectorAll('button')].filter((button) => !button.disabled)
+      .map((button) => normalize(button.innerText));
+    return labels.find((label) => /^(Check handle|Check again|Check @)/i.test(label)) || null;
+  })()`), 'the enabled recipient check action after profile setup');
+  assert.match(recipientCheckLabel, /^(Check handle|Check again|Check @)/i);
+  await clickButton(recipientCheckLabel);
+  await waitFor(async () => evaluate(`document.body.innerText.includes(${JSON.stringify(`Recipient confirmed: ${recipient.displayName} (@${recipient.username})`)})`), 'the recipient confirmation in restored Compose');
+  await clickButton('Send drop');
+  await waitFor(async () => evaluate(`location.pathname === '/sent'
+    && new URLSearchParams(location.search).get('letter') === ${JSON.stringify(guestDraft.id)}`), 'the explicit send receipt for the transferred draft');
+
+  const { data: sentRows, error: sentRowsError } = await admin.from('letters')
+    .select('id, sender_id, recipient_id, recipient_username, recipient_name, subject, content, status, delivery_mode, payload_kind')
+    .eq('sender_id', userId).eq('subject', dropSubject).eq('content', dropContent);
+  assert.ifError(sentRowsError);
+  assert.equal(sentRows?.length, 1, 'The first-time sender must create exactly one delivered row.');
+  const [sentRow] = sentRows;
+  assert.deepEqual(sentRow, {
+    id: guestDraft.id,
+    sender_id: userId,
+    recipient_id: recipient.id,
+    recipient_username: recipient.username,
+    recipient_name: recipient.displayName,
+    subject: dropSubject,
+    content: dropContent,
+    status: 'delivered',
+    delivery_mode: 'instant',
+    payload_kind: 'text',
+  });
+  dropFixture = { id: sentRow.id, senderId: userId, subject: dropSubject, content: dropContent };
+  console.log('[browser-first-signup-smoke] PASS first-time sender explicitly sent the restored text draft exactly once to the confirmed recipient.');
+  await closeCurrentBrowser();
+
+  await startBrowser('first-time-sender-recipient-browser', { width: 390, height: 844 });
+  await navigate(await generateSenderMagicLink(recipient));
+  await waitFor(async () => evaluate(`location.origin === ${JSON.stringify(APP_ORIGIN)}
+    && location.pathname !== '/auth/callback'`), 'the existing recipient magic-link callback');
+  await navigate(`${APP_ORIGIN}/mailbox`);
+  await waitFor(async () => evaluate(`location.pathname === '/mailbox'
+    && document.body.innerText.includes('A mailbox for your people.')
+    && document.body.innerText.includes(${JSON.stringify(dropSubject)})`), 'the first-time sender’s drop in recipient Inbox');
+  const recipientLinkClicked = await evaluate(`(() => {
+    const link = [...document.querySelectorAll('a')].find((item) => {
+      try { return new URL(item.href).pathname === ${JSON.stringify(`/letter/${guestDraft.id}`)}; }
+      catch { return false; }
+    });
+    if (!link) return false;
+    link.click();
+    return true;
+  })()`);
+  assert.equal(recipientLinkClicked, true, 'The recipient must open the sent drop from Inbox.');
+  const recipientFixture = { id: guestDraft.id, subject: dropSubject, content: dropContent };
+  await waitFor(async () => evaluate(`location.pathname === ${JSON.stringify(`/letter/${guestDraft.id}`)}
+    && document.body.innerText.includes(${JSON.stringify(dropSubject)})
+    && [...document.querySelectorAll('button')].some((button) => button.innerText.replace(/\\s+/g, ' ').trim().toLocaleLowerCase() === 'reveal fragments')`), 'the recipient sealed-drop view');
+  const sealedRecipientView = await evaluate(`({
+    hasContent: document.body.innerText.includes(${JSON.stringify(dropContent)}),
+    revealVisible: [...document.querySelectorAll('button')].some((button) => button.innerText.replace(/\\s+/g, ' ').trim().toLocaleLowerCase() === 'reveal fragments'),
+  })`);
+  assert.deepEqual(sealedRecipientView, { hasContent: false, revealVisible: true }, 'The recipient should see the drop sealed before asking to reveal it.');
+  await clickButton('Reveal fragments');
+  await waitFor(async () => evaluate(`([...document.querySelectorAll('button')].some((button) => button.innerText.replace(/\\s+/g, ' ').trim().toLocaleLowerCase() === 'open received drop'))`), 'the recipient open action after reveal');
+  await clickButton('Open received drop');
+  await waitFor(async () => evaluate(`document.querySelector('#letter-body')?.innerText.includes(${JSON.stringify(dropContent)})`), 'the opened first-time sender text drop');
+  const openedContent = await evaluate(`document.querySelector('#letter-body')?.innerText || ''`);
+  assert.ok(openedContent.includes(recipientFixture.content));
+  assert.equal(blockedExternalOrigins.size, 0, `Unexpected browser origin was blocked: ${[...blockedExternalOrigins].join(', ')}`);
+  assert.equal(firewallFailure, false, 'The isolated browser request firewall must remain active.');
+  assert.deepEqual(consoleErrors, [], 'The first-time sender/recipient flow must not produce console errors.');
+  assert.deepEqual(exceptions, [], 'The first-time sender/recipient flow must not throw browser exceptions.');
+  console.log('[browser-first-signup-smoke] PASS recipient opened and revealed the first-time sender’s note from Inbox.');
+}
+
 async function stopOwnedProcess(child, label) {
   if (!child || child.exitCode !== null || child.signalCode !== null) return true;
   try {
@@ -927,18 +1229,19 @@ async function cleanup() {
     console.error('[browser-first-signup-smoke] CLEANUP FAILED: the exact disposable Mailpit message could not be removed.');
   }
 
-  if (admin && sender?.id && (dropFixture?.id || (dropSubject && dropContent))) {
+  if (admin && dropSubject && dropContent) {
     try {
       let query = admin.from('letters')
         .select('id, sender_id')
-        .eq('sender_id', sender.id);
-      query = dropFixture?.id
-        ? query.eq('id', dropFixture.id)
-        : query.eq('subject', dropSubject).eq('content', dropContent);
+        .eq('subject', dropSubject)
+        .eq('content', dropContent);
+      if (sender?.id) query = query.eq('sender_id', sender.id);
+      if (dropFixture?.id) query = query.eq('id', dropFixture.id);
       const { data: matches, error: lookupError } = await query.limit(2);
       if (lookupError || (matches || []).length > 1) throw new Error('ambiguous exact letter lookup');
       const target = matches?.[0];
       if (target) {
+        if (!sender?.id || target.sender_id !== sender.id) throw new Error('the exact matching letter has no verified test sender');
         const { error: deleteError } = await admin.from('letters')
           .delete()
           .eq('id', target.id)
@@ -957,6 +1260,8 @@ async function cleanup() {
       cleanupFailed = true;
       console.error('[browser-first-signup-smoke] CLEANUP FAILED: the exact disposable text drop could not be removed.');
     }
+  } else if (!dropFixture?.id) {
+    dropCleanupVerified = true;
   }
 
   if (admin) {
@@ -1030,7 +1335,7 @@ async function main() {
   admin = createClient(supabaseUrl.origin, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
-  email = `drop-first-signup-${randomUUID().replaceAll('-', '').slice(0, 20)}@example.test`;
+  email = `${senderFirstOnly ? 'drop-first-sender' : 'drop-first-signup'}-${randomUUID().replaceAll('-', '').slice(0, 20)}@example.test`;
   const handle = `sm${randomUUID().replaceAll('-', '').slice(0, 10)}`;
   const displayName = `Pilot ${randomUUID().slice(0, 6)}`;
   const bio = 'First signup private claim smoke profile.';
@@ -1038,110 +1343,114 @@ async function main() {
   temporaryRoot = await mkdtemp(join(tmpdir(), 'drop-first-signup-'));
   try {
     await startTemporaryApp(localValues);
-    sender = await createDisposableAccount('sender');
-    outsider = await createDisposableAccount('outsider');
-    await startBrowser('sender-browser');
-    await navigate(await generateSenderMagicLink(sender));
-    await waitFor(async () => evaluate(`location.origin === ${JSON.stringify(APP_ORIGIN)}
-      && location.pathname !== '/auth/callback'`), 'the disposable sender magic-link callback');
-    await navigate(`${APP_ORIGIN}/profile`);
-    await waitForNewProfileForm(sender.email);
-    await navigate(`${APP_ORIGIN}/compose`);
-    await createTextClaimInvite();
-    console.log('[browser-first-signup-smoke] PASS sender created a private text claim through the composer UI.');
-    await closeCurrentBrowser();
+    if (senderFirstOnly) {
+      await runFirstTimeSenderJourney(handle, displayName, bio);
+    } else {
+      sender = await createDisposableAccount('sender');
+      outsider = await createDisposableAccount('outsider');
+      await startBrowser('sender-browser');
+      await navigate(await generateSenderMagicLink(sender));
+      await waitFor(async () => evaluate(`location.origin === ${JSON.stringify(APP_ORIGIN)}
+        && location.pathname !== '/auth/callback'`), 'the disposable sender magic-link callback');
+      await navigate(`${APP_ORIGIN}/profile`);
+      await waitForNewProfileForm(sender.email);
+      await navigate(`${APP_ORIGIN}/compose`);
+      await createTextClaimInvite();
+      console.log('[browser-first-signup-smoke] PASS sender created a private text claim through the composer UI.');
+      await closeCurrentBrowser();
 
-    await startBrowser('recipient-browser');
-    const { claimHandoffId } = await startUnauthenticatedRecipient(email);
-    const newUser = await waitFor(async () => findDisposableUser(email), 'the public email form to create the exact new local Auth user');
-    userId = newUser.id;
-    if (!createdUsers.some((candidate) => candidate.id === userId)) createdUsers.push({ id: userId, email });
-    const { data: beforeProfile, error: beforeProfileError } = await admin.from('profiles').select('id').eq('id', userId).maybeSingle();
-    assert.ifError(beforeProfileError);
-    assert.equal(beforeProfile, null, 'The new recipient account must not already have a profile before first-use setup.');
+      await startBrowser('recipient-browser');
+      const { claimHandoffId } = await startUnauthenticatedRecipient(email);
+      const newUser = await waitFor(async () => findDisposableUser(email), 'the public email form to create the exact new local Auth user');
+      userId = newUser.id;
+      if (!createdUsers.some((candidate) => candidate.id === userId)) createdUsers.push({ id: userId, email });
+      const { data: beforeProfile, error: beforeProfileError } = await admin.from('profiles').select('id').eq('id', userId).maybeSingle();
+      assert.ifError(beforeProfileError);
+      assert.equal(beforeProfile, null, 'The new recipient account must not already have a profile before first-use setup.');
 
-    const magicLink = await readMagicLinkFromMailpit();
-    await navigate(magicLink);
-    await waitFor(async () => evaluate(`location.origin === ${JSON.stringify(APP_ORIGIN)}
-      && location.pathname === '/claim'
-      && new URLSearchParams(location.search).get('handoff') === ${JSON.stringify(claimHandoffId)}
-      && [...document.querySelectorAll('a')].some((link) => link.innerText.replace(/\\s+/g, ' ').trim().toLocaleLowerCase() === 'choose a drop handle')`), 'the email callback to return to the private claim and show its handle-setup link');
-    await clickLink('Choose a Drop handle');
-    await waitForNewProfileForm(email);
-    const returnedHandoffId = await evaluate(`(() => {
-      const next = new URL(new URLSearchParams(location.search).get('next') || '/', location.origin);
-      return next.searchParams.get('handoff');
-    })()`);
-    assert.equal(returnedHandoffId, claimHandoffId, 'The handle-setup link must preserve the original claim handoff.');
-    console.log('[browser-first-signup-smoke] PASS new recipient opened the local Mailpit email link and returned to first profile setup.');
+      const magicLink = await readMagicLinkFromMailpit();
+      await navigate(magicLink);
+      await waitFor(async () => evaluate(`location.origin === ${JSON.stringify(APP_ORIGIN)}
+        && location.pathname === '/claim'
+        && new URLSearchParams(location.search).get('handoff') === ${JSON.stringify(claimHandoffId)}
+        && [...document.querySelectorAll('a')].some((link) => link.innerText.replace(/\\s+/g, ' ').trim().toLocaleLowerCase() === 'choose a drop handle')`), 'the email callback to return to the private claim and show its handle-setup link');
+      await clickLink('Choose a Drop handle');
+      await waitForNewProfileForm(email);
+      const returnedHandoffId = await evaluate(`(() => {
+        const next = new URL(new URLSearchParams(location.search).get('next') || '/', location.origin);
+        return next.searchParams.get('handoff');
+      })()`);
+      assert.equal(returnedHandoffId, claimHandoffId, 'The handle-setup link must preserve the original claim handoff.');
+      console.log('[browser-first-signup-smoke] PASS new recipient opened the local Mailpit email link and returned to first profile setup.');
 
-    const recipientHandle = handle;
-    const recipientDisplayName = displayName;
-    await saveFirstClaimProfile(recipientHandle, recipientDisplayName, bio, claimHandoffId);
-    const { data: savedProfile, error: savedProfileError } = await admin.from('profiles')
-      .select('id, username, display_name, bio')
-      .eq('id', userId)
-      .maybeSingle();
-    assert.ifError(savedProfileError);
-    assert.deepEqual(savedProfile, { id: userId, username: recipientHandle, display_name: recipientDisplayName, bio });
+      const recipientHandle = handle;
+      const recipientDisplayName = displayName;
+      await saveFirstClaimProfile(recipientHandle, recipientDisplayName, bio, claimHandoffId);
+      const { data: savedProfile, error: savedProfileError } = await admin.from('profiles')
+        .select('id, username, display_name, bio')
+        .eq('id', userId)
+        .maybeSingle();
+      assert.ifError(savedProfileError);
+      assert.deepEqual(savedProfile, { id: userId, username: recipientHandle, display_name: recipientDisplayName, bio });
 
-    const { data: beforeClaim, error: beforeClaimError } = await admin.from('letters')
-      .select('id, recipient_id, status')
-      .eq('id', dropFixture.id)
-      .eq('sender_id', sender.id)
-      .maybeSingle();
-    assert.ifError(beforeClaimError);
-    assert.deepEqual(beforeClaim, { id: dropFixture.id, recipient_id: null, status: 'claim_pending' }, 'Profile setup alone must not claim the invite.');
-    const { data: outsiderBefore, error: outsiderBeforeError } = await outsider.client.from('letters')
-      .select('id')
-      .eq('id', dropFixture.id)
-      .maybeSingle();
-    assert.ifError(outsiderBeforeError);
-    assert.equal(outsiderBefore, null, 'An unrelated account must not read an unclaimed private drop.');
+      const { data: beforeClaim, error: beforeClaimError } = await admin.from('letters')
+        .select('id, recipient_id, status')
+        .eq('id', dropFixture.id)
+        .eq('sender_id', sender.id)
+        .maybeSingle();
+      assert.ifError(beforeClaimError);
+      assert.deepEqual(beforeClaim, { id: dropFixture.id, recipient_id: null, status: 'claim_pending' }, 'Profile setup alone must not claim the invite.');
+      const { data: outsiderBefore, error: outsiderBeforeError } = await outsider.client.from('letters')
+        .select('id')
+        .eq('id', dropFixture.id)
+        .maybeSingle();
+      assert.ifError(outsiderBeforeError);
+      assert.equal(outsiderBefore, null, 'An unrelated account must not read an unclaimed private drop.');
 
-    await clickButton('Claim this drop');
-    await waitFor(async () => evaluate(`location.origin === ${JSON.stringify(APP_ORIGIN)}
-      && location.pathname === ${JSON.stringify(`/letter/${dropFixture.id}`)}`), 'the explicit recipient claim to open the received drop page');
-    await revealClaimedText(dropFixture, claimHandoffId);
+      await clickButton('Claim this drop');
+      await waitFor(async () => evaluate(`location.origin === ${JSON.stringify(APP_ORIGIN)}
+        && location.pathname === ${JSON.stringify(`/letter/${dropFixture.id}`)}`), 'the explicit recipient claim to open the received drop page');
+      await revealClaimedText(dropFixture, claimHandoffId);
 
-    const { data: claimedLetter, error: claimedLetterError } = await admin.from('letters')
-      .select('id, sender_id, recipient_id, recipient_username, recipient_name, subject, content, status, delivery_mode, payload_kind')
-      .eq('id', dropFixture.id)
-      .eq('sender_id', sender.id)
-      .maybeSingle();
-    assert.ifError(claimedLetterError);
-    assert.deepEqual(claimedLetter, {
-      id: dropFixture.id,
-      sender_id: sender.id,
-      recipient_id: userId,
-      recipient_username: recipientHandle,
-      recipient_name: recipientDisplayName,
-      subject: dropFixture.subject,
-      content: dropFixture.content,
-      status: 'delivered',
-      delivery_mode: 'instant',
-      payload_kind: 'text',
-    }, 'The local database must record the claimed text drop for the new profile.');
+      const { data: claimedLetter, error: claimedLetterError } = await admin.from('letters')
+        .select('id, sender_id, recipient_id, recipient_username, recipient_name, subject, content, status, delivery_mode, payload_kind')
+        .eq('id', dropFixture.id)
+        .eq('sender_id', sender.id)
+        .maybeSingle();
+      assert.ifError(claimedLetterError);
+      assert.deepEqual(claimedLetter, {
+        id: dropFixture.id,
+        sender_id: sender.id,
+        recipient_id: userId,
+        recipient_username: recipientHandle,
+        recipient_name: recipientDisplayName,
+        subject: dropFixture.subject,
+        content: dropFixture.content,
+        status: 'delivered',
+        delivery_mode: 'instant',
+        payload_kind: 'text',
+      }, 'The local database must record the claimed text drop for the new profile.');
 
-    const { data: outsiderAfter, error: outsiderAfterError } = await outsider.client.from('letters')
-      .select('id')
-      .eq('id', dropFixture.id)
-      .maybeSingle();
-    assert.ifError(outsiderAfterError);
-    assert.equal(outsiderAfter, null, 'An unrelated account must not read a claimed private drop.');
-    const { data: replay, error: replayError } = await outsider.client.rpc('claim_drop_invite', { p_token: dropFixture.token });
-    assert.equal(replayError?.code, '42501', 'An unrelated account must not replay the consumed invite.');
-    assert.equal(replay, null);
+      const { data: outsiderAfter, error: outsiderAfterError } = await outsider.client.from('letters')
+        .select('id')
+        .eq('id', dropFixture.id)
+        .maybeSingle();
+      assert.ifError(outsiderAfterError);
+      assert.equal(outsiderAfter, null, 'An unrelated account must not read a claimed private drop.');
+      const { data: replay, error: replayError } = await outsider.client.rpc('claim_drop_invite', { p_token: dropFixture.token });
+      assert.equal(replayError?.code, '42501', 'An unrelated account must not replay the consumed invite.');
+      assert.equal(replay, null);
 
-    const { data: confirmedUser, error: confirmedUserError } = await admin.auth.admin.getUserById(userId);
-    assert.ifError(confirmedUserError);
-    assert.equal(confirmedUser.user.id, userId);
-    assert.equal(confirmedUser.user.email?.toLowerCase(), email.toLowerCase());
-    assert.equal(blockedExternalOrigins.size, 0, `Unexpected browser origin was blocked: ${[...blockedExternalOrigins].join(', ')}`);
-    assert.equal(firewallFailure, false, 'The isolated browser network guard must remain active.');
-    assert.deepEqual(consoleErrors, [], 'The first-use browser flow must not produce console errors.');
-    assert.deepEqual(exceptions, [], 'The first-use browser flow must not throw page exceptions.');
-    console.log('[browser-first-signup-smoke] PASS new recipient completed first profile setup, explicitly claimed, revealed, and opened the text drop.');
+      const { data: confirmedUser, error: confirmedUserError } = await admin.auth.admin.getUserById(userId);
+      assert.ifError(confirmedUserError);
+      assert.equal(confirmedUser.user.id, userId);
+      assert.equal(confirmedUser.user.email?.toLowerCase(), email.toLowerCase());
+      assert.equal(blockedExternalOrigins.size, 0, `Unexpected browser origin was blocked: ${[...blockedExternalOrigins].join(', ')}`);
+      assert.equal(firewallFailure, false, 'The isolated browser network guard must remain active.');
+      assert.deepEqual(consoleErrors, [], 'The first-use browser flow must not produce console errors.');
+      assert.deepEqual(exceptions, [], 'The first-use browser flow must not throw page exceptions.');
+      console.log('[browser-first-signup-smoke] PASS new recipient completed first profile setup, explicitly claimed, revealed, and opened the text drop.');
+    }
   } finally {
     await cleanup();
   }

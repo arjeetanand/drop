@@ -5,10 +5,11 @@ import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getSupabaseBrowserClient } from '@/lib/supabaseBrowser';
-import { isClaimReturnPath, profileRoute, resolveAuthReturnPath } from '@/lib/inviteOnboarding';
+import { firstUseProfileSetupRoute, isClaimReturnPath, profileRoute, resolveAuthReturnPath } from '@/lib/inviteOnboarding';
 import { isAuthAccountCurrent, resolveGuestDraftAuthReturn, resolveStoredDraftAuthReturn } from '@/lib/guestDraftAuthReturn';
 import { copyGuestDraftAttachmentToAccount, deleteDraftAttachment } from '@/lib/letterMediaStore';
 import { copyGuestDraftToAccount, getGuestDraftById, getStoredLetterDraftById } from '@/lib/letterStore';
+import { getRemoteProfileState } from '@/lib/letterBackend';
 import { createAuthCallbackActivity, exchangeAuthCodeWhileActive, type AuthCodeExchangeSlot } from '@/lib/authCallbackSafety';
 
 const AUTH_RETURN_KEY = 'dear-exe:auth-return';
@@ -231,6 +232,35 @@ function AuthCallbackContent() {
               setClaimReturn(false);
               setIsBusy(false);
               setMessage('Your sign-in changed while this draft was being checked. The draft is still safe; return to your profile and sign in to the same account before continuing.');
+              return;
+            }
+          }
+          if (nextPath.split(/[?#]/, 1)[0] === '/compose') {
+            const profileState = await getRemoteProfileState();
+            if (!activity.isActive()) return;
+            const profileAccountIsCurrent = await isSignedInAs(signedInUserId);
+            if (!activity.isActive()) return;
+            if (!profileAccountIsCurrent) {
+              if (pendingDraftReturn) {
+                setPendingTransfer({ ...pendingDraftReturn, accountId: signedInUserId, kind: 'session' });
+                setReturnPath(profileRoute(inviteContext));
+                setClaimReturn(false);
+                setIsBusy(false);
+                setMessage('Your sign-in changed while this draft was being checked. The draft is still safe; return to your profile and sign in to the same account before continuing.');
+              } else {
+                redirectWithError('Your sign-in changed while we checked your profile. Please sign in again.');
+              }
+              return;
+            }
+            const setupRoute = firstUseProfileSetupRoute(
+              nextPath,
+              inviteContext,
+              profileState.status,
+              profileState.status === 'missing' ? profileState.userId : null,
+              signedInUserId,
+            );
+            if (setupRoute) {
+              activity.whileActive(() => router.replace(setupRoute));
               return;
             }
           }
