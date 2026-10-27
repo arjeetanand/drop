@@ -2613,3 +2613,34 @@ For a try-it page, put the product's differentiating journey before secondary sa
 ### Git state
 
 Code commit `ae2c9a6` is pushed to `origin/feat/pilot-demo-relay-first`, and [PR #19](https://github.com/arjeetanand/drop/pull/19) is open into `main`. The GitHub CLI's saved token was invalid, so the existing macOS GitHub credential was used in memory for the requested PR action and was neither printed nor saved by this task. At the first check refresh the PR was mergeable, GitGuardian had passed, and the required CI check was pending. Unrelated `AGENTS.md` and `next-env.d.ts` edits remain unstaged. No credentials were added to Git.
+
+## 2026-10-28 — Merge the Relay-first try-it slice
+
+### Issue
+
+PR #19 had all code, browser, and documentation evidence, but `main` and the latest handoff still needed a confirmed integration checkpoint.
+
+### Cause
+
+The CI workflow was pending when the PR was first opened, and the handoff was updated before that workflow completed.
+
+### Resolution
+
+- Reviewed the complete PR diff for correctness, clarity, architecture, security, and performance. No blocking issues were found.
+- Refreshed PR #19 at `f2bdd39`; both required checks passed and the PR was mergeable.
+- Squash-merged the PR into `main`, then fetched and fast-forwarded the local `main` to `f4ebb67` while preserving unrelated local edits.
+- Updated the current README, checklist, plan, handoff, and learning log on a follow-up documentation branch so project status reflects the merged result.
+
+### Learning
+
+Treat GitHub's merged state and remote `main` ref as the integration proof. A passing local test run and a successful merge command alone do not prove the resulting base branch is current.
+
+### Verification
+
+- PR #19 required Tests/lint/types/build and GitGuardian checks passed on head `f2bdd39eda78ddf7caf253ba6f4c657f90f6f6d8`.
+- GitHub reported PR #19 `MERGED` with merge commit `f4ebb67f8f381445a99668be145798a65cd6acdc`; `git ls-remote` reported the same `origin/main` SHA.
+- The credential-free public demo remained on its separate production server at 6004; Home and `/demo` had returned HTTP 200.
+
+### Git state
+
+PR #19 is merged into `main` as `f4ebb67`; local `main` was fast-forwarded to match. A documentation-only status correction is on `docs/drop-pr19-merged-state`. Unrelated `AGENTS.md` and `next-env.d.ts` edits were preserved and left unstaged. No credentials were committed.

@@ -12,7 +12,7 @@ Tasks are ordered by dependency. Progress is recorded at each tested and pushed 
 - [x] Pass the full production browser smoke across 320, 360, 390, 430, 768, and 1440px. No backend or cross-origin requests occurred in the demo flow.
 - [x] Serve the current preview on 6004 and verify its temporary public Home and `/demo` routes return HTTP 200: https://bottom-greatest-bras-christmas.trycloudflare.com/demo.
 - [x] Commit source as `ae2c9a6` and push `feat/pilot-demo-relay-first` to origin.
-- [x] Open [PR #19](https://github.com/arjeetanand/drop/pull/19) into `main`; use its current required checks as the merge gate.
+- [x] Merge [PR #19](https://github.com/arjeetanand/drop/pull/19) into `main` at `f4ebb67` after required CI and GitGuardian checks passed.
 - [ ] Complete hosted Free-plan/migration/Auth/email/cleanup configuration, real two-account send/delete acceptance, durable hosting, OS share, screen reader, physical device, and opt-in pilot before claiming a real live pilot.
 
 ## Project closure — full pilot PR to main (2026-10-27)

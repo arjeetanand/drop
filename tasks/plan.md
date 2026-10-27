@@ -14,7 +14,7 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 - The browser smoke checks that the Relay entry point is visible at 320×740, stays before the large samples, scrolls/focuses correctly, and advances through all three handoffs. A fresh 390×844 keyboard run and the production flow both passed.
 - Verification passed: 302/302 tests, lint, non-incremental TypeScript, browser-smoke syntax, and diff check. A clean environment production build generated all 22 routes; the full production browser smoke passed at widths from 320px to 1440px with no Auth/RPC/Storage/cross-origin requests.
 - The credential-free build is served on port 6004 through a temporary Quick Tunnel: https://bottom-greatest-bras-christmas.trycloudflare.com/demo. The existing 5004 preview remains untouched. The local development app remains on port 4004.
-- Feature branch `feat/pilot-demo-relay-first` is pushed at `ae2c9a6`; [PR #19](https://github.com/arjeetanand/drop/pull/19) is the review and integration path into `main`.
+- [PR #19](https://github.com/arjeetanand/drop/pull/19) merged the branch into `main` at `f4ebb67`; the reviewed feature branch head was `f2bdd39`, with required CI and GitGuardian checks passing.
 
 ### Remaining real-pilot gates
 
