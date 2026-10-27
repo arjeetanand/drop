@@ -9,6 +9,7 @@ Updated: 2026-10-27
 - [x] Remove the featured drop from the mailbox preview list so Home does not render the same received drop twice; show accurate copy when the newest drop is featured above.
 - [x] Pass `npm test` (301/301), `npm run lint`, `npx tsc --noEmit --incremental false`, browser-script syntax, `git diff --check`, and the Webpack production build. The plain `npm run typecheck` was blocked by sandbox `EPERM` writing `tsconfig.tsbuildinfo`.
 - [x] Commit the code as `c388a14` and push `codex/invitee-first-send` to `origin`.
+- [x] Leave Drop running at `http://localhost:4004` via `./run.sh start`; verify HTTP 200.
 - [ ] Open a review PR into `codex/social-relay-pilot`; GitHub CLI reports an invalid saved token and the PR API is currently unreachable.
 - [ ] Verify hosted account-to-account delivery, OS sharing, screen-reader output, and physical-device behavior.
 
