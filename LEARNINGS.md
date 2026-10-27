@@ -2411,3 +2411,36 @@ Do not treat an organization name containing `Free` as billing-plan evidence. Ve
 ### Git and remaining gates
 
 The current source of truth remains `main` at the merged PR #14 closure docs; this status update is a documentation follow-up. Confirm the Free plan, reconcile remote-only migrations, configure hosted Auth/email redirects, activate the cleanup worker, then test real two-account delivery and device behavior.
+
+## 2026-10-27 — Sync main and separate open PR work from pilot closure
+
+### Issue
+
+The current checkout was still on the PR #15 documentation branch after GitHub had merged it. The handoff also mixed the merged pilot source with several still-open feature branches, which made it unclear which code was actually on main.
+
+### Cause
+
+Parallel feature and documentation PRs leave local remote-tracking refs stale until fetched. An open PR can be a draft, target another feature branch, or still lack its central browser proof; its title alone does not mean its code is part of main.
+
+### Resolution
+
+- Fetched origin/main, verified PR #15 is MERGED, then fast-forwarded local main to b705b3bf3b0b9a2437ac3cfaa5923f2bd8084aac.
+- Confirmed main’s first-parent history includes pilot source PR #13 and closure/status docs PRs #14–#15.
+- Checked the current open list: PRs #3, #4, and #7–#12. Kept those as separate candidates. PR #7 still lacks authenticated QR and camera-scan evidence; PR #11 is a dirty draft; PR #12 targets feat/pilot-integrated-preview.
+- Preserved the unrelated AGENTS.md and next-env.d.ts working-tree edits.
+- Started the main checkout on localhost:4004 and confirmed HTTP 200. Hosted Supabase variables remain separate from the local loopback configuration.
+
+### Learning
+
+Use the fetched main commit as the source-of-truth pointer, and describe code merge status separately from hosted/device acceptance. Classify each open PR by base branch, draft state, checks, conflicts, and missing proof before merging it.
+
+### Verification
+
+- gh pr view 15 reported state MERGED and merge commit b705b3bf3b0b9a2437ac3cfaa5923f2bd8084aac.
+- git rev-parse HEAD and git rev-parse origin/main matched at that commit after a fast-forward.
+- git diff --check passed for the documentation checkpoint.
+- The local app returned HTTP 200 on 127.0.0.1:4004. No hosted database, Auth, storage, function, or scheduler changes were made.
+
+### Git and remaining gates
+
+This is a documentation-only checkpoint on docs/drop-current-main-checkpoint. No application code was changed. The hosted pilot is still pending billing-plan confirmation, remote-only migration reconciliation, Auth/email setup, the 30-day cleanup worker, real two-account delivery, and physical-device/accessibility checks. The remaining open PRs require individual scope and verification decisions.
