@@ -8,6 +8,8 @@ test('keeps private navigation available across the main workflows', () => {
   }
   assert.equal(usesPrivateShell(null), true);
   assert.equal(usesPrivateShell('/u/alex'), false);
+  assert.equal(usesPrivateShell('/demo'), false);
+  assert.equal(usesPrivateShell('/auth/callback'), false);
   assert.equal(usesPrivateShell('/relayer'), false);
 });
 

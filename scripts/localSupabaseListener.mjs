@@ -20,9 +20,9 @@ const LOCAL_RUNTIME_COMMANDS = new Set([
   'orbstack',
 ]);
 
-const SUPABASE_SERVICE_PREFIX_BY_PORT = new Map([
-  [54321, 'supabase_kong_'],
-  [54324, 'supabase_inbucket_'],
+const SUPABASE_CONTAINER_BY_PORT = new Map([
+  [54321, 'supabase_kong_drop'],
+  [54324, 'supabase_inbucket_drop'],
 ]);
 
 export function parseLsofListeners(output) {
@@ -173,8 +173,8 @@ export function assertTrustedLocalSupabaseListener(port, {
     throw new Error(`Cannot verify a local Docker context for Supabase port ${port}; refusing to create test fixtures.`);
   }
 
-  const expectedServicePrefix = SUPABASE_SERVICE_PREFIX_BY_PORT.get(port);
-  if (!expectedServicePrefix) {
+  const expectedContainer = SUPABASE_CONTAINER_BY_PORT.get(port);
+  if (!expectedContainer) {
     throw new Error(`No local Supabase service is defined for port ${port}; refusing to create test fixtures.`);
   }
 
@@ -184,7 +184,7 @@ export function assertTrustedLocalSupabaseListener(port, {
   } catch {
     throw new Error(`Could not verify a local Supabase container on port ${port}; refusing to create test fixtures.`);
   }
-  if (!Array.isArray(containers) || !containers.some((name) => String(name).startsWith(expectedServicePrefix))) {
+  if (!Array.isArray(containers) || !containers.some((name) => String(name) === expectedContainer)) {
     throw new Error(`Could not verify the expected local Supabase service on port ${port}; refusing to create test fixtures.`);
   }
 }

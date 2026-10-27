@@ -41,6 +41,7 @@ function InboxUnreadBadge({ count }: { count: number | null }) {
 
 export function Sidebar() {
   const pathname = usePathname();
+  const privateShellVisible = usesPrivateShell(pathname);
   const activeNavigationHref = getActiveNavigationHref(pathname);
   const [profile, setProfile] = useState(defaultUserProfile);
   const [inboxLetters, setInboxLetters] = useState<MockLetter[]>([]);
@@ -48,6 +49,8 @@ export function Sidebar() {
   const inboxLettersRef = useRef<MockLetter[]>([]);
 
   useEffect(() => {
+    if (!privateShellVisible) return;
+
     let active = true;
     let observedAccountId: string | null = null;
     let authInitialized = false;
@@ -108,7 +111,7 @@ export function Sidebar() {
       stopRecipientDropReadEvents();
       authSubscription?.unsubscribe();
     };
-  }, []);
+  }, [privateShellVisible]);
 
   useEffect(() => {
     let active = true;
@@ -123,7 +126,7 @@ export function Sidebar() {
     };
   }, []);
 
-  if (pathname && !usesPrivateShell(pathname)) return null;
+  if (pathname && !privateShellVisible) return null;
 
   const initials = profile.displayName
     .split(' ')

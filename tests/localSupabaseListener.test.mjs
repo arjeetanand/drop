@@ -66,6 +66,14 @@ test('rejects a local runtime port with no matching Supabase container', () => {
   }), /could not verify.*Supabase service.*54321/i);
 });
 
+test('rejects another local Supabase project even when it publishes the same port', () => {
+  assert.throws(() => assertTrustedLocalSupabaseListener(54321, {
+    inspect: () => [{ pid: '51', command: 'com.docker.backend' }],
+    dockerEndpoint: 'unix:///var/run/docker.sock',
+    inspectContainers: () => ['supabase_kong_another_project'],
+  }), /could not verify.*Supabase service.*54321/i);
+});
+
 test('refuses trusted container listeners when Docker uses a remote context', () => {
   assert.throws(() => assertTrustedLocalSupabaseListener(54321, {
     inspect: () => [{ pid: '51', command: 'com.docker.backend' }],
