@@ -2511,3 +2511,38 @@ Label old Git and PR snapshots as historical. Before closeout, reconcile the bra
 ### Git and remaining gates
 
 At the time of this note, closeout commit `b8bf5d7` was pushed to `origin/feat/drop-relay-first-choice`. This appended learning record will be part of the next docs-only commit on the same PR; refresh its CI/GitGuardian results before merge. PR #17 remains a draft pending browser acceptance. Hosted two-account delivery, billing-plan confirmation, Auth/email setup, cleanup scheduling, and physical-device/accessibility checks remain separate pilot gates.
+
+
+## 2026-10-27 — Verify first-use routing and carrier consent in a real browser
+
+### Issue
+
+Home had two delivery paths, but the acceptance page presented its important bearer-invite and route-privacy limits after the carrier form. Source and unit checks also could not prove the new Home links worked after hydration or that the correct delivery mode stayed selected.
+
+### Cause
+
+The carrier's earlier privacy note was below the form and near the Accept action; it did not give the whole route/identity context before a person began accepting. Home is client-rendered, so checking raw server HTML was not a valid substitute for checking the hydrated page.
+
+### Resolution
+
+- Moved a compact **Before you carry** disclosure before the carrier form and Accept action. It explains that the first person with the one-time invite can accept, the ten-minute expiry, self-entered route details, unverified names, sealed text/media, and typed neighborhood without device location.
+- Raised the remaining small mobile navigation labels to the existing 12px `text-xs` token.
+- Added an attach-only browser mode that keeps the canonical app on 4004 running, verifies hydrated Home links and mode selection before creating any disposable accounts, then exercises text and GIF Relay flows against loopback Supabase with exact cleanup.
+- Aligned carrier-name wording with the existing test expectation, and made the smoke assert the rendered disclosure before both text and GIF Accept actions.
+
+### Learning
+
+For client-rendered routes, assert the actual hydrated DOM, interaction, and final selection in an isolated browser. Run that read-only preflight before creating fixtures so a stale app build cannot leave test accounts behind. Put identity, consent, expiry, and privacy context before the action that commits the user to a route.
+
+### Verification
+
+- `npm test`: 302/302 passed; `npm run lint`, `npx tsc --noEmit --incremental false`, browser guard/syntax, and `git diff --check` passed.
+- `npm run build -- --webpack` passed and generated all 22 routes. Existing warnings remain for React 18 support in Next 16 and an ambiguous Tailwind easing utility.
+- Isolated Chromium checked Home at 320×740, 390×844, and 1440×900: both CTAs had visible keyboard focus; Enter opened the expected route; Instant/Relay selection matched after hydration; no horizontal overflow.
+- The full local text/GIF Relay browser run passed consent disclosure, carrier replay denial, recipient collection, sealed-media boundaries, and explicit recipient reveal. It observed no console/runtime errors, failed requests, or cross-origin browser traffic. Exact disposable accounts, profiles, drops, media, and browser profiles were verified removed.
+- Home and Relay Compose returned HTTP 200 at `http://localhost:4004`; the app was left running. Screenshots: `/private/tmp/drop-pr17-ui-evidence-final`.
+- No hosted Supabase resources or data were changed. No public deployment was made.
+
+### Git and remaining gates
+
+Code commit `bbaf38c` is pushed to `feat/drop-relay-first-choice` for PR #17 into `main`; this closeout documentation is a separate update on that branch. At the last live PR check, GitGuardian passed and the main CI check was pending. Refresh all required checks at the latest head before merging through PR #17. No public hosting project is configured in this checkout; the Sites connector is disabled. Hosted Free-plan confirmation, migration reconciliation, Auth/email, deployed cleanup worker, real two-account delivery/deletion, native sharing, screen reader/physical device, and opt-in pilot acceptance remain open.
