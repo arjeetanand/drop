@@ -2546,3 +2546,37 @@ For client-rendered routes, assert the actual hydrated DOM, interaction, and fin
 ### Git and remaining gates
 
 Code commit `bbaf38c` is pushed to `feat/drop-relay-first-choice` for PR #17 into `main`; this closeout documentation is a separate update on that branch. At the last live PR check, GitGuardian passed and the main CI check was pending. Refresh all required checks at the latest head before merging through PR #17. No public hosting project is configured in this checkout; the Sites connector is disabled. Hosted Free-plan confirmation, migration reconciliation, Auth/email, deployed cleanup worker, real two-account delivery/deletion, native sharing, screen reader/physical device, and opt-in pilot acceptance remain open.
+
+## 2026-10-27 — Merge the first-use slice and expose a safe demo preview
+
+### Issue
+
+The latest README and handoff still said PR #17 was open, the local checkout was on a feature branch, and no tester URL existed. The user needed a concrete way for people to try Drop while the hosted backend was not ready for real sends.
+
+### Cause
+
+The closeout notes had been written before PR #17 merged. The OneDrive checkout was gone, while the migrated local clone remained on the PR branch. The hosted Supabase project also had three remote-only migration versions, no deployed Edge Functions, and no Edge Function secrets; there was no linked permanent hosting site.
+
+### Resolution
+
+- Switched the migrated clone to its already-merged main at 77c03c6, preserving unrelated AGENTS.md and next-env.d.ts edits.
+- Kept the full local app on port 4004 and built a separate production preview from main under /private/tmp/drop-pilot-demo.3CD4GC. The preview had no Supabase environment variables or credentials.
+- Started the preview on port 5004 and opened a temporary Cloudflare Quick Tunnel at https://commissioner-cool-spoken-disable.trycloudflare.com/demo. It supports only the browser-local bundled demo; it does not accept accounts, send real drops, or upload media.
+- Updated README, checklist, and handoff with the merged state, current preview, exact verification, and remaining hosted gates.
+
+### Learning
+
+Keep code integration, a temporary product demo, and a real hosted pilot as separate readiness claims. A credential-free local demo can let people evaluate the interaction while hosted delivery is unfinished; the preview URL is temporary and is not a deployment.
+
+### Verification
+
+- PR #17's final CI and GitGuardian checks passed; merged source is 77c03c67d9282cdd32f338bfc9eb437227ebe505.
+- The isolated production build passed and generated all 22 routes. Its first attempt could not resolve fonts.googleapis.com in the sandbox; a scoped network retry fetched the app's declared fonts and completed successfully.
+- The existing demo browser smoke passed photo/GIF flows, reactions, sender copy, claim recovery, keyboard interaction, and responsive widths from 320px through 1440px. It observed no Auth, RPC, Storage, or cross-origin requests.
+- Local Home and demo routes returned HTTP 200; the temporary public Home and /demo routes also returned HTTP 200.
+- Read-only Supabase CLI checks returned project status ACTIVE_HEALTHY, three remote-only migrations (20261026100000, 20261026110000, 20261026120000), no Edge Functions, and no Edge Function secrets. No hosted state was changed.
+- git diff --check passed for this documentation diff before staging.
+
+### Git and remaining gates
+
+The application source remains merged on main at 77c03c6. This status documentation is on docs/drop-pilot-preview-closeout-20261027; stage only README, CHECKLIST, HANDOFF, and LEARNINGS. Preserve the unrelated edits to AGENTS.md and next-env.d.ts. Real hosted two-account delivery is not verified. Before that pilot, obtain durable free hosting, confirm the project plan, reconcile migration history before any push, configure Auth/email and cleanup scheduling, and test actual deletion.

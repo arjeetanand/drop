@@ -2,18 +2,20 @@
 
 Updated: 2026-10-27
 
-## First-use delivery choice (2026-10-27)
+## Current pilot status — PR #17 and temporary demo preview (2026-10-27)
 
-- [x] Push the Home and mobile Relay clarity slice and closeout correction through `feat/drop-relay-first-choice`; PR #17 is the route to `main`.
-- [ ] Confirm the final PR #17 head, including this learning update, has passing checks before merge. At pre-learning-update head `b8bf5d7`, PR #17 was open/draft/clean and both CI and GitGuardian passed.
-
-- [x] Explain direct delivery and Relay on Home.
-- [x] Provide separate direct and Relay start links; the Relay link preselects relay mode in Compose.
-- [x] Label the mobile destination Relay and raise tab labels to 12px.
-- [x] Pass 302 unit tests, lint, non-incremental TypeScript, and diff check.
-- [ ] Capture and verify the Home-to-Compose flow at 320px, 390px, and desktop widths, including focus and Relay mode selection. Waiting on approval to use local Playwright.
-- [ ] Recheck rendered behavior and required CI before merging this feature branch.
-- [ ] Restart and verify the local app on port 4004 before a demo; this pass saw a listener but HTTP probes failed.
+- [x] Merge PR #17 into main at 77c03c67d9282cdd32f338bfc9eb437227ebe505; required CI and GitGuardian checks passed on the final PR head.
+- [x] Preserve separate Direct and Relay starts, the hydrated Relay compose selection, 12px mobile navigation labels, and pre-acceptance carrier disclosure.
+- [x] Pass PR #17 verification: 302/302 tests, lint, non-incremental TypeScript, production build, and local text/GIF Relay browser journey.
+- [x] Switch the migrated local checkout to main; keep the local development app on port 4004 (HTTP 200).
+- [x] Build an isolated production demo from main with no Supabase credentials on port 5004.
+- [x] Pass the demo browser smoke at 360×844, 390×844, 430×844, and 1440×900; no Auth/RPC/Storage requests or cross-origin browser requests.
+- [x] Start a temporary Cloudflare Quick Tunnel and verify Home and /demo externally (HTTP 200): [temporary preview](https://commissioner-cool-spoken-disable.trycloudflare.com/demo). It is demo-only and stops when the local server or tunnel stops.
+- [ ] Connect a permanent no-cost public host; the current workspace Sites connector is disabled and this repository has no linked Netlify site.
+- [ ] Confirm Supabase billing is Free. Reconcile the three remote-only migration versions 20261026100000, 20261026110000, and 20261026120000 before any migration push.
+- [ ] Deploy/configure the required Edge Functions and secrets; validate hosted Auth/email redirects and the 30-day cleanup schedule.
+- [ ] Verify hosted two-account text/photo/GIF sends, privacy boundaries, and actual deletion before inviting people to use real accounts.
+- [ ] Verify native OS sharing, spoken screen-reader output, physical-device behavior, and the opt-in usability pilot.
 
 ## Historical main and PR closure checkpoint (2026-10-27)
 
