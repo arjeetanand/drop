@@ -2319,3 +2319,34 @@ Commits 66d8930 and f651b3e are pushed on codex/invitee-first-send. Draft PR #13
 ## 2026-10-27 — Final PR check refresh
 
 The pushed closeout head 14cee94 passed both GitHub Actions CI and GitGuardian, and GitHub reported a clean merge state. A final documentation-only status commit follows this check and will trigger another CI run. The branch remains a draft PR; do not merge without explicit approval. Hosted Supabase delivery/retention and device acceptance remain open.
+
+## 2026-10-27 — Relay arrival recap and mailbox refresh race
+
+### Issue
+
+The first Relay recap browser run timed out because the recipient’s mailbox did not retain the recap after collection. A follow-up run showed why: the collection broadcast refreshes the delivered row, which replaces the route-only card with a normal mailbox card before the recipient opens the drop.
+
+### Cause
+
+The recap state lived inside `RelayRecipientCard`. `useLiveInbox` refreshes the mailbox from the recipient collection broadcast; the list then removes the dispatched Relay card. The delivered `LetterCard` can show subject and teaser content before the new recap’s explicit open action.
+
+### Resolution
+
+- Store the just-collected Relay recap at the Mailbox level, scoped to the current account, so it survives the Realtime refresh.
+- Hide the just-collected row while the recap is visible; **Open your drop** refreshes the mailbox and navigates into the existing reveal/open flow.
+- Keep the detail-route recap inline until the recipient explicitly continues. Show only the handoff count in the recap, move focus to its primary action, and retain retry/error feedback.
+- Extend the text and GIF Relay browser journey to assert aggregate counts, no subject/body/caption/carrier details in the recap, focus on **Open your drop**, and no GIF Storage request before opening.
+
+### Learning
+
+Realtime list updates can unmount local success UI. Put transaction follow-up state in the nearest parent that owns the refreshed collection, and test the actual event ordering. Hide or replace rows when a newly released payload must not appear before the next user action.
+
+### Verification
+
+- Final `npm run test:browser-relay` passed the isolated production journeys for text and GIF at 390×844. It verified route replay denial, collection, recap, next-action focus, private content and carrier details absent from the recap, no pre-open GIF request, recipient open, and no overflow, failed requests, runtime exceptions, console errors, or cross-origin requests.
+- `npm test`: 302/302 passed; `npm run lint`; `npx tsc --noEmit --incremental false`; browser script syntax; and `git diff --check` passed. The separate local photo/GIF claim browser smoke passed as well.
+- Supabase and GitHub status commands were checked without exposing credentials. Supabase CLI reported no access token; hosted behavior remains unverified.
+
+### Git and remaining gates
+
+Code commit `6ccd4c6` is pushed to `origin/codex/invitee-first-send`. This learning entry and the updated README, checklist, and handoff are the documentation follow-up on the same branch. Refresh CI and GitGuardian on the final PR head before merge. Hosted Supabase delivery/retention, OS sharing, actual screen-reader output, physical-device behavior, and user-pilot acceptance remain open.

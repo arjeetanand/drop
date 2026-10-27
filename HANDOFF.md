@@ -2,6 +2,17 @@
 
 Updated: 2026-10-27
 
+## Latest checkpoint — Relay arrival recap and pilot closure (2026-10-27)
+
+- Product pitch: Drop is a personal note, photo, or GIF sent directly or through an optional, human-carried Relay journey. Relay’s defensible product angle is the combination of willing one-at-a-time carriers, a payload hidden from carriers, and recipient-controlled collection; treat market distinction as a hypothesis to test. The short pitch, demo script, comparison, and eight-drop pilot question are in [README.md](./README.md#pitch).
+- Relay recap: after the recipient collects a traveling drop, Drop shows only the aggregate hand count and an explicit **Open your drop** action. The recap survives the mailbox’s Realtime refresh, hides the collected row until the open action, and moves focus to the next action. The detail route keeps the existing fragment reveal and full-open controls.
+- Verification: `npm test` passed 302/302; `npm run lint`; `npx tsc --noEmit --incremental false`; browser-script syntax; and `git diff --check` passed. `npm run test:browser-relay` passed the isolated production text and GIF journeys at 390×844, including carrier/replay privacy, recap counts, focus, no subject/caption/carrier detail in the recap, and no GIF Storage request before opening. No overflow, failed requests, runtime exceptions, console errors, or cross-origin requests were observed. A separate `npm run test:browser-media-claim` also passed photo/GIF claim privacy and replay checks. All fixtures were disposable and cleaned up.
+- Git: code commit `6ccd4c6` is pushed on `codex/invitee-first-send` and updates draft PR #13 to `main`. The app remains on port 4004; the isolated browser test used and released 6004.
+- Live pilot remains blocked: `.env.local` points only to loopback Supabase. `SUPABASE_TELEMETRY_DISABLED=1 npx supabase projects list --output json` reports that no access token is available. Hosted Auth, migrations, functions, Storage, scheduled cleanup, and real two-account delivery have not been verified. Device camera, OS share sheet, and actual screen-reader output also remain open.
+- Remote review boundary: code commit `6ccd4c6` was pushed, but this environment has not refreshed PR checks at the later documentation head. Earlier CI/GitGuardian checks were green on the preceding head; do not treat them as proof for the updated PR. After the docs push, refresh checks and review the PR before merge.
+
+**Next:** refresh GitHub CI and GitGuardian on the final PR head, complete PR review, and get approval to merge. In parallel, restore Supabase CLI access and configure the approved Free project, then verify hosted two-account text/photo/GIF send and Relay collection plus scheduled physical deletion. Schedule OS-share, screen-reader, and physical-device acceptance before describing Drop as a live pilot.
+
 ## Latest checkpoint — dependency security fix and full pilot PR to main (2026-10-27)
 
 - Candidate: codex/invitee-first-send targets the open draft PR #13 to main. Remote main was last verified at 5138f88. The integrated branch includes the secret-free CI workflow and exact-container local fixture guard.

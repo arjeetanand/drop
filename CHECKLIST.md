@@ -2,6 +2,16 @@
 
 Updated: 2026-10-27
 
+## Relay arrival recap (2026-10-27)
+
+- [x] Add the recipient-facing “It made it” recap after Relay collection; show only the aggregate hand count and keep private text/media out of the recap.
+- [x] Keep the recap visible through the mailbox Realtime refresh, suppress the collected row until the recipient continues, and route **Open your drop** through the existing reveal flow.
+- [x] Move focus to the next action and add a browser assertion for focus, recap privacy, handoff counts, and no GIF Storage request before opening.
+- [x] Pass `npm test` (302/302), `npm run lint`, `npx tsc --noEmit --incremental false`, browser-script syntax, `git diff --check`, and `npm run test:browser-relay`. The isolated production browser journey passed for text and GIF at 390×844 with no overflow, failed requests, console errors, runtime exceptions, or cross-origin requests.
+- [x] Commit as `6ccd4c6` and push to `origin/codex/invitee-first-send` for draft PR #13.
+- [ ] Refresh PR #13 checks on the final documentation head and complete review/merge through the PR.
+- [ ] Verify hosted Free Supabase delivery/retention, actual OS sharing, spoken screen-reader output, and physical-device/camera behavior before a live user pilot.
+
 ## Full pilot closure to main (2026-10-27)
 
 - [x] Include the secret-free GitHub Actions gate for pull requests and main pushes.
