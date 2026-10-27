@@ -2,6 +2,17 @@
 
 Updated: 2026-10-27
 
+## First-friend local end-to-end verification (2026-10-27)
+
+- [x] From signed-out Home, keyboard-activate **Invite a friend**, sign up through local Mailpit, and verify the auth callback returns to exactly `/profile?invite=1` without an unrelated `next` route.
+- [x] Verify the original sealed-claim handoff survives invite signup, profile sync gates the share controls, and explicit sharing contains only the public handle and canonical profile URL.
+- [x] Complete the same user's private claim/reveal and verify outsider read denial and replay denial.
+- [x] From a friend's signed-in session, open the sender's public profile, use its **Send a drop** link, confirm the handle in Compose, send a text reply, and verify the reply in the sender's Home inbox.
+- [x] Pass both loopback browser smokes with exact disposable data cleanup: three Auth/profile fixtures and one Mailpit message in first-signup; both exact send rows, reaction, accounts, profiles, app, and browser sessions in send/react.
+- [x] Pass `npm test` (301/301), `npm run lint`, `npm run typecheck`, both browser-script syntax checks, and `git diff --check`.
+- [x] Push verified code commits `a238fa0` and `70214d9` separately to `codex/social-relay-pilot`; do not merge. GitHub API could not refresh PR #12's head/checks after the pushes.
+- [ ] Verify hosted two-account delivery, native OS sharing, screen-reader output, and physical-device behavior before treating those gates as complete.
+
 ## Home first-friend activation (2026-10-27)
 
 - [x] Replace the passive empty-inbox message with a clear first-drop invitation and a link to `/profile?invite=1`; keep the demo sample marked as not received.

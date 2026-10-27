@@ -2195,3 +2195,34 @@ Give an empty state an immediate, low-pressure action that reuses the existing u
 ### Git and remaining gaps
 
 Code commit `986e2e4` (`feat: guide new users to invite their first friend`) is pushed to `origin/codex/social-relay-pilot`. After that code push, PR #12 was open/draft against `feat/pilot-integrated-preview`; `GitGuardian Security Checks` was pending and GitHub reported `UNSTABLE`. No merge occurred. Current hosted Supabase state was not refreshed; the `supabase` CLI is not on the shell PATH. Hosted delivery/retention, actual screen-reader output, installed-PWA sharing, physical camera/device acceptance, and the opt-in sender study remain open.
+
+## 2026-10-27 — Verify first-friend signup, sharing, and send-back
+
+### Issue
+
+The empty-inbox invitation, first-time email signup, public profile share, and a friend's reply were separate UI paths. Existing browser smokes covered private claims and known-handle sends, but did not prove that a new user kept invite intent through email verification or that a friend could send a reply from the shared profile.
+
+### Cause
+
+The onboarding and delivery tests stopped at different checkpoints. A route-only assertion could miss lost invite context at the auth callback, and a database-only assertion could miss a broken public-profile Compose link or a reply absent from the receiver's inbox.
+
+### Resolution
+
+- Extend the first-signup browser smoke from signed-out Home through keyboard activation of **Invite a friend**, the local Mailpit callback to exactly `/profile?invite=1`, first profile sync, explicit share, then the existing sealed private claim/reveal. Assert the claim handoff survives, share controls stay hidden until profile sync, and the share payload contains exactly the public handle and profile URL.
+- Extend the send/react browser smoke so a signed-in friend visits `/u/{handle}`, follows **Send a drop**, confirms the prefilled handle, sends a new text drop, and the original sender sees that exact reply in Home. Remove the reply by its exact draft/letter ID before deleting the disposable accounts.
+- Keep both smokes loopback-only; do not reset local Supabase or contact hosted services.
+
+### Learning
+
+Test the whole first-friend loop across account setup, explicit sharing, the recipient's public-profile action, and the receiver's inbox. Keep intent state assertions at the callback itself; test payload contents after an explicit share action; verify both persisted routing and the rendered inbox result.
+
+### Verification
+
+- `npm test`: 301/301 passed. `npm run lint`, `npm run typecheck`, both browser-smoke syntax checks, and `git diff --check` passed.
+- `npm run test:browser-first-signup` passed: Home invite activated by keyboard, local signup callback preserved `/profile?invite=1` and the sealed-claim handoff, share controls appeared only after profile sync, the explicit share payload contained only its public fields, private claim/reveal completed, and outsider/replay checks passed. Cleanup confirmed the exact drop, all three disposable Auth/profile pairs, the Mailpit message, and temporary app/browser directory absent.
+- `node scripts/browser-send-react-smoke.mjs` passed: sender/recipient send-read-reaction checks remained green; public-profile Compose sent one delivered reply, the sender's Home displayed it, all browser requests stayed local, and exact cleanup completed. The smoke builds the isolated production app with Webpack.
+- The local app at port 4004 responded HTTP 200. No hosted Supabase calls or resets were made. Edge's Apple Events setting remained enabled as requested.
+
+### Git and remaining gaps
+
+Code commits `a238fa0` (first-friend signup/share) and `70214d9` (profile send-back) were pushed separately to `origin/codex/social-relay-pilot`. PR #12 was last confirmed open/draft before these pushes; GitHub API access then failed, so current check state and head are unverified. No merge occurred. The tests stub native browser sharing, so actual OS share sheets remain unverified. Hosted delivery, spoken screen-reader output, physical-device/camera behavior, and an opt-in human study remain open.
