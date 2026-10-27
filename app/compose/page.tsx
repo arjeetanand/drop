@@ -3,20 +3,24 @@
 import { Suspense, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { AlignCenter, AlignLeft, AlignRight, ArrowLeft, Check, Eye, FileImage, ImagePlus, Minus, Plus, Send, Share2, Trash2, Type, X } from 'lucide-react';
+import { AlignCenter, AlignLeft, AlignRight, ArrowLeft, Check, Eye, FileImage, ImagePlus, Minus, Plus, QrCode, Send, Share2, Trash2, Type, X } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { getSealInfo, mockSeals, waxColors, writingPrompts, type DropDeliveryMode, type DropPayloadKind } from '@/data/mockData';
 import { canDeleteLocalDraft, clearRecipientInviteProgressForDraft, completeSuccessfulSend, deleteLocalDraft, ensureLetterDraftMediaUploadId, getLetterDraft, getLetterDraftById, getLetterDraftByMediaUploadId, isLetterDraftPersisted, recordRecipientInviteProgress, restoreDeletedDraft, saveLetterDraft, setActiveLetterDraft, startNewLetter, type LetterDraftState, type LetterAlignment } from '@/lib/letterStore';
 import { getRemoteRecentDropRecipients, issueDropClaimInvite, issueDropMediaClaimInvite, lookupDropRecipient, syncDropToBackend } from '@/lib/letterBackend';
 import { getSupabaseBrowserClient } from '@/lib/supabaseBrowser';
 import { isDropPayloadKindCompatibleWithMedia, isDropRecipientConfirmed, normalizeDropRecipient, validateDropMedia } from '@/lib/dropValidation';
-import { deleteDraftAttachment, getDraftAttachment, saveDraftAttachment } from '@/lib/letterMediaStore';
+import { AttachmentCommittedAfterAccountSwitchError, deleteDraftAttachment, getDraftAttachment, saveDraftAttachment } from '@/lib/letterMediaStore';
 import { getLocalAccountId, isCurrentLocalAccount } from '@/lib/localAccountScope';
 import { canOfferInstantClaimSwitch, canOfferPrivateClaimInvite, getClaimInviteExpiryDuration, getConfirmedMediaRetryUploadId } from '@/lib/claimInviteStatus';
+import { rollbackShareTargetImport, type ShareTargetImportRollbackContext } from '@/lib/shareTargetImportRollback';
 import { ReducedMotionGif } from '@/components/ReducedMotionGif';
+import { getDropMediaAccessibleName } from '@/lib/dropMediaAccessibility';
 import { cn } from '@/lib/utils';
 import { shareInviteLink } from '@/lib/shareInvite';
 import { buildDropClaimUrl, createDropClaimSharePayload, createDropClaimToken } from '@/lib/dropClaim';
 import { buildPrivateClaimDetailsPath, buildSentReceiptPath, getComposerClaimPendingCopy } from '@/lib/claimReceipt';
+import { COMPOSE_STARTERS, getComposeStarterValue } from '@/lib/composeStarters';
 import type { RecentDropRecipient } from '@/lib/recentDropRecipients';
 import { deleteShareTargetHandoff, getShareTargetHandoff, isValidShareTargetHandoffId, validateShareTargetHandoffFile } from '@/lib/shareTargetHandoff';
 
@@ -81,9 +85,12 @@ function Composer() {
   const [recentRecipients, setRecentRecipients] = useState<RecentDropRecipient[]>([]);
   const recipientCheckRequest = useRef(0);
   const recipientInputRef = useRef<HTMLInputElement>(null);
+  const contentInputRef = useRef<HTMLTextAreaElement>(null);
   const recipientlessPanelRef = useRef<HTMLDivElement>(null);
   const focusRecipientlessPanel = useRef(false);
   const focusRecipientInput = useRef(false);
+  const privateClaimQrRef = useRef<HTMLDivElement>(null);
+  const focusPrivateClaimQrOnRender = useRef(false);
   const privateClaimButtonRef = useRef<HTMLButtonElement>(null);
   const focusPrivateClaimButtonAfterModeSwitch = useRef(false);
   const [subject, setSubject] = useState('');
@@ -97,6 +104,8 @@ function Composer() {
   const [shareImporting, setShareImporting] = useState(false);
   const shareImportInProgressRef = useRef(false);
   const shareImportOperationsRef = useRef(new Map<string, Promise<ShareTargetImportResult>>());
+  // Effect replays for one handoff must share rollback state with the deduplicated import promise.
+  const shareImportRollbackContextsRef = useRef(new Map<string, ShareTargetImportRollbackContext>());
   const [saved, setSaved] = useState(false);
   const [accountState, setAccountState] = useState<'checking' | 'connected' | 'signed-out' | 'unavailable'>('checking');
   const [sending, setSending] = useState(false);
@@ -107,8 +116,19 @@ function Composer() {
   const [inviteNotice, setInviteNotice] = useState('');
   const [manualInviteUrl, setManualInviteUrl] = useState('');
   const [privateClaimUrl, setPrivateClaimUrl] = useState('');
+  const [showPrivateClaimQr, setShowPrivateClaimQr] = useState(false);
+  const [privateClaimAction, setPrivateClaimAction] = useState<'share' | 'qr' | null>(null);
   const [mediaExpiresAt, setMediaExpiresAt] = useState<string | null>(null);
   const [sharingInvite, setSharingInvite] = useState(false);
+  const privateClaimContextRef = useRef<{ accountId: string | null; draftId: string | null; url: string }>({ accountId: null, draftId: null, url: '' });
+  const currentAccountId = getLocalAccountId();
+
+  const clearPrivateClaimInvite = () => {
+    setPrivateClaimUrl('');
+    setShowPrivateClaimQr(false);
+    setPrivateClaimAction(null);
+    focusPrivateClaimQrOnRender.current = false;
+  };
 
   useEffect(() => {
     let active = true;
@@ -130,6 +150,9 @@ function Composer() {
     setInviteNotice('');
     setManualInviteUrl(current.recipientInviteProgress?.manualLinkAvailable ? `${window.location.origin}/invite` : '');
     setPrivateClaimUrl('');
+    setShowPrivateClaimQr(false);
+    setPrivateClaimAction(null);
+    focusPrivateClaimQrOnRender.current = false;
     setMediaExpiresAt(null);
     setContent(current.content);
     setRecipient(requestedRecipient);
@@ -249,6 +272,14 @@ function Composer() {
     setError('');
     setNotice('Adding the shared image to a new draft…');
 
+    const rollbackContext = shareImportRollbackContextsRef.current.get(handoffId) ?? {
+      accountId: undefined,
+      previousActiveDraft: null,
+      activatedDraftIds: new Set<string>(),
+      newlyWrittenAttachmentDraftId: null,
+    };
+    shareImportRollbackContextsRef.current.set(handoffId, rollbackContext);
+
     let operation = shareImportOperationsRef.current.get(handoffId);
     if (!operation) {
       operation = (async (): Promise<ShareTargetImportResult> => {
@@ -259,6 +290,34 @@ function Composer() {
         if (mediaError) throw new Error(mediaError);
 
         const accountId = getLocalAccountId();
+        rollbackContext.accountId = accountId;
+        rollbackContext.previousActiveDraft = getLetterDraft(accountId);
+        const saveShareAttachment = async (draftId: string) => {
+          try {
+            await saveDraftAttachment(draftId, handoff.file, accountId);
+          } catch (error) {
+            if (error instanceof AttachmentCommittedAfterAccountSwitchError
+              && error.draftId === draftId
+              && error.accountId === accountId) {
+              rollbackContext.newlyWrittenAttachmentDraftId = draftId;
+            }
+            throw error;
+          }
+          rollbackContext.newlyWrittenAttachmentDraftId = draftId;
+        };
+        const startNewShareDraft = () => {
+          try {
+            return startNewLetter({ forceNew: true, requirePreserved: true });
+          } catch (error) {
+            if (isCurrentLocalAccount(accountId)) {
+              const activeDraftAfterFailure = getLetterDraft(accountId);
+              if (activeDraftAfterFailure.id !== rollbackContext.previousActiveDraft?.id) {
+                rollbackContext.activatedDraftIds.add(activeDraftAfterFailure.id);
+              }
+            }
+            throw error;
+          }
+        };
         const payloadKind = handoff.file.type === 'image/gif' ? 'gif' : 'image';
         const existingImport = getLetterDraftByMediaUploadId(handoffId, accountId, payloadKind);
         let importedDraft: LetterDraftState;
@@ -266,9 +325,11 @@ function Composer() {
         if (existingImport) {
           const activeDraft = getLetterDraft(accountId);
           if (activeDraft.id !== existingImport.id) {
-            startNewLetter({ forceNew: true, requirePreserved: true });
+            const blank = startNewShareDraft();
+            rollbackContext.activatedDraftIds.add(blank.id);
           }
           importedDraft = setActiveLetterDraft(existingImport);
+          rollbackContext.activatedDraftIds.add(importedDraft.id);
           if (!isLetterDraftPersisted(importedDraft, accountId)) {
             throw new Error('The existing draft could not be restored on this device. Your saved version is still available.');
           }
@@ -280,10 +341,11 @@ function Composer() {
             }
             importedFile = savedAttachment;
           } else {
-            await saveDraftAttachment(importedDraft.id, handoff.file, accountId);
+            await saveShareAttachment(importedDraft.id);
           }
         } else {
-          const blank = startNewLetter({ forceNew: true, requirePreserved: true });
+          const blank = startNewShareDraft();
+          rollbackContext.activatedDraftIds.add(blank.id);
           importedDraft = setActiveLetterDraft({
             ...blank,
             content: handoff.caption,
@@ -294,7 +356,12 @@ function Composer() {
             mediaUploadId: handoffId,
             address: { ...blank.address, name: '' },
           });
-          await saveDraftAttachment(importedDraft.id, handoff.file, accountId);
+          rollbackContext.activatedDraftIds.add(importedDraft.id);
+          const preexistingAttachment = await getDraftAttachment(importedDraft.id);
+          if (preexistingAttachment) {
+            throw new Error('A saved attachment already exists for this draft. Your shared image is still available to reopen.');
+          }
+          await saveShareAttachment(importedDraft.id);
           if (!isCurrentLocalAccount(accountId)) throw new Error('Your active account changed before the share could be saved. Reopen it and try again.');
 
           const persistedDraft = saveLetterDraft({
@@ -320,6 +387,7 @@ function Composer() {
     }
 
     void operation.then((result) => {
+      shareImportRollbackContextsRef.current.delete(handoffId);
       if (!active) return;
       setDraft(result.draft);
       setContent(result.draft.content);
@@ -345,12 +413,21 @@ function Composer() {
         : `${mediaLabel} added to a new draft. Saved on this device; not sent.`);
       shareImportOperationsRef.current.delete(handoffId);
       router.replace(`/compose?letter=${encodeURIComponent(result.draft.id)}`, { scroll: false });
-    }).catch((error: unknown) => {
+    }).catch(async (error: unknown) => {
       shareImportOperationsRef.current.delete(handoffId);
+
+      const rollbackResult = await rollbackShareTargetImport(rollbackContext);
+      shareImportRollbackContextsRef.current.delete(handoffId);
+
       if (!active) return;
       setAttachmentLoading(false);
       setAttachmentSaved(false);
-      setError(error instanceof Error ? error.message : 'This shared image could not be opened. Choose a photo or GIF to try again.');
+      const message = error instanceof Error ? error.message : 'This shared image could not be opened. Choose a photo or GIF to try again.';
+      setError(rollbackResult.activeDraftRestoreFailed
+        ? `${message} Your earlier draft is still saved, but Drop could not make it active again.`
+        : rollbackResult.preserveCommittedImportForCapturedAccount
+          ? `${message} The imported draft remains saved to its original account.`
+        : message);
       setNotice('The shared item has not been sent. You can still choose a photo or GIF below.');
     }).finally(() => {
       if (active) {
@@ -361,6 +438,18 @@ function Composer() {
 
     return () => { active = false; };
   }, [ready, router, searchParams]);
+
+  useEffect(() => {
+    const previous = privateClaimContextRef.current;
+    const nextDraftId = draft?.id ?? null;
+    if (previous.accountId !== currentAccountId || (previous.draftId !== null && previous.draftId !== nextDraftId)) {
+      setPrivateClaimUrl('');
+      setShowPrivateClaimQr(false);
+      setPrivateClaimAction(null);
+      focusPrivateClaimQrOnRender.current = false;
+    }
+    privateClaimContextRef.current = { accountId: currentAccountId, draftId: draft?.id ?? null, url: privateClaimUrl };
+  }, [currentAccountId, draft?.id, privateClaimUrl]);
 
   const wordCount = content.trim() ? content.trim().split(/\s+/).length : 0;
   const recipientUsername = normalizeDropRecipient(recipient);
@@ -401,6 +490,12 @@ function Composer() {
   }, [canSendPrivateClaim]);
 
   useEffect(() => {
+    if (!focusPrivateClaimQrOnRender.current || !privateClaimUrl || !showPrivateClaimQr) return;
+    focusPrivateClaimQrOnRender.current = false;
+    privateClaimQrRef.current?.focus();
+  }, [privateClaimUrl, showPrivateClaimQr]);
+
+  useEffect(() => {
     if (shareWithoutHandle && focusRecipientlessPanel.current) {
       focusRecipientlessPanel.current = false;
       recipientlessPanelRef.current?.focus();
@@ -420,6 +515,14 @@ function Composer() {
     attachmentChosenRef.current = true;
     setPayloadKind(kind);
     setAttachmentFormatError('');
+  };
+
+  const applyStarter = (starter: string) => {
+    const nextContent = getComposeStarterValue(content, starter);
+    if (nextContent === content) return;
+    setContent(nextContent);
+    setSaved(false);
+    contentInputRef.current?.focus();
   };
 
   const handleFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -537,7 +640,7 @@ function Composer() {
     setError('');
     setInviteNotice('');
     setManualInviteUrl('');
-    setPrivateClaimUrl('');
+    clearPrivateClaimInvite();
   };
 
   const checkRecipient = async (value = recipientUsername) => {
@@ -575,7 +678,7 @@ function Composer() {
     setError('');
     setInviteNotice('');
     setManualInviteUrl('');
-    setPrivateClaimUrl('');
+    clearPrivateClaimInvite();
     void checkRecipient(username);
   };
 
@@ -589,7 +692,7 @@ function Composer() {
     setShareWithoutHandle(true);
     setInviteNotice('');
     setManualInviteUrl('');
-    setPrivateClaimUrl('');
+    clearPrivateClaimInvite();
   };
 
   const chooseHandleInstead = () => {
@@ -599,10 +702,10 @@ function Composer() {
     setRecipient('');
     setRecipientCheck({ status: 'idle', username: null });
     setInviteNotice('');
-    setPrivateClaimUrl('');
+    clearPrivateClaimInvite();
   };
 
-  const sharePrivateClaimInvite = async () => {
+  const sharePrivateClaimInvite = async (action: 'share' | 'qr' = 'share') => {
     if (!draft || !canSendPrivateClaim || sharingInvite || sending || deletingRef.current) return;
     const request = recipientCheckRequest.current;
     let next = makeDraft();
@@ -629,7 +732,8 @@ function Composer() {
     setError('');
     setInviteNotice('');
     setManualInviteUrl('');
-    setPrivateClaimUrl('');
+    clearPrivateClaimInvite();
+    setPrivateClaimAction(action);
     try {
       const token = createDropClaimToken();
       let issued: PrivateClaimInviteReceipt;
@@ -678,6 +782,13 @@ function Composer() {
         setInviteNotice('Your drop is saved in Sent, but this browser could not prepare its private link. Open it in Sent and try again.');
         return;
       }
+      setPrivateClaimUrl(inviteUrl);
+      if (action === 'qr') {
+        focusPrivateClaimQrOnRender.current = true;
+        setShowPrivateClaimQr(true);
+        setInviteNotice('Your private claim scan code is ready. Anyone who scans it can claim this drop.');
+        return;
+      }
       const payload = createDropClaimSharePayload(inviteUrl);
       const result = await shareInviteLink(
         inviteUrl,
@@ -693,7 +804,6 @@ function Composer() {
         router.push(buildSentReceiptPath({ kind: 'claim', letterId: issued.letterId, shareOutcome: result }));
         return;
       }
-      setPrivateClaimUrl(inviteUrl);
       setInviteNotice(result === 'cancelled'
         ? 'Nothing was shared yet. Copy this private link when you’re ready.'
         : 'Sharing is unavailable. Copy this private link to send it yourself.');
@@ -701,7 +811,46 @@ function Composer() {
       if (isCurrentLocalAccount(accountId)) setInviteNotice('The private link could not be prepared. Your draft is still here—try again.');
     } finally {
       setSharingInvite(false);
+      setPrivateClaimAction(null);
       setSending(false);
+    }
+  };
+
+  const sharePreparedPrivateClaimInvite = async () => {
+    if (!privateClaimUrl || !draft || sharingInvite || sending || deletingRef.current) return;
+    const accountId = getLocalAccountId();
+    const draftId = draft.id;
+    const isCurrentInviteContext = () => {
+      const current = privateClaimContextRef.current;
+      return isCurrentLocalAccount(accountId)
+        && current.accountId === accountId
+        && current.draftId === draftId
+        && current.url === privateClaimUrl;
+    };
+    setSharingInvite(true);
+    setInviteNotice('');
+    try {
+      const result = await shareInviteLink(
+        privateClaimUrl,
+        navigator.share ? (details) => navigator.share(details) : undefined,
+        async (url) => {
+          if (!navigator.clipboard) throw new Error('Clipboard unavailable');
+          await navigator.clipboard.writeText(url);
+        },
+        createDropClaimSharePayload(privateClaimUrl),
+      );
+      if (!isCurrentInviteContext()) return;
+      if (result === 'shared' || result === 'copied') {
+        router.push(buildSentReceiptPath({ kind: 'claim', letterId: draftId, shareOutcome: result }));
+        return;
+      }
+      setInviteNotice(result === 'cancelled'
+        ? 'Nothing was shared yet. The same private link is still ready below.'
+        : 'Sharing is unavailable. Copy the private link below instead.');
+    } catch {
+      if (isCurrentInviteContext()) setInviteNotice('The share sheet is unavailable. The same private link is still ready to copy.');
+    } finally {
+      setSharingInvite(false);
     }
   };
 
@@ -901,7 +1050,7 @@ function Composer() {
   const deletableDraft = draft ? canDeleteLocalDraft(draft.id) : false;
 
   return (
-    <main className="page-shell page-enter !pt-4 sm:!pt-8">
+    <main className="page-shell page-enter page-shell--composer !pt-4 sm:!pt-8">
       <div className="page-container max-w-[760px]">
         <header className="flex items-center justify-between gap-3">
           <Link href="/" onClick={saveBeforeLeaving} aria-disabled={shareImporting} className="inline-flex min-h-11 items-center gap-2 rounded-full px-3 text-sm font-semibold text-ink-navy hover:bg-white/65 aria-disabled:cursor-wait"><ArrowLeft className="h-4 w-4" aria-hidden="true" /> Desk</Link>
@@ -927,11 +1076,23 @@ function Composer() {
             <p className="text-sm font-semibold text-ink-navy">Anyone holding this link can claim the drop.</p>
             <p className="mt-1 text-xs leading-relaxed text-on-surface-variant">Share it directly with the person you had in mind.</p>
             <code tabIndex={0} aria-label="Select and copy this private claim link" className="mt-3 block select-all break-all rounded-lg bg-white/80 px-2 py-2 font-mono text-[0.68rem] text-ink-navy">{privateClaimUrl}</code>
-            <button type="button" onClick={() => void copyPrivateClaimInvite()} className="button-primary mt-3 !min-h-12 w-full !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white">Copy private link</button>
+            <div id="private-claim-qr" ref={privateClaimQrRef} tabIndex={showPrivateClaimQr ? -1 : undefined} role={showPrivateClaimQr ? 'region' : undefined} aria-label={showPrivateClaimQr ? 'Private claim scan code' : undefined} hidden={!showPrivateClaimQr} className={showPrivateClaimQr ? 'mt-4 flex flex-col items-center rounded-xl border border-[rgba(16,42,67,.12)] bg-white/80 p-4 focus:outline-none focus:ring-2 focus:ring-[#2b45f7] focus:ring-offset-2' : 'hidden'}>
+              {showPrivateClaimQr && <>
+                <div className="max-w-full rounded-lg bg-white p-3" role="img" aria-label="QR code for the private claim link">
+                  <QRCodeSVG value={privateClaimUrl} size={216} level="M" includeMargin />
+                </div>
+                <p className="mt-3 max-w-sm text-center text-xs leading-relaxed text-ink-navy">Anyone who scans this code can claim the drop. The code expires with the private link.</p>
+              </>}
+            </div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <button type="button" onClick={() => setShowPrivateClaimQr((visible) => !visible)} disabled={sharingInvite || sending} aria-expanded={showPrivateClaimQr} aria-controls="private-claim-qr" className="button-secondary !min-h-12 !rounded-xl disabled:opacity-50">{showPrivateClaimQr ? 'Hide scan code' : 'Show scan code'}</button>
+              <button type="button" onClick={() => void copyPrivateClaimInvite()} disabled={sharingInvite || sending} className="button-primary !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white disabled:opacity-50">Copy private link</button>
+            </div>
+            <button type="button" onClick={() => void sharePreparedPrivateClaimInvite()} disabled={sharingInvite || sending} className="button-secondary mt-2 !min-h-12 w-full !rounded-xl disabled:opacity-50">{sharingInvite ? 'Opening share…' : 'Share private link'}</button>
           </div>}
           {inviteNotice && <p className="field-help mt-3" role="status" aria-live="polite">{inviteNotice}</p>}
           <Link href={privateClaimDetailsHref} onClick={saveBeforeLeaving} aria-disabled={shareImporting} className="button-secondary mt-5 !min-h-12 !rounded-xl aria-disabled:cursor-wait">Open saved drop <ArrowRightIcon /></Link>
-        </section> : <form onSubmit={handleSend} aria-busy={deleting || shareImporting} className="mt-6 sm:mt-8">
+        </section> : <form onSubmit={handleSend} aria-busy={deleting || sending || shareImporting} className="composer-form mt-6 sm:mt-8">
           <fieldset disabled={deleting || sending || shareImporting} aria-label="Compose drop" className="m-0 min-w-0 space-y-4 border-0 p-0 sm:space-y-5">
           <section className="rounded-2xl border border-[rgba(16,42,67,.12)] bg-white/55 p-4 sm:p-6">
             <p className="eyebrow">First · your person</p>
@@ -950,7 +1111,11 @@ function Composer() {
                   ? <p className="mt-1 text-xs leading-relaxed text-on-surface-variant">The link lasts 7 days.</p>
                   : <p className="mt-1 text-xs leading-relaxed text-on-surface-variant">The link {getClaimInviteExpiryDuration(payloadKind)}. If unclaimed after 30 days, access ends and Drop queues the attachment for deletion. A paused free project or worker outage can delay removal.</p>}
                 <button ref={privateClaimButtonRef} type="button" onClick={() => void sharePrivateClaimInvite()} disabled={sharingInvite || sending || deleting} className="button-primary mt-3 !min-h-12 w-full !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white disabled:opacity-50">
-                  <Share2 className="h-4 w-4" aria-hidden="true" />{sharingInvite ? 'Preparing private link…' : 'Share private link'}
+                  <Share2 className="h-4 w-4" aria-hidden="true" />{privateClaimAction === 'share' ? 'Preparing private link…' : 'Share private link'}
+                </button>
+                <p className="mt-3 text-xs leading-relaxed text-on-surface-variant">A scan code contains this same private link. Anyone who scans it can claim the drop.</p>
+                <button type="button" onClick={() => void sharePrivateClaimInvite('qr')} disabled={sharingInvite || sending || deleting} className="button-secondary mt-2 !min-h-12 w-full !rounded-xl disabled:opacity-50">
+                  <QrCode className="h-4 w-4" aria-hidden="true" />{privateClaimAction === 'qr' ? 'Creating scan code…' : 'Show scan code'}
                 </button>
               </div> : !canSwitchToInstantClaim && <p className="field-help mt-3" role="status">{privateClaimReadinessMessage}</p>}
               {privateClaimUrl && <div className="mt-3 rounded-lg border border-[rgba(16,42,67,.12)] bg-white/75 p-3">
@@ -1014,7 +1179,11 @@ function Composer() {
                     ? <p className="mt-2 text-xs leading-relaxed text-on-surface-variant">The link lasts 7 days.</p>
                     : <p className="mt-2 text-xs leading-relaxed text-on-surface-variant">The link {getClaimInviteExpiryDuration(payloadKind)}. If unclaimed after 30 days, the claim and media access end and Drop queues the attachment for deletion. Cleanup can be delayed if the free project is paused or unavailable. A fresh link won’t extend the cutoff.</p>}
                   <button ref={privateClaimButtonRef} type="button" onClick={() => void sharePrivateClaimInvite()} disabled={sharingInvite || sending || deleting} className="button-primary mt-3 !min-h-12 w-full !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white disabled:opacity-50">
-                    <Share2 className="h-4 w-4" aria-hidden="true" />{sharingInvite ? 'Preparing private link…' : `Send a private ${privateClaimPayloadLabel} link`}
+                    <Share2 className="h-4 w-4" aria-hidden="true" />{privateClaimAction === 'share' ? 'Preparing private link…' : `Send a private ${privateClaimPayloadLabel} link`}
+                  </button>
+                  <p className="mt-3 text-xs leading-relaxed text-on-surface-variant">A scan code contains this same private link. Anyone who scans it can claim the drop.</p>
+                  <button type="button" onClick={() => void sharePrivateClaimInvite('qr')} disabled={sharingInvite || sending || deleting} className="button-secondary mt-2 !min-h-12 w-full !rounded-xl disabled:opacity-50">
+                    <QrCode className="h-4 w-4" aria-hidden="true" />{privateClaimAction === 'qr' ? 'Creating scan code…' : 'Show scan code'}
                   </button>
                 </div>}
                 <button type="button" onClick={() => void inviteRecipient()} disabled={sharingInvite || sending || deleting} className="button-secondary mt-3 !min-h-12 w-full !rounded-xl disabled:opacity-50">
@@ -1046,10 +1215,10 @@ function Composer() {
           </fieldset>
 
           {!isText && (
-            <section className="overflow-hidden rounded-2xl border border-[rgba(16,42,67,.14)] bg-white/60">
+            <section className="media-picker-surface overflow-hidden rounded-2xl border border-[rgba(16,42,67,.14)] bg-white/60">
               {previewUrl ? (
                 <div className="relative aspect-[4/3] max-h-[430px] overflow-hidden bg-[#ede8df]">
-                  <ReducedMotionGif src={previewUrl} alt={content.trim() ? '' : `Preview of your ${payloadKind === 'gif' ? 'GIF' : 'photo'}`} animated={payloadKind === 'gif'} sizes="(max-width: 760px) 100vw, 760px" className="object-contain" />
+                  <ReducedMotionGif src={previewUrl} alt={getDropMediaAccessibleName(payloadKind === 'gif' ? 'gif' : 'image')} animated={payloadKind === 'gif'} sizes="(max-width: 760px) 100vw, 760px" className="object-contain" />
                   <button type="button" aria-label="Remove attachment" disabled={attachmentSaving} onClick={() => { setFile(null); setAttachmentSaved(false); setAttachmentFormatError(''); attachmentChosenRef.current = true; if (draft) void deleteDraftAttachment(draft.id).catch(() => undefined); if (fileInputRef.current) fileInputRef.current.value = ''; }} className="absolute right-3 top-3 flex h-11 w-11 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/75 disabled:opacity-50"><X className="h-4 w-4" aria-hidden="true" /></button>
                 </div>
               ) : (
@@ -1058,7 +1227,7 @@ function Composer() {
                   <span><span className="block text-sm font-bold text-ink-navy">Tap to add a {payloadKind === 'gif' ? 'GIF' : 'photo or meme'}</span><span className="mt-1 block text-xs text-on-surface-variant">JPG, PNG, WebP, or GIF · up to 8 MB</span></span>
                 </label>
               )}
-              <input ref={fileInputRef} id="drop-media" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleFile} className="sr-only" aria-label={`Choose a ${payloadKind === 'gif' ? 'GIF' : 'photo'}`} />
+              <input ref={fileInputRef} id="drop-media" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleFile} onFocus={(event) => { if (event.currentTarget.matches(':focus-visible')) event.currentTarget.closest('.media-picker-surface')?.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'nearest' }); }} className="sr-only" aria-label={`Choose a ${payloadKind === 'gif' ? 'GIF' : 'photo'}`} />
               {previewUrl && <p className="px-4 pb-3 text-center font-mono text-[0.62rem] text-on-surface-variant">{attachmentSaving ? 'Saving attachment on this device…' : attachmentSaved ? 'Saved privately on this device · uploads only when sent' : 'Local preview · keep this screen open while sending'}</p>}
             </section>
           )}
@@ -1069,7 +1238,13 @@ function Composer() {
             <div className="mt-4 border-t border-[rgba(16,42,67,.1)] pt-4">
               {writingPrompt && <div className="mb-4 rounded-xl border-l-2 border-[#dc7951] bg-[#fff4e7] px-3 py-2.5"><p className="font-mono text-[0.6rem] font-bold uppercase tracking-[0.12em] text-[#9a5037]">A thought to start with</p><p className="mt-1 font-literata text-sm leading-relaxed text-ink-navy">{writingPrompt}</p></div>}
               <label htmlFor="drop-content" className="field-label">{isText ? 'Your note' : 'Add a caption or description'} <span className="font-normal text-on-surface-variant">{isText ? '' : '(optional)'}</span></label>
-              <textarea id="drop-content" value={content} onChange={(event) => { setContent(event.target.value); setSaved(false); }} className={cn('textarea-field mt-2 min-h-[150px] !rounded-xl !border-0 !bg-[#f5f1e9] font-literata leading-relaxed text-ink-navy placeholder:font-sans placeholder:text-sm sm:min-h-[190px]', isText && alignClass)} style={isText ? { fontSize: `${fontSize}px` } : undefined} placeholder={isText ? 'Say the thing you wanted them to know…' : 'Describe the moment or add a little context.'} maxLength={5000} />
+              {!content.trim() && <div className="mt-2">
+                <p id="drop-content-starter-help" className="text-xs leading-relaxed text-on-surface-variant">Not sure where to start? Choose a line, then make it yours.</p>
+                <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label={isText ? 'Optional note starters' : 'Optional caption starters'} aria-describedby="drop-content-starter-help">
+                  {COMPOSE_STARTERS[payloadKind].map((starter) => <button key={starter} type="button" onClick={() => applyStarter(starter)} className="min-h-11 max-w-full rounded-full border border-[rgba(16,42,67,.14)] bg-white/75 px-3 py-2 text-left text-xs leading-snug text-ink-navy transition-colors hover:bg-white active:bg-[#f1ede5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2b45f7] focus-visible:ring-offset-2 sm:text-sm">{starter}</button>)}
+                </div>
+              </div>}
+              <textarea ref={contentInputRef} id="drop-content" value={content} onChange={(event) => { setContent(event.target.value); setSaved(false); }} className={cn('textarea-field mt-2 min-h-[150px] !rounded-xl !border-0 !bg-[#f5f1e9] font-literata leading-relaxed text-ink-navy placeholder:font-sans placeholder:text-sm sm:min-h-[190px]', isText && alignClass)} style={isText ? { fontSize: `${fontSize}px` } : undefined} placeholder={isText ? 'Say the thing you wanted them to know…' : 'Describe the moment or add a little context.'} maxLength={5000} />
               {isText && <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
                 <span className="meta">{wordCount} {wordCount === 1 ? 'word' : 'words'}</span>
                 <div className="flex items-center gap-1 rounded-xl border border-[rgba(16,42,67,.1)] bg-white/70 p-0.5">
@@ -1090,7 +1265,7 @@ function Composer() {
                 ['relay', 'Make a journey', 'Let people carry it'],
               ] as const).map(([mode, label, copy]) => <button key={mode} type="button" aria-pressed={deliveryMode === mode} onClick={() => setDeliveryMode(mode)} className={cn('min-h-[74px] rounded-xl border px-3 py-2 text-left transition-colors', deliveryMode === mode ? 'border-[#2b45f7] bg-[#2b45f7]/[0.06]' : 'border-[rgba(16,42,67,.12)] bg-white/60 hover:bg-white')}><span className="block text-sm font-bold text-ink-navy">{label}</span><span className="mt-1 block text-[0.68rem] leading-snug text-on-surface-variant">{copy}</span></button>)}
             </div>
-            {deliveryMode === 'relay' && <p className="field-help mt-3">Their message stays private. You can follow the handoff from Journey.</p>}
+            {deliveryMode === 'relay' && <p className="field-help mt-3">One person carries it at a time. Follow each accepted handoff in Journey; the recipient opens the message after collecting it.</p>}
           </fieldset>
 
           {isText && <details className="rounded-2xl border border-[rgba(16,42,67,.12)] bg-white/55 p-4 sm:p-5">
@@ -1107,14 +1282,14 @@ function Composer() {
           {error && <p className="notice error-notice" role="alert">{error}</p>}
           {notice && !error && <p className="notice" role="status">{notice}</p>}
 
-          <div className="flex flex-col gap-2 pb-3">
-            <Link href={draft ? `/compose/preview?letter=${encodeURIComponent(draft.id)}` : '/compose/preview'} onClick={saveBeforeLeaving} aria-disabled={shareImporting} className="button-secondary !min-h-12 !rounded-xl aria-disabled:cursor-wait"><Eye className="h-4 w-4" aria-hidden="true" /> Preview as recipient</Link>
-            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
-              <div className={deletableDraft ? 'grid grid-cols-2 gap-2 sm:flex' : 'flex'}>
-                <button type="button" onClick={handleSave} className="button-secondary !min-h-12 !rounded-xl">{saveLabel}</button>
-                {deletableDraft && <button type="button" onClick={handleDelete} disabled={deleting || sending || attachmentSaving} className="button-secondary !min-h-12 !rounded-xl !border-[#e6c7bd] !text-[#9e4038] disabled:opacity-45"><Trash2 className="h-4 w-4" aria-hidden="true" />{deleting ? 'Deleting…' : 'Delete draft'}</button>}
+          <div className={`composer-action-tray${deletableDraft ? ' composer-action-tray--with-delete' : ''}`} role="group" aria-label="Drop actions">
+            <Link href={draft ? `/compose/preview?letter=${encodeURIComponent(draft.id)}` : '/compose/preview'} onClick={saveBeforeLeaving} aria-label="Preview as recipient" aria-disabled={shareImporting} className="button-secondary composer-action-preview !min-h-12 !rounded-xl aria-disabled:cursor-wait"><Eye className="h-4 w-4" aria-hidden="true" /><span className="hidden sm:inline">Preview as recipient</span><span className="sm:hidden" aria-hidden="true">Preview</span></Link>
+            <div className="composer-action-footer">
+              <div className="composer-action-secondary">
+                <button type="button" onClick={handleSave} aria-label={saveLabel} className="button-secondary composer-action-save !min-h-12 !rounded-xl"><span className="hidden sm:inline">{saveLabel}</span><span className="sm:hidden" aria-hidden="true">{saved ? 'Saved' : 'Save'}</span></button>
+                {deletableDraft && <button type="button" onClick={handleDelete} disabled={deleting || sending || attachmentSaving} aria-label={deleting ? 'Deleting draft' : 'Delete draft'} className="button-secondary composer-action-delete !min-h-12 !rounded-xl !border-[#e6c7bd] !text-[#9e4038] disabled:opacity-45"><Trash2 className="h-4 w-4" aria-hidden="true" /><span className="hidden sm:inline">{deleting ? 'Deleting…' : 'Delete draft'}</span><span className="sm:hidden" aria-hidden="true">{deleting ? 'Deleting…' : 'Delete'}</span></button>}
               </div>
-              {accountState === 'connected' ? <button type="submit" disabled={!complete || sending || deleting || attachmentSaving || shareImporting} className="button-primary !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white disabled:opacity-45"><span aria-live="polite" aria-atomic="true">{sending ? sendProgressLabel : 'Send drop'}</span> <Send className="h-4 w-4" aria-hidden="true" /></button> : <Link href={profileHref} onClick={saveBeforeLeaving} aria-disabled={shareImporting || deleting || attachmentSaving || Boolean(file && !attachmentSaved)} className="button-primary !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white">{accountState === 'unavailable' ? 'Account options' : 'Connect to send'} <Send className="h-4 w-4" aria-hidden="true" /></Link>}
+              {accountState === 'connected' ? <button type="submit" disabled={!complete || sending || deleting || attachmentSaving || shareImporting} className="button-primary composer-action-primary !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white disabled:opacity-45"><span aria-live="polite" aria-atomic="true">{sending ? sendProgressLabel : 'Send drop'}</span> <Send className="h-4 w-4" aria-hidden="true" /></button> : <Link href={profileHref} onClick={saveBeforeLeaving} aria-disabled={shareImporting || deleting || attachmentSaving || Boolean(file && !attachmentSaved)} className="button-primary composer-action-primary !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white">{accountState === 'unavailable' ? 'Account options' : 'Connect to send'} <Send className="h-4 w-4" aria-hidden="true" /></Link>}
             </div>
           </div>
           </fieldset>

@@ -44,6 +44,8 @@ export interface MockLetter {
   relayProgress?: RelayRecipientProgress;
   reaction?: string;
   reactionUpdatedAt?: string;
+  /** Server-confirmed recipient read time; undefined means it was not hydrated. */
+  recipientReadAt?: string | null;
   claimedViaInvite?: boolean;
   localDemo?: boolean;
   sample?: boolean;

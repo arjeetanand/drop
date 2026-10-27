@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { ArrowLeft, ArrowRight, Check, LockKeyhole, MailOpen, Share2, Sparkles } from 'lucide-react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import type { MockLetter } from '@/data/mockData';
-import { getRemoteDropDirection, getRemoteLetterById, getRemoteLetters, getRemoteReactionSnapshot, getRemoteSenderClaimStatusForDrop, reissueDropClaimInvite, reissueDropMediaClaimInvite, saveRemoteReaction, subscribeToIncomingDropInbox, subscribeToSenderDropReactions } from '@/lib/letterBackend';
+import { getRemoteDropDirection, getRemoteLetterById, getRemoteLetters, getRemoteReactionSnapshot, getRemoteSenderClaimStatusForDrop, markRemoteDropRead, reissueDropClaimInvite, reissueDropMediaClaimInvite, saveRemoteReaction, subscribeToIncomingDropInbox, subscribeToSenderDropReactions } from '@/lib/letterBackend';
 import { getLetterById, startNewLetter } from '@/lib/letterStore';
 import { startDropBackDraft } from '@/lib/dropBackDraft';
 import { getLiveClaimCompletionUpdate } from '@/lib/liveClaimStatus';
@@ -15,12 +15,15 @@ import { DEMO_REACTION_EMOJIS, saveDemoReaction } from '@/lib/demoReactionStore'
 import { getDraftAttachment } from '@/lib/letterMediaStore';
 import { withFallbackTimeout } from '@/lib/withFallbackTimeout';
 import { ReducedMotionGif } from '@/components/ReducedMotionGif';
+import { getDropMediaAccessibleName } from '@/lib/dropMediaAccessibility';
 import { getReactionName } from '@/lib/reactionNames';
 import { RelayRecipientCard } from '@/components/RelayRecipientCard';
 import { startVisibleDataRefresh, type VisibleDataRefreshController } from '@/lib/relayRouteRefresh';
 import { buildDropClaimUrl, createDropClaimSharePayload, createDropClaimToken } from '@/lib/dropClaim';
 import { getLocalAccountId, isCurrentLocalAccount } from '@/lib/localAccountScope';
 import { shareInviteLink } from '@/lib/shareInvite';
+import { announceRecipientDropRead } from '@/lib/recipientDropReadEvent';
+import { isEligibleReceivedDrop } from '@/lib/mailboxView';
 
 const inFlightClaimReissues = new Set<string>();
 
@@ -409,7 +412,12 @@ export default function LetterArrivalPage() {
   };
 
   const openDrop = async () => {
+    const currentLetter = letter;
+    if (!currentLetter) return;
     setContentNotice('');
+    let openedRemoteLetter: MockLetter | null = fullContentAvailable && isEligibleReceivedDrop(currentLetter)
+      ? currentLetter
+      : null;
     if (!fullContentAvailable && letterId) {
       setContentLoading(true);
       try {
@@ -419,6 +427,7 @@ export default function LetterArrivalPage() {
           return;
         }
         setLetter((current) => retainKnownClaimStatus(current, remoteDetail));
+        openedRemoteLetter = remoteDetail;
         if (remoteDetail.mediaPath && !remoteDetail.mediaUrl) {
           setContentNotice('The private attachment could not load. Check your connection, then try opening again.');
           return;
@@ -432,6 +441,29 @@ export default function LetterArrivalPage() {
       }
     }
     setOpened(true);
+    if (openedRemoteLetter
+      && isEligibleReceivedDrop(openedRemoteLetter)
+      && typeof openedRemoteLetter.recipientReadAt !== 'string') {
+      const letterIdToMark = openedRemoteLetter.id;
+      const accountId = getLocalAccountId();
+      if (!accountId) return;
+      void markRemoteDropRead(letterIdToMark).then((readAt) => {
+        if (!readAt || !isCurrentLocalAccount(accountId)) return;
+        const detail = { accountId, letterId: letterIdToMark, readAt };
+        setLetter((current) => {
+          if (!current || current.id !== letterIdToMark) return current;
+          const readLetter = {
+            ...current,
+            recipientReadAt: typeof current.recipientReadAt === 'string' ? current.recipientReadAt : readAt,
+          };
+          currentLetterRef.current = readLetter;
+          return readLetter;
+        });
+        announceRecipientDropRead(detail);
+      }).catch(() => {
+        // Opening the drop is independent from the optional durable read receipt.
+      });
+    }
   };
 
   const shareFreshClaimLink = async () => {
@@ -629,9 +661,9 @@ export default function LetterArrivalPage() {
             </Link>
           </header>
           <section className="mt-8">
-            <p className="eyebrow">On its way</p>
-            <h1 className="display-title mt-3 max-w-[12ch]">This drop is still traveling.</h1>
-            <RelayRecipientCard letter={letter} onRefresh={refreshCollectedRelay} />
+            <p className="eyebrow">Relay drop</p>
+            <h1 className="display-title mt-3 max-w-[12ch]">A drop for you.</h1>
+            <RelayRecipientCard letter={letter} onOpenCollected={refreshCollectedRelay} />
           </section>
         </div>
       </main>
@@ -692,7 +724,7 @@ export default function LetterArrivalPage() {
             <div className="flex flex-col gap-5 border-b border-[rgba(16,42,67,0.13)] pb-6 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <p className="eyebrow">Subject</p>
-                <h2 className="section-title mt-2 break-words text-3xl">{letter.subject}</h2>
+                <h2 className="section-title mt-2 text-3xl [overflow-wrap:anywhere]">{letter.subject}</h2>
                 <p className="meta mt-3">From {sender} · {letter.date}</p>
               </div>
               <span className="status-mark success self-start max-w-full flex-wrap break-words">
@@ -709,7 +741,7 @@ export default function LetterArrivalPage() {
                     <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center border border-[rgba(16,42,67,0.14)] bg-white text-[#b84b3a]">
                       {revealed ? <Check className="h-4 w-4" aria-hidden="true" /> : <LockKeyhole className="h-4 w-4" aria-hidden="true" />}
                     </span>
-                    <p className="font-literata text-base leading-relaxed text-ink-navy">
+                    <p className="min-w-0 font-literata text-base leading-relaxed text-ink-navy [overflow-wrap:anywhere]">
                       {revealed ? teaser : 'A confidential fragment is resting behind the seal.'}
                     </p>
                   </li>
@@ -757,12 +789,12 @@ export default function LetterArrivalPage() {
                 <p className="eyebrow text-[#b84b3a]">Unsealed</p>
                 <div className="mt-4 border-l-2 border-[#b84b3a] bg-white px-6 py-7 sm:px-8">
                   {letter.mediaUrl && <div className="relative mb-5 aspect-[4/3] overflow-hidden rounded-xl bg-[#f1ede5]">
-                    <ReducedMotionGif src={letter.mediaUrl} alt={fullContentAvailable && letter.excerpt.trim() ? '' : letter.subject ? `${letter.subject}, sent by ${sender}` : `Drop from ${sender}`} animated={letter.payloadKind === 'gif'} sizes="(max-width: 760px) 100vw, 700px" className="object-contain" />
+                    <ReducedMotionGif src={letter.mediaUrl} alt={getDropMediaAccessibleName(letter.payloadKind === 'gif' ? 'gif' : 'image')} animated={letter.payloadKind === 'gif'} sizes="(max-width: 760px) 100vw, 700px" className="object-contain" />
                     <span className="absolute left-3 top-3 rounded-full bg-[#fffaf2]/90 px-3 py-1 font-mono text-[0.62rem] font-bold uppercase tracking-[0.12em] text-ink-navy">{letter.payloadKind === 'gif' ? 'GIF' : 'Photo'}</span>
                   </div>}
                   {letter.localDemo && letter.payloadKind !== 'text' && !letter.mediaUrl && <p className="notice error-notice mb-5" role="status">The attachment is unavailable on this device. The rest of the demo is still available.</p>}
                   {letter.payloadKind && letter.payloadKind !== 'text' && letter.mediaPath && !letter.mediaUrl && <p className="notice error-notice mb-5" role="status">The private attachment could not load. Check your connection and open the drop again.</p>}
-                  {letter.excerpt && letter.excerpt !== 'An empty drop, waiting for your words.' && letter.excerpt !== 'An empty letter, waiting for your words.' && <p className="body-copy text-lg text-ink-navy">{fullContentAvailable ? letter.excerpt : 'This drop is still available as a sealed preview. Sign in as its recipient to open it.'}</p>}
+                  {letter.excerpt && letter.excerpt !== 'An empty drop, waiting for your words.' && letter.excerpt !== 'An empty letter, waiting for your words.' && <p className="body-copy text-lg text-ink-navy [overflow-wrap:anywhere]">{fullContentAvailable ? letter.excerpt : 'This drop is still available as a sealed preview. Sign in as its recipient to open it.'}</p>}
                   {!letter.mediaUrl && (!letter.excerpt || letter.excerpt === 'An empty drop, waiting for your words.' || letter.excerpt === 'An empty letter, waiting for your words.') && <p className="body-copy text-lg text-ink-navy">This drop is still available as a sealed preview. Sign in as its recipient to open it.</p>}
                   <p className="meta mt-6 border-t border-[rgba(16,42,67,0.1)] pt-4">From {sender}</p>
                 </div>

@@ -6,6 +6,7 @@ import { ArrowUpRight, CheckCircle2, Clock3, Eye, FileEdit, Image as ImageIcon, 
 import type { LetterStatus, MockLetter } from '@/data/mockData';
 import { cn } from '@/lib/utils';
 import { getClaimedDropLabel } from '@/lib/claimInviteStatus';
+import { isUnreadReceivedDrop } from '@/lib/mailboxView';
 
 const statusConfig: Record<LetterStatus, { label: string; icon: typeof Mail; tone: string }> = {
   draft: { label: 'Draft', icon: FileEdit, tone: 'text-[#8a611b]' },
@@ -76,6 +77,11 @@ export function LetterCard({ letter, showExcerpt = false }: { letter: MockLetter
               {letter.subject}
             </span>
             <span className="meta">{isReceived ? `From ${letter.sender || 'a correspondent'}` : `To ${letter.recipient}`}</span>
+            {isUnreadReceivedDrop(letter) && (
+              <span aria-label="New unread drop" className="rounded-full bg-[#e7f3eb] px-2 py-0.5 font-mono text-[0.58rem] font-bold uppercase tracking-[0.08em] text-[#276a4d]">
+                New
+              </span>
+            )}
           </span>
           <span className="mt-1 inline-flex flex-wrap gap-1.5">
             <span className="rounded-full bg-[#f2eee5] px-2 py-0.5 font-mono text-[0.58rem] font-bold uppercase tracking-[0.1em] text-on-surface-variant">{kind === 'text' ? 'Note' : kind === 'gif' ? 'GIF' : 'Photo'}</span>

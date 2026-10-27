@@ -10,13 +10,14 @@ import { LiveReactionCue } from '@/components/LiveReactionCue';
 import { LetterCard } from '@/components/LetterCard';
 import { writingPrompts } from '@/data/mockData';
 import { getRemoteProfile } from '@/lib/letterBackend';
+import { selectFeaturedInboxDrop } from '@/lib/mailboxView';
 import { setActiveLetterDraft, startNewLetter } from '@/lib/letterStore';
 import { defaultUserProfile, getUserProfileForCurrentAccount, type UserProfile } from '@/lib/userStore';
 import { useLiveInbox } from '@/lib/useLiveInbox';
 
 export default function HomeDesk() {
   const router = useRouter();
-  const { letters, arrival, arrivalCount, dismissArrival, reaction, reactionCount, dismissReaction } = useLiveInbox();
+  const { letters, recipientReadStatesHydrated, arrival, arrivalCount, dismissArrival, reaction, reactionCount, dismissReaction } = useLiveInbox();
   const [profile, setProfile] = useState<UserProfile>(defaultUserProfile);
   const [promptIndex, setPromptIndex] = useState(0);
 
@@ -31,9 +32,12 @@ export default function HomeDesk() {
     return () => { active = false; };
   }, []);
 
-  const incoming = letters.filter((letter) => letter.direction === 'received' && !letter.sample).slice(0, 2);
-  const featured = arrival ?? incoming[0];
-  const isNewArrival = Boolean(arrival && featured?.id === arrival.id);
+  const allIncoming = letters.filter((letter) => letter.direction === 'received' && !letter.sample);
+  const featuredSelection = selectFeaturedInboxDrop(allIncoming, arrival, recipientReadStatesHydrated);
+  const featured = featuredSelection.letter;
+  const incoming = allIncoming.filter((letter) => letter.id !== featured?.id).slice(0, 2);
+  const isNewArrival = featuredSelection.reason === 'arrival';
+  const isUnreadFeature = featuredSelection.reason === 'unread';
   const arrivalLabel = arrivalCount > 1 ? `${arrivalCount} new drops` : 'Just landed';
 
   const startPromptDraft = () => {
@@ -70,15 +74,15 @@ export default function HomeDesk() {
             <Link href="/demo" className="mt-2 inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-white/40 px-4 text-sm font-semibold text-white transition-colors hover:bg-white/10 focus-visible:outline-white">
               <Eye className="h-4 w-4" aria-hidden="true" /> Try a demo drop
             </Link>
-            <p className="mt-2 text-xs text-white/75">No sign-in · stays on this device</p>
+            <p className="mt-2 text-xs text-white/80">Demo stays on this device · a Drop account is needed to send.</p>
             <p className="mt-6 flex items-center gap-2 text-xs text-white/80"><Zap className="h-3.5 w-3.5" aria-hidden="true" /> Instant by default · private between you two</p>
           </div>
 
           {featured ? (
-            <Link href={`/letter/${encodeURIComponent(featured.id)}`} onClick={() => { if (isNewArrival) dismissArrival(); }} aria-label={`Open drop from ${featured.sender || 'a correspondent'}: ${featured.subject}`} className="group relative flex min-h-[250px] flex-col overflow-hidden rounded-[1.5rem] bg-gradient-to-br from-[#e1e7ff] via-[#f5e5d7] to-[#fff7ed] p-5 text-ink-navy shadow-[0_12px_30px_rgba(16,42,67,.07)] sm:min-h-[300px] md:min-h-0">
+            <Link href={`/letter/${encodeURIComponent(featured.id)}`} onClick={() => { if (isNewArrival) dismissArrival(); }} aria-label={`Open ${isNewArrival || isUnreadFeature ? 'new ' : ''}drop from ${featured.sender || 'a correspondent'}: ${featured.subject}`} className="group relative flex min-h-[250px] flex-col overflow-hidden rounded-[1.5rem] bg-gradient-to-br from-[#e1e7ff] via-[#f5e5d7] to-[#fff7ed] p-5 text-ink-navy shadow-[0_12px_30px_rgba(16,42,67,.07)] sm:min-h-[300px] md:min-h-0">
               <span className="absolute -right-8 -top-10 h-44 w-44 rounded-full bg-white/35 blur-2xl" aria-hidden="true" />
               <span className="relative flex items-center justify-between gap-3">
-                <span className="inline-flex items-center gap-2 rounded-full bg-white/85 px-3 py-1.5 font-mono text-[0.62rem] font-bold uppercase tracking-[0.12em]"><Mail className="h-3.5 w-3.5" aria-hidden="true" />{isNewArrival ? arrivalLabel : 'In your inbox'}</span>
+                <span className="inline-flex items-center gap-2 rounded-full bg-white/85 px-3 py-1.5 font-mono text-[0.62rem] font-bold uppercase tracking-[0.12em]"><Mail className="h-3.5 w-3.5" aria-hidden="true" />{isNewArrival ? arrivalLabel : isUnreadFeature ? 'New' : 'In your inbox'}</span>
                 <span className="rounded-full bg-[#152b43]/[0.07] px-3 py-1.5 font-mono text-[0.62rem] font-bold uppercase tracking-[0.12em]">{featured.payloadKind === 'image' ? 'Photo' : featured.payloadKind || 'Note'}</span>
               </span>
               <span className="relative mt-auto block pt-10">
@@ -108,7 +112,20 @@ export default function HomeDesk() {
               <Link href="/mailbox" className="inline-flex min-h-11 items-center gap-1 text-xs font-bold text-[#2b45f7]">See all <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
             </div>
             <div className="mt-3 rounded-2xl border border-[rgba(16,42,67,.1)] bg-white/55 px-4 sm:px-6">
-              {incoming.length ? incoming.map((letter) => <LetterCard key={letter.id} letter={letter} showExcerpt />) : <p className="py-7 text-sm text-on-surface-variant">When someone sends you a drop, it will land here.</p>}
+              {incoming.length ? incoming.map((letter) => <LetterCard key={letter.id} letter={letter} showExcerpt />) : featured || allIncoming.length ? (
+                <div className="py-5">
+                  <h3 className="font-headline-md text-lg font-semibold text-ink-navy">Your newest drop is up top.</h3>
+                  <p className="mt-2 max-w-xl text-sm leading-relaxed text-on-surface-variant">See all your drops in the mailbox, and check back when the next one lands.</p>
+                </div>
+              ) : (
+                <div className="py-5">
+                  <h3 className="font-headline-md text-lg font-semibold text-ink-navy">Your inbox is waiting on its first drop.</h3>
+                  <p className="mt-2 max-w-xl text-sm leading-relaxed text-on-surface-variant">Invite a friend with your public @handle and profile link. They can use it to send you a drop back.</p>
+                  <Link href="/profile?invite=1" className="mt-4 inline-flex min-h-11 scroll-mb-24 items-center justify-center gap-2 rounded-full bg-[#2b45f7] px-4 text-xs font-bold text-white transition-colors hover:bg-[#223bdc] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2b45f7] focus-visible:ring-offset-2 md:scroll-mb-0">
+                    Invite a friend <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                  </Link>
+                </div>
+              )}
             </div>
           </div>
 

@@ -2,6 +2,78 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
+## Project closure — full pilot PR to main (2026-10-27)
+
+- [x] Consolidate the candidate on codex/invitee-first-send; remote main was last verified at 5138f88.
+- [x] Add secret-free PR CI and bind local fixture setup to this repo's exact Drop Supabase containers.
+- [x] Stop sidebar mailbox polling on public routes and record the remaining duplicate recovery read.
+- [x] Patch dependency advisories and push commits 66d8930 and f651b3e: Next.js, eslint-config-next, and SWC WASM fallback 16.4.3; Sharp 0.35.5; remove unused direct Zod; refresh compatible transitive packages. npm's install/audit pass reported zero vulnerabilities.
+- [x] Pass 302 unit tests, lint, Next route type generation, TypeScript, diff checks, and a 22-route Webpack production build. The local photo/GIF claim browser flow passed on patched Next and Sharp.
+- [x] Open draft PR #13 directly to main.
+- [x] Confirm CI and GitGuardian passed on head 14cee94 with a clean merge state; this final status note triggers another run.
+- [x] Keep Drop's run.sh process on port 4004. This session's HTTP probe was blocked by sandbox loopback permissions; earlier local checks returned HTTP 200.
+- [ ] Verify hosted Free project identity, Auth/migrations/functions, two-account delivery, and scheduled physical media deletion.
+- [ ] Verify actual OS sharing, spoken screen-reader behavior, and physical-device/camera paths; run the small opt-in user pilot.
+- [ ] Refresh final PR checks, complete review, and merge to main only with explicit approval.
+
+## Checkpoint — signed-out friend first send and unique Home inbox (2026-10-27)
+
+- [x] Verify a brand-new signed-out friend opens the owner's public profile, keeps an editable addressed draft through local Mailpit signup, explicitly sends it, and returns to the same owner in a separate session.
+- [x] Fix the duplicate Home card and verify exactly one link to the new drop at 390×844.
+- [x] Pass the full local browser flow and cleanup; pass 301 unit tests, lint, non-incremental TypeScript, browser syntax, diff check, and Webpack production build.
+- [x] Push code commit `c388a14` and docs commits `f4438c9`, `e122132` to `origin/codex/invitee-first-send`; leave Drop running on port 4004.
+- [ ] Use the full-pilot closure target above: create one review PR directly into `main`; this supersedes the earlier intermediate-branch target. Recheck all remote PR state after GitHub authentication is restored.
+- [ ] Verify hosted project identity/plan/migrations, then complete disposable hosted two-account delivery and retention checks. Local tests do not satisfy these gates.
+- [ ] Verify actual OS sharing, spoken screen-reader output, and physical-device/camera behavior; then plan an opt-in user pilot.
+
+## Checkpoint — Compose starters, text wrapping, and GIF Relay browser acceptance (2026-10-26)
+
+- [x] Add optional starters for text/photo/GIF drafts; verify selection fills an editable field, keeps GIF attachment attached, preserves nonempty text, and never auto-sends.
+- [x] Wrap unbroken subject, fragment, and message content; pass the 390×844 detail-page overflow regression.
+- [x] Pass expanded `npm run test:browser-relay` with UI-created text and GIF drops, carrier/recipient privacy, recipient collection/reveal, exact Storage validation/cleanup, and zero browser overflow/errors/external requests.
+- [x] Pass `npm test` (301/301), TypeScript, focused lint, smoke syntax/guard, `git diff --check`, and isolated production build. Review three 390×844 screenshots in `/private/tmp/drop-pilot-final-evidence.Lyw5xo/`.
+- [x] Commit `bce0f37` and separate docs commit `6a20dc4` and push both to existing `feat/pilot-integrated-preview`; GitHub confirms PR #11 remains open/draft on this branch and remote `main` remains `5138f88`. CI checks were not queried.
+- [ ] Add a scoped `SUPABASE_ACCESS_TOKEN` locally to provision the approved Free project; complete hosted delivery/retention, screen-reader, installed-PWA sharing, and physical-device/camera checks.
+
+## Checkpoint — secure Relay browser journey (2026-10-26)
+
+- [x] Add `npm run test:browser-relay` on isolated test port `6004`; restrict Node Supabase calls to exact loopback origin and reject redirects.
+- [x] Pass sender invite creation, carrier acceptance with geolocation denied/no call, carrier privacy, fresh replay denial, one-handoff/null-coordinate assertion, sender Journey refresh, and recipient collect/reveal at `390×844`.
+- [x] Verify exact local fixture/account/profile/process/browser cleanup; pass production build, 298 unit tests, lint, TypeScript, syntax, and diff checks.
+- [x] Push code commit `57ce03a` to the existing pilot branch; PR #11 stays open/draft and remote `main` remains unchanged at `5138f88`.
+- [ ] Provision the approved hosted Free project when the Management API token is available; finish hosted, screen-reader, installed-PWA sharing, and physical-device/camera checks.
+
+## Current integrated pilot candidate (2026-10-26)
+
+- [x] Add private-claim QR sharing and clear QR state on draft/account changes; code commits `98cb6aa` and `f8cbde3`.
+- [x] Prune expired claim handoffs at app startup and on page restore/focus; code commit `2eb4071`.
+- [x] Pass combined 288 unit tests, lint, typecheck, `git diff --check`, and Webpack production build (22 routes).
+- [x] Pass authenticated local QR browser verification at 390×844 and local aged staged-media deletion/recent-object retention proof.
+- [x] Add and pass `npm run test:browser-qr`; verify accessible issue/privacy/hide/show/reset and exact cleanup. Push code commits `9e764e8` and `2a9cf49` to the existing pilot branch; PR #11 remains open/draft and `main` is unchanged. Pixel decoding is still browser/physical-device dependent.
+- [x] Transfer the verified commits and task docs into canonical `feat/pilot-integrated-preview` at `d9d9823`; restart and verify the app at `http://localhost:4004`, local Auth, and Mailpit.
+- [x] Push the tested candidate through code checkpoint `9781ed6`; verify draft PR #11 stays open, PR #7 stays unchanged, and `main` is untouched. Keep PR #11 unmerged.
+- [ ] Complete hosted account-to-account delivery and scheduled deletion, installed-PWA OS share, spoken screen-reader, and physical device/QR-camera checks.
+
+
+## Checkpoint — local same-recipient unread sync and reaction browser flow (2026-10-25)
+
+- [x] Verify sender Compose, two independent recipient sessions, unread Home at 390×844 and 1440×900, Inbox open/read, recipient reaction, and sender live/reloaded reaction.
+- [x] Build and run an isolated production app; verify exact read-state RPC correlation and that the second recipient session clears “New” without a document reload.
+- [x] Pass 281 unit tests, changed-harness ESLint and syntax checks, `git diff --check`, and the complete authenticated local production browser run with exact disposable cleanup.
+- [x] Confirm Docker and local Supabase are running; restart Drop on port 4004 and verify app, Auth, and Mailpit HTTP 200.
+- [x] Push code commit `0e672f3` to `origin/feat/recipient-unread-e2e`; keep documentation in a separate follow-on commit.
+- [ ] Finish hosted, screen-reader, and physical-device checks. Keep PR #7 open until its separate QR browser check is complete.
+
+## Checkpoint — private, durable unread state (2026-10-25)
+
+- [x] Add recipient-only server read markers for delivered drops; deny sender and outsider access.
+- [x] Show a “New” marker on unread received cards and a private unread count on Inbox navigation across desktop and mobile.
+- [x] Mark read only after full content opens; keep the server timestamp idempotent and prevent stale refresh or account-switch responses from reverting state.
+- [x] Exclude samples, demos, sent/draft/claim-pending drops, signed-out state, and uncollected relay drops.
+- [x] Add unit and rollback-only SQL coverage; pass local Supabase smoke and authenticated local browser checks; update README, checklist, handoff, and learning log.
+- [x] Push code commit `a416d81` to `origin/feat/recipient-unread-state`.
+- [ ] Verify the same recipient's read state in a second authenticated browser session; complete hosted, screen-reader, and physical-device checks.
+
 ## Checkpoint — received-drop Drop back draft isolation (2026-10-24)
 
 - [x] Start Drop back from a received drop using a persisted fresh draft ID and the sender's normalized handle.

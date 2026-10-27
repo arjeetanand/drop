@@ -2,24 +2,42 @@
 
 import { useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ArrowRight, Mail, PenLine, Search, X } from 'lucide-react';
 import { LiveDropCue, LiveDropStatus } from '@/components/LiveDropCue';
 import { LiveReactionCue } from '@/components/LiveReactionCue';
 import { LetterCard } from '@/components/LetterCard';
+import { RelayArrivalRecap } from '@/components/RelayArrivalRecap';
 import { RelayRecipientCard } from '@/components/RelayRecipientCard';
 import { useLiveInbox } from '@/lib/useLiveInbox';
 import { filterMailboxLetters, getMailboxCounts, getMailboxEmptyState, type MailboxFilter } from '@/lib/mailboxView';
+import { getLocalAccountId } from '@/lib/localAccountScope';
 import { cn } from '@/lib/utils';
+
+interface RelayCollectionRecapState {
+  accountId: string | null;
+  handoffCount: number;
+  letterId: string;
+}
 
 export default function Mailbox() {
   const { letters, arrival, arrivalCount, dismissArrival, reaction, reactionCount, dismissReaction, refreshInbox } = useLiveInbox();
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<MailboxFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [relayCollectionRecap, setRelayCollectionRecap] = useState<RelayCollectionRecapState | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const visibleRelayRecap = relayCollectionRecap?.accountId === getLocalAccountId() ? relayCollectionRecap : null;
 
   const clearSearch = () => {
     setSearchQuery('');
     searchInputRef.current?.focus();
+  };
+
+  const openCollectedRelay = async (letterId: string) => {
+    await refreshInbox();
+    setRelayCollectionRecap(null);
+    router.push(`/letter/${encodeURIComponent(letterId)}`);
   };
 
   const counts = useMemo(() => getMailboxCounts(letters), [letters]);
@@ -33,7 +51,11 @@ export default function Mailbox() {
     { id: 'samples', label: 'Samples', count: counts.samples },
   ];
 
-  const filteredLetters = useMemo(() => filterMailboxLetters(letters, activeTab, searchQuery), [activeTab, letters, searchQuery]);
+  const filteredLetters = useMemo(
+    () => filterMailboxLetters(letters, activeTab, searchQuery)
+      .filter((letter) => letter.id !== visibleRelayRecap?.letterId),
+    [activeTab, letters, searchQuery, visibleRelayRecap?.letterId],
+  );
   const emptyState = getMailboxEmptyState(activeTab, searchQuery);
 
   return (
@@ -54,6 +76,12 @@ export default function Mailbox() {
         <LiveDropStatus letter={arrival} count={arrivalCount} />
         {arrival && <div className="mt-5"><LiveDropCue letter={arrival} count={arrivalCount} onDismiss={dismissArrival} /></div>}
         <LiveReactionCue letter={reaction} count={reactionCount} onDismiss={dismissReaction} />
+        {visibleRelayRecap && (
+          <RelayArrivalRecap
+            handoffCount={visibleRelayRecap.handoffCount}
+            onOpen={() => openCollectedRelay(visibleRelayRecap.letterId)}
+          />
+        )}
 
         <section className="grid grid-cols-2 gap-0 border-b border-[rgba(16,42,67,0.13)] py-7 sm:grid-cols-4">
           {[
@@ -115,9 +143,20 @@ export default function Mailbox() {
               && letter.status === 'dispatched'
               && !letter.sample
               && !letter.localDemo
-              ? <RelayRecipientCard key={letter.id} letter={letter} onRefresh={refreshInbox} />
+              ? (
+                <RelayRecipientCard
+                  key={letter.id}
+                  letter={letter}
+                  onOpenCollected={() => openCollectedRelay(letter.id)}
+                  onCollected={(letterId, handoffCount) => setRelayCollectionRecap({
+                    accountId: getLocalAccountId(),
+                    handoffCount,
+                    letterId,
+                  })}
+                />
+              )
               : <LetterCard key={letter.id} letter={letter} showExcerpt />
-          )) : (
+          )) : visibleRelayRecap ? null : (
             <div className="panel-muted my-10 rounded-2xl p-8 text-center sm:p-10">
               <Mail className="mx-auto h-7 w-7 text-on-surface-variant" aria-hidden="true" />
               <h2

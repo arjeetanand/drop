@@ -1,6 +1,191 @@
 # Drop handoff
 
-Updated: 2026-10-24
+Updated: 2026-10-27
+
+## Latest checkpoint — Relay arrival recap and pilot closure (2026-10-27)
+
+- Product pitch: Drop is a personal note, photo, or GIF sent directly or through an optional, human-carried Relay journey. Relay’s defensible product angle is the combination of willing one-at-a-time carriers, a payload hidden from carriers, and recipient-controlled collection; treat market distinction as a hypothesis to test. The short pitch, demo script, comparison, and eight-drop pilot question are in [README.md](./README.md#pitch).
+- Relay recap: after the recipient collects a traveling drop, Drop shows only the aggregate hand count and an explicit **Open your drop** action. The recap survives the mailbox’s Realtime refresh, hides the collected row until the open action, and moves focus to the next action. The detail route keeps the existing fragment reveal and full-open controls.
+- Verification: `npm test` passed 302/302; `npm run lint`; `npx tsc --noEmit --incremental false`; browser-script syntax; and `git diff --check` passed. `npm run test:browser-relay` passed the isolated production text and GIF journeys at 390×844, including carrier/replay privacy, recap counts, focus, no subject/caption/carrier detail in the recap, and no GIF Storage request before opening. No overflow, failed requests, runtime exceptions, console errors, or cross-origin requests were observed. A separate `npm run test:browser-media-claim` also passed photo/GIF claim privacy and replay checks. All fixtures were disposable and cleaned up.
+- Git: code commit `6ccd4c6` is pushed on `codex/invitee-first-send` and updates draft PR #13 to `main`. The app remains on port 4004; the isolated browser test used and released 6004.
+- Live pilot remains blocked: `.env.local` points only to loopback Supabase. `SUPABASE_TELEMETRY_DISABLED=1 npx supabase projects list --output json` reports that no access token is available. Hosted Auth, migrations, functions, Storage, scheduled cleanup, and real two-account delivery have not been verified. Device camera, OS share sheet, and actual screen-reader output also remain open.
+- Remote review boundary: PR #13 targets `main` from `codex/invitee-first-send`, with head `04a2fc7` and base `5138f88`. GitHub CI and GitGuardian both passed on that head and GitHub reported `CLEAN`; the PR is still open as a draft with no submitted reviews. The main branch protection endpoint reports no protection rule. The PR is ready for final approval and merge through GitHub.
+
+**Next:** get explicit approval to merge PR #13, then restore Supabase CLI access and configure the approved Free project. Verify hosted two-account text/photo/GIF send and Relay collection plus scheduled physical deletion. Schedule OS-share, screen-reader, and physical-device acceptance before describing Drop as a live pilot.
+
+## Latest checkpoint — dependency security fix and full pilot PR to main (2026-10-27)
+
+- Candidate: codex/invitee-first-send targets the open draft PR #13 to main. Remote main was last verified at 5138f88. The integrated branch includes the secret-free CI workflow and exact-container local fixture guard.
+- Dependency issue: the previous lockfile reported eight advisories, including one critical, six high, and one moderate. Commit 66d8930 updates Next.js and eslint-config-next to 16.4.3, pins Sharp to 0.35.5, removes the unused direct Zod dependency, and refreshes patched transitive packages. Commit f651b3e aligns the Next SWC WASM fallback to 16.4.3.
+- Verification: npm's install/audit pass reported zero vulnerabilities across 656 packages. npm test passed 302/302; ESLint, Next route typegen, TypeScript, and git diff --check passed. The Webpack production build passed and generated all 22 routes. The recorded local photo/GIF claim browser journey passed with the updated Next and Sharp packages.
+- Review scope: independent source review found no confirmed high-severity auth, media-privacy, or migration/API compatibility defect. Review confirmed no Drop source imports of Zod and peer compatibility with Zod 4.6.7. The SWC WASM package is version-aligned; local builds used the native macOS binding, so the WASM fallback itself was not exercised.
+- Local app: run.sh owns the documented port 4004. This session's HTTP request was denied by sandbox loopback permissions; earlier local checks returned HTTP 200. Build warns that React 18 support is deprecated in Next 16 and will be removed in Next 17; plan a React 19 upgrade before adopting Next 17.
+- GitHub: commits 66d8930 and f651b3e are pushed to origin/codex/invitee-first-send. Draft PR #13 remains open to main. On f651b3e, CI and GitGuardian were in progress and GitHub reported UNSTABLE; the closeout docs push will start another run. Refresh the final head/checks before merge.
+- Still open for a live pilot: verify the hosted Free project, Auth email, deployed migrations/functions, real two-account delivery, and scheduled physical Storage deletion; verify real OS sharing, spoken screen-reader output, and physical camera/device behavior; then run the opt-in user study.
+
+At head 14cee94, CI and GitGuardian passed and GitHub reported CLEAN. This verification follow-up will start a new run; verify that final documentation head before requesting merge approval. The code is prepared for review, but hosted pilot acceptance is not complete.
+
+## Latest checkpoint — signed-out friend first send and unique inbox card (2026-10-27)
+
+- The public-profile **Send a drop** path now works for a brand-new, signed-out friend: the addressed draft survives email signup, remains editable, and sends only after the friend taps **Send drop**. A separate owner session sees the delivered drop on Home at 390×844.
+- The end-to-end check exposed a Home duplication: the featured latest drop was also repeated in the “Fresh from the mailbox” list. Home now omits the featured item from that list and shows “Your newest drop is up top” when no older items remain. The browser regression requires one link for the new drop and verifies the owner session before opening Home.
+- Verification passed: `node scripts/browser-first-signup-smoke.mjs` completed the signed-out send and owner inbox check; cleanup confirmed the exact claim/send rows, four disposable Auth users and profiles, two Mailpit messages, and temporary app/browser directory were removed. `npm test` passed 301/301, `npm run lint`, `npx tsc --noEmit --incremental false`, browser-script syntax, `git diff --check`, and `npm run build -- --webpack` passed. The regular `npm run typecheck` hit sandbox `EPERM` writing `tsconfig.tsbuildinfo`; the non-incremental typecheck passed. Build reported the existing outdated Browserslist and ambiguous Tailwind easing warnings.
+- No hosted Supabase requests or resource changes occurred. Local browser testing used loopback Supabase/Mailpit on port 6004 and left the main app on 4004 untouched. Hosted delivery/retention, native OS sharing, spoken screen-reader output, and physical-device behavior remain open.
+- After the isolated run, `./run.sh start` left the canonical app available at `http://localhost:4004`; a fresh request returned HTTP 200. Use `./run.sh` to restart it or `./run.sh stop` to stop it.
+- Code commit `c388a14` (`fix: avoid duplicate featured inbox drops`) is pushed to `origin/codex/invitee-first-send`, based on `codex/social-relay-pilot`; the task checkpoint is documented separately from code. GitHub offered `https://github.com/arjeetanand/drop/pull/new/codex/invitee-first-send`; no PR was opened because `gh auth status` reports an invalid saved GitHub token and `gh pr view 12` could not reach `api.github.com`. No merge occurred.
+
+**Next:** refresh GitHub authentication, open a review PR into `codex/social-relay-pilot`, and refresh PR #12's state/checks before integration. Keep this branch separate and do not merge without review. Continue the hosted and device acceptance gates when access is available.
+
+## Latest checkpoint — Home first-friend activation (2026-10-27)
+
+- Replaced the passive empty-inbox sentence with a first-drop explanation and an **Invite a friend** action to `/profile?invite=1`. The action appears only when there are no real incoming drops; sample content remains labeled as a sample.
+- Extended the accessibility smoke to check the link’s semantic name, keyboard focus, 44px target, scroll visibility above the fixed navigation, retained invite query, profile route, and no horizontal overflow. The same page reused across viewport changes made whichever viewport ran second fail its natural-focus scroll check. The smoke now runs 320px and 390px in separate isolated Edge sessions; no manual scrolling is used to mask focus behavior.
+- Visual review: focused CTA and profile invite context at 320×740 and 390×844 are saved under `/private/tmp/drop-first-friend-final-verification/`. Photo/GIF picker focus and composer/recipient images also passed at both sizes. No cross-origin browser requests occurred.
+- Verification passed: `npm test` (301/301), ESLint, TypeScript, browser-script syntax, `bash -n run.sh`, and `git diff --check`. `npm run build -- --webpack` compiled and generated all routes. The default `npm run build` failed in this scratch clone because Turbopack rejects its `node_modules` symlink pointing outside the clone; this is a checkout-layout issue, not a source compilation error. Existing Browserslist and Tailwind easing warnings remain.
+- The local app remains available at `http://localhost:4004` (HTTP 200). Code commit `986e2e4` is pushed to `origin/codex/social-relay-pilot`. After that code push, PR #12 was open/draft against `feat/pilot-integrated-preview`; GitHub reported `UNSTABLE` while `GitGuardian Security Checks` was pending. This documentation push may retrigger checks, so refresh GitHub before merging. No merge occurred.
+- This slice made no hosted Supabase calls. The `supabase` CLI is not on the shell PATH, so current hosted project/Auth/migration state was not refreshed. Edge’s “Allow JavaScript from Apple Events” setting was left untouched as requested.
+- Still open: hosted account-to-account delivery and scheduled deletion; actual screen-reader output; installed-PWA OS sharing; physical camera/QR and device checks; the opt-in sender study.
+
+**Next:** refresh the hosted Supabase project state through an authenticated path, then complete hosted delivery/retention and device acceptance. Keep PR #12 draft and unmerged until its checks and pilot gates are reviewed.
+
+## Previous checkpoint — Compose starters and GIF Relay pilot verification (2026-10-26)
+
+- Added optional note/caption starters for text, photo, and GIF Compose; selection fills an editable field, preserves existing text and attachments, and never sends automatically. Wrapped unbroken subject, fragment, and message text on the opened-drop screen to prevent narrow-screen overflow.
+- Extended `npm run test:browser-relay` to exercise sender-created GIF Relay end to end, including exact final/staged Storage checks, private media before collection, post-collection render, confirmed not-found cleanup, and starter selection/focus/attachment preservation. Optional 390×844 screenshots are in `/private/tmp/drop-pilot-final-evidence.Lyw5xo/`.
+- Verification passed: `npm test` (301/301), TypeScript, focused ESLint, smoke syntax and loopback guard, `git diff --check`, and the isolated production browser journey. The text and GIF Relay runs had no overflow, browser errors, failed requests, or cross-origin browser traffic. The 4004 app remained available; test data, Storage objects, and browser profiles were cleaned.
+- Code commit `bce0f37` and separate documentation commit `6a20dc4` are pushed to `origin/feat/pilot-integrated-preview`. GitHub confirms PR #11 remains open/draft on this branch with base `main`; its CI checks were not queried. Remote `main` remains `5138f88`; no merge occurred.
+- Hosted Supabase is still blocked: `.env.local` and the process environment have no `SUPABASE_ACCESS_TOKEN`, the Supabase ChatGPT connector is disabled by workspace admin, and the earlier pasted credential was not reused. No hosted project, billing, or hosted data changed. Hosted delivery/retention, actual screen-reader output, installed-PWA sharing, and physical device/camera checks remain open.
+
+**Next:** add a fresh scoped Supabase Management API token to the canonical checkout's local `.env.local` (do not paste it into chat) to provision the approved Free project, then complete hosted acceptance. Refresh PR #11 state/checks before any merge; keep `main` unchanged until the remaining gates pass and the user approves merging.
+
+## Latest checkpoint — secure Relay browser journey (2026-10-26)
+
+- `npm run test:browser-relay` now starts with a signed-in sender creating the text Relay drop through Compose, confirms the selected Relay mode and recipient, and reads back the exact dispatched row. The rest of the flow accepts the UUIDv4 fragment invite as a carrier, confirms location is never called, verifies subject/body privacy, rejects a fresh replay, refreshes the sender Journey, then collects and reveals the drop as the recipient.
+- The final local browser run passed at `390×844`: no horizontal overflow, console/runtime errors, or cross-origin browser requests. The runner verified exact cleanup of its UI-created drop, three Auth users/profiles, browser profiles, temporary app, and process groups. Its isolated production build passed. `npm test` passed 298/298; lint, TypeScript, runner syntax/guard/ESLint, and `git diff --check` passed. No hosted request or database reset occurred.
+- Focused review found the Relay button includes helper text and the handle-check label changes with recipient state. The smoke now checks the Relay title as rendered text and waits on the enabled recipient check state; the final rerun passed.
+- Code commit `f92a78c` is pushed to `origin/feat/pilot-integrated-preview`; PR #11 was last verified open/draft at `5f9562a`. GitHub API DNS failed after the push, so the current PR state/checks were not refreshed. Remote `main` was last verified at `5138f88`; no merge was made. The existing app on `4004` was left running, and test port `6004` was released.
+- The task environment still has no usable Supabase Management API token, so no hosted Free project or billing/resource change was made. Hosted delivery/retention, screen-reader output, installed-PWA sharing, and physical-device/camera checks remain open.
+
+**Next:** continue the local pilot while hosted Management API access is unavailable, then complete hosted and device acceptance when that access exists. Refresh PR #11's current state/checks before any merge; keep it unmerged until remaining gates pass and the user approves merging.
+
+## Latest checkpoint — local Supabase fixture-target guard (2026-10-26)
+
+- Added a fail-closed listener/Docker/container provenance check to the six fixture-writing Supabase smokes. A review found that broad Rancher/Lima/socket substring matching could accept a lookalike remote SSH tunnel; the guard now accepts only the exact Rancher Desktop Lima mux socket title and requires a local Docker endpoint plus the matching Supabase container.
+- Verification: `npm test` passed 298/298; lint, no-incremental TypeScript, script syntax, and `git diff --check` passed. `npm run test:browser-qr` passed at 390×844 with exact drop/profile/Auth/process/temp cleanup. `npm run test:local-supabase` passed the local text/image/GIF claim, send/read/reaction, relay collection, and cleanup checks for five disposable accounts and temporary media. No database reset was run. No application source changed, so no production build was run.
+- Code commit `f8c709d` is pushed to `origin/feat/pilot-integrated-preview`. GitHub verified PR #11 open/draft at that code head; remote `main` remains `5138f88`; no merge occurred. Port 4004 was not restarted or stopped.
+- The task has no Supabase Management API token. The CLI reports `SUPABASE_ACCESS_TOKEN` missing; `.env.local` app keys are not project-management credentials. No hosted project, billing, or hosted data changed.
+- QR pixel decoding, hosted delivery/retention, screen-reader output, installed-PWA OS sharing, physical camera scanning, and physical-device behavior remain open.
+
+**Next:** add a scoped Management API token locally, verify the Free project, and finish hosted/device acceptance. Keep PR #11 open until the remaining gates pass and the user approves merging.
+
+## Latest checkpoint — repeatable QR browser smoke pushed (2026-10-26)
+
+- Pushed code commits `9e764e8` (repeatable QR smoke) and `2a9cf49` (loopback-only Supabase requests with redirects denied) to `origin/feat/pilot-integrated-preview`. GitHub confirmed draft PR #11 open at `2a9cf49`; remote `main` remains `5138f88`. No merge occurred.
+- `npm run test:browser-qr` passed on local Supabase at 390×844. It verified pending private text-drop state, anonymous read denial, accessible focused QR/link, stable hide/show, and new-draft reset. Cleanup verified the exact drop/profile/Auth user were removed, app/browser process groups exited, and the temporary directory was deleted. Port 6004 was released; port 4004 remains owned by the canonical app.
+- `npm test` passed 288/288; `npm run lint`, `npm run typecheck`, `node --check`, and `git diff --check` passed. No application source changed, so the Webpack build was not rerun in this slice. QR decoding was unavailable (`BarcodeDetector` absent); the earlier manual pixel-decode result is separate evidence.
+- The QR browser initially stalled because setting its `HOME` to a temporary folder prevented macOS loopback navigation. Keeping the regular process `HOME` while using a disposable `--user-data-dir` restored the flow. Every Node-side Supabase request now enforces the exact configured loopback origin and rejects redirects; the service-role key is not passed to child processes.
+- This run did not contact hosted Supabase. Hosted account-to-account delivery and physical retention remain open, along with spoken screen-reader, installed-PWA OS sharing, and physical camera/device checks.
+
+**Next:** provision the approved Free hosted project when a Management API token is available to the task, then run hosted two-account and scheduled-retention checks. Keep PR #11 unmerged until remaining gates pass and the user approves merging.
+
+## Previous checkpoint — tested pilot branch pushed before repeatable QR automation (2026-10-26)
+
+- Pushed the tested canonical candidate to `origin/feat/pilot-integrated-preview` through code checkpoint `9781ed6`. GitHub confirmed draft PR #11 open at that head, PR #7 open and unchanged at `dec1608`, and `main` at `5138f88`.
+- PR #11 currently reports GitGuardian Security Checks as passing. No additional CI checks were reported. Local validation passed 288/288 unit tests, lint, no-incremental TypeScript, diff check, and Webpack build with 22 routes.
+- `http://localhost:4004` is running from `/Users/arjeetanand/projects/drop`; local Auth and Mailpit each return HTTP 200. The local Supabase Docker stack is running with no database reset.
+- No PR was merged. QR browser automation, hosted Free project setup/two-account delivery/scheduled deletion, physical camera/device behavior, installed-PWA OS sharing, and spoken screen-reader checks remain open.
+- The verified feature push is `9781ed6`; follow-up docs can advance the branch, so check the current PR head before any merge decision.
+
+**Next:** provision and configure the approved Free hosted project when access is available, then run the real two-account and scheduled-retention checks. Keep PR #11 unmerged until the hosted and device gates pass and the user approves merging.
+
+## Latest checkpoint — canonical pilot candidate running locally (2026-10-26)
+
+- Fast-forwarded the verified local branch into canonical `feat/pilot-integrated-preview` at `d9d9823`. Its four commits ahead of the cached `origin` ref are `2eb4071` (expired claim handoff sweep), `98cb6aa`/`f8cbde3` (QR issue and stale-state reset), and this pilot evidence/docs update.
+- Canonical verification: 288/288 unit tests, lint, `npx tsc --noEmit --incremental false`, and diff checks passed. The equivalent tested source tree built successfully with Webpack into 22 routes after the existing Google Fonts fetch was allowed. The standard typecheck command was rerun without incremental output because the restricted canonical checkout denied writing `tsconfig.tsbuildinfo`.
+- The canonical `./run.sh start` process owns port 4004 and serves `http://localhost:4004` with HTTP 200; local Auth at 54321 and Mailpit at 54324 also return HTTP 200. The project Docker stack is running. No database reset was run.
+- The authenticated QR browser proof and 31-day local staged-media worker proof are recorded in `docs/pilot-qr-verification.md` and `docs/pilot-retention-verification.md`. A committed repeatable QR browser smoke is still pending.
+- The update has not been pushed. GitHub could not be refreshed; PR #11 was last observed open/draft at `f0c015a`, and PR #7 was not changed. No merge to `main`, hosted Supabase access, or `.env.local` read occurred.
+- Hosted Free project setup and two-account verification, hosted cleanup scheduling/deletion, physical QR/camera/device behavior, installed-PWA system sharing, and spoken screen-reader output remain open.
+
+**Next:** push the tested branch update to the existing draft PR when GitHub is reachable, then complete hosted and device acceptance before asking for any merge.
+
+## Latest checkpoint — QR pilot and cleanup verification (2026-10-26)
+
+- Combined three reviewed code commits on `pilot/combined-verification` from candidate base `f0c015a`: `2eb4071` prunes expired claim handoffs at app startup and on `pageshow`/focus; `98cb6aa` adds QR display for private claim links; `f8cbde3` clears stale QR state when the active draft or account changes.
+- Combined verification passed: `npm test` 288/288, lint, typecheck, `git diff --check`, and `npm run build -- --webpack` with 22 routes. The build passed after allowing the existing Google Fonts requests; non-blocking Browserslist and Tailwind ambiguity warnings remain.
+- Authenticated local Chrome QR journey passed at 390×844 on `pilot/qr-integration`. It verified issue/render, focus, hide/show using the same link, token only in the URL fragment, decoded screenshot matching the displayed invite, one pending claim row with no recipient yet, anonymous RLS denial, no browser errors/cross-origin calls, and exact cleanup of the test drop/user/profile. Details are in `docs/pilot-qr-verification.md`.
+- Local retention worker removed one exact 31-day staged-media fixture through the Storage API while a recent fixture stayed available. The test began and ended with zero fixture objects/tombstones and the initial null cursor restored; details are in `docs/pilot-retention-verification.md`.
+- The combined branch is still an isolated local verification branch and has not been transferred or pushed. The canonical checkout remains at `f0c015a`; GitHub could not be queried during this run, so PR #11 and PR #7 remote status is unrefreshed. No `main` merge, hosted Supabase access, or `.env.local` read occurred.
+- Main remaining pilot gates: hosted project migrations/secrets/scheduler and two-account delivery; hosted physical deletion; physical QR scan/device behavior; installed-PWA OS share; and spoken screen-reader verification.
+
+**Next:** transfer the reviewed commits and evidence docs into canonical `feat/pilot-integrated-preview`, rerun final checks there, then push the authorized update to the existing draft PR if GitHub is reachable. Keep the PR unmerged while the hosted/device acceptance gates are open.
+
+## Latest checkpoint — integrated pilot candidate published for review (2026-10-25)
+
+- The current candidate is `feat/pilot-integrated-preview`, tracked by [draft PR #11](https://github.com/arjeetanand/drop/pull/11). It is not merged. PR #7 remains open and unchanged; `git log -1 --oneline --decorate` shows the exact current branch tip.
+- Candidate app code commit `723d45f` integrates the standalone signup test `d49aaf3`; full first-use claim coverage and its documentation are integrated in the pushed checkpoint `7dad439`. Scope includes mobile composer actions/accessibility, send/read/reaction, private photo/GIF claims, PWA share-target recovery, and first-time email signup/profile setup.
+- Verification on the candidate: 287/287 unit tests, lint, TypeScript, smoke-script syntax, diff check, and Webpack production build (22 routes) passed. Local authenticated text, private-media, and PWA browser flows passed on the candidate application code; the public signup browser flow passed on its source branch and is integrated. Default Turbopack rerun was blocked by font-fetch and worker-port environment restrictions; Webpack build passed.
+- The combined new-recipient signup-to-private-claim test now passes locally: fresh claim, signed-out invite page, email request, Mailpit magic-link callback, handle setup, profile sync, return to the same claim, explicit claim and reveal/open, plus outsider and replay denial. Exact cleanup removed the claim, three disposable Auth users/profiles, and Mailpit message. The harness was corrected to follow the app's claim-page-to-profile step and normalize CSS-uppercase button labels; app source did not need a change.
+- The canonical `/Users/arjeetanand/projects/drop` checkout is now on `feat/pilot-integrated-preview`. `./run.sh start` serves the pilot at `http://localhost:4004`; the loopback request returned HTTP 200. The previous branch and detached preview worktree were preserved.
+- Hosted email/delivery, storage policy and 30-day cleanup remain unverified because there is no hosted Drop project. Physical camera/phone behavior, installed-PWA system sharing, and spoken screen-reader output remain open. PR #7's local QR browser check passed, but its feature is not in this candidate.
+
+**Next:** complete hosted Supabase delivery/retention and physical-device, OS-share, screen-reader, and QR-camera checks when their environments are available; keep PR #11 draft and unmerged until the remaining gates and your merge approval.
+
+## Latest checkpoint — pilot accessibility follow-up (2026-10-25)
+
+- Improved the Home send-account helper to meet 4.5:1 contrast, retained accessible names for attached photo/GIF media across the composer, recipient preview, and received view when text is present, and added a visible keyboard focus ring for the clipped picker input. Keyboard focus scrolls the picker above the fixed action tray.
+- Added unit regression coverage for both media labels and real-browser checks for computed contrast, keyboard focus visibility, AX-tree media names in all three views, responsive overflow, and interactivity after PWA share import reaches its canonical route. The route was interactive in the check, so no share-import app change was needed.
+- Verification passed: `npm test` (287/287), `npm run lint`, `npm run typecheck`, browser-smoke syntax, and staged diff checks. Isolated Chrome checks passed at 320×740 and 390×844: computed contrast was 4.62:1; keyboard focus showed a visible 3px mint outline on the photo and GIF picker without overlap; both media kinds had the expected accessible names with nonempty text in composer, preview, and received samples. The focused share-target check also passed its canonical-route interactivity assertion. No cross-origin requests or horizontal overflow were observed.
+- Code commit `ca29555` is on `fix/pilot-a11y-accessibility`, branched from `feat/pilot-integrated-preview` (`da358a5`). The branch is isolated in `/private/tmp/drop-a11y`; port 6004 was released after testing. Browser screenshots are in `/private/tmp/drop-a11y-evidence`.
+- These local checks do not verify actual screen-reader announcements, physical-device behavior, hosted sending, or operating-system share-sheet installation. No hosted Supabase resource was used, `.env.local` was not read, `/letter` was not changed, and `main` and PR #7 were left unchanged.
+
+**Next:** review and merge the accessibility branch through the normal PR flow after screen-reader and device acceptance are scheduled; keep hosted delivery and OS share-sheet acceptance separate from these local results.
+
+## Latest checkpoint — PWA share-target account-switch recovery (2026-10-25)
+
+- The pilot candidate already had the installable manifest, service-worker share target, and bounded multipart import handler. This branch adds the relevant follow-up from `feat/pwa-share-acceptance`: imports capture their account/draft context, rollback is scoped to that captured owner, and failed persistence keeps the staged handoff available for retry. The smoke now checks the canonical `letter` route and expected content even if navigation completes before it observes the intermediate handoff URL.
+- Verification: focused unit tests passed 46/46; full `npm test` passed 286/286; lint, no-incremental TypeScript, browser-smoke syntax and ESLint, and `git diff --check` passed. The isolated production share-target smoke passed synthetic PNG import, caption/recipient state, retry after injected persistence failures, prior draft/media preservation, same-ID replay, and widths 375×844, 390×844, 844×390, and 1440×900. The production build passed using a temporary test-only local-font fixture; the unmocked build could not resolve Google Fonts DNS. No fixture or `node_modules` symlink is committed.
+- Code commit `ff9c2ff` and PWA documentation commit `43ea3d6` are pushed to `origin/feat/pilot-pwa-share`; the pilot candidate ref `fix/pilot-send-account-disclosure` was fast-forwarded through the same history. Both refs identify the same current candidate tip. No main merge, new PR, or PR #7 change was made.
+- The local browser run used port 6004 and was stopped after verification. It does not verify installation or the operating-system share sheet. Hosted account-to-account behavior, screen-reader output, and physical-device checks remain open. `/letter` and `.env.local` were not changed.
+
+**Next:** verify Drop installation and inbound sharing from a supported OS share sheet on a physical device, then finish screen-reader and hosted account checks.
+
+## Latest checkpoint — production browser smoke stability and pilot candidate (2026-10-25)
+
+- Stabilized the full browser smoke after headless Chrome stalled on `page-enter` animation state during viewport changes. The runner now waits for route content and the page shell, settles for 420ms (the CSS animation is 380ms), and includes animation details in timeout snapshots. Reveal, open, and sender-copy actions after reload use keyboard input; the initial 360px flow still exercises touch.
+- Verification: `npm test` passed 281/281; `npm run lint`, no-incremental TypeScript, browser-smoke syntax, targeted ESLint, and `git diff --check` passed. The production build passed with 22 routes. The isolated production browser smoke passed the GIF path at 360×844, 390×844, 430×844, and 1440×900; the photo/reaction/reload path at 390×844; the prompt-to-draft path with existing attachment preservation; and handleless claim choice plus saved-claim recovery at all four widths. It reported zero cross-origin requests and no horizontal overflow. Screenshots were visually reviewed at mobile and desktop sizes.
+- Code commit `36f557d` is pushed to `fix/pilot-send-account-disclosure`; this handoff, checklist, plan, README, and learning update are committed separately on the same branch. The candidate builds on the locally verified account-to-account send, unread-sync, and reaction work from `feat/recipient-unread-e2e`. Nothing was merged; PR #7 remains open for its QR check.
+- Drop remains on `http://localhost:4004`; the isolated production test server on 6004 is stopped after verification. This demo/recovery smoke does not establish hosted account-to-account behavior. Hosted verification, screen-reader output, physical-device behavior, system share-sheet behavior, and PR #7's QR browser check remain open.
+
+**Next:** complete the authorized Free-project hosted send checks when the project credentials and local endpoint are available, then finish screen-reader and physical-device acceptance. Keep PR #7 open until its QR browser check passes.
+
+## Latest checkpoint — Home send-account clarity (2026-10-25)
+
+- Home now says the demo stays on this device and a Drop account is needed to send. The browser smoke asserts this copy before starting the Home prompt flow and before the demo flow.
+- Verification: `npm test` passed 281/281; lint, no-incremental TypeScript, browser-script syntax, and `git diff --check` passed. The focused Chrome prompt flow passed keyboard entry and draft/attachment preservation at 360×844, 390×844, 430×844, and 1440×900; the browser gate recorded zero cross-origin requests. The full GIF smoke passed at 360×844 and 390×844, then timed out waiting for the Home entrance animation at the next viewport even though Home rendered with the new copy.
+- Code commit `64f29b5` is on `fix/pilot-send-account-disclosure`; documentation is in a separate commit on that branch. The isolated Next dev server used port 5004 and is stopped after testing. The canonical app remains on port 4004.
+- Hosted send, screen-reader output, physical-device behavior, and PR #7’s separate QR browser check remain open. No hosted Supabase resource changed; `/letter` and `.env.local` were not changed.
+
+**Next:** resolve or isolate the flaky page-animation wait in the full browser smoke, then continue hosted and device acceptance when the approved Free project and physical-device access are available.
+
+## Latest checkpoint — local same-recipient unread sync and Docker runtime (2026-10-25)
+
+- Extended the authenticated smoke to three isolated browser profiles: sender plus two sessions for the same recipient. It builds an isolated production app with `next build --webpack`, runs `next start` on port 6004, and verifies that the second recipient session clears “New” after the server read-state refresh while its Home document stays open.
+- The same flow sends from Compose, checks both recipient sessions at 390×844 and 1440×900, opens from Inbox, records the exact successful read marker, reacts with 🫶, verifies sender live and persisted reaction, checks browser errors and origins, and removes the exact disposable rows, accounts, profiles, app, and browser profiles.
+- Verification: `npm test` passed 281/281; browser-smoke syntax, ESLint for the changed harness, and `git diff --check` passed. The full production browser run passed, including exact RPC response correlation and no-reload sync. The local Docker daemon reports server 29.5.2; the Supabase stack is up, and the app, Auth, and Mailpit return HTTP 200.
+- Code commit `0e672f3` is pushed to `origin/feat/recipient-unread-e2e`; this handoff/checklist/plan/README/learning update is a separate commit on the same branch. No PR is open for this branch. PR #7 remains open for its separate QR browser check.
+- Drop is running at `http://localhost:4004`. The Docker socket permissions and global Docker settings were not changed. No hosted Supabase resource was used or changed, `.env.local` was not committed, and `/letter` was not changed.
+
+**Next:** verify hosted migration/API behavior, screen-reader output, and physical-device behavior when the hosted project is available. Complete PR #7's separate QR browser check before merging that PR.
+
+## Latest checkpoint — private, durable unread state (2026-10-25)
+
+- Added private server-side read markers for actual delivered recipient drops, recipient-scoped RPCs, unread card/navigation indicators on desktop and mobile, and account-safe handling of asynchronous read events. Read markers are not exposed to senders.
+- Verification: `npm test` passed 280/280; lint, no-incremental TypeScript, `git diff --check`, and the isolated Webpack production build passed. `npm run test:local-supabase` passed all 9 groups, and the rollback-only SQL fixture passed against a disposable local database. Authenticated Edge browser verification passed at 390×844 and 1440×900: sign-in, open, successful read RPC, cleared markers, and persisted state after reload. Cleanup left no disposable users or drops, no port 5004 listener, and no temporary browser profile or owned app process.
+- Code commit `a416d81` and documentation commit `e53c0d0` are pushed to `origin/feat/recipient-unread-state`. This branch has not been opened as a PR or merged. PR #7 remains open for the private-claim QR browser check.
+- No hosted Supabase resource or credential changed. After the isolated browser smoke cleaned up, the project app returned HTTP 200 on port 4004 and remains available at `http://localhost:4004`.
+
+**Next:** verify read synchronization in a second authenticated session for the same recipient, then complete hosted migration/API, screen-reader, and physical-device checks when available. The app uses `./run.sh start` and the stable URL `http://localhost:4004`.
 
 ## Latest checkpoint — PR #5 merged into main (2026-10-24)
 
@@ -453,3 +638,24 @@ Updated: 2026-10-24
 ## Run locally
 
 From /Users/arjeetanand/projects/drop, run npm ci, then ./run.sh. Drop uses http://localhost:4004; ./run.sh stop stops the project-owned process. The local Supabase smoke environment uses port 5004 and browser QA is reserved port 6004. Code commit `88f9b11` is pushed to `origin/feat/media-orphan-reconciliation`; this handoff and learning update are committed separately on that branch. The branch is not merged and has no pull request.
+
+## Latest checkpoint — Social Relay identity and feasibility pilot (2026-10-26)
+
+- The task branch is `codex/social-relay-pilot`, based on `feat/pilot-integrated-preview` at `9b3ee7c`. Code commit `b9fb0f5` is pushed to `origin/codex/social-relay-pilot`; it has not been merged. The PR target is the pilot branch, never `main`.
+- Relay copy now describes the sequential journey and recipient collection, identifies carrier names as self-entered and unverified, and says anyone receiving the one-time link can accept it first. The share-sheet message asks the next carrier to opt in.
+- `docs/social-relay-pilot.md` records the positioning, platform feasibility limits, opt-in pilot scope, and success measures. Direct delivery remains the better path when speed matters; Relay's proposed advantage is an occasion-based journey people choose to carry.
+- `npm test` passed 301/301; typecheck, focused ESLint, browser script syntax, and `git diff --check` passed. The full local browser run passed for a two-carrier text route, replay denial, sender refresh, recipient collection, and the existing GIF journey before the final bearer-link disclosure and its new assertions were added.
+- The final browser rerun stopped during initialization because port 6004 belongs to an active `next-server` with working directory `/private/tmp/drop-local-demo-cleanup`. It was left running. The app process on port 4004 belongs to this checkout and returned HTTP 200.
+- Draft [PR #12](https://github.com/arjeetanand/drop/pull/12) is open from `codex/social-relay-pilot` into `feat/pilot-integrated-preview`; leave it unmerged. GitHub CLI reports its saved token is invalid, but branch pushes and PR creation succeeded with the configured Git credential. No main branch changes were made.
+- PR CI status is not verified: `gh pr view`/`gh pr checks` could not connect to `api.github.com`, and the Code Review diagnostics connector was unavailable after the PR was created.
+- Remaining product risks: no social graph is read, carrier identities are not verified, and a bearer invite can be accepted by its first recipient. No human participant study, platform API integration, native share-sheet, screen-reader, or physical-device test was run.
+
+## Latest checkpoint — First-friend signup, share, and send-back (2026-10-27)
+
+- Branch: `codex/social-relay-pilot`, based on `feat/pilot-integrated-preview`. The verified browser-test commits are `a238fa0` and `70214d9`, pushed separately. No merge was performed.
+- `scripts/browser-first-signup-smoke.mjs` now starts with the sealed private claim unopened, follows the signed-out Home **Invite a friend** action through local email signup, checks the callback returns to `/profile?invite=1` with no `next`, verifies the claim handoff survives, keeps share controls hidden until first profile sync, checks the exact explicit public handle/profile URL payload, then completes private claim/reveal and outsider/replay denials.
+- `scripts/browser-send-react-smoke.mjs` now uses the signed-in recipient to visit the sender's public `/u/{handle}` page, follows **Send a drop**, confirms the prefilled handle, sends a reply, checks the exact delivered row and that the sender sees it in Home, then verifies exact-row cleanup.
+- Verification: `npm test` passed 301/301; `npm run lint`, `npm run typecheck`, `node --check` for both smoke scripts, and `git diff --check` passed. Both isolated local browser runs passed. First-signup cleanup confirmed one exact drop, three Auth/profile pairs, one Mailpit message, and removal of the temporary directory. Send/react reported exact local cleanup. Local Supabase, Mailpit, and browser requests stayed on loopback; no reset or hosted request occurred.
+- The canonical app on `127.0.0.1:4004` responded HTTP 200 and remains running. The smoke tests used only port `6004` and left that main process untouched. Edge's “Allow JavaScript from Apple Events” setting was left as requested.
+- PR #12 was last confirmed open/draft before these pushes. GitHub API access failed with `error connecting to api.github.com`, so current PR head/checks are not verified; refresh them when GitHub is reachable. Keep the PR unmerged pending user approval.
+- Remaining: hosted Free-project two-account delivery, native OS share sheet, screen-reader announcement checks, physical-device/keyboard/camera acceptance, and an opt-in human value study. The browser share API is stubbed in the smoke and does not prove OS share-sheet behavior.

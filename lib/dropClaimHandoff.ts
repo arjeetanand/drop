@@ -4,6 +4,7 @@ export const DROP_CLAIM_HANDOFF_TTL_MS = 10 * 60 * 1000;
 
 const HANDOFF_KEY_PREFIX = 'drop:claim-handoff:v1:';
 type HandoffStorage = Pick<Storage, 'length' | 'key' | 'getItem' | 'setItem' | 'removeItem'>;
+type HandoffLifecycleTarget = Pick<Window, 'addEventListener' | 'removeEventListener'>;
 
 export function isDropClaimHandoffId(value: string | null): value is string {
   return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value);
@@ -53,6 +54,21 @@ export function pruneDropClaimHandoffs(storage: HandoffStorage, now = Date.now()
   } catch {
     // Storage can be blocked. The caller can still keep the invite in memory or session storage.
   }
+}
+
+export function installDropClaimHandoffPruning(
+  storage: HandoffStorage,
+  lifecycle: HandoffLifecycleTarget,
+  now: () => number = Date.now,
+) {
+  const prune = () => pruneDropClaimHandoffs(storage, now());
+  prune();
+  lifecycle.addEventListener('pageshow', prune);
+  lifecycle.addEventListener('focus', prune);
+  return () => {
+    lifecycle.removeEventListener('pageshow', prune);
+    lifecycle.removeEventListener('focus', prune);
+  };
 }
 
 export function storeDropClaimHandoff(

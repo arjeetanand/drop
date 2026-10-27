@@ -10,6 +10,18 @@ type StoredAttachment = {
   lastModified: number;
 };
 
+export class AttachmentCommittedAfterAccountSwitchError extends Error {
+  readonly draftId: string;
+  readonly accountId: string | null;
+
+  constructor(draftId: string, accountId: string | null) {
+    super('The active account changed while saving the attachment.');
+    this.name = 'AttachmentCommittedAfterAccountSwitchError';
+    this.draftId = draftId;
+    this.accountId = accountId;
+  }
+}
+
 function openDatabase() {
   return new Promise<IDBDatabase>((resolve, reject) => {
     const request = window.indexedDB.open(DATABASE, 1);
@@ -38,7 +50,9 @@ export async function saveDraftAttachment(draftId: string, file: File, expectedA
       transaction.onerror = () => reject(transaction.error);
       transaction.onabort = () => reject(transaction.error);
     });
-    if (!isCurrentLocalAccount(accountId)) throw new Error('The active account changed while saving the attachment.');
+    if (!isCurrentLocalAccount(accountId)) {
+      throw new AttachmentCommittedAfterAccountSwitchError(draftId, accountId);
+    }
   } finally {
     database.close();
   }
@@ -90,13 +104,13 @@ export async function copyGuestDraftAttachmentToAccount(draftId: string, account
   }).finally(() => database.close());
 }
 
-export async function deleteDraftAttachment(draftId: string, accountId?: string | null) {
+async function deleteDraftAttachmentWithStatus(draftId: string, accountId?: string | null): Promise<'deleted' | 'account-switched'> {
   const activeAccountId = getLocalAccountId();
   const targetAccountId = accountId === undefined ? activeAccountId : accountId;
   const recordId = localAccountRecordId(draftId, targetAccountId);
   const database = await openDatabase();
   try {
-    if (accountId === undefined && !isCurrentLocalAccount(activeAccountId)) return;
+    if (accountId === undefined && !isCurrentLocalAccount(activeAccountId)) return 'account-switched';
     await new Promise<void>((resolve, reject) => {
       const transaction = database.transaction(STORE, 'readwrite');
       transaction.objectStore(STORE).delete(recordId);
@@ -104,7 +118,16 @@ export async function deleteDraftAttachment(draftId: string, accountId?: string 
       transaction.onerror = () => reject(transaction.error);
       transaction.onabort = () => reject(transaction.error);
     });
+    return 'deleted';
   } finally {
     database.close();
   }
+}
+
+export async function deleteDraftAttachment(draftId: string, accountId?: string | null): Promise<void> {
+  await deleteDraftAttachmentWithStatus(draftId, accountId);
+}
+
+export async function deleteDraftAttachmentForCurrentAccount(draftId: string): Promise<'deleted' | 'account-switched'> {
+  return deleteDraftAttachmentWithStatus(draftId);
 }

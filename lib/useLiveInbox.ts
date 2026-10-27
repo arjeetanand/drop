@@ -4,15 +4,19 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { mockLetters, type MockLetter } from '@/data/mockData';
 import { getRemoteLetters, subscribeToIncomingDropInbox, subscribeToSenderDropReactions } from '@/lib/letterBackend';
 import { getLetterDraft, getLettersWithDraft } from '@/lib/letterStore';
-import { getLiveInboxUpdate, mergeInboxLetters } from '@/lib/liveInboxState';
+import { getSupabaseBrowserClient } from '@/lib/supabaseBrowser';
+import { applyRecipientDropRead, applyRecipientDropReadEvents, getLiveInboxUpdate, mergeInboxLetters } from '@/lib/liveInboxState';
 import { getLiveReactionUpdate } from '@/lib/liveReactionState';
 import { startVisibleDataRefresh, type VisibleDataRefreshController } from '@/lib/relayRouteRefresh';
+import { isRecipientDropReadForAccount, subscribeToRecipientDropReads, type RecipientDropReadEventDetail } from '@/lib/recipientDropReadEvent';
+import { getLocalAccountId } from '@/lib/localAccountScope';
 
 export const LIVE_INBOX_RECOVERY_INTERVAL_MS = 60_000;
 
 export function useLiveInbox(initialLetters: MockLetter[] = mockLetters) {
   const [initialReactionSignalWindowStart] = useState(() => Date.now() - 60_000);
   const [letters, setLetters] = useState<MockLetter[]>(initialLetters);
+  const [recipientReadStatesHydrated, setRecipientReadStatesHydrated] = useState(false);
   const [arrival, setArrival] = useState<MockLetter | null>(null);
   const [arrivalCount, setArrivalCount] = useState(0);
   const [reaction, setReaction] = useState<MockLetter | null>(null);
@@ -29,6 +33,15 @@ export function useLiveInbox(initialLetters: MockLetter[] = mockLetters) {
     let active = true;
     let stopRealtime = () => {};
     let stopReactionRealtime = () => {};
+    let observedAccountId: string | null = null;
+    let authInitialized = false;
+    let accountGeneration = 0;
+    const pendingReadEvents = new Map<string, RecipientDropReadEventDetail>();
+    const stopRecipientDropReadEvents = subscribeToRecipientDropReads((detail) => {
+      if (!isRecipientDropReadForAccount(detail, getLocalAccountId())) return;
+      pendingReadEvents.set(detail.letterId, detail);
+      setLetters((current) => applyRecipientDropRead(current, detail));
+    });
     const signaledDropIds = new Set<string>();
     const signaledReactionDropIds = new Set<string>();
 
@@ -48,13 +61,29 @@ export function useLiveInbox(initialLetters: MockLetter[] = mockLetters) {
       else {
         stopRealtime = stop;
         const refreshController = startVisibleDataRefresh({
-          load: getRemoteLetters,
+          load: async () => {
+            const generation = accountGeneration;
+            return { mailbox: await getRemoteLetters(), generation };
+          },
           intervalMs: LIVE_INBOX_RECOVERY_INTERVAL_MS,
           queueOneWhileInFlight: true,
-          onData: (mailbox) => {
+          onData: ({ mailbox, generation }) => {
             if (!active) return;
+            if (generation !== accountGeneration) return;
+            if (!mailbox) {
+              seenIncomingIds.current = null;
+              seenReactions.current = null;
+              setRecipientReadStatesHydrated(false);
+              setLetters(initialLetters);
+              return;
+            }
 
-            const remoteLetters = mailbox.letters;
+            const serverReadIds = mailbox.letters
+              .filter((letter) => typeof letter.recipientReadAt === 'string')
+              .map((letter) => letter.id);
+            serverReadIds.forEach((id) => pendingReadEvents.delete(id));
+            const remoteLetters = applyRecipientDropReadEvents(mailbox.letters, pendingReadEvents.values());
+            setRecipientReadStatesHydrated(mailbox.recipientReadStatesHydrated === true);
             const pendingRelayIds = new Set(remoteLetters
               .filter((letter) => letter.direction === 'received'
                 && letter.status === 'dispatched'
@@ -96,6 +125,7 @@ export function useLiveInbox(initialLetters: MockLetter[] = mockLetters) {
               localLetters,
               displayLetters,
               mailbox.claimStatusHydrated ? [] : current,
+              current,
             ));
           },
         });
@@ -103,17 +133,43 @@ export function useLiveInbox(initialLetters: MockLetter[] = mockLetters) {
       }
     });
 
+    const authSubscription = getSupabaseBrowserClient()?.auth.onAuthStateChange((_event, session) => {
+      const nextAccountId = session?.user.id ?? null;
+      if (!authInitialized) {
+        authInitialized = true;
+        observedAccountId = nextAccountId;
+        return;
+      }
+      if (observedAccountId === nextAccountId) return;
+
+      observedAccountId = nextAccountId;
+      accountGeneration += 1;
+      pendingReadEvents.clear();
+      seenIncomingIds.current = null;
+      seenReactions.current = null;
+      setRecipientReadStatesHydrated(false);
+      setLetters(initialLetters);
+      setArrival(null);
+      setArrivalCount(0);
+      setReaction(null);
+      setReactionCount(0);
+      void refreshControllerRef.current?.refresh();
+    }).data.subscription;
+
     return () => {
       active = false;
       refreshControllerRef.current?.stop();
       refreshControllerRef.current = null;
       stopRealtime();
       stopReactionRealtime();
+      stopRecipientDropReadEvents();
+      authSubscription?.unsubscribe();
     };
-  }, [initialReactionSignalWindowStart]);
+  }, [initialLetters, initialReactionSignalWindowStart]);
 
   return {
     letters,
+    recipientReadStatesHydrated,
     refreshInbox,
     arrival,
     arrivalCount,

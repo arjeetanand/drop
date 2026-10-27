@@ -6,6 +6,7 @@ import { createServer } from 'node:net';
 import { join, relative, resolve, sep } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createClient } from '@supabase/supabase-js';
+import { assertTrustedLocalSupabaseListener } from './localSupabaseListener.mjs';
 
 const root = process.cwd();
 const envFile = await readFile(resolve(root, '.env.local'), 'utf8').catch(() => {
@@ -22,6 +23,10 @@ if (!supabaseUrl || !anonKey || !serviceRoleKey) throw new Error('.env.local is 
 if (!['localhost', '127.0.0.1', '::1', '[::1]'].includes(new URL(supabaseUrl).hostname)) {
   throw new Error('This smoke test only runs against a Supabase URL on this machine.');
 }
+if (Number(new URL(supabaseUrl).port) !== 54321) {
+  throw new Error('This smoke test requires the local Supabase API on port 54321.');
+}
+assertTrustedLocalSupabaseListener(54321);
 
 const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } });
 const createdUserIds = [];
@@ -530,6 +535,61 @@ try {
   assert.equal(recentDropRows.filter(({ recipient_username }) => recipient_username === profiles[1].username).length, 1);
   assert.equal(recentDropRows.filter(({ recipient_username }) => recipient_username === unknownRecipientHandle).length, unknownHandleMedia.length + 1, 'Each claimed text or media invite should contribute the profiled claimant to the raw recent-recipient rows');
 
+  const readStateDropId = randomUUID();
+  const readStateSentAt = new Date().toISOString();
+  const { error: readStateDropInsertError } = await sender.client.from('letters').insert({
+    id: readStateDropId,
+    sender_id: sender.id,
+    recipient_id: recipient.id,
+    sender_display_name: 'Smoke Sender',
+    recipient_username: profiles[1].username,
+    recipient_name: 'Smoke Recipient',
+    subject: 'Recipient read state smoke',
+    content: 'Only the recipient should store a read timestamp.',
+    teaser: ['Only the recipient should store a read timestamp.'],
+    status: 'delivered',
+    seal_id: 'cobalt',
+    dispatched_at: readStateSentAt,
+    delivered_at: readStateSentAt,
+    payload_kind: 'text',
+    delivery_mode: 'instant',
+  });
+  assert.ifError(readStateDropInsertError);
+
+  const readStateArgs = { p_letter_ids: [readStateDropId] };
+  const { data: initialRecipientReadState, error: initialRecipientReadStateError } = await recipient.client.rpc('get_recipient_drop_read_states', readStateArgs);
+  assert.ifError(initialRecipientReadStateError);
+  assert.deepEqual(initialRecipientReadState, [], 'The recipient should start with no read timestamp for a new delivered drop');
+
+  const { data: firstReadAt, error: firstReadAtError } = await recipient.client.rpc('mark_recipient_drop_read', { p_letter_id: readStateDropId });
+  assert.ifError(firstReadAtError);
+  assert.ok(typeof firstReadAt === 'string' && Number.isFinite(Date.parse(firstReadAt)), 'The recipient should receive a valid server read timestamp');
+  const { data: repeatedReadAt, error: repeatedReadAtError } = await recipient.client.rpc('mark_recipient_drop_read', { p_letter_id: readStateDropId });
+  assert.ifError(repeatedReadAtError);
+  assert.equal(repeatedReadAt, firstReadAt, 'Repeating the recipient mark should preserve its server timestamp');
+
+  const { data: recipientReadState, error: recipientReadStateError } = await recipient.client.rpc('get_recipient_drop_read_states', readStateArgs);
+  assert.ifError(recipientReadStateError);
+  assert.deepEqual(recipientReadState, [{ letter_id: readStateDropId, read_at: firstReadAt }], 'The recipient should be able to read their own timestamp');
+
+  for (const [label, account] of [['sender', sender], ['outsider', outsider]]) {
+    const { data: hiddenReadState, error: hiddenReadStateError } = await account.client.rpc('get_recipient_drop_read_states', readStateArgs);
+    assert.ifError(hiddenReadStateError);
+    assert.deepEqual(hiddenReadState, [], `The ${label} must not see the recipient read timestamp`);
+    const { data: rejectedReadAt, error: rejectedReadAtError } = await account.client.rpc('mark_recipient_drop_read', { p_letter_id: readStateDropId });
+    assert.ifError(rejectedReadAtError);
+    assert.equal(rejectedReadAt, null, `The ${label} must not create a read timestamp`);
+  }
+
+  const { data: anonymousReadState, error: anonymousReadStateError } = await anonymous.rpc('get_recipient_drop_read_states', readStateArgs);
+  assert.ok(anonymousReadStateError && anonymousReadState == null, 'Anonymous clients must not read recipient read state');
+  const { data: anonymousReadAt, error: anonymousReadAtError } = await anonymous.rpc('mark_recipient_drop_read', { p_letter_id: readStateDropId });
+  assert.ok(anonymousReadAtError && anonymousReadAt == null, 'Anonymous clients must not create recipient read state');
+
+  const { data: readStateAfterDeniedCalls, error: readStateAfterDeniedCallsError } = await recipient.client.rpc('get_recipient_drop_read_states', readStateArgs);
+  assert.ifError(readStateAfterDeniedCallsError);
+  assert.deepEqual(readStateAfterDeniedCalls, [{ letter_id: readStateDropId, read_at: firstReadAt }], 'Denied sender, outsider, and anonymous calls must not create or alter read state');
+
   for (const account of [sender, recipient]) {
     const { data, error } = await account.client.from('letters').select('id, content').eq('id', textDropId).maybeSingle();
     assert.ifError(error);
@@ -981,6 +1041,7 @@ try {
   console.log('PASS: unknown-handle image and GIF invites remain unreadable and unclaimable before profile setup, then expose media only to the sender and explicit claimant.');
   console.log('PASS: sender and recipient read the drop; an unrelated account cannot read or edit it.');
   console.log('PASS: the recipient reacts; the sender sees the reaction; unrelated reaction access is denied.');
+  console.log('PASS: recipient read timestamps are idempotent and private; sender, outsider, and anonymous requests are denied.');
   console.log('PASS: the local finalize route validates a GIF, safely reuses an exact retry with a fresh staging path, and keeps media limited to participants.');
   console.log('PASS: relay-GIF handoff exposes route summaries only; recipient content, media, and reactions stay locked until repeat-safe collection; carriers and outsiders remain denied.');
   console.log('PASS: legacy dispatched rows remain sealed regardless of delivery mode, then normalize to relay when collected.');

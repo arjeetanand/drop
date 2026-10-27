@@ -219,6 +219,7 @@ function RelayContent() {
         if (!navigator.clipboard) throw new Error('Clipboard unavailable');
         await navigator.clipboard.writeText(url);
       },
+      { title: 'A Drop to carry', text: 'I’d like you to be the first person to carry this sealed Drop. Accept the one-time invite to join its journey.' },
     );
     setError('');
     if (result === 'shared') {
@@ -357,6 +358,7 @@ function RelayContent() {
                     </div>
                     <p className="mt-4 break-all rounded-xl bg-[#f5f1e9] p-3 font-mono text-[0.65rem] leading-relaxed text-ink-navy">{inviteUrl}</p>
                     <p className="mt-3 text-xs text-on-surface-variant">Expires {inviteExpiresAt ? new Date(inviteExpiresAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : 'in 10 minutes'}.</p>
+                    <p className="mt-2 text-xs leading-relaxed text-on-surface-variant">This one-time link is not tied to a Drop account. Whoever receives it can accept first.</p>
                     <button type="button" onClick={() => void shareInvite()} className="button-secondary mt-4 w-full !min-h-12 !rounded-xl">
                       {copied ? <Check className="h-4 w-4 text-[#2b45f7]" aria-hidden="true" /> : <Share2 className="h-4 w-4 text-[#2b45f7]" aria-hidden="true" />}
                       {copied ? 'Invite copied' : 'Share carrier invite'}

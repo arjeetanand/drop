@@ -1,13 +1,20 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ArrowUpRight, Mail, PenLine, Plus, Route, Sparkles, UserRound } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getLetterDraft } from '@/lib/letterStore';
 import { defaultUserProfile, getUserProfileForCurrentAccount } from '@/lib/userStore';
-import { getRemoteProfile } from '@/lib/letterBackend';
+import { getRemoteLetters, getRemoteProfile } from '@/lib/letterBackend';
+import type { MockLetter } from '@/data/mockData';
+import { applyRecipientDropRead, applyRecipientDropReadEvents, mergeInboxLetters } from '@/lib/liveInboxState';
+import { getUnreadReceivedCount } from '@/lib/mailboxView';
+import { startVisibleDataRefresh } from '@/lib/relayRouteRefresh';
+import { isRecipientDropReadForAccount, subscribeToRecipientDropReads, type RecipientDropReadEventDetail } from '@/lib/recipientDropReadEvent';
+import { getLocalAccountId } from '@/lib/localAccountScope';
+import { getSupabaseBrowserClient } from '@/lib/supabaseBrowser';
 import { SoundToggle } from '@/components/SoundToggle';
 import { getActiveNavigationHref, usesPrivateShell } from '@/lib/navigation';
 
@@ -18,10 +25,93 @@ const navItems = [
   { href: '/profile', label: 'You', icon: UserRound },
 ];
 
+function InboxUnreadBadge({ count }: { count: number | null }) {
+  if (!count) return null;
+  return (
+    <span
+      role="status"
+      aria-label={`${count} new ${count === 1 ? 'drop' : 'drops'}`}
+      className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[#e7f3eb] px-1.5 py-0.5 font-mono text-[0.56rem] font-bold uppercase tracking-[0.06em] text-[#276a4d]"
+    >
+      <span aria-hidden="true">New</span>
+      <span aria-hidden="true">{count > 99 ? '99+' : count}</span>
+    </span>
+  );
+}
+
 export function Sidebar() {
   const pathname = usePathname();
+  const privateShellVisible = usesPrivateShell(pathname);
   const activeNavigationHref = getActiveNavigationHref(pathname);
   const [profile, setProfile] = useState(defaultUserProfile);
+  const [inboxLetters, setInboxLetters] = useState<MockLetter[]>([]);
+  const [recipientReadStatesHydrated, setRecipientReadStatesHydrated] = useState(false);
+  const inboxLettersRef = useRef<MockLetter[]>([]);
+
+  useEffect(() => {
+    if (!privateShellVisible) return;
+
+    let active = true;
+    let observedAccountId: string | null = null;
+    let authInitialized = false;
+    let accountGeneration = 0;
+    const pendingReadEvents = new Map<string, RecipientDropReadEventDetail>();
+    const stopRecipientDropReadEvents = subscribeToRecipientDropReads((detail) => {
+      if (!isRecipientDropReadForAccount(detail, getLocalAccountId())) return;
+      pendingReadEvents.set(detail.letterId, detail);
+      inboxLettersRef.current = applyRecipientDropRead(inboxLettersRef.current, detail);
+      setInboxLetters(inboxLettersRef.current);
+    });
+    const refresh = startVisibleDataRefresh({
+      load: async () => {
+        const generation = accountGeneration;
+        return { mailbox: await getRemoteLetters(), generation };
+      },
+      intervalMs: 60_000,
+      queueOneWhileInFlight: true,
+      onData: ({ mailbox, generation }) => {
+        if (!active) return;
+        if (generation !== accountGeneration) return;
+        if (!mailbox) {
+          inboxLettersRef.current = [];
+          setInboxLetters([]);
+          setRecipientReadStatesHydrated(false);
+          return;
+        }
+        mailbox.letters
+          .filter((letter) => typeof letter.recipientReadAt === 'string')
+          .forEach((letter) => pendingReadEvents.delete(letter.id));
+        const remoteLetters = applyRecipientDropReadEvents(mailbox.letters, pendingReadEvents.values());
+        inboxLettersRef.current = mergeInboxLetters([], remoteLetters, [], inboxLettersRef.current);
+        setInboxLetters(inboxLettersRef.current);
+        setRecipientReadStatesHydrated(mailbox.recipientReadStatesHydrated === true);
+      },
+    });
+    const authSubscription = getSupabaseBrowserClient()?.auth.onAuthStateChange((_event, session) => {
+      const nextAccountId = session?.user.id ?? null;
+      if (!authInitialized) {
+        authInitialized = true;
+        observedAccountId = nextAccountId;
+        return;
+      }
+      if (observedAccountId === nextAccountId) return;
+
+      observedAccountId = nextAccountId;
+      accountGeneration += 1;
+      pendingReadEvents.clear();
+      inboxLettersRef.current = [];
+      setInboxLetters([]);
+      setRecipientReadStatesHydrated(false);
+      void refresh.refresh();
+    }).data.subscription;
+
+    return () => {
+      active = false;
+      refresh.stop();
+      stopRecipientDropReadEvents();
+      authSubscription?.unsubscribe();
+    };
+  }, [privateShellVisible]);
 
   useEffect(() => {
     let active = true;
@@ -36,7 +126,7 @@ export function Sidebar() {
     };
   }, []);
 
-  if (pathname && !usesPrivateShell(pathname)) return null;
+  if (pathname && !privateShellVisible) return null;
 
   const initials = profile.displayName
     .split(' ')
@@ -44,6 +134,7 @@ export function Sidebar() {
     .join('')
     .slice(0, 2)
     .toUpperCase();
+  const unreadReceivedCount = getUnreadReceivedCount(inboxLetters, recipientReadStatesHydrated);
 
   return (
     <>
@@ -86,6 +177,7 @@ export function Sidebar() {
                   >
                     <Icon className="h-[18px] w-[18px]" aria-hidden="true" />
                     <span>{item.label}</span>
+                    {item.href === '/mailbox' && <InboxUnreadBadge count={unreadReceivedCount} />}
                   </Link>
                 </li>
               );
@@ -124,7 +216,10 @@ export function Sidebar() {
               )}
             >
               <Icon className={cn('h-[18px] w-[18px]', active && 'text-[#4f9d7a]')} aria-hidden="true" />
-              <span>{item.label}</span>
+              <span className="inline-flex items-center gap-1.5">
+                {item.label}
+                {item.href === '/mailbox' && <InboxUnreadBadge count={unreadReceivedCount} />}
+              </span>
             </Link>
           );
         })}
