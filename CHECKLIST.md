@@ -10,7 +10,8 @@ Updated: 2026-10-27
 - [x] Patch the dependency advisories: Next.js, eslint-config-next, and the SWC WASM fallback at 16.4.3; Sharp 0.35.5; remove unused direct Zod; refresh compatible transitive packages. npm's install/audit pass reported zero vulnerabilities.
 - [x] Pass 302 unit tests, lint, Next route type generation, TypeScript, diff checks, and the Webpack production build with all 22 routes.
 - [x] Commit and push dependency changes 66d8930 and f651b3e to codex/invitee-first-send.
-- [x] Open draft PR #13 directly into main. GitGuardian and CI were running on head f651b3e at the last status check; refresh after this documentation push and before merge.
+- [x] Open draft PR #13 directly into main.
+- [x] Confirm CI and GitGuardian passed on head 14cee94 with a clean merge state; this final status note triggers another workflow run.
 - [x] Keep Drop's run.sh process on its documented port 4004. The current sandbox HTTP probe was blocked by local-network permission; earlier local checks returned HTTP 200.
 - [ ] Verify the hosted Free project, Auth, migrations/functions, real two-account delivery, and scheduled physical cleanup.
 - [ ] Verify OS sharing, spoken screen-reader output, and physical-device/camera behavior; run the opt-in pilot.

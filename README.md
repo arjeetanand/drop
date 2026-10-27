@@ -14,7 +14,7 @@ Local verification: 302/302 unit tests, ESLint, Next route type generation, Type
 
 The code candidate is ready for PR review; live-pilot readiness is still open. Hosted Supabase project/Auth/migrations/functions, real hosted two-account delivery, scheduled physical media deletion, actual OS sharing, spoken screen-reader output, physical camera/device behavior, and the opt-in user study remain unverified.
 
-Draft PR #13 is open from codex/invitee-first-send to main. Dependency commits 66d8930 and f651b3e are pushed. On f651b3e, GitHub showed CI and GitGuardian in progress and an unstable merge state. Refresh checks after the closeout documentation push and before merge.
+Draft PR #13 is open from codex/invitee-first-send to main. Dependency commits 66d8930 and f651b3e are pushed. On f651b3e, GitHub showed CI and GitGuardian in progress and an unstable merge state. On head 14cee94, both checks passed and GitHub reported CLEAN. This final status note triggers a new run; verify the documentation head before merge.
 
 ## Pitch
 

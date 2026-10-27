@@ -9,7 +9,8 @@ Tasks are ordered by dependency. Progress is recorded at each tested and pushed 
 - [x] Stop sidebar mailbox polling on public routes and record the remaining duplicate recovery read.
 - [x] Patch dependency advisories and push commits 66d8930 and f651b3e: Next.js, eslint-config-next, and SWC WASM fallback 16.4.3; Sharp 0.35.5; remove unused direct Zod; refresh compatible transitive packages. npm's install/audit pass reported zero vulnerabilities.
 - [x] Pass 302 unit tests, lint, Next route type generation, TypeScript, diff checks, and a 22-route Webpack production build. The local photo/GIF claim browser flow passed on patched Next and Sharp.
-- [x] Open draft PR #13 directly to main. GitGuardian and CI were in progress on head f651b3e at the last status check; refresh after this documentation push.
+- [x] Open draft PR #13 directly to main.
+- [x] Confirm CI and GitGuardian passed on head 14cee94 with a clean merge state; this final status note triggers another run.
 - [x] Keep Drop's run.sh process on port 4004. This session's HTTP probe was blocked by sandbox loopback permissions; earlier local checks returned HTTP 200.
 - [ ] Verify hosted Free project identity, Auth/migrations/functions, two-account delivery, and scheduled physical media deletion.
 - [ ] Verify actual OS sharing, spoken screen-reader behavior, and physical-device/camera paths; run the small opt-in user pilot.

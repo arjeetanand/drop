@@ -14,7 +14,7 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 - The local fixture guard pins writes to this repository's supabase_kong_drop and supabase_inbucket_drop containers. Sidebar polling stops on routes where the private shell is hidden; Home and its visible sidebar still make separate 60-second recovery reads.
 - Dependency advisory fixes are in commits 66d8930 and f651b3e: Next.js, eslint-config-next, and Next SWC WASM fallback 16.4.3; Sharp 0.35.5; unused direct Zod removed; compatible transitive packages refreshed. npm's install/audit pass reported zero vulnerabilities. A separate online npm audit attempt could not reach the registry.
 - Verification: 302 unit tests, lint, Next route typegen, TypeScript, diff checks, and Webpack production build passed; all 22 routes generated. The local photo/GIF claim browser flow passed on the updated Next and Sharp packages. Build warns that React 18 support is deprecated in Next 16 and removed in Next 17.
-- Draft PR #13 is open to main. On f651b3e, GitHub showed CI and GitGuardian in progress with an unstable merge state. Refresh after the closeout docs push.
+- Draft PR #13 is open to main. CI and GitGuardian passed on head 14cee94 with a clean merge state; this final verification note triggers another run.
 - The app is running through run.sh on port 4004. This session's HTTP probe was blocked by sandbox loopback permissions; earlier local checks returned HTTP 200.
 - Previously recorded local browser journeys cover new-user signup/send, direct send/reply/read/reaction, text/GIF Relay, private claims/QR, and responsive accessibility. Hosted delivery/retention, real OS sharing, spoken screen-reader output, physical-device/camera acceptance, and an opt-in study remain open.
 

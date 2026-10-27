@@ -2315,3 +2315,7 @@ Raise declared version floors as well as updating the lockfile. Keep framework t
 ### Git and remaining gates
 
 Commits 66d8930 and f651b3e are pushed on codex/invitee-first-send. Draft PR #13 is open to main; CI and GitGuardian were in progress at the last check. Hosted delivery and retention, native OS sharing, spoken screen-reader output, physical device/camera behavior, and the opt-in pilot remain unverified.
+
+## 2026-10-27 — Final PR check refresh
+
+The pushed closeout head 14cee94 passed both GitHub Actions CI and GitGuardian, and GitHub reported a clean merge state. A final documentation-only status commit follows this check and will trigger another CI run. The branch remains a draft PR; do not merge without explicit approval. Hosted Supabase delivery/retention and device acceptance remain open.

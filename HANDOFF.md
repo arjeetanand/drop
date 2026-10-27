@@ -12,7 +12,7 @@ Updated: 2026-10-27
 - GitHub: commits 66d8930 and f651b3e are pushed to origin/codex/invitee-first-send. Draft PR #13 remains open to main. On f651b3e, CI and GitGuardian were in progress and GitHub reported UNSTABLE; the closeout docs push will start another run. Refresh the final head/checks before merge.
 - Still open for a live pilot: verify the hosted Free project, Auth email, deployed migrations/functions, real two-account delivery, and scheduled physical Storage deletion; verify real OS sharing, spoken screen-reader output, and physical camera/device behavior; then run the opt-in user study.
 
-Next: push the closeout docs, refresh PR #13 checks on its final head, and request merge approval after review. The code is prepared for review, but hosted pilot acceptance is not complete.
+At head 14cee94, CI and GitGuardian passed and GitHub reported CLEAN. This verification follow-up will start a new run; verify that final documentation head before requesting merge approval. The code is prepared for review, but hosted pilot acceptance is not complete.
 
 ## Latest checkpoint — signed-out friend first send and unique inbox card (2026-10-27)
 
