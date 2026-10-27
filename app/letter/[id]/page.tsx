@@ -661,9 +661,9 @@ export default function LetterArrivalPage() {
             </Link>
           </header>
           <section className="mt-8">
-            <p className="eyebrow">On its way</p>
-            <h1 className="display-title mt-3 max-w-[12ch]">This drop is still traveling.</h1>
-            <RelayRecipientCard letter={letter} onRefresh={refreshCollectedRelay} />
+            <p className="eyebrow">Relay drop</p>
+            <h1 className="display-title mt-3 max-w-[12ch]">A drop for you.</h1>
+            <RelayRecipientCard letter={letter} onOpenCollected={refreshCollectedRelay} />
           </section>
         </div>
       </main>

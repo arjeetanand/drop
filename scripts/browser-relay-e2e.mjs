@@ -1385,10 +1385,26 @@ async function main() {
     await clickButton(recipientSession, 'I got this drop');
     await recipientSession.waitFor(async () => {
       const text = await bodyText(recipientSession);
-      return textIncludes(text, fixture.subject) && textIncludes(text, fixture.content);
-    }, 'recipient mailbox to reveal the collected drop');
+      return textIncludes(text, 'Your drop made it to you') && textIncludes(text, 'passed through 2 hands');
+    }, 'recipient Relay arrival recap');
+    await recipientSession.waitFor(() => recipientSession.evaluate(`document.activeElement?.innerText.replace(/\\s+/g, ' ').trim().toLocaleLowerCase() === 'open your drop'`), 'focus on the next Relay action');
+    const collectedRecap = await bodyText(recipientSession);
+    assert.ok(!textIncludes(collectedRecap, fixture.subject), 'The post-collection recap must keep the subject sealed until the recipient opens the drop.');
+    assert.ok(!textIncludes(collectedRecap, fixture.content), 'The post-collection recap must keep the message sealed until the recipient opens the drop.');
+    assert.ok(!textIncludes(collectedRecap, nextCarrier.displayName), 'The post-collection recap must not expose carrier names.');
+    assert.ok(!textIncludes(collectedRecap, 'Second Pilot Neighborhood'), 'The post-collection recap must not expose carrier neighborhoods.');
     await assertNoHorizontalOverflow(recipientSession, 'Recipient mailbox after collection');
-    console.log('[browser-relay-e2e] PASS recipient saw route-only details, explicitly collected, and then opened the private drop.');
+    await clickButton(recipientSession, 'Open your drop');
+    await recipientSession.waitFor(() => recipientSession.evaluate(`location.pathname === ${JSON.stringify(`/letter/${encodeURIComponent(fixture.letterId)}`)}
+      && Array.from(document.querySelectorAll('button')).some((button) => button.innerText.replace(/\\s+/g, ' ').trim().toLocaleLowerCase() === 'reveal fragments')`), 'recipient collected-drop detail page');
+    await clickButton(recipientSession, 'Reveal fragments');
+    await recipientSession.waitFor(() => pageIncludes(recipientSession, 'Open received drop'), 'recipient explicit open action');
+    await clickButton(recipientSession, 'Open received drop');
+    await recipientSession.waitFor(async () => {
+      const text = await bodyText(recipientSession);
+      return textIncludes(text, fixture.subject) && textIncludes(text, fixture.content);
+    }, 'recipient to open the collected drop');
+    console.log('[browser-relay-e2e] PASS recipient saw route-only details, explicitly collected, read the aggregate recap, then opened the private drop.');
 
     currentStep = 'checking the sender collection receipt';
     await senderSession.navigate(`${APP_ORIGIN}/journey?letter=${encodeURIComponent(fixture.letterId)}`);
@@ -1452,15 +1468,20 @@ async function main() {
     await assertNoPrivateMediaDisclosure(recipientSession, gifFixture, 'GIF recipient mailbox before collection');
     await assertNoHorizontalOverflow(recipientSession, 'Recipient GIF mailbox before collection');
 
-    currentStep = 'collecting and opening the GIF Relay drop as its recipient';
+    currentStep = 'collecting the GIF Relay drop and checking its recap before opening';
     await clickButton(recipientSession, 'I got this drop');
     await recipientSession.waitFor(async () => {
       const text = await bodyText(recipientSession);
-      return textIncludes(text, gifFixture.subject) && textIncludes(text, gifFixture.content);
-    }, 'recipient mailbox to reveal the collected GIF drop');
+      return textIncludes(text, 'Your drop made it to you') && textIncludes(text, 'passed through 1 hand');
+    }, 'recipient GIF Relay arrival recap');
+    const gifCollectedRecap = await bodyText(recipientSession);
+    assert.ok(!textIncludes(gifCollectedRecap, gifFixture.subject), 'The GIF recap must keep the subject sealed until the recipient opens the drop.');
+    assert.ok(!textIncludes(gifCollectedRecap, gifFixture.content), 'The GIF recap must keep the caption sealed until the recipient opens the drop.');
+    assert.ok(!textIncludes(gifCollectedRecap, carrier.displayName), 'The GIF recap must not expose the carrier name.');
+    assert.ok(!textIncludes(gifCollectedRecap, 'GIF Pilot Neighborhood'), 'The GIF recap must not expose the carrier neighborhood.');
     assert.deepEqual(privateMediaObjectRequests(recipientSession), [], 'Collection alone must not request the GIF object before the recipient opens the drop.');
     await assertNoHorizontalOverflow(recipientSession, 'Recipient GIF mailbox after collection');
-    await clickLinkTo(recipientSession, 'Open drop', `/letter/${encodeURIComponent(gifFixture.letterId)}`);
+    await clickButton(recipientSession, 'Open your drop');
     await recipientSession.waitFor(() => recipientSession.evaluate(`location.pathname === ${JSON.stringify(`/letter/${gifFixture.letterId}`)}
       && document.body.innerText.includes(${JSON.stringify(gifFixture.subject)})`), 'collected GIF detail page');
     await assertNoPrivateMediaDisclosure(recipientSession, gifFixture, 'collected GIF detail before opening');

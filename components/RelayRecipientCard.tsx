@@ -1,15 +1,17 @@
 'use client';
 
 import { useId, useState } from 'react';
-import { Check, Clock3, MapPin, MessageCircle, PackageCheck, Route } from 'lucide-react';
+import { Clock3, MapPin, MessageCircle, PackageCheck, Route } from 'lucide-react';
 import type { MockLetter, RelayRecipientProgress } from '@/data/mockData';
 import { collectRemoteRelayDrop } from '@/lib/letterBackend';
+import { RelayArrivalRecap } from '@/components/RelayArrivalRecap';
 
 type RelayRecipientLetter = MockLetter & { relayProgress?: RelayRecipientProgress };
 
 interface RelayRecipientCardProps {
   letter: RelayRecipientLetter;
-  onRefresh: () => Promise<void>;
+  onOpenCollected: () => void | Promise<void>;
+  onCollected?: (letterId: string, handoffCount: number) => void;
 }
 
 function formatHandoffTime(value: string | null) {
@@ -24,30 +26,16 @@ function formatHandoffTime(value: string | null) {
   }).format(date);
 }
 
-export function RelayRecipientCard({ letter, onRefresh }: RelayRecipientCardProps) {
+export function RelayRecipientCard({ letter, onOpenCollected, onCollected }: RelayRecipientCardProps) {
   const headingId = useId();
   const progress = letter.relayProgress;
+  const handoffCount = Math.max(0, progress?.handoffCount ?? 0);
   const [collecting, setCollecting] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
   const [collected, setCollected] = useState(false);
   const [error, setError] = useState('');
 
-  const refreshMailbox = async () => {
-    setRefreshing(true);
-    setError('');
-    try {
-      await onRefresh();
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
   const collectDrop = async () => {
-    if (collecting || refreshing) return;
-    if (collected) {
-      await refreshMailbox();
-      return;
-    }
+    if (collecting || collected) return;
 
     setCollecting(true);
     setError('');
@@ -59,7 +47,7 @@ export function RelayRecipientCard({ letter, onRefresh }: RelayRecipientCardProp
       }
 
       setCollected(true);
-      await refreshMailbox();
+      onCollected?.(letter.id, handoffCount);
     } catch {
       setError('This drop could not be collected yet. Check your connection and try again.');
     } finally {
@@ -67,18 +55,14 @@ export function RelayRecipientCard({ letter, onRefresh }: RelayRecipientCardProp
     }
   };
 
-  const handoffCount = Math.max(0, progress?.handoffCount ?? 0);
   const latestHandoffTime = formatHandoffTime(progress?.latestHandoffAt ?? null);
   const routeStatus = handoffCount === 0
     ? 'Waiting for its first carrier.'
     : `This drop has passed through ${handoffCount} ${handoffCount === 1 ? 'hand' : 'hands'}.`;
-  const actionStatus = refreshing
-    ? 'Checking your mailbox…'
-    : collecting
-      ? 'Collecting your drop…'
-      : collected
-        ? 'Collection confirmed. Check your mailbox for the open drop.'
-        : '';
+  const actionStatus = collecting ? 'Collecting your drop…' : '';
+
+  if (collected && onCollected) return null;
+  if (collected) return <RelayArrivalRecap handoffCount={handoffCount} onOpen={onOpenCollected} />;
 
   return (
     <article
@@ -138,19 +122,11 @@ export function RelayRecipientCard({ letter, onRefresh }: RelayRecipientCardProp
       <button
         type="button"
         onClick={() => void collectDrop()}
-        disabled={collecting || refreshing}
-        aria-busy={collecting || refreshing}
+        disabled={collecting}
+        aria-busy={collecting}
         className="button-primary mt-4 min-h-12 w-full !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white disabled:opacity-55"
       >
-        {refreshing
-          ? 'Checking mailbox…'
-          : collecting
-            ? 'Collecting…'
-            : collected
-              ? <><Check className="h-4 w-4" aria-hidden="true" /> Check mailbox</>
-              : error
-                ? 'Try again'
-                : 'I got this drop'}
+        {collecting ? 'Collecting…' : error ? 'Try again' : 'I got this drop'}
       </button>
     </article>
   );
