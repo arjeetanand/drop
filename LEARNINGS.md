@@ -2379,3 +2379,35 @@ Record the PR source head and resulting `main` merge SHA separately. A green CI 
 ### Git and remaining gates
 
 The code is on `main` through PR #13. This entry records the merged state and does not change the finding that hosted Supabase access, real hosted delivery/retention, OS sharing, actual screen-reader output, physical-device behavior, and user-pilot acceptance remain unverified.
+
+## 2026-10-27 — Refresh hosted Supabase state after CLI sign-in
+
+### Issue
+
+The project handoff still said no hosted project existed, while a hosted Drop project in the organization named `Drop App Free` had since been created and the CLI could authenticate. The actual billing plan was not verified. The hosted database also contained migration versions newer than `main`, and the 30-day cleanup schedule was not active.
+
+### Cause
+
+The earlier status was captured before the latest Supabase CLI sign-in. Project existence, migration history, Auth configuration, billing plan, and retention-worker state had not been checked as separate facts.
+
+### Resolution
+
+- Verified `Drop` is `ACTIVE_HEALTHY` in `Drop App Free`, region `ap-south-1`, linked the local CLI checkout, and confirmed all 22 `main` migrations are applied.
+- Recorded three remote-only migrations also present on `feat/drop-preview-continuity`; do not run `db push` until their source is reconciled with `main`.
+- Saved the hosted publishable key and server-only secret to ignored `.env.hosted.local` with mode 600. Kept `.env.local` unchanged for loopback tests; no key values were printed or committed.
+- Read Auth settings without mutation: HTTP 200, sign-ups enabled, email confirmation required, Google provider disabled. Confirmed `pg_cron`/`pg_net`, cleanup Vault values, Edge secrets, and deployed functions are absent.
+
+### Learning
+
+Do not treat an organization name containing `Free` as billing-plan evidence. Verify the plan separately, compare remote migration history with the checked-out source before deployment, and track the cleanup schedule independently from the retention migration. Keep hosted test credentials in a distinct ignored file so local destructive fixtures remain loopback-only.
+
+### Verification
+
+- `supabase projects list` and `supabase orgs list` identified the active hosted project and organization; the CLI listing did not return the subscription plan.
+- `supabase migration list --linked` showed 22 matching local/remote versions and the three extra remote versions.
+- Read-only `supabase db query --linked` and Auth settings request confirmed the state above. `supabase secrets list` and `supabase functions list` returned empty arrays.
+- No hosted migrations, Auth settings, Edge Functions, Vault values, or storage data were changed in this status pass.
+
+### Git and remaining gates
+
+The current source of truth remains `main` at the merged PR #14 closure docs; this status update is a documentation follow-up. Confirm the Free plan, reconcile remote-only migrations, configure hosted Auth/email redirects, activate the cleanup worker, then test real two-account delivery and device behavior.

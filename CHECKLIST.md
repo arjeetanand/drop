@@ -11,7 +11,10 @@ Updated: 2026-10-27
 - [x] Commit as `6ccd4c6` and push to `origin/codex/invitee-first-send` for PR #13.
 - [x] Refresh PR #13 on final head `641bb8d`: CI and GitGuardian passed and GitHub reported `CLEAN`.
 - [x] Merge PR #13 into `main` through GitHub; squash commit `f314ced66598d809e9e9ec104d0cba4ea602f6eb`.
-- [ ] Verify hosted Free Supabase delivery/retention, actual OS sharing, spoken screen-reader output, and physical-device/camera behavior before a live user pilot.
+- [x] Confirm the hosted Drop project is active in the `Drop App Free` organization and all 22 `main` migrations are applied; record the three extra remote migrations for reconciliation.
+- [ ] Confirm the organization's actual billing plan is Free; reconcile the three remote-only migrations before any future `db push`.
+- [ ] Configure hosted Auth redirects and email delivery (or Google provider), deploy the cleanup function, and activate/verify the 30-day deletion schedule.
+- [ ] Verify real hosted two-account delivery, actual OS sharing, spoken screen-reader output, and physical-device/camera behavior before a live user pilot.
 
 ## Full pilot closure to main (2026-10-27)
 
@@ -24,8 +27,9 @@ Updated: 2026-10-27
 - [x] Open draft PR #13 directly into main.
 - [x] Confirm CI and GitGuardian passed on head 14cee94 with a clean merge state; this final status note triggers another workflow run.
 - [x] Keep Drop's run.sh process on its documented port 4004. The current sandbox HTTP probe was blocked by local-network permission; earlier local checks returned HTTP 200.
-- [ ] Verify the hosted Free project, Auth, migrations/functions, real two-account delivery, and scheduled physical cleanup.
-- [ ] Verify OS sharing, spoken screen-reader output, and physical-device/camera behavior; run the opt-in pilot.
+- [x] Verify hosted project presence and migration history read-only; the project is active, all repository migrations are applied, and three remote-only migrations need reconciliation.
+- [ ] Verify the organization's actual Free plan, hosted Auth email/redirect configuration, deployed cleanup function, and scheduled physical cleanup.
+- [ ] Verify real two-account delivery, OS sharing, spoken screen-reader output, physical-device/camera behavior, and run the opt-in pilot.
 - [x] Refresh final PR checks and merge PR #13 after the user's direct request to complete the code to `main` through a PR.
 
 ## Signed-out friend first send and unique Home inbox (2026-10-27)
