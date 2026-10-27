@@ -8,9 +8,9 @@ Updated: 2026-10-27
 - [x] Keep the recap visible through the mailbox Realtime refresh, suppress the collected row until the recipient continues, and route **Open your drop** through the existing reveal flow.
 - [x] Move focus to the next action and add a browser assertion for focus, recap privacy, handoff counts, and no GIF Storage request before opening.
 - [x] Pass `npm test` (302/302), `npm run lint`, `npx tsc --noEmit --incremental false`, browser-script syntax, `git diff --check`, and `npm run test:browser-relay`. The isolated production browser journey passed for text and GIF at 390×844 with no overflow, failed requests, console errors, runtime exceptions, or cross-origin requests.
-- [x] Commit as `6ccd4c6` and push to `origin/codex/invitee-first-send` for draft PR #13.
-- [x] Refresh PR #13 on head `04a2fc7`: CI and GitGuardian passed and GitHub reported `CLEAN`.
-- [ ] Complete review and merge PR #13 after explicit approval; keep hosted-pilot gates separate from source merge readiness.
+- [x] Commit as `6ccd4c6` and push to `origin/codex/invitee-first-send` for PR #13.
+- [x] Refresh PR #13 on final head `641bb8d`: CI and GitGuardian passed and GitHub reported `CLEAN`.
+- [x] Merge PR #13 into `main` through GitHub; squash commit `f314ced66598d809e9e9ec104d0cba4ea602f6eb`.
 - [ ] Verify hosted Free Supabase delivery/retention, actual OS sharing, spoken screen-reader output, and physical-device/camera behavior before a live user pilot.
 
 ## Full pilot closure to main (2026-10-27)
@@ -26,7 +26,7 @@ Updated: 2026-10-27
 - [x] Keep Drop's run.sh process on its documented port 4004. The current sandbox HTTP probe was blocked by local-network permission; earlier local checks returned HTTP 200.
 - [ ] Verify the hosted Free project, Auth, migrations/functions, real two-account delivery, and scheduled physical cleanup.
 - [ ] Verify OS sharing, spoken screen-reader output, and physical-device/camera behavior; run the opt-in pilot.
-- [ ] Refresh final PR checks and merge only after review and explicit approval.
+- [x] Refresh final PR checks and merge PR #13 after the user's direct request to complete the code to `main` through a PR.
 
 ## Signed-out friend first send and unique Home inbox (2026-10-27)
 
