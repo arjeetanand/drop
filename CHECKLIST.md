@@ -4,19 +4,24 @@ Updated: 2026-10-27
 
 ## First-use delivery choice (2026-10-27)
 
+- [x] Push the Home and mobile Relay clarity slice on `feat/drop-relay-first-choice`; PR #17 is the route to `main` (last reported as draft).
+- [ ] Confirm the final PR #17 head, including this closeout documentation, has passing checks before merge. At prior head `65e77cb`, PR #17 was open/draft/clean and both CI and GitGuardian passed.
+
 - [x] Explain direct delivery and Relay on Home.
 - [x] Provide separate direct and Relay start links; the Relay link preselects relay mode in Compose.
 - [x] Label the mobile destination Relay and raise tab labels to 12px.
 - [x] Pass 302 unit tests, lint, non-incremental TypeScript, and diff check.
 - [ ] Capture and verify the Home-to-Compose flow at 320px, 390px, and desktop widths, including focus and Relay mode selection. Waiting on approval to use local Playwright.
 - [ ] Recheck rendered behavior and required CI before merging this feature branch.
+- [ ] Restart and verify the local app on port 4004 before a demo; this pass saw a listener but HTTP probes failed.
 
-## Main and PR closure checkpoint (2026-10-27)
+## Historical main and PR closure checkpoint (2026-10-27)
 
 - [x] Verify PR #15 merged; fast-forward local main to origin/main at b705b3b.
+- [x] PR #16 subsequently merged; local `main` and `origin/main` tracking refs now point to `446337f`.
 - [x] Keep localhost:4004 available and confirm the merged app returns HTTP 200.
 - [x] Inventory the remaining open PRs (#3, #4, #7–#12) without treating them as merged.
-- [ ] Review/update/merge only the remaining PRs that are still needed for the pilot. PR #7 authenticated QR and camera scan remain unverified; PR #11 is a dirty draft; PR #12 targets a feature branch.
+- [ ] Refresh the current GitHub PR inventory and review only branches still needed for the pilot; the earlier PR #7/#11/#12 observations are historical; only PR #17 was refreshed during this pass.
 - [ ] Finish the hosted Free-plan, migration reconciliation, Auth/email, 30-day cleanup, real two-account, and physical-device gates listed below before calling the hosted pilot ready.
 
 ## Relay arrival recap (2026-10-27)

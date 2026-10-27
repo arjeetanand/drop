@@ -2,18 +2,26 @@
 
 Updated: 2026-10-27
 
+## Current repository and review status (2026-10-27)
+
+- `main` and the local `origin/main` tracking ref are at `446337f` (PR #16). `feat/drop-relay-first-choice` tracks `origin/feat/drop-relay-first-choice`; its last verified pre-correction head was `65e77cb`, based on that main. The code change is `2ab1f06`; PR #17 is the review path to `main` and was reported as draft in the prior session.
+- Refreshed this turn at `65e77cb`: PR #17 is open as a draft with a `CLEAN` merge state; CI and GitGuardian passed. This documentation correction changes the PR head and starts another check run. Refresh the PR and checks at the final head before merge.
+- Browser acceptance at 320px, 390px, and desktop, keyboard focus, and hydrated Relay mode selection remains pending the earlier Playwright approval request. Do not describe this first-use slice as browser accepted yet.
+- A Node listener was listed on `127.0.0.1:4004`, but HTTP probes to `/` and the Relay Compose URL failed with curl status 7 in this turn. Recheck or restart the app before a pilot demo.
+- This slice changed no backend or hosted Supabase configuration. Hosted readiness gates remain listed below.
+
 ## First-use delivery choice (2026-10-27)
 
-- Branch: feat/drop-relay-first-choice. Code commit: 2ab1f06.
+- Branch: `feat/drop-relay-first-choice`. Code commit: `2ab1f06`; branch head before this closeout correction: `65e77cb`.
 - Home now explains direct delivery and Relay, gives each a separate CTA, and links the Relay CTA to the composer with mode=relay. The mobile nav calls the route Relay and uses 12px labels.
 - Verification: npm test passed 302/302; npm run lint passed; npx tsc --noEmit --incremental false passed; git diff --check passed. GET / and GET /compose?new=1&mode=relay returned HTTP 200.
 - No browser screenshot or click-through was run. The Product Design audit guidance requires approval before Playwright, and that approval is pending. Do not call the responsive or keyboard flow accepted yet.
 - Local app is on localhost:4004. Hosted project configuration was not changed by this slice.
 
-## Main pointer before this closure follow-up (2026-10-27)
+## Historical main pointer before the PR #16 follow-up (2026-10-27)
 
-- PR #15 is merged. Local main and origin/main both point to b705b3bf3b0b9a2437ac3cfaa5923f2bd8084aac; first-parent history contains code PR #13 and documentation PRs #14–#15.
-- GitHub lists PRs #3, #4, and #7–#12 as open. PR #7 still lacks authenticated QR issuance and physical camera-scan proof and is dirty against main. PR #11 is a 55-file draft with a dirty merge state and only GitGuardian passing. PR #12 targets feat/pilot-integrated-preview, not main. Do not treat any of these open branches as landed.
+- At that checkpoint, PR #15 was merged and local `main` plus `origin/main` pointed to `b705b3bf3b0b9a2437ac3cfaa5923f2bd8084aac`; history contained code PR #13 and documentation PRs #14–#15. PR #16 later advanced the local main refs to `446337f`.
+- The PR inventory and individual branch findings below were captured at the earlier checkpoint. The full GitHub PR list was not refreshed in this pass; do not treat those observations as current.
 - The app started from this checkout on localhost:4004 and returned HTTP 200. It uses loopback .env.local; hosted settings remain separate in ignored .env.hosted.local.
 - The only local unstaged changes are AGENTS.md and next-env.d.ts; they were preserved and excluded from the task work.
 
