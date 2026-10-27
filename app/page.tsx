@@ -67,10 +67,15 @@ export default function HomeDesk() {
           <div className="overflow-hidden rounded-[1.5rem] bg-[#2b45f7] p-6 text-white shadow-[0_16px_36px_rgba(43,69,247,.15)] sm:p-9">
             <p className="font-mono text-[0.68rem] font-bold uppercase tracking-[0.16em] text-white/80">Your little corner of the internet</p>
             <h1 className="mt-4 max-w-[12ch] font-headline-md text-4xl font-semibold leading-[1.02] tracking-[-0.045em] sm:text-5xl">Drop a little something.</h1>
-            <p className="mt-4 max-w-md text-sm leading-relaxed text-white/80 sm:text-base">A photo, a note, the meme that explains everything. Pick one person and make their day.</p>
-            <Link href="/compose?new=1" className="mt-7 inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[#fffaf2] px-5 text-sm font-bold text-[#223bdc] shadow-sm transition-transform hover:-translate-y-0.5 focus-visible:outline-white">
-              <Sparkles className="h-4 w-4" aria-hidden="true" /> Make a drop <ArrowRight className="h-4 w-4" aria-hidden="true" />
-            </Link>
+            <p className="mt-4 max-w-md text-sm leading-relaxed text-white/80 sm:text-base">Send a photo, note, or meme directly to one person—or choose Relay to pass it among willing friends. Relay carriers never see the contents; the recipient chooses when to open.</p>
+            <div className="mt-7 grid gap-2 sm:grid-cols-2">
+              <Link href="/compose?new=1" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[#fffaf2] px-5 text-sm font-bold text-[#223bdc] shadow-sm transition-transform hover:-translate-y-0.5 focus-visible:outline-white">
+                <Sparkles className="h-4 w-4" aria-hidden="true" /> Send it now <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </Link>
+              <Link href="/compose?new=1&mode=relay" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full border border-white/50 px-4 text-sm font-semibold text-white transition-colors hover:bg-white/10 focus-visible:outline-white">
+                Send it through Relay <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </Link>
+            </div>
             <Link href="/demo" className="mt-2 inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-white/40 px-4 text-sm font-semibold text-white transition-colors hover:bg-white/10 focus-visible:outline-white">
               <Eye className="h-4 w-4" aria-hidden="true" /> Try a demo drop
             </Link>

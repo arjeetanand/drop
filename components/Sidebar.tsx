@@ -21,7 +21,7 @@ import { getActiveNavigationHref, usesPrivateShell } from '@/lib/navigation';
 const navItems = [
   { href: '/', label: 'Desk', icon: PenLine },
   { href: '/mailbox', label: 'Inbox', icon: Mail },
-  { href: '/journey', label: 'Journey', icon: Route },
+  { href: '/journey', label: 'Relay', icon: Route },
   { href: '/profile', label: 'You', icon: UserRound },
 ];
 
@@ -211,7 +211,7 @@ export function Sidebar() {
               href={item.href}
               aria-current={active ? 'page' : undefined}
               className={cn(
-                'flex min-h-11 min-w-[62px] flex-col items-center justify-center gap-1 px-2 text-[0.68rem] font-semibold transition-colors',
+                'flex min-h-11 min-w-[62px] flex-col items-center justify-center gap-1 px-2 text-xs font-semibold transition-colors',
                 active ? 'text-ink-navy' : 'text-on-surface-variant hover:text-ink-navy'
               )}
             >
