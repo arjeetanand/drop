@@ -6,7 +6,7 @@ The append-only engineering learning log is in [LEARNINGS.md](./LEARNINGS.md); i
 
 ## Pilot status and closure
 
-**Source code:** PR [#17](https://github.com/arjeetanand/drop/pull/17) is merged into main as 77c03c67d9282cdd32f338bfc9eb437227ebe505. The Relay-first demo improvement is committed as `ae2c9a6` and pushed to `feat/pilot-demo-relay-first` for [PR #19](https://github.com/arjeetanand/drop/pull/19), the review and integration path into `main`.
+**Source code:** [PR #19](https://github.com/arjeetanand/drop/pull/19) merged the Relay-first demo improvement into `main` as `f4ebb67`. The reviewed branch head was `f2bdd39`; its required Tests/lint/types/build and GitGuardian checks passed.
 
 **Try Drop:** [Open the current demo preview](https://bottom-greatest-bras-christmas.trycloudflare.com/demo). This isolated production build runs on port 6004 with no `.env` file or Supabase credentials. Relay is shown before the photo/GIF samples; try its fictional handoffs, then open a bundled sample. Everything stays in the visitor’s browser; nothing is uploaded or sent. There is no account sign-in or real account-to-account delivery in this preview. The random Quick Tunnel URL is temporary, only works while the local server and tunnel run, and anyone with the URL can open it. Do not use it for private content. See [Cloudflare Quick Tunnels](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/).
 
