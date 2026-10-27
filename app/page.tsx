@@ -33,9 +33,9 @@ export default function HomeDesk() {
   }, []);
 
   const allIncoming = letters.filter((letter) => letter.direction === 'received' && !letter.sample);
-  const incoming = allIncoming.slice(0, 2);
   const featuredSelection = selectFeaturedInboxDrop(allIncoming, arrival, recipientReadStatesHydrated);
   const featured = featuredSelection.letter;
+  const incoming = allIncoming.filter((letter) => letter.id !== featured?.id).slice(0, 2);
   const isNewArrival = featuredSelection.reason === 'arrival';
   const isUnreadFeature = featuredSelection.reason === 'unread';
   const arrivalLabel = arrivalCount > 1 ? `${arrivalCount} new drops` : 'Just landed';
@@ -112,7 +112,12 @@ export default function HomeDesk() {
               <Link href="/mailbox" className="inline-flex min-h-11 items-center gap-1 text-xs font-bold text-[#2b45f7]">See all <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
             </div>
             <div className="mt-3 rounded-2xl border border-[rgba(16,42,67,.1)] bg-white/55 px-4 sm:px-6">
-              {incoming.length ? incoming.map((letter) => <LetterCard key={letter.id} letter={letter} showExcerpt />) : (
+              {incoming.length ? incoming.map((letter) => <LetterCard key={letter.id} letter={letter} showExcerpt />) : featured || allIncoming.length ? (
+                <div className="py-5">
+                  <h3 className="font-headline-md text-lg font-semibold text-ink-navy">Your newest drop is up top.</h3>
+                  <p className="mt-2 max-w-xl text-sm leading-relaxed text-on-surface-variant">See all your drops in the mailbox, and check back when the next one lands.</p>
+                </div>
+              ) : (
                 <div className="py-5">
                   <h3 className="font-headline-md text-lg font-semibold text-ink-navy">Your inbox is waiting on its first drop.</h3>
                   <p className="mt-2 max-w-xl text-sm leading-relaxed text-on-surface-variant">Invite a friend with your public @handle and profile link. They can use it to send you a drop back.</p>
