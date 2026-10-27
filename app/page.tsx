@@ -112,7 +112,15 @@ export default function HomeDesk() {
               <Link href="/mailbox" className="inline-flex min-h-11 items-center gap-1 text-xs font-bold text-[#2b45f7]">See all <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
             </div>
             <div className="mt-3 rounded-2xl border border-[rgba(16,42,67,.1)] bg-white/55 px-4 sm:px-6">
-              {incoming.length ? incoming.map((letter) => <LetterCard key={letter.id} letter={letter} showExcerpt />) : <p className="py-7 text-sm text-on-surface-variant">When someone sends you a drop, it will land here.</p>}
+              {incoming.length ? incoming.map((letter) => <LetterCard key={letter.id} letter={letter} showExcerpt />) : (
+                <div className="py-5">
+                  <h3 className="font-headline-md text-lg font-semibold text-ink-navy">Your inbox is waiting on its first drop.</h3>
+                  <p className="mt-2 max-w-xl text-sm leading-relaxed text-on-surface-variant">Invite a friend with your public @handle and profile link. They can use it to send you a drop back.</p>
+                  <Link href="/profile?invite=1" className="mt-4 inline-flex min-h-11 scroll-mb-24 items-center justify-center gap-2 rounded-full bg-[#2b45f7] px-4 text-xs font-bold text-white transition-colors hover:bg-[#223bdc] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2b45f7] focus-visible:ring-offset-2 md:scroll-mb-0">
+                    Invite a friend <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                  </Link>
+                </div>
+              )}
             </div>
           </div>
 

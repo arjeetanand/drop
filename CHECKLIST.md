@@ -1,6 +1,26 @@
 # Drop integration checklist
 
-Updated: 2026-10-26
+Updated: 2026-10-27
+
+## First-friend local end-to-end verification (2026-10-27)
+
+- [x] From signed-out Home, keyboard-activate **Invite a friend**, sign up through local Mailpit, and verify the auth callback returns to exactly `/profile?invite=1` without an unrelated `next` route.
+- [x] Verify the original sealed-claim handoff survives invite signup, profile sync gates the share controls, and explicit sharing contains only the public handle and canonical profile URL.
+- [x] Complete the same user's private claim/reveal and verify outsider read denial and replay denial.
+- [x] From a friend's signed-in session, open the sender's public profile, use its **Send a drop** link, confirm the handle in Compose, send a text reply, and verify the reply in the sender's Home inbox.
+- [x] Pass both loopback browser smokes with exact disposable data cleanup: three Auth/profile fixtures and one Mailpit message in first-signup; both exact send rows, reaction, accounts, profiles, app, and browser sessions in send/react.
+- [x] Pass `npm test` (301/301), `npm run lint`, `npm run typecheck`, both browser-script syntax checks, and `git diff --check`.
+- [x] Push verified code commits `a238fa0` and `70214d9` separately to `codex/social-relay-pilot`; do not merge. GitHub API could not refresh PR #12's head/checks after the pushes.
+- [ ] Verify hosted two-account delivery, native OS sharing, screen-reader output, and physical-device behavior before treating those gates as complete.
+
+## Home first-friend activation (2026-10-27)
+
+- [x] Replace the passive empty-inbox message with a clear first-drop invitation and a link to `/profile?invite=1`; keep the demo sample marked as not received.
+- [x] Verify keyboard name/focus, 44px target, and clearance above fixed mobile navigation; activate the link and preserve invite context at 320×740 and 390×844.
+- [x] Run each mobile accessibility viewport in a fresh isolated Edge session so focus-scroll checks do not inherit the previous viewport's page state. Review screenshots in `/private/tmp/drop-first-friend-final-verification/`.
+- [x] Pass `npm test` (301/301), `npm run lint`, `npm run typecheck`, browser-script syntax, `bash -n run.sh`, `git diff --check`, and `npm run build -- --webpack`. The default Turbopack build in the scratch clone is blocked by its external `node_modules` symlink; the Webpack production build succeeds.
+- [x] Push code commit `986e2e4` to `codex/social-relay-pilot`. After that code push, PR #12 was open/draft against `feat/pilot-integrated-preview`; `GitGuardian Security Checks` was pending and GitHub reported merge state `UNSTABLE`. No merge occurred.
+- [ ] Verify current hosted Supabase project/Auth/migrations before real-account testing; complete hosted delivery and scheduled deletion, spoken screen-reader output, installed-PWA sharing, physical camera/device behavior, and the planned opt-in sender study.
 
 ## Compose starters and GIF Relay pilot slice (2026-10-26)
 
@@ -149,3 +169,17 @@ Updated: 2026-10-26
 - [ ] Verify the installed PWA share target and OS share sheet in a browser/device that supports the required flow.
 - [ ] Check screen-reader announcements and physical-device keyboard/safe-area behavior.
 - [ ] Validate two-account photo/GIF claims and actual 30-day Storage cleanup against the approved Free Supabase project.
+
+## Social Relay identity and feasibility pilot (2026-10-26)
+
+- [x] Keep direct delivery available and explain Relay as one accepted handoff at a time, with recipient collection ending the route.
+- [x] Label carrier names as self-entered and unverified; disclose that the one-time invite is not bound to an account and its first receiver can accept.
+- [x] Document product identity, occasion-based use, platform API limits, opt-in pilot scope, and measures in `docs/social-relay-pilot.md`.
+- [x] Extend the Relay browser smoke to exercise two text carriers, one-time replay denial, sender route refresh, recipient collection, and generic share-sheet copy.
+- [x] Pass `npm test` (301/301), `npm run typecheck`, focused ESLint, browser script syntax, and `git diff --check`.
+- [x] Pass the full isolated text/GIF Relay browser journey before the final bearer-link disclosure copy was added.
+- [ ] Rerun the final browser journey with the bearer-link disclosure assertions. Port 6004 is occupied by an active `next-server` in `/private/tmp/drop-local-demo-cleanup`; it was left untouched.
+- [ ] Run the opt-in human value/usability pilot and verify native OS sharing, screen-reader output, and physical-device behavior.
+- [x] Commit code as `b9fb0f5` on `codex/social-relay-pilot`, based on `feat/pilot-integrated-preview`; push the feature branch. No merge to `main`.
+- [x] Open draft [PR #12](https://github.com/arjeetanand/drop/pull/12) into `feat/pilot-integrated-preview`; leave it unmerged.
+- [ ] Review PR CI status when GitHub's API or Code Review connection is available; both checks failed to connect after PR creation.

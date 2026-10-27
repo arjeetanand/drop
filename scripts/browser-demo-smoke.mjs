@@ -1190,9 +1190,11 @@ async function assertAccessibleMedia(cdp, expectedName, step) {
   assert.ok(imageNode, `${step}: the accessibility tree should expose an image named “${expectedName}”.`);
 }
 
-async function runAccessibilityFlow(cdp, { appUrl, screenshotDir }) {
+async function runAccessibilityFlow(cdp, { appUrl, screenshotDir, width: requestedWidth }) {
   await cdp.send('Accessibility.enable');
-  const viewports = [320, 390].map((width) => ({ name: `mobile-${width}`, width, height: width === 320 ? 740 : 844, deviceScaleFactor: 1, mobile: true }));
+  const viewports = [320, 390]
+    .filter((width) => !requestedWidth || width === requestedWidth)
+    .map((width) => ({ name: `mobile-${width}`, width, height: width === 320 ? 740 : 844, deviceScaleFactor: 1, mobile: true }));
   const noteText = 'A small note to send with this attachment.';
   const mediaCases = [
     { kind: 'image', button: 'A photo', file: join(PROJECT_ROOT, 'public/demo-cat.png'), name: 'Attached photo' },
@@ -1203,6 +1205,69 @@ async function runAccessibilityFlow(cdp, { appUrl, screenshotDir }) {
     await setViewport(cdp, viewport);
     await cdp.send('Page.navigate', { url: appUrl.href });
     await waitUntil(cdp, 'Home account requirement at the requested mobile width', async () => (
+      await evaluate(cdp, `${normalizedVisibleText(LABELS.homeSendAccountDisclosure)} && location.pathname === '/'`)
+    ));
+    await waitForPageShell(cdp, 'Home contrast check');
+
+    await focusControlWithKeyboard(cdp, {
+      name: 'Invite a friend',
+      expectedTag: 'A',
+      expectedHref: '/profile?invite=1',
+    });
+    const inviteControlState = async () => evaluate(cdp, `(() => {
+        const link = [...document.querySelectorAll('a')].find((item) => item.textContent.replace(/\\s+/g, ' ').trim() === 'Invite a friend');
+        const bottomNav = [...document.querySelectorAll('nav[aria-label="Primary navigation"]')].find((candidate) => {
+          const navRect = candidate.getBoundingClientRect();
+          return navRect.width > 0 && navRect.height > 0 && getComputedStyle(candidate).visibility !== 'hidden';
+        });
+        if (!link) return null;
+        const rect = link.getBoundingClientRect();
+        const navRect = bottomNav?.getBoundingClientRect();
+        return {
+          href: link.getAttribute('href'),
+          name: link.textContent.replace(/\\s+/g, ' ').trim(),
+          height: rect.height,
+          top: rect.top,
+          bottom: rect.bottom,
+          viewportHeight: window.innerHeight,
+          scrollY: window.scrollY,
+          bottomNavTop: navRect?.top ?? null,
+          scrollMarginBottom: getComputedStyle(link).scrollMarginBottom,
+          focusVisible: link.matches(':focus-visible'),
+          visible: rect.top >= 0 && rect.bottom <= window.innerHeight,
+          clearOfBottomNav: !navRect || rect.bottom <= navRect.top,
+          sampleStillMarked: document.body.innerText.toLocaleLowerCase().includes('sample drop') && document.body.innerText.toLocaleLowerCase().includes('not received'),
+        };
+      })()`);
+    try {
+      await waitUntil(cdp, 'focused Home invite clear of the fixed mobile navigation', async () => {
+        const state = await inviteControlState();
+        return state?.visible && state.clearOfBottomNav;
+      });
+    } catch (error) {
+      throw new Error(`${error.message}; focused invite state=${JSON.stringify(await inviteControlState())}`);
+    }
+    const inviteControl = await inviteControlState();
+    if (screenshotDir) await captureScreenshot(cdp, screenshotDir, `${viewport.name}-home-first-friend-invite`);
+    assert.equal(inviteControl?.href, '/profile?invite=1', `Home invite should preserve the profile invite route: ${JSON.stringify(inviteControl)}.`);
+    assert.equal(inviteControl?.name, 'Invite a friend', `Home invite should have a clear accessible name: ${JSON.stringify(inviteControl)}.`);
+    assert.equal(inviteControl?.height, 44, `Home invite target should be at least 44px tall: ${JSON.stringify(inviteControl)}.`);
+    assert.equal(inviteControl?.focusVisible, true, `Home invite should show keyboard focus: ${JSON.stringify(inviteControl)}.`);
+    assert.equal(inviteControl?.sampleStillMarked, true, `The demo sample must remain labeled as a sample: ${JSON.stringify(inviteControl)}.`);
+    assert.equal(inviteControl?.visible, true, `Focused Home invite should be fully visible: ${JSON.stringify(inviteControl)}.`);
+    assert.equal(inviteControl?.clearOfBottomNav, true, `Focused Home invite should stay above the fixed mobile navigation: ${JSON.stringify(inviteControl)}.`);
+    await activateFocusedControl(cdp, 'Enter');
+    await waitUntil(cdp, 'profile invite context after the Home action', async () => (
+      await evaluate(cdp, `location.pathname === '/profile' && new URLSearchParams(location.search).get('invite') === '1'`)
+    ));
+    await waitForPageShell(cdp, 'Profile invite context');
+    await assertNoFrameworkOverlay(cdp, 'Profile invite context');
+    await assertNoHorizontalOverflow(cdp, 'Profile invite context', viewport.width);
+    if (screenshotDir) await captureScreenshot(cdp, screenshotDir, `${viewport.name}-profile-invite-context`);
+    console.log(`[browser-accessibility] PASS Home first-friend invite stays keyboard accessible at ${viewport.width}px and retains /profile?invite=1.`);
+
+    await cdp.send('Page.navigate', { url: appUrl.href });
+    await waitUntil(cdp, 'Home after returning from the profile invite route', async () => (
       await evaluate(cdp, `${normalizedVisibleText(LABELS.homeSendAccountDisclosure)} && location.pathname === '/'`)
     ));
     await waitForPageShell(cdp, 'Home contrast check');
@@ -2266,7 +2331,7 @@ async function runShareTargetFlow(cdp, { appUrl, screenshotDir, getPageLoadEvent
 
 async function main() {
   if (process.argv.includes('--help') || process.argv.includes('-h')) {
-    console.log('Usage: node scripts/browser-demo-smoke.mjs [http://127.0.0.1:4004] [--claim-recovery-only|--prompt-only|--friend-draft-only|--share-target-only|--drop-back-only|--accessibility-only]');
+    console.log('Usage: node scripts/browser-demo-smoke.mjs [http://127.0.0.1:4004] [--claim-recovery-only|--prompt-only|--friend-draft-only|--share-target-only|--drop-back-only|--accessibility-only [--accessibility-width=320|390]]');
     console.log('Set DROP_BROWSER_EXECUTABLE to select an installed Chrome, Edge, or Chromium executable.');
     return;
   }
@@ -2278,8 +2343,24 @@ async function main() {
   const shareTargetOnly = args.includes('--share-target-only');
   const dropBackOnly = args.includes('--drop-back-only');
   const accessibilityOnly = args.includes('--accessibility-only');
+  const accessibilityWidthArgument = args.find((argument) => argument.startsWith('--accessibility-width='));
+  const accessibilityWidth = accessibilityWidthArgument ? Number(accessibilityWidthArgument.split('=')[1]) : undefined;
   assert.ok([claimRecoveryOnly, promptOnly, friendDraftOnly, shareTargetOnly, dropBackOnly, accessibilityOnly].filter(Boolean).length <= 1, 'Choose only one focused browser-smoke mode.');
   const appUrl = parseAppUrl(args.find((argument) => !argument.startsWith('--')) || DEFAULT_APP_URL);
+  if (accessibilityWidth !== undefined) {
+    assert.equal(accessibilityOnly, true, '--accessibility-width can only be used with --accessibility-only.');
+    assert.ok([320, 390].includes(accessibilityWidth), '--accessibility-width must be 320 or 390.');
+  }
+  if (accessibilityOnly && accessibilityWidth === undefined) {
+    for (const width of [320, 390]) {
+      console.log(`[browser-demo-smoke] Starting a fresh isolated browser for accessibility viewport ${width}px.`);
+      execFileSync(process.execPath, [fileURLToPath(import.meta.url), appUrl.href, '--accessibility-only', `--accessibility-width=${width}`], {
+        stdio: 'inherit',
+        env: process.env,
+      });
+    }
+    return;
+  }
   if (typeof WebSocket !== 'function') throw new Error('This smoke check needs a Node runtime with the built-in WebSocket API.');
   const screenshotDir = screenshotDirectoryFromEnv();
   if (screenshotDir) await mkdir(screenshotDir, { recursive: true });
@@ -2443,11 +2524,11 @@ async function main() {
 
     console.log(`[browser-demo-smoke] Browser: ${chromeExecutable}`);
     const flowName = accessibilityOnly ? 'accessibility-only' : dropBackOnly ? 'drop-back-only' : shareTargetOnly ? 'share-target-only' : claimRecoveryOnly ? 'claim-recovery' : promptOnly ? 'prompt-only' : friendDraftOnly ? 'friend-draft-only' : 'full';
-    const flowViewports = accessibilityOnly ? ['mobile-320', 'mobile-390'].map((name) => ({ name })) : friendDraftOnly || shareTargetOnly || dropBackOnly ? [MOBILE_VIEWPORTS[1]] : FLOW_VIEWPORTS;
+    const flowViewports = accessibilityOnly ? [{ name: `mobile-${accessibilityWidth}` }] : friendDraftOnly || shareTargetOnly || dropBackOnly ? [MOBILE_VIEWPORTS[1]] : FLOW_VIEWPORTS;
     console.log(`[browser-demo-smoke] App: ${appUrl.origin}; ${flowName} flow viewports: ${flowViewports.map(({ name }) => name).join(', ')}.`);
 
     if (accessibilityOnly) {
-      await runAccessibilityFlow(pageCdp, { appUrl, screenshotDir });
+      await runAccessibilityFlow(pageCdp, { appUrl, screenshotDir, width: accessibilityWidth });
     }
 
     if (dropBackOnly) {

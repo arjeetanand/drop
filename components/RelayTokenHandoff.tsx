@@ -207,7 +207,7 @@ export function RelayTokenHandoff({ token, destination, backHref, method }: Rela
       <form onSubmit={handleAccept}>
         <div className="space-y-5">
           <label htmlFor="relay-carrier-name" className="field-label">
-            Your name <span className="text-[#b84b3a]">*</span>
+            Name shown on the route <span className="text-[#b84b3a]">*</span>
             <input
               id="relay-carrier-name"
               required
@@ -236,7 +236,7 @@ export function RelayTokenHandoff({ token, destination, backHref, method }: Rela
           </label>
 
           <label htmlFor="relay-carrier-note" className="field-label block">
-            Note for the next carrier <span className="font-normal text-on-surface-variant">(optional)</span>
+            A note for the next carrier <span className="font-normal text-on-surface-variant">(optional)</span>
             <textarea
               id="relay-carrier-note"
               maxLength={500}
@@ -244,14 +244,14 @@ export function RelayTokenHandoff({ token, destination, backHref, method }: Rela
               onChange={(event) => setNote(event.target.value)}
               readOnly={retryLocked}
               className="textarea-field mt-2 min-h-[5.5rem] !rounded-xl"
-              placeholder="A short note about the handoff"
+              placeholder="What would you like them to know?"
             />
           </label>
         </div>
 
         <p className="mt-5 flex items-start gap-2 text-xs leading-relaxed text-on-surface-variant">
           <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#2b45f7]" aria-hidden="true" />
-          Your neighborhood label is optional. We never show the drop’s text or media to carriers.
+          Carrier names are entered by each person and are not verified against a Drop account. Your note and neighborhood appear on the route; the drop’s text and media stay private.
         </p>
         {recoveryNotice && <p className="mt-4 rounded-xl bg-[#2b45f7]/5 px-3 py-2 text-sm leading-relaxed text-on-surface-variant" role="status" aria-live="polite">{recoveryNotice}</p>}
         {error && <p className="notice error-notice mt-5" role="alert" aria-live="assertive">{error}</p>}

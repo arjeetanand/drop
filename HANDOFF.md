@@ -1,8 +1,20 @@
 # Drop handoff
 
-Updated: 2026-10-26
+Updated: 2026-10-27
 
-## Latest checkpoint — Compose starters and GIF Relay pilot verification (2026-10-26)
+## Latest checkpoint — Home first-friend activation (2026-10-27)
+
+- Replaced the passive empty-inbox sentence with a first-drop explanation and an **Invite a friend** action to `/profile?invite=1`. The action appears only when there are no real incoming drops; sample content remains labeled as a sample.
+- Extended the accessibility smoke to check the link’s semantic name, keyboard focus, 44px target, scroll visibility above the fixed navigation, retained invite query, profile route, and no horizontal overflow. The same page reused across viewport changes made whichever viewport ran second fail its natural-focus scroll check. The smoke now runs 320px and 390px in separate isolated Edge sessions; no manual scrolling is used to mask focus behavior.
+- Visual review: focused CTA and profile invite context at 320×740 and 390×844 are saved under `/private/tmp/drop-first-friend-final-verification/`. Photo/GIF picker focus and composer/recipient images also passed at both sizes. No cross-origin browser requests occurred.
+- Verification passed: `npm test` (301/301), ESLint, TypeScript, browser-script syntax, `bash -n run.sh`, and `git diff --check`. `npm run build -- --webpack` compiled and generated all routes. The default `npm run build` failed in this scratch clone because Turbopack rejects its `node_modules` symlink pointing outside the clone; this is a checkout-layout issue, not a source compilation error. Existing Browserslist and Tailwind easing warnings remain.
+- The local app remains available at `http://localhost:4004` (HTTP 200). Code commit `986e2e4` is pushed to `origin/codex/social-relay-pilot`. After that code push, PR #12 was open/draft against `feat/pilot-integrated-preview`; GitHub reported `UNSTABLE` while `GitGuardian Security Checks` was pending. This documentation push may retrigger checks, so refresh GitHub before merging. No merge occurred.
+- This slice made no hosted Supabase calls. The `supabase` CLI is not on the shell PATH, so current hosted project/Auth/migration state was not refreshed. Edge’s “Allow JavaScript from Apple Events” setting was left untouched as requested.
+- Still open: hosted account-to-account delivery and scheduled deletion; actual screen-reader output; installed-PWA OS sharing; physical camera/QR and device checks; the opt-in sender study.
+
+**Next:** refresh the hosted Supabase project state through an authenticated path, then complete hosted delivery/retention and device acceptance. Keep PR #12 draft and unmerged until its checks and pilot gates are reviewed.
+
+## Previous checkpoint — Compose starters and GIF Relay pilot verification (2026-10-26)
 
 - Added optional note/caption starters for text, photo, and GIF Compose; selection fills an editable field, preserves existing text and attachments, and never sends automatically. Wrapped unbroken subject, fragment, and message text on the opened-drop screen to prevent narrow-screen overflow.
 - Extended `npm run test:browser-relay` to exercise sender-created GIF Relay end to end, including exact final/staged Storage checks, private media before collection, post-collection render, confirmed not-found cleanup, and starter selection/focus/attachment preservation. Optional 390×844 screenshots are in `/private/tmp/drop-pilot-final-evidence.Lyw5xo/`.
@@ -592,3 +604,24 @@ Updated: 2026-10-26
 ## Run locally
 
 From /Users/arjeetanand/projects/drop, run npm ci, then ./run.sh. Drop uses http://localhost:4004; ./run.sh stop stops the project-owned process. The local Supabase smoke environment uses port 5004 and browser QA is reserved port 6004. Code commit `88f9b11` is pushed to `origin/feat/media-orphan-reconciliation`; this handoff and learning update are committed separately on that branch. The branch is not merged and has no pull request.
+
+## Latest checkpoint — Social Relay identity and feasibility pilot (2026-10-26)
+
+- The task branch is `codex/social-relay-pilot`, based on `feat/pilot-integrated-preview` at `9b3ee7c`. Code commit `b9fb0f5` is pushed to `origin/codex/social-relay-pilot`; it has not been merged. The PR target is the pilot branch, never `main`.
+- Relay copy now describes the sequential journey and recipient collection, identifies carrier names as self-entered and unverified, and says anyone receiving the one-time link can accept it first. The share-sheet message asks the next carrier to opt in.
+- `docs/social-relay-pilot.md` records the positioning, platform feasibility limits, opt-in pilot scope, and success measures. Direct delivery remains the better path when speed matters; Relay's proposed advantage is an occasion-based journey people choose to carry.
+- `npm test` passed 301/301; typecheck, focused ESLint, browser script syntax, and `git diff --check` passed. The full local browser run passed for a two-carrier text route, replay denial, sender refresh, recipient collection, and the existing GIF journey before the final bearer-link disclosure and its new assertions were added.
+- The final browser rerun stopped during initialization because port 6004 belongs to an active `next-server` with working directory `/private/tmp/drop-local-demo-cleanup`. It was left running. The app process on port 4004 belongs to this checkout and returned HTTP 200.
+- Draft [PR #12](https://github.com/arjeetanand/drop/pull/12) is open from `codex/social-relay-pilot` into `feat/pilot-integrated-preview`; leave it unmerged. GitHub CLI reports its saved token is invalid, but branch pushes and PR creation succeeded with the configured Git credential. No main branch changes were made.
+- PR CI status is not verified: `gh pr view`/`gh pr checks` could not connect to `api.github.com`, and the Code Review diagnostics connector was unavailable after the PR was created.
+- Remaining product risks: no social graph is read, carrier identities are not verified, and a bearer invite can be accepted by its first recipient. No human participant study, platform API integration, native share-sheet, screen-reader, or physical-device test was run.
+
+## Latest checkpoint — First-friend signup, share, and send-back (2026-10-27)
+
+- Branch: `codex/social-relay-pilot`, based on `feat/pilot-integrated-preview`. The verified browser-test commits are `a238fa0` and `70214d9`, pushed separately. No merge was performed.
+- `scripts/browser-first-signup-smoke.mjs` now starts with the sealed private claim unopened, follows the signed-out Home **Invite a friend** action through local email signup, checks the callback returns to `/profile?invite=1` with no `next`, verifies the claim handoff survives, keeps share controls hidden until first profile sync, checks the exact explicit public handle/profile URL payload, then completes private claim/reveal and outsider/replay denials.
+- `scripts/browser-send-react-smoke.mjs` now uses the signed-in recipient to visit the sender's public `/u/{handle}` page, follows **Send a drop**, confirms the prefilled handle, sends a reply, checks the exact delivered row and that the sender sees it in Home, then verifies exact-row cleanup.
+- Verification: `npm test` passed 301/301; `npm run lint`, `npm run typecheck`, `node --check` for both smoke scripts, and `git diff --check` passed. Both isolated local browser runs passed. First-signup cleanup confirmed one exact drop, three Auth/profile pairs, one Mailpit message, and removal of the temporary directory. Send/react reported exact local cleanup. Local Supabase, Mailpit, and browser requests stayed on loopback; no reset or hosted request occurred.
+- The canonical app on `127.0.0.1:4004` responded HTTP 200 and remains running. The smoke tests used only port `6004` and left that main process untouched. Edge's “Allow JavaScript from Apple Events” setting was left as requested.
+- PR #12 was last confirmed open/draft before these pushes. GitHub API access failed with `error connecting to api.github.com`, so current PR head/checks are not verified; refresh them when GitHub is reachable. Keep the PR unmerged pending user approval.
+- Remaining: hosted Free-project two-account delivery, native OS share sheet, screen-reader announcement checks, physical-device/keyboard/camera acceptance, and an opt-in human value study. The browser share API is stubbed in the smoke and does not prove OS share-sheet behavior.

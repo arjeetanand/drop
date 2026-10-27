@@ -16,6 +16,8 @@ const TEST_PORT = 6004;
 const APP_ORIGIN = `http://127.0.0.1:${TEST_PORT}`;
 const SUBJECT = `A little check-in ${randomUUID().slice(0, 8)}`;
 const MESSAGE = `I saw this and thought of you. ${randomUUID()}`;
+const BACK_SUBJECT = `A little note back ${randomUUID().slice(0, 8)}`;
+const BACK_MESSAGE = `Your drop made my day. Here is one back: ${randomUUID()}`;
 const APP_TIMEOUT_MS = 60_000;
 const BUILD_TIMEOUT_MS = 180_000;
 const BROWSER_TIMEOUT_MS = 45_000;
@@ -46,6 +48,7 @@ let localValues = {};
 let sender;
 let recipient;
 let letterId;
+let backLetterId;
 let createdUserIds = [];
 let cleanupFailed = false;
 let currentStep = 'initializing';
@@ -600,6 +603,18 @@ async function clickButton(session, accessibleLabel) {
   })()`);
 }
 
+async function clickLink(session, accessibleLabel) {
+  return session.evaluate(`(() => {
+    const normalize = (value) => (value || '').replace(/\\s+/g, ' ').trim().toLocaleLowerCase();
+    const expected = ${JSON.stringify(accessibleLabel.toLocaleLowerCase())};
+    const link = Array.from(document.querySelectorAll('a')).find((element) => normalize(element.innerText) === expected);
+    if (!link) return null;
+    const href = link.href;
+    link.click();
+    return href;
+  })()`);
+}
+
 async function recipientCheckState(session, username) {
   return session.evaluate(`(() => {
     const input = document.querySelector('#drop-recipient');
@@ -673,6 +688,21 @@ async function verifySentRow() {
   assert.equal(data[0].status, 'delivered');
   assert.ok(data[0].subject === SUBJECT, 'The UI-submitted subject did not match the disposable drop.');
   assert.ok(data[0].content === MESSAGE, 'The UI-submitted content did not match the disposable drop.');
+}
+
+async function verifyBackSentRow() {
+  const { data, error } = await admin.from('letters')
+    .select('id,sender_id,recipient_id,status,subject,content,payload_kind,delivery_mode')
+    .eq('id', backLetterId)
+    .eq('sender_id', recipient.id);
+  assert.equal(error, null, 'Admin read of the reciprocal local send failed.');
+  assert.equal(data?.length, 1, 'Expected exactly one local row for the public-profile send-back.');
+  assert.equal(data[0].recipient_id, sender.id);
+  assert.equal(data[0].status, 'delivered');
+  assert.equal(data[0].subject, BACK_SUBJECT);
+  assert.equal(data[0].content, BACK_MESSAGE);
+  assert.equal(data[0].payload_kind, 'text');
+  assert.equal(data[0].delivery_mode, 'instant');
 }
 
 async function verifyReactionRow() {
@@ -910,6 +940,24 @@ async function cleanup() {
         console.error('[browser-send-react-smoke] CLEANUP FAILED: the exact sender-owned test drop was not removed and verified absent.');
       }
     }
+    if (backLetterId && recipient?.id && /^draft-[a-f0-9-]{36}$/i.test(backLetterId)) {
+      const { data: deletedRows, error } = await admin
+        .from('letters')
+        .delete()
+        .eq('id', backLetterId)
+        .eq('sender_id', recipient.id)
+        .select('id');
+      const { data: remainingRow, error: verifyError } = await admin
+        .from('letters')
+        .select('id')
+        .eq('id', backLetterId)
+        .eq('sender_id', recipient.id)
+        .maybeSingle();
+      if (error || (deletedRows?.length || 0) > 1 || verifyError || remainingRow) {
+        cleanupFailed = true;
+        console.error('[browser-send-react-smoke] CLEANUP FAILED: the exact recipient-owned send-back was not removed and verified absent.');
+      }
+    }
     for (const userId of createdUserIds) {
       await admin.auth.admin.deleteUser(userId);
       const { data, error: verifyError } = await admin.auth.admin.getUserById(userId);
@@ -1132,6 +1180,60 @@ async function main() {
         && body.includes('they reacted 🫶');
     })()`), 'persisted reaction after sender mailbox reload');
     console.log('[browser-send-react-smoke] PASS sender mailbox still shows 🫶 after reload.');
+
+    currentStep = 'opening sender public profile as the recipient';
+    const senderProfilePath = `/u/${encodeURIComponent(sender.username)}`;
+    await recipientSession.navigate(`${APP_ORIGIN}${senderProfilePath}`);
+    await recipientSession.waitFor(() => recipientSession.evaluate(`(() => {
+      const sendLink = Array.from(document.querySelectorAll('a')).some((element) =>
+        element.innerText.replace(/\\s+/g, ' ').trim().toLocaleLowerCase() === 'send a drop');
+      return location.pathname === ${JSON.stringify(senderProfilePath)}
+        && document.body.innerText.includes('Open to drops')
+        && sendLink;
+    })()`), 'sender public profile and Send a drop link');
+
+    currentStep = 'opening the sender public-profile composer';
+    const composeHref = await clickLink(recipientSession, 'Send a drop');
+    assert.ok(composeHref, 'Could not activate Send a drop from the sender public profile.');
+    const composeUrl = new URL(composeHref);
+    assert.equal(composeUrl.origin, APP_ORIGIN);
+    assert.equal(composeUrl.pathname, '/compose');
+    assert.equal(composeUrl.searchParams.get('new'), '1');
+    assert.equal(composeUrl.searchParams.get('recipient'), `@${sender.username}`);
+    await recipientSession.waitFor(() => recipientSession.evaluate(`location.pathname === '/compose'
+      && new URL(location.href).searchParams.get('new') === '1'
+      && new URL(location.href).searchParams.get('recipient') === ${JSON.stringify(`@${sender.username}`)}
+      && Boolean(document.querySelector('#drop-recipient'))
+      && Boolean(document.querySelector('#drop-content'))`), 'public-profile composer with the sender handle prefilled');
+    await recipientSession.waitFor(() => recipientSession.evaluate(`document.body.innerText.includes('Your account is ready.')`), 'connected outsider account in Compose');
+    const backRecipientControls = await recipientCheckState(recipientSession, sender.username);
+    assert.equal(backRecipientControls.inputMatches, true, 'The public-profile composer did not prefill the sender handle.');
+    assert.equal(await clickRecipientCheck(recipientSession), true, 'Could not check the sender handle in the send-back Compose flow.');
+    await recipientSession.waitFor(() => recipientSession.evaluate(`document.body.innerText.includes(${JSON.stringify(`Recipient confirmed: Smoke Sender (@${sender.username})`)})`), 'confirmed sender handle in the send-back flow');
+    await fillByKeyboard(recipientSession, '#drop-subject', BACK_SUBJECT);
+    await fillByKeyboard(recipientSession, '#drop-content', BACK_MESSAGE);
+    backLetterId = await readDraftId(recipientSession);
+    assert.match(backLetterId || '', /^draft-[a-f0-9-]{36}$/i, 'The send-back draft did not have a cleanable ID.');
+
+    currentStep = 'submitting the public-profile send-back';
+    assert.equal(await clickButton(recipientSession, 'Send drop'), true, 'Could not submit Send drop from the public-profile composer.');
+    await recipientSession.waitFor(() => recipientSession.evaluate(`location.pathname === '/sent' && new URL(location.href).searchParams.get('letter') === ${JSON.stringify(backLetterId)}`), 'send-back success receipt from Compose');
+    await verifyBackSentRow();
+    console.log('[browser-send-react-smoke] PASS recipient sent one delivered text drop back to the sender through the public-profile CTA.');
+
+    currentStep = 'checking the send-back in the sender Home inbox';
+    const backLetterPath = `/letter/${encodeURIComponent(backLetterId)}`;
+    await senderSession.navigate(`${APP_ORIGIN}/`);
+    await senderSession.waitFor(() => senderSession.evaluate(`(() => {
+      const inboxLink = Array.from(document.querySelectorAll('a')).some((element) => {
+        let path = '';
+        try { path = new URL(element.href).pathname; } catch { return false; }
+        return path === ${JSON.stringify(backLetterPath)}
+          && element.innerText.includes(${JSON.stringify(BACK_SUBJECT)});
+      });
+      return location.pathname === '/' && inboxLink;
+    })()`), 'send-back link and subject in the sender Home inbox');
+    console.log('[browser-send-react-smoke] PASS sender Home inbox shows the incoming send-back drop.');
 
     for (const session of sessions) {
       assert.deepEqual(session.failedLocalRequests, [], `${session.name} browser had a failed local request.`);

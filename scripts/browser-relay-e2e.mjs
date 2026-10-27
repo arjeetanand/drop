@@ -196,6 +196,11 @@ class BrowserSession {
       this.pageCdp.send('Page.addScriptToEvaluateOnNewDocument', {
         source: `(() => {
           Object.defineProperty(window, '__dropGeoCalls', { configurable: true, writable: true, value: 0 });
+          Object.defineProperty(window, '__dropSharedDetails', { configurable: true, writable: true, value: null });
+          Object.defineProperty(navigator, 'share', {
+            configurable: true,
+            value: async (details) => { window.__dropSharedDetails = details; },
+          });
           const geolocation = navigator.geolocation;
           for (const method of ['getCurrentPosition', 'watchPosition']) {
             const original = geolocation[method].bind(geolocation);
@@ -609,6 +614,7 @@ async function createRelayDropThroughCompose(session) {
     && Boolean(document.querySelector('#drop-content'))`), 'rendered Relay Compose form');
   await session.waitFor(() => pageIncludes(session, 'Your account is ready.'), 'connected sender account in Relay Compose');
   await assertNoHorizontalOverflow(session, 'Sender Relay Compose page');
+  assert.ok(await pageIncludes(session, 'One person carries it at a time.'), 'Compose must explain the one-person Relay journey.');
   const relaySelected = await session.evaluate(`Array.from(document.querySelectorAll('button'))
     .some((button) => button.innerText.replace(/\\s+/g, ' ').includes('Make a journey')
       && button.getAttribute('aria-pressed') === 'true')`);
@@ -676,6 +682,7 @@ async function createGifRelayDropThroughCompose(session) {
     && Boolean(document.querySelector('#drop-content'))`), 'rendered Relay Compose form for GIF');
   await session.waitFor(() => pageIncludes(session, 'Your account is ready.'), 'connected sender account in GIF Relay Compose');
   await assertNoHorizontalOverflow(session, 'Sender GIF Relay Compose page');
+  assert.ok(await pageIncludes(session, 'One person carries it at a time.'), 'GIF Compose must explain the one-person Relay journey.');
   const relaySelected = await session.evaluate(`Array.from(document.querySelectorAll('button'))
     .some((button) => button.innerText.replace(/\\s+/g, ' ').includes('Make a journey')
       && button.getAttribute('aria-pressed') === 'true')`);
@@ -1240,11 +1247,13 @@ async function main() {
     currentStep = 'creating disposable sender, carrier, and recipient accounts';
     sender = await createAccount('sender');
     carrier = await createAccount('carrier');
+    const nextCarrier = await createAccount('nextcarrier');
     recipient = await createAccount('recipient');
 
     currentStep = 'starting isolated mobile browser sessions';
     const senderSession = await createBrowserSession('sender', sender);
     const carrierSession = await createBrowserSession('carrier', carrier);
+    const nextCarrierSession = await createBrowserSession('nextcarrier', nextCarrier);
     const recipientSession = await createBrowserSession('recipient', recipient);
 
     currentStep = 'sending a text Relay drop through the sender Compose UI';
@@ -1256,6 +1265,7 @@ async function main() {
     await assertNoHorizontalOverflow(senderSession, 'Sender Relay page');
     await clickButton(senderSession, 'Invite a carrier');
     await senderSession.waitFor(() => senderSession.evaluate("document.body.innerText.includes('Carrier invite ready. It expires in 10 minutes.')"), 'secure invite confirmation');
+    assert.ok(await pageIncludes(senderSession, 'Whoever receives it can accept first.'), 'The sender must be told the invite is not recipient-bound.');
     const inviteUrl = await extractInviteUrl(senderSession);
     const invite = new URL(inviteUrl);
     assert.equal(invite.origin, APP_ORIGIN);
@@ -1263,12 +1273,20 @@ async function main() {
     assert.equal(invite.searchParams.get('letter'), fixture.letterId);
     assert.equal(invite.searchParams.has('token'), false, 'The bearer capability must stay out of the query string.');
     assert.match(invite.hash, /^#token=[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i, 'The secure carrier capability must be a UUIDv4 in the URL fragment.');
+    await clickButton(senderSession, 'Share carrier invite');
+    await senderSession.waitFor(() => pageIncludes(senderSession, 'Carrier invite shared.'), 'sender share-sheet invitation');
+    const senderShareDetails = await senderSession.evaluate('window.__dropSharedDetails');
+    assert.equal(senderShareDetails?.title, 'A Drop to carry');
+    assert.equal(senderShareDetails?.text, 'I’d like you to be the first person to carry this sealed Drop. Accept the one-time invite to join its journey.');
+    assert.equal(senderShareDetails?.url, inviteUrl);
     console.log('[browser-relay-e2e] PASS sender created a short-lived carrier invite through the rendered UI; token is in the fragment.');
 
     currentStep = 'accepting the secure invite from the mobile carrier browser';
     await carrierSession.navigate(inviteUrl);
     await carrierSession.waitFor(() => pageIncludes(carrierSession, 'Accept sealed drop'), 'secure carrier acceptance form');
     await assertNoHorizontalOverflow(carrierSession, 'Carrier invite page');
+    assert.ok(await pageIncludes(carrierSession, 'Name shown on the route'), 'Carrier identity must be labeled as route attribution.');
+    assert.ok(await pageIncludes(carrierSession, 'not verified against a Drop account'), 'The carrier identity limitation must be explicit.');
     await fillControl(carrierSession, '#relay-carrier-name', carrier.displayName);
     await fillControl(carrierSession, '#relay-carrier-neighborhood', 'Pilot Neighborhood');
     await fillControl(carrierSession, '#relay-carrier-note', 'Handing this sealed drop forward.');
@@ -1282,7 +1300,36 @@ async function main() {
     await carrierSession.waitFor(() => carrierSession.evaluate("location.pathname === '/relay/carry' && document.body.innerText.toLocaleLowerCase().includes('pass it on')"), 'carrier view');
     assert.ok(!textIncludes(await bodyText(carrierSession), fixture.subject), 'Carrier view must not expose the private subject.');
     assert.ok(!textIncludes(await bodyText(carrierSession), fixture.content), 'Carrier view must not expose the private body.');
-    console.log('[browser-relay-e2e] PASS carrier accepted manually at neighborhood level, location stayed unused, and private content stayed sealed.');
+
+    currentStep = 'passing the sealed drop to a second carrier';
+    await clickButton(carrierSession, 'Pass it on');
+    await carrierSession.waitFor(() => pageIncludes(carrierSession, 'Invite one person to carry it next.'), 'one-person continuation invite');
+    assert.ok(await pageIncludes(carrierSession, 'whoever receives the link can accept first'), 'The carrier must be told the invite is not recipient-bound.');
+    assert.ok(await pageIncludes(carrierSession, 'their accepted handoff becomes the next stop'), 'The next carrier must understand how the route advances.');
+    await clickButton(carrierSession, 'Share secure link');
+    await carrierSession.waitFor(() => pageIncludes(carrierSession, 'Secure invite shared.'), 'carrier share-sheet invitation');
+    const carrierShareDetails = await carrierSession.evaluate('window.__dropSharedDetails');
+    assert.equal(carrierShareDetails?.title, 'A Drop to carry');
+    assert.equal(carrierShareDetails?.text, 'I’d like you to carry this sealed Drop one step further. Accept if you’d like to join its journey.');
+    const nextInvite = new URL(carrierShareDetails?.url);
+    assert.equal(nextInvite.origin, APP_ORIGIN);
+    assert.equal(nextInvite.pathname, '/relay/scan');
+    assert.equal(nextInvite.searchParams.get('letter'), fixture.letterId);
+    assert.equal(nextInvite.searchParams.has('token'), false, 'The next carrier token must stay out of the query string.');
+    assert.match(nextInvite.hash, /^#token=[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+    // The share URL is a one-use bearer invite; whoever receives it may accept first.
+    await nextCarrierSession.navigate(carrierShareDetails.url);
+    await nextCarrierSession.waitFor(() => pageIncludes(nextCarrierSession, 'Accept sealed drop'), 'second carrier acceptance form');
+    await assertNoHorizontalOverflow(nextCarrierSession, 'Second carrier invite page');
+    await fillControl(nextCarrierSession, '#relay-carrier-name', nextCarrier.displayName);
+    await fillControl(nextCarrierSession, '#relay-carrier-neighborhood', 'Second Pilot Neighborhood');
+    await fillControl(nextCarrierSession, '#relay-carrier-note', 'Passing the same sealed drop onward.');
+    await clickButton(nextCarrierSession, 'Accept sealed drop');
+    await nextCarrierSession.waitFor(() => pageIncludes(nextCarrierSession, 'A sealed drop is in your care.'), 'second accepted carrier confirmation');
+    assert.equal(await nextCarrierSession.evaluate('window.__dropGeoCalls'), 0, 'The second carrier flow must not request device geolocation.');
+    assert.ok(!textIncludes(await bodyText(nextCarrierSession), fixture.subject), 'The second carrier must not see the private subject.');
+    assert.ok(!textIncludes(await bodyText(nextCarrierSession), fixture.content), 'The second carrier must not see the private body.');
+    console.log('[browser-relay-e2e] PASS the second account accepted the shared one-time invite; the drop stayed sealed.');
 
     currentStep = 'rejecting a fresh replay of the used carrier invite';
     await carrierSession.navigate(inviteUrl);
@@ -1296,16 +1343,23 @@ async function main() {
     // inspects only this disposable fixture to verify the one-time invite count.
     const { data: handoffs, error: handoffError } = await admin.from('relay_handoffs')
       .select('id, carrier_name, neighborhood, note, handoff_lat, handoff_lng, accepted_lat, accepted_lng')
-      .eq('letter_id', fixture.letterId);
+      .eq('letter_id', fixture.letterId)
+      .order('created_at', { ascending: true });
     assert.ifError(handoffError);
-    assert.equal(handoffs?.length, 1, 'A fresh request against the used invite must not create another handoff.');
+    assert.equal(handoffs?.length, 2, 'A fresh request against the used invite must not create a third handoff.');
     assert.equal(handoffs[0].carrier_name, carrier.displayName);
     assert.equal(handoffs[0].neighborhood, 'Pilot Neighborhood');
+    assert.equal(handoffs[1].carrier_name, nextCarrier.displayName);
+    assert.equal(handoffs[1].neighborhood, 'Second Pilot Neighborhood');
     assert.equal(handoffs[0].handoff_lat, null);
     assert.equal(handoffs[0].handoff_lng, null);
     assert.equal(handoffs[0].accepted_lat, null);
     assert.equal(handoffs[0].accepted_lng, null);
-    console.log('[browser-relay-e2e] PASS replay with fresh carrier details was denied; exactly one handoff exists and coordinate fields are empty.');
+    assert.equal(handoffs[1].handoff_lat, null);
+    assert.equal(handoffs[1].handoff_lng, null);
+    assert.equal(handoffs[1].accepted_lat, null);
+    assert.equal(handoffs[1].accepted_lng, null);
+    console.log('[browser-relay-e2e] PASS replay with fresh carrier details was denied; exactly two chosen carriers are recorded and coordinate fields are empty.');
 
     currentStep = 'refreshing the sender Journey route';
     await senderSession.navigate(`${APP_ORIGIN}/journey?letter=${encodeURIComponent(fixture.letterId)}`);
@@ -1313,17 +1367,18 @@ async function main() {
     await clickButton(senderSession, 'Refresh route');
     await senderSession.waitFor(async () => {
       const text = await bodyText(senderSession);
-      return textIncludes(text, carrier.displayName) && textIncludes(text, 'Pilot Neighborhood');
-    }, 'sender Journey to show the new carrier and neighborhood');
+      return textIncludes(text, carrier.displayName) && textIncludes(text, 'Pilot Neighborhood')
+        && textIncludes(text, nextCarrier.displayName) && textIncludes(text, 'Second Pilot Neighborhood');
+    }, 'sender Journey to show both chosen carriers');
     await assertNoHorizontalOverflow(senderSession, 'Sender Journey page');
-    console.log('[browser-relay-e2e] PASS sender Journey refreshed and showed the new carrier stop.');
+    console.log('[browser-relay-e2e] PASS sender Journey refreshed and showed both accepted carrier stops.');
 
     currentStep = 'collecting the sealed drop as its recipient';
     await recipientSession.navigate(`${APP_ORIGIN}/mailbox`);
     await recipientSession.waitFor(() => pageIncludes(recipientSession, 'I got this drop'), 'recipient sealed Relay card');
     const beforeCollect = await bodyText(recipientSession);
     assert.ok(textIncludes(beforeCollect, 'A sealed drop is traveling to you'), 'Recipient should see the sealed route card.');
-    assert.ok(textIncludes(beforeCollect, carrier.displayName), 'Recipient should see safe carrier route details.');
+    assert.ok(textIncludes(beforeCollect, nextCarrier.displayName), 'Recipient should see the latest carrier route details.');
     assert.ok(!textIncludes(beforeCollect, fixture.subject), 'Recipient must not see the subject before collection.');
     assert.ok(!textIncludes(beforeCollect, fixture.content), 'Recipient must not see the body before collection.');
     await assertNoHorizontalOverflow(recipientSession, 'Recipient mailbox before collection');
