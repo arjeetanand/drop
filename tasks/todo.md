@@ -9,7 +9,8 @@ Tasks are ordered by dependency. Progress is recorded at each tested and pushed 
 - [x] Bind local fixture setup to the exact Drop Supabase container names and reject another local project on the same port.
 - [x] Stop the sidebar mailbox poll on public routes where the sidebar is hidden; record the remaining duplicate Home/sidebar recovery read as a low-priority follow-up.
 - [x] Pass 302 unit tests, lint, Next route type generation, TypeScript, whitespace checks, and a 22-route Webpack production build; confirm the app at port 4004 returns HTTP 200.
-- [ ] Restore GitHub CLI authentication, push the final branch commits, create one review PR directly into `main`, and refresh PR checks. The saved token is currently invalid, so no current PR state is confirmed.
+- [x] Push the verified branch and create draft [PR #13](https://github.com/arjeetanand/drop/pull/13) directly into `main`; GitGuardian passed on the initial PR head.
+- [ ] Refresh PR #13 after the closure documentation push and confirm its latest CI run and review state.
 - [ ] Verify hosted Free project identity, Auth/migrations/functions, two-account delivery, and scheduled physical media deletion.
 - [ ] Verify the actual OS share sheet, spoken screen-reader behavior, and physical-device/camera paths; run the small opt-in user pilot.
 - [ ] After PR review and hosted/device gates, merge to `main` with the user's explicit approval.

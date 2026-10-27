@@ -9,7 +9,8 @@ Updated: 2026-10-27
 - [x] Stop background sidebar mailbox refresh on routes where the private shell is hidden; note the remaining Home/sidebar duplicate recovery read for later optimization.
 - [x] Pass 302 unit tests, lint, Next route type generation, TypeScript, `git diff --check`, and the Webpack production build with all 22 routes.
 - [x] Verify the local app responds HTTP 200 at `http://localhost:4004`.
-- [ ] Restore GitHub CLI auth, push the final closure commits, and open one full-pilot review PR directly into `main`; confirm the PR head and CI checks.
+- [x] Push the verified branch and open draft [PR #13](https://github.com/arjeetanand/drop/pull/13) directly into `main`.
+- [ ] Refresh the PR head and confirm the latest CI and review state after the closure documentation push.
 - [ ] Verify the hosted Free project, Auth, migrations/functions, real two-account delivery, and scheduled physical cleanup.
 - [ ] Verify OS sharing, spoken screen-reader output, and physical-device/camera behavior; run the opt-in pilot.
 - [ ] Merge only after PR review, readiness gates, and explicit merge approval.
