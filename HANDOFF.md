@@ -2,21 +2,15 @@
 
 Updated: 2026-10-27
 
-## Current repository and review status (2026-10-27)
+## Current repository and pilot status (2026-10-27)
 
-- `main` and the local `origin/main` tracking ref are at `446337f` (PR #16). `feat/drop-relay-first-choice` tracks `origin/feat/drop-relay-first-choice`; the latest verified pre-learning-update head was `b8bf5d7`, based on that main. The UX code change is `2ab1f06`, with earlier docs commit `65e77cb`. PR #17 is the review path to `main`.
-- Refreshed at `b8bf5d7`: PR #17 was open as a draft with a `CLEAN` merge state; CI and GitGuardian passed. This append-only learning update advances the PR head; refresh the PR and checks at the resulting head before merge.
-- Browser acceptance at 320px, 390px, and desktop, keyboard focus, and hydrated Relay mode selection remains pending the earlier Playwright approval request. Do not describe this first-use slice as browser accepted yet.
-- A Node listener was listed on `127.0.0.1:4004`, but HTTP probes to `/` and the Relay Compose URL failed with curl status 7 in this turn. Recheck or restart the app before a pilot demo.
-- This slice changed no backend or hosted Supabase configuration. Hosted readiness gates remain listed below.
-
-## First-use delivery choice (2026-10-27)
-
-- Branch: `feat/drop-relay-first-choice`. Code commit: `2ab1f06`; branch head before this closeout correction: `65e77cb`.
-- Home now explains direct delivery and Relay, gives each a separate CTA, and links the Relay CTA to the composer with mode=relay. The mobile nav calls the route Relay and uses 12px labels.
-- Verification: npm test passed 302/302; npm run lint passed; npx tsc --noEmit --incremental false passed; git diff --check passed. GET / and GET /compose?new=1&mode=relay returned HTTP 200.
-- No browser screenshot or click-through was run. The Product Design audit guidance requires approval before Playwright, and that approval is pending. Do not call the responsive or keyboard flow accepted yet.
-- Local app is on localhost:4004. Hosted project configuration was not changed by this slice.
+- PR [#17](https://github.com/arjeetanand/drop/pull/17) is merged to main as 77c03c67d9282cdd32f338bfc9eb437227ebe505. Its final required Tests/lint/types/build and GitGuardian checks passed.
+- The main branch ref is at 77c03c6; this documentation task is on docs/drop-pilot-preview-closeout-20261027. Existing local edits to AGENTS.md and next-env.d.ts are unrelated and excluded.
+- The full local development app is running at http://localhost:4004; the Home route returned HTTP 200. The local .env.local points to loopback Supabase.
+- A separate production demo build is in /private/tmp/drop-pilot-demo.3CD4GC, on port 5004, with no .env.local and no Supabase keys in its environment. Current preview: [Drop demo](https://commissioner-cool-spoken-disable.trycloudflare.com/demo). The Quick Tunnel is temporary and ends when its process or this local server stops. It exposes the browser-local demo only; it cannot sign users in or send real drops.
+- The demo browser smoke passed photo/GIF opening, saved reactions, sender copy, saved-claim recovery, keyboard behavior, responsive checks at 360px/390px/430px/1440px, 320px action-fit, and 768px fixed-navigation clearance, and zero Auth/RPC/Storage or cross-origin requests. The isolated build produced all 22 routes. Screenshots are in /private/tmp/drop-public-demo-evidence-20261027.
+- The hosted Supabase project is Drop in ap-south-1, status ACTIVE_HEALTHY; the actual billing plan is still unverified. The CLI migration listing shows all 22 main migrations applied plus remote-only versions 20261026100000, 20261026110000, and 20261026120000. Read-only CLI checks returned no deployed Edge Functions and no Edge Function secrets. No hosted project settings or data changed in this closeout.
+- Next: connect a durable no-cost host; verify the Free plan; reconcile remote migration history before migrations; deploy and configure the cleanup function and its schedule; validate hosted Auth/email; then test real two-account delivery and 30-day deletion. Keep the temporary link labeled as a demo preview. OS sharing, screen-reader output, physical-device behavior, and the opt-in study remain open.
 
 ## Historical main pointer before the PR #16 follow-up (2026-10-27)
 
@@ -685,7 +679,7 @@ From /Users/arjeetanand/projects/drop, run npm ci, then ./run.sh. Drop uses http
 - PR #12 was last confirmed open/draft before these pushes. GitHub API access failed with `error connecting to api.github.com`, so current PR head/checks are not verified; refresh them when GitHub is reachable. Keep the PR unmerged pending user approval.
 - Remaining: hosted Free-project two-account delivery, native OS share sheet, screen-reader announcement checks, physical-device/keyboard/camera acceptance, and an opt-in human value study. The browser share API is stubbed in the smoke and does not prove OS share-sheet behavior.
 
-## Latest checkpoint — First-use and carrier-consent closeout (2026-10-27)
+## Historical checkpoint — First-use and carrier-consent closeout before PR #17 merge (2026-10-27)
 
 - Branch `feat/drop-relay-first-choice`; code commit `bbaf38c` is pushed to the branch for [PR #17](https://github.com/arjeetanand/drop/pull/17), base `main`. At the immediate post-push check PR #17 was OPEN, draft, and mergeable; GitGuardian passed, while the required Tests/lint/types/build check had no conclusion yet. Refresh checks after this handoff commit and merge only through PR #17.
 - The code moves carrier acceptance disclosures before the Accept action, states the 10-minute/first-holder behavior and route/privacy limits, and raises the mobile Relay tab label to 12px. The browser runner adds an attach-only 4004 mode and checks the Home direct/Relay choices after hydration before it creates test fixtures.
@@ -695,3 +689,12 @@ From /Users/arjeetanand/projects/drop, run npm ci, then ./run.sh. Drop uses http
 - No public tester URL is configured or verified: the checkout has `netlify.toml` but no `.netlify` site link or Netlify CLI, and the Sites connector is disabled for this workspace. `localhost:4004` is available only on this machine.
 - Hosted pilot gates remain: confirm the Supabase project is on the Free plan; reconcile three remote-only migrations before any hosted migration push; deploy/configure Edge Functions and cleanup secrets; configure hosted Auth/email; verify two-account sends and actual 30-day deletion. Native OS sharing, screen-reader output, physical-device behavior, and the opt-in usability study are also open.
 - Next: refresh PR #17 checks at the latest head and merge it through the PR when clean. Separately provision/verify the no-cost public hosting target and hosted backend before inviting external testers to send real drops.
+
+## Latest checkpoint — PR #17 merged and safe demo preview (2026-10-27)
+
+- Source merge: PR #17 merged to main as 77c03c67d9282cdd32f338bfc9eb437227ebe505; both required checks passed. The main app source is current at that commit.
+- Local service: ./run.sh start launched the app on port 4004; Home returned HTTP 200.
+- Shareable preview: https://commissioner-cool-spoken-disable.trycloudflare.com/demo. It is a temporary Cloudflare Quick Tunnel to a separate production build at /private/tmp/drop-pilot-demo.3CD4GC on port 5004. The build contains no Supabase environment or credentials and supports only browser-local demo content. Anyone with the link can open it; the link stops when the tunnel or local server exits.
+- Verification: isolated production build succeeded with all 22 routes. browser-demo-smoke.mjs passed the photo/GIF demos, reaction persistence, sender copy, claim recovery, keyboard navigation, and responsive checks. It recorded no Auth, RPC, Storage, or cross-origin browser requests. Home and /demo returned HTTP 200 through the public URL. Screenshots: /private/tmp/drop-public-demo-evidence-20261027.
+- Hosted service read-only checks: project status ACTIVE_HEALTHY; 22 main migrations match, with three remote-only versions (20261026100000, 20261026110000, 20261026120000); no Edge Functions or project Edge secrets; billing plan remains unknown. No hosted changes were made.
+- Real pilot remains blocked on permanent free hosting, billing-plan confirmation, source migration reconciliation, hosted Auth/email and cleanup setup, and successful hosted two-account delivery/deletion. The temporary demo link is suitable for product feedback on the local sample experience only.
