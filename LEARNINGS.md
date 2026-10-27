@@ -2284,4 +2284,4 @@ For fixture-writing tests, bind the local endpoint to the expected project ident
 
 ### Git and remaining gaps
 
-The code is committed as `98651c5` on `codex/invitee-first-send`; the secret-free CI workflow is in `72ec464`. The branch and closure documentation are pushed through `3b731ff`, and draft PR #13 is open to `main`. GitGuardian passed on the initial PR head; refresh CI after the documentation follow-up. Hosted acceptance, actual OS sharing, spoken screen-reader output, physical-device behavior, and the opt-in user study remain open.
+The code is committed as `98651c5` on `codex/invitee-first-send`; the secret-free CI workflow is in `72ec464`. The branch and closure documentation are pushed through `722b5ec`, and draft PR #13 is open to `main`. CI and GitGuardian passed with a clean merge state on that head; this status-note commit requires a fresh check. Hosted acceptance, actual OS sharing, spoken screen-reader output, physical-device behavior, and the opt-in user study remain open.

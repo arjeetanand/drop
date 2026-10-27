@@ -12,7 +12,7 @@ Local verification on this candidate: `npm test` passed 302/302; ESLint, `next t
 
 **Live pilot readiness is still open.** The hosted Free Supabase project, Auth email configuration, deployed migrations/functions, real account-to-account delivery, and scheduled physical media deletion have not been verified. The operating-system share sheet, spoken screen-reader output, physical camera/device behavior, and the small opt-in user study also remain pending. Local success is not hosted acceptance.
 
-Draft [PR #13](https://github.com/arjeetanand/drop/pull/13) is open from `codex/invitee-first-send` to `main`. GitGuardian passed and the CI job was running on the last observed head; this follow-up documentation push starts a fresh run. Review the current PR head/checks and keep it unmerged until hosted/device gates are resolved and merge is approved.
+Draft [PR #13](https://github.com/arjeetanand/drop/pull/13) is open from `codex/invitee-first-send` to `main`. GitGuardian and CI passed on `722b5ec`, and GitHub reported a clean merge state. This status-note push triggers another run; review the current PR head/checks and keep it unmerged until hosted/device gates are resolved and merge is approved.
 
 ## Pitch
 
