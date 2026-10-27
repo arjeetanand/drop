@@ -47,7 +47,7 @@ export function RelayDemoPreview() {
   const currentStopIndex = stageStopIndex[stage];
 
   return (
-    <section className="mt-7 overflow-hidden rounded-[1.5rem] border border-[#d7defe] bg-[#eef1ff] p-5 sm:p-7" aria-labelledby="relay-demo-title">
+    <section id="relay-demo" tabIndex={-1} className="mt-7 scroll-mt-6 overflow-hidden rounded-[1.5rem] border border-[#d7defe] bg-[#eef1ff] p-5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#263ee0] sm:p-7" aria-labelledby="relay-demo-title">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="eyebrow text-[#263ee0]">A more human route</p>
         <span className="rounded-full bg-white/80 px-3 py-1.5 font-mono text-[0.62rem] font-bold uppercase tracking-[0.12em] text-[#263ee0]">Fictional demo · no account</span>

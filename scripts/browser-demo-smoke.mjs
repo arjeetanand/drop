@@ -377,6 +377,15 @@ async function waitUntil(cdp, description, predicate, timeoutMs = STEP_TIMEOUT_M
     const page = document.querySelector('main.page-enter');
     return {
       pathname: location.pathname,
+      hash: location.hash,
+      scrollY: window.scrollY,
+      relayTargetTop: document.querySelector('#relay-demo')?.getBoundingClientRect().top ?? null,
+      activeElement: document.activeElement ? {
+        tag: document.activeElement.tagName,
+        id: document.activeElement.id,
+        href: document.activeElement.getAttribute('href'),
+      } : null,
+      viewport: { width: window.innerWidth, height: window.innerHeight },
       readyState: document.readyState,
       title: document.title,
       bodyText: document.body?.innerText.slice(0, 500) || '',
@@ -515,10 +524,22 @@ async function assertComposerActionTray(cdp, viewport, step) {
 
 async function assertResponsiveWidths(cdp, step) {
   const previousViewport = activeViewport;
-  for (const viewport of FLOW_VIEWPORTS) {
+  const responsiveViewports = step === 'Demo chooser'
+    ? [{ name: 'mobile-320', width: 320, height: 740, deviceScaleFactor: 1, mobile: true }, ...FLOW_VIEWPORTS]
+    : FLOW_VIEWPORTS;
+  for (const viewport of responsiveViewports) {
     await setViewport(cdp, viewport);
     const label = viewport.mobile ? `${viewport.width}px` : `${viewport.width}×${viewport.height} desktop`;
     await assertNoHorizontalOverflow(cdp, `${step} at ${label}`, viewport.width);
+    if (step === 'Demo chooser' && viewport.width === 320) {
+      const visible = await evaluate(cdp, `(() => {
+        const link = document.querySelector('a[href="#relay-demo"]');
+        const rect = link?.getBoundingClientRect();
+        return Boolean(rect && rect.top >= 0 && rect.bottom <= window.innerHeight);
+      })()`);
+      assert.equal(visible, true, 'The Relay entry point should fit on the 320×740 demo chooser without scrolling.');
+      console.log('[browser-demo-smoke] PASS Relay demo entry remains visible at 320×740.');
+    }
   }
   await setViewport(cdp, previousViewport);
 }
@@ -611,6 +632,7 @@ async function runDemoFlow(cdp, {
   screenshotDir,
   screenshotSteps = new Set(),
   checkResponsive = false,
+  exerciseRelay = true,
   getPageLoadEvents,
 }) {
   const prefix = viewport.name;
@@ -669,7 +691,49 @@ async function runDemoFlow(cdp, {
   await waitForPageShell(cdp, 'Demo chooser');
   await assertNoFrameworkOverlay(cdp, 'Demo chooser');
   await checkWidth('Demo chooser');
+  const demoEntryPoints = await evaluate(cdp, `(() => {
+    const relay = document.querySelector('#relay-demo');
+    const samples = document.querySelector('#sample-drops');
+    const relayLink = document.querySelector('a[href="#relay-demo"]');
+    const samplesLink = document.querySelector('a[href="#sample-drops"]');
+    const relayLinkRect = relayLink?.getBoundingClientRect();
+    return {
+      relayBeforeSamples: Boolean(relay && samples && relay.compareDocumentPosition(samples) & Node.DOCUMENT_POSITION_FOLLOWING),
+      relayLinkName: relayLink?.innerText.replace(/\\s+/g, ' ').trim(),
+      samplesLinkName: samplesLink?.innerText.replace(/\\s+/g, ' ').trim(),
+      relayLinkVisible: Boolean(relayLinkRect && relayLinkRect.top >= 0 && relayLinkRect.bottom <= window.innerHeight),
+    };
+  })()`);
+  assert.equal(demoEntryPoints.relayBeforeSamples, true, 'The hand-to-hand journey should appear before the large media sample cards.');
+  assert.match(demoEntryPoints.relayLinkName || '', /Try the hand-to-hand journey/, 'The demo should offer a clear jump to Relay before the sample cards.');
+  assert.match(demoEntryPoints.samplesLinkName || '', /Open a photo or GIF sample/, 'The demo should keep a clear jump to the photo and GIF samples.');
+  assert.equal(demoEntryPoints.relayLinkVisible, true, `The Relay entry point should be visible without scrolling past the samples: ${JSON.stringify(demoEntryPoints)}`);
   await capture('chooser');
+  if (exerciseRelay) {
+    await activateFlowControl(cdp, { keyboard, name: 'Try the hand-to-hand journey', expectedTag: 'A', expectedHref: '#relay-demo' });
+    await waitUntil(cdp, 'the Relay demo jump target', async () => (
+      await evaluate(cdp, `(() => {
+        const relay = document.querySelector('#relay-demo');
+        const rect = relay?.getBoundingClientRect();
+        return location.hash === '#relay-demo'
+          && document.activeElement === relay
+          && Boolean(rect && rect.top >= 0 && rect.top <= 80);
+      })()`)
+    ));
+    for (const status of [
+      'Handoff one of three: Ari passed a sealed drop to Jo.',
+      'Handoff two of three: Jo passed the sealed drop to Sol.',
+      'Your drop is ready. Collect it to see what is inside.',
+      'You collected the sample. It is still only a demo on this device.',
+    ]) {
+      await activateFlowControl(cdp, { keyboard, selector: '#relay-demo button', expectedTag: 'BUTTON' });
+      await waitUntil(cdp, `Relay preview status “${status}”`, async () => (
+        await evaluate(cdp, `${normalizedVisibleText(status)}`)
+      ));
+    }
+    await assertNoHorizontalOverflow(cdp, 'Collected Relay demo', viewport.width);
+    await capture('relay-collected');
+  }
   await activateFlowControl(cdp, { keyboard, name: optionLabel, expectedTag: 'BUTTON' });
 
   await waitUntil(cdp, 'the recipient demo route', async () => (
@@ -2565,14 +2629,15 @@ async function main() {
         keyboard: true,
         verifyFreshDraft: true,
         screenshotDir,
-        screenshotSteps: new Set(['home', 'sender-copy']),
+        screenshotSteps: new Set(['home', 'chooser', 'relay-collected', 'sender-copy']),
+        exerciseRelay: true,
         getPageLoadEvents: () => pageLoadEvents,
       });
       console.log(`[browser-demo-smoke] PASS keyboard sender-copy to fresh editable text draft at ${viewport.width}×${viewport.height}; existing media draft and local demo remain preserved.`);
     }
 
     if (!friendDraftOnly && !claimRecoveryOnly && !promptOnly && !shareTargetOnly && !dropBackOnly && !accessibilityOnly) {
-      const screenshotSteps = new Set(['home', 'chooser', 'recipient', 'fragments-revealed', 'reaction-saved', 'sender-copy']);
+      const screenshotSteps = new Set(['home', 'chooser', 'relay-collected', 'recipient', 'fragments-revealed', 'reaction-saved', 'sender-copy']);
       for (const viewport of FLOW_VIEWPORTS) {
         const keyboard = viewport.width !== 360;
         await runDemoFlow(pageCdp, {
@@ -2583,6 +2648,7 @@ async function main() {
           screenshotDir: viewport.width === 390 || !viewport.mobile ? screenshotDir : null,
           screenshotSteps: screenshotDir && (viewport.width === 390 || !viewport.mobile) ? screenshotSteps : new Set(),
           checkResponsive: viewport.width === 360,
+          exerciseRelay: viewport.width === 360,
           getPageLoadEvents: () => pageLoadEvents,
         });
         console.log(`[browser-demo-smoke] PASS ${keyboard ? 'keyboard' : 'touch'} GIF flow at ${viewport.width}×${viewport.height}${viewport.mobile ? '' : ' desktop'}.`);
@@ -2594,6 +2660,7 @@ async function main() {
         payload: 'photo',
         keyboard: true,
         screenshotDir: null,
+        exerciseRelay: false,
         getPageLoadEvents: () => pageLoadEvents,
       });
     }

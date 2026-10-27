@@ -1,6 +1,21 @@
 # Drop integration checklist
 
-Updated: 2026-10-27
+Updated: 2026-10-28
+
+## Current try-it demo — Relay-first production preview (2026-10-28)
+
+- [x] Bring Drop’s hand-to-hand Relay demo above the large photo/GIF sample cards and add clear entry links for both experiences.
+- [x] Use Next.js hash navigation, focus the destination, and honor reduced-motion preferences through normal browser scrolling.
+- [x] Add browser assertions for Relay-first order, visible mobile entry point, destination focus/scroll, and all handoff stages.
+- [x] Pass 302/302 unit tests, lint, non-incremental TypeScript, browser-smoke syntax, and `git diff --check`.
+- [x] Build a credential-free production app in `/private/tmp/drop-clean-demo-build.3fZKql`; all 22 routes generated.
+- [x] Pass the full production browser smoke at 320×740, 360×844, 390×844, 430×844, 768×1024, and 1440×900. The demo sent no Auth, RPC, Storage, or cross-origin requests.
+- [x] Verify Home and `/demo` on the temporary public preview return HTTP 200: [current try-it demo](https://bottom-greatest-bras-christmas.trycloudflare.com/demo). It is browser-local, credential-free, and temporary.
+- [x] Keep the existing preview on port 5004 running; the updated preview is separate on 6004.
+- [x] Commit the source as `ae2c9a6` and push `feat/pilot-demo-relay-first` to origin.
+- [x] Open [PR #19](https://github.com/arjeetanand/drop/pull/19) from the pushed feature branch into `main`; its current CI and merge state are tracked on GitHub.
+- [ ] For real account-to-account use, verify the Supabase Free plan and reconcile three remote-only migrations before any push; configure hosted Auth/email and the cleanup worker/schedule.
+- [ ] Verify hosted two-account delivery/deletion, permanent hosting, OS sharing, spoken screen-reader behavior, physical-device behavior, and the opt-in pilot.
 
 ## Current pilot status — PR #17 and temporary demo preview (2026-10-27)
 
