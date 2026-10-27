@@ -12,8 +12,14 @@ import { createClient } from '@supabase/supabase-js';
 import { assertTrustedLocalSupabaseListener } from './localSupabaseListener.mjs';
 
 const PROJECT_ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
-const APP_PORT = 6004;
-const APP_ORIGIN = `http://127.0.0.1:${APP_PORT}`;
+const ATTACH_TO_EXISTING_4004 = process.argv.includes('--attach-4004');
+const APP_PORT = ATTACH_TO_EXISTING_4004 ? 4004 : 6004;
+const APP_ORIGIN = ATTACH_TO_EXISTING_4004 ? 'http://localhost:4004' : `http://127.0.0.1:${APP_PORT}`;
+const HOME_CHOICE_VIEWPORTS = [
+  { name: '320x740', width: 320, height: 740, mobile: true },
+  { name: '390x844', width: 390, height: 844, mobile: true },
+  { name: '1440x900 desktop', width: 1440, height: 900, mobile: false },
+];
 const screenshotDir = screenshotDirectoryFromEnv();
 const BUILD_TIMEOUT_MS = 180_000;
 const APP_TIMEOUT_MS = 60_000;
@@ -401,6 +407,18 @@ async function assertPortAvailable(port) {
     throw error;
   }
   await new Promise((resolveClose, reject) => server.close((error) => error ? reject(error) : resolveClose()));
+}
+
+async function assertExistingApp() {
+  let response;
+  try {
+    response = await fetch(APP_ORIGIN, { redirect: 'error', signal: AbortSignal.timeout(5_000) });
+  } catch {
+    throw new Error(`Attach mode requires the already-running app at ${APP_ORIGIN}; it will not start or stop an app process.`);
+  }
+  assert.equal(response.status, 200, `The existing app at ${APP_ORIGIN} returned HTTP ${response.status}.`);
+  const html = await response.text();
+  assert.match(html, /<title[^>]*>Drop\s+—/i, `The existing app at ${APP_ORIGIN} does not look like Drop.`);
 }
 
 function browserEnvironment() {
@@ -1033,7 +1051,117 @@ async function assertNoHorizontalOverflow(session, name) {
     } catch { /* Keep the DOM diagnostic even if DevTools cannot capture the viewport. */ }
   }
   assert.ok(dimensions?.scroll <= dimensions?.width + 1,
-    `${name} has horizontal overflow at the 390px mobile viewport: viewport=${dimensions?.viewport}, client=${dimensions?.width}, scroll=${dimensions?.scroll}, overflowing elements=${JSON.stringify(dimensions?.offenders || [])}${screenshotPath ? `, screenshot=${screenshotPath}` : ''}.`);
+    `${name} has horizontal overflow: viewport=${dimensions?.viewport}, client=${dimensions?.width}, scroll=${dimensions?.scroll}, overflowing elements=${JSON.stringify(dimensions?.offenders || [])}${screenshotPath ? `, screenshot=${screenshotPath}` : ''}.`);
+}
+
+async function sendKeyboardKey(session, key, code, keyCode) {
+  await session.pageCdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key, code, windowsVirtualKeyCode: keyCode, nativeVirtualKeyCode: keyCode });
+  await session.pageCdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key, code, windowsVirtualKeyCode: keyCode, nativeVirtualKeyCode: keyCode });
+}
+
+async function focusHomeChoiceWithKeyboard(session, { label, href }) {
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    const focus = await session.evaluate(`(() => {
+      const element = document.activeElement;
+      const text = (element?.innerText || element?.textContent || '').replace(/\\s+/g, ' ').trim().toLocaleLowerCase();
+      if (!element?.matches('a[href]') || !text.includes(${JSON.stringify(label.toLocaleLowerCase())})) return null;
+      const style = getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      return {
+        href: element.getAttribute('href'),
+        text,
+        focusVisible: element.matches(':focus-visible'),
+        outlineStyle: style.outlineStyle,
+        outlineWidth: Number.parseFloat(style.outlineWidth) || 0,
+        outlineColor: style.outlineColor,
+        inViewport: rect.top >= 0 && rect.bottom <= window.innerHeight && rect.left >= 0 && rect.right <= window.innerWidth,
+      };
+    })()`);
+    if (focus) {
+      assert.equal(focus.href, href, `Keyboard focus should land on the ${label} link.`);
+      assert.equal(focus.focusVisible, true, `${label} should expose keyboard-visible focus.`);
+      assert.ok(focus.outlineStyle !== 'none' && focus.outlineWidth >= 2, `${label} should render a visible focus outline: ${JSON.stringify(focus)}.`);
+      assert.ok(!['transparent', 'rgba(0, 0, 0, 0)'].includes(focus.outlineColor), `${label} focus outline should have a visible color.`);
+      assert.equal(focus.inViewport, true, `${label} should remain visible in the viewport while focused.`);
+      return;
+    }
+    await sendKeyboardKey(session, 'Tab', 'Tab', 9);
+  }
+  throw new Error(`Could not reach ${label} using keyboard Tab.`);
+}
+
+async function readDeliveryModeSelection(session) {
+  return session.evaluate(`(() => {
+    const fieldset = [...document.querySelectorAll('fieldset')].find((node) => node.querySelector('legend')?.innerText.includes('How should it get there?'));
+    if (!fieldset) return null;
+    const buttons = [...fieldset.querySelectorAll('button')];
+    const label = (button) => button.innerText.replace(/\\s+/g, ' ').trim().toLocaleLowerCase();
+    const instant = buttons.find((button) => label(button).startsWith('instant'));
+    const relay = buttons.find((button) => label(button).includes('make a journey'));
+    return { instant: instant?.getAttribute('aria-pressed') ?? null, relay: relay?.getAttribute('aria-pressed') ?? null };
+  })()`);
+}
+
+async function assertHomeDeliveryChoices(session) {
+  const choices = [
+    { label: 'Send it now', href: '/compose?new=1', mode: 'instant', expected: { instant: 'true', relay: 'false' } },
+    { label: 'Send it through Relay', href: '/compose?new=1&mode=relay', mode: 'relay', expected: { instant: 'false', relay: 'true' } },
+  ];
+  for (const viewport of HOME_CHOICE_VIEWPORTS) {
+    await session.pageCdp.send('Emulation.setDeviceMetricsOverride', {
+      width: viewport.width,
+      height: viewport.height,
+      deviceScaleFactor: 1,
+      mobile: viewport.mobile,
+    });
+    for (const choice of choices) {
+      await session.navigate(`${APP_ORIGIN}/`);
+      await session.waitFor(() => session.evaluate(`location.pathname === '/' && [...document.querySelectorAll('a[href]')].some((link) => {
+        const text = (link.innerText || '').replace(/\\s+/g, ' ').trim().toLocaleLowerCase();
+        return text.includes(${JSON.stringify(choice.label.toLocaleLowerCase())}) && link.getAttribute('href') === ${JSON.stringify(choice.href)};
+      })`), `Home ${choice.label} link at ${viewport.name}`);
+      await assertNoHorizontalOverflow(session, `Home ${viewport.name}`);
+      if (choice === choices[0]) await session.captureScreenshot(`home-choices-${viewport.name}`);
+      await focusHomeChoiceWithKeyboard(session, choice);
+      await sendKeyboardKey(session, 'Enter', 'Enter', 13);
+      await session.waitFor(() => session.evaluate(`location.pathname === '/compose'
+        && new URL(location.href).searchParams.get('new') === '1'
+        && Boolean(document.querySelector('fieldset'))`), `${choice.label} Compose route at ${viewport.name}`);
+      await session.waitFor(async () => {
+        const selection = await readDeliveryModeSelection(session);
+        return selection?.instant === choice.expected.instant
+          && selection?.relay === choice.expected.relay;
+      }, `hydrated ${choice.mode} selection at ${viewport.name}`);
+      assert.deepEqual(await readDeliveryModeSelection(session), choice.expected, `${choice.label} should open Compose with the expected delivery mode selected.`);
+      assert.equal(new URL(await session.evaluate('location.href')).pathname, '/compose');
+      await assertNoHorizontalOverflow(session, `${choice.label} Compose at ${viewport.name}`);
+      await session.captureScreenshot(`${choice.mode}-compose-${viewport.name}`);
+      console.log(`[browser-relay-e2e] PASS keyboard ${choice.label} at ${viewport.name}; Compose selected ${choice.mode}.`);
+    }
+  }
+  await session.pageCdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+}
+
+async function assertCarrierInviteDisclosure(session, flowName) {
+  const disclosure = await session.evaluate(`(() => {
+    const normalize = (element) => (element?.innerText || '').replace(/\\s+/g, ' ').trim().toLocaleLowerCase();
+    const aside = [...document.querySelectorAll('aside')].find((element) => normalize(element).includes('before you carry'));
+    const accept = [...document.querySelectorAll('button')].find((element) => normalize(element) === 'accept sealed drop');
+    const neighborhood = [...document.querySelectorAll('label')].find((element) => normalize(element).startsWith('neighborhood'));
+    return {
+      text: normalize(aside),
+      beforeAccept: Boolean(aside && accept && (aside.compareDocumentPosition(accept) & Node.DOCUMENT_POSITION_FOLLOWING)),
+      optionalNeighborhoodLabel: normalize(neighborhood),
+    };
+  })()`);
+  assert.ok(disclosure.text.includes('before you carry'), `${flowName}: the carrier consent disclosure should be visible.`);
+  assert.equal(disclosure.beforeAccept, true, `${flowName}: the disclosure must appear before Accept sealed drop.`);
+  assert.ok(disclosure.text.includes('anyone with this one-time invite can accept first'), `${flowName}: explain that the first invite holder may accept.`);
+  assert.ok(disclosure.text.includes('expires in 10 minutes'), `${flowName}: state the one-time invite expiry.`);
+  assert.ok(disclosure.text.includes('self-entered name') && disclosure.text.includes('note or neighborhood you add are visible on the route'), `${flowName}: explain which self-entered details appear on the route.`);
+  assert.ok(disclosure.text.includes('text and media stay hidden from carriers'), `${flowName}: state that the message and media remain sealed.`);
+  assert.ok(disclosure.text.includes('a neighborhood is typed by you') && disclosure.text.includes('does not use your device location'), `${flowName}: explain typed neighborhood and no device location.`);
+  assert.ok(disclosure.optionalNeighborhoodLabel.includes('(optional)'), `${flowName}: neighborhood must be labeled optional.`);
 }
 
 async function extractInviteUrl(session) {
@@ -1216,9 +1344,10 @@ async function main() {
     guardSelfTest();
     return;
   }
-  assert.deepEqual(process.argv.slice(2), [], 'This smoke accepts only --guard-self-test.');
+  const expectedArguments = ATTACH_TO_EXISTING_4004 ? ['--attach-4004'] : [];
+  assert.deepEqual(process.argv.slice(2), expectedArguments, 'This smoke accepts only --guard-self-test or --attach-4004.');
 
-  await assertPortAvailable(APP_PORT);
+  if (!ATTACH_TO_EXISTING_4004) await assertPortAvailable(APP_PORT);
   const envText = await readFile(resolve(PROJECT_ROOT, '.env.local'), 'utf8').catch(() => {
     throw new Error('Create .env.local with local loopback Supabase URL, anon key, and service-role key first.');
   });
@@ -1241,8 +1370,21 @@ async function main() {
   await mkdir(join(temporaryRoot, 'home'), { recursive: true });
 
   try {
-    currentStep = 'starting isolated production app';
-    await startTemporaryApp();
+    if (ATTACH_TO_EXISTING_4004) {
+      currentStep = 'attaching to the existing localhost:4004 app';
+      await assertExistingApp();
+    } else {
+      currentStep = 'starting isolated production app';
+      await startTemporaryApp();
+    }
+
+    if (ATTACH_TO_EXISTING_4004) {
+      currentStep = 'checking the Home direct and Relay choices before creating test accounts';
+      const homeSession = new BrowserSession('home-preflight');
+      sessions.push(homeSession);
+      await homeSession.launch();
+      await assertHomeDeliveryChoices(homeSession);
+    }
 
     currentStep = 'creating disposable sender, carrier, and recipient accounts';
     sender = await createAccount('sender');
@@ -1285,6 +1427,8 @@ async function main() {
     await carrierSession.navigate(inviteUrl);
     await carrierSession.waitFor(() => pageIncludes(carrierSession, 'Accept sealed drop'), 'secure carrier acceptance form');
     await assertNoHorizontalOverflow(carrierSession, 'Carrier invite page');
+    await assertCarrierInviteDisclosure(carrierSession, 'Text carrier invite');
+    await carrierSession.captureScreenshot('text-carrier-consent-disclosure');
     assert.ok(await pageIncludes(carrierSession, 'Name shown on the route'), 'Carrier identity must be labeled as route attribution.');
     assert.ok(await pageIncludes(carrierSession, 'not verified against a Drop account'), 'The carrier identity limitation must be explicit.');
     await fillControl(carrierSession, '#relay-carrier-name', carrier.displayName);
@@ -1431,6 +1575,8 @@ async function main() {
     await carrierSession.navigate(gifInviteUrl);
     await carrierSession.waitFor(() => pageIncludes(carrierSession, 'Accept sealed drop'), 'GIF secure carrier acceptance form');
     await assertNoHorizontalOverflow(carrierSession, 'GIF carrier invite page');
+    await assertCarrierInviteDisclosure(carrierSession, 'GIF carrier invite');
+    await carrierSession.captureScreenshot('gif-carrier-consent-disclosure');
     await fillControl(carrierSession, '#relay-carrier-name', carrier.displayName);
     await fillControl(carrierSession, '#relay-carrier-neighborhood', 'GIF Pilot Neighborhood');
     await fillControl(carrierSession, '#relay-carrier-note', 'The GIF stays sealed while the route moves.');

@@ -199,10 +199,28 @@ export function RelayTokenHandoff({ token, destination, backHref, method }: Rela
           <p className="eyebrow text-[#2b45f7]">{method} handoff</p>
           <h2 className="mt-2 font-headline-md text-2xl text-ink-navy">Add your hand to the route.</h2>
           <p className="mt-2 text-sm leading-relaxed text-on-surface-variant">
-            You’ll carry a sealed drop toward {destination || 'the recipient area'}. Type a neighborhood if you like; this invite does not access your device location.
+            Share a route name and any context you want the next carrier to see.
           </p>
         </div>
       </div>
+
+      <aside aria-labelledby="relay-carrier-consent-title" className="mb-6 rounded-2xl border border-[#ead5c6] bg-[#fff7ed] p-4 sm:p-5">
+        <div className="flex items-start gap-3">
+          <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-[#2b45f7]" aria-hidden="true">
+            <ShieldCheck className="h-5 w-5" />
+          </span>
+          <div className="min-w-0">
+            <p className="eyebrow text-[#aa5f42]">Before you carry</p>
+            <h3 id="relay-carrier-consent-title" className="mt-1 font-headline-md text-lg font-semibold text-ink-navy">Know what you’re joining.</h3>
+          </div>
+        </div>
+        <ul className="mt-4 list-disc space-y-3 pl-5 text-sm leading-relaxed text-ink-navy">
+          <li><strong>First come:</strong> Anyone with this one-time invite can accept first. It expires in 10 minutes.</li>
+          <li><strong>On the route:</strong> Your self-entered name and any note or neighborhood you add are visible on the route. Carrier names are not verified against a Drop account.</li>
+          <li><strong>Still sealed:</strong> The drop’s text and media stay hidden from carriers. A neighborhood is typed by you; Drop does not use your device location.</li>
+        </ul>
+        <p className="mt-4 rounded-xl bg-white/75 px-3 py-2.5 text-sm font-semibold leading-relaxed text-ink-navy">Only accept if this invite was meant for you.</p>
+      </aside>
 
       <form onSubmit={handleAccept}>
         <div className="space-y-5">
@@ -249,10 +267,6 @@ export function RelayTokenHandoff({ token, destination, backHref, method }: Rela
           </label>
         </div>
 
-        <p className="mt-5 flex items-start gap-2 text-xs leading-relaxed text-on-surface-variant">
-          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#2b45f7]" aria-hidden="true" />
-          Carrier names are entered by each person and are not verified against a Drop account. Your note and neighborhood appear on the route; the drop’s text and media stay private.
-        </p>
         {recoveryNotice && <p className="mt-4 rounded-xl bg-[#2b45f7]/5 px-3 py-2 text-sm leading-relaxed text-on-surface-variant" role="status" aria-live="polite">{recoveryNotice}</p>}
         {error && <p className="notice error-notice mt-5" role="alert" aria-live="assertive">{error}</p>}
         <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
