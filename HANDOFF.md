@@ -1,6 +1,17 @@
 # Drop handoff
 
-Updated: 2026-10-26
+Updated: 2026-10-27
+
+## Latest checkpoint — composer send recovery across navigation (2026-10-27)
+
+- Added a shared composer navigation guard for Desk, Profile, saved drop, Sent, Preview, and the primary connect/preview action. It blocks those links while delivery, private-claim preparation, native invite sharing, attachment saving, or share-target import is pending, announces why, and exposes `aria-disabled`. The form also stays busy during native share and prevents send/delete overlap.
+- The Next App Router has no supported cancelable browser-Back hook, so Back remains available. Successful delivery and `claim_pending` receipts are persisted before component mount checks; late completions no longer navigate to a receipt or open a share sheet after Compose unmounts. A same-tab event refreshes open Home/Mailbox state from the saved receipt. Lost private-claim links can be recreated from the saved-drop detail page.
+- Failures received after leaving Compose leave the existing saved draft intact; the user can return and retry, and delivery preflight checks the exact draft ID. A delayed authenticated browser test for Back/Forward, ambiguous outcomes, and native share remains open; do not describe this as fully live-send verified.
+- Verification: `npm test` passed 338/338; lint, typecheck, `bash -n run.sh`, and `git diff --check` passed. Webpack build completed all 22 routes using temporary local Google Font responses. The unmocked build failed only because DNS could not resolve `fonts.googleapis.com`. The isolated Chrome `--friend-draft-only` run passed at 390×844 and 1440×900 for text, photo, and GIF, preserved existing draft/media, and observed zero cross-origin requests. That smoke did not send or exercise browser Back during a pending operation.
+- This isolated task checkout has no `.env.local` and no Supabase public keys in its process environment; no hosted request, account send, or Supabase resource change occurred. Edge’s Apple Events setting was left on per the user’s latest instruction; no Edge page scripts were run.
+- Git: code commit `e1b88cd` (`e1b88cd978d1f330eaa830cc4e8a02a33fa91c6f`) is pushed and verified on `origin/fix/compose-send-navigation-guard`, based on `e21e568`. A documentation checkpoint is being committed separately. No PR was opened; `main` and PR #7 remain untouched.
+
+**Next:** verify the delayed-send and share-sheet recovery with a signed-in local account, then continue the hosted two-account pilot gates recorded below.
 
 ## Latest checkpoint — unavailable-account preview and Supabase CLI sign-in (2026-10-26)
 

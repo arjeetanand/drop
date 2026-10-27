@@ -2679,3 +2679,31 @@ Push the named, tested task branch so the work is reviewable, and verify the exa
 ### Git and remaining gaps
 
 `origin/feat/drop-preview-continuity` was verified at `202167d` before this follow-up log commit. No PR was opened and no merge occurred. The account-unavailable browser flow and Edge physical toggle-off remain pending as recorded in `HANDOFF.md`.
+
+## 2026-10-27 — keep composer outcomes safe across navigation
+
+### Issue
+
+Leaving Compose while a send, private-claim setup, attachment save, or share action was pending could leave the user unsure whether a successful action had been recorded. A late completion could also attempt to route from an unmounted page or open a native share sheet after the user had left.
+
+### Cause
+
+The composer owned both the pending interaction and the success follow-up. Browser Back can unmount it while an asynchronous operation is still in flight, and Next App Router does not offer a supported cancelable browser-Back hook.
+
+### Resolution
+
+Guarded in-app composer links and conflicting controls while an operation is pending. Persisted successful send and claim receipts before mount checks, emitted a same-tab mailbox refresh event, and skipped stale navigation/share-sheet actions after unmount. Kept browser Back available; a saved draft and draft-ID preflight remain the recovery path when the user returns.
+
+### Learning
+
+Treat durable operation results as independent from the screen that started them. A navigation guard can protect in-app actions, but do not simulate a cancellable browser Back event with history sentinels in a framework that does not support it.
+
+### Verification
+
+- `npm test`: 338/338 passed; lint, typecheck, `bash -n run.sh`, and `git diff --check` passed.
+- Webpack build completed 22 routes with temporary local Google Font responses. A regular build could not resolve `fonts.googleapis.com` because DNS was unavailable.
+- Isolated Chrome `--friend-draft-only` passed text/photo/GIF sender-copy flows at 390×844 and 1440×900, preserving existing draft/media and observing zero cross-origin requests. It did not exercise a live send, Back during a pending send, or native share.
+
+### Git and remaining gaps
+
+Code commit `e1b88cd978d1f330eaa830cc4e8a02a33fa91c6f` was pushed to `origin/fix/compose-send-navigation-guard`; this log is part of the separate documentation checkpoint. No PR or merge occurred, and `main` and PR #7 were not changed. Delayed authenticated Back/Forward and ambiguous-send recovery still need browser verification. No `.env.local` was present in this isolated checkout and no hosted Supabase action was taken. Edge’s Apple Events setting remains on per the user’s instruction.

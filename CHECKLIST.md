@@ -1,6 +1,16 @@
 # Drop integration checklist
 
-Updated: 2026-10-26
+Updated: 2026-10-27
+
+## Composer send and navigation recovery (2026-10-27)
+
+- [x] Block composer links during send, private-claim preparation, native sharing, attachment save, and share-target import; expose the same pending state to assistive technology.
+- [x] Persist successful delivery/claim receipts before checking component mount state; refresh an already-open Home/Mailbox view and avoid late receipt redirects or share sheets after Back.
+- [x] Pass `npm test` (338/338), lint, typecheck, `bash -n run.sh`, and `git diff --check`.
+- [x] Pass Webpack production build for 22 routes with temporary local Google Font responses. The ordinary build cannot resolve `fonts.googleapis.com` in this environment.
+- [x] Pass isolated Chrome `--friend-draft-only` on 6004 at 390×844 and 1440×900; text, photo, and GIF sender-copy flows preserve existing draft/media state and make blank drafts. No cross-origin requests were observed.
+- [x] Commit and verify pushed code commit `e1b88cd` on `fix/compose-send-navigation-guard`; `main` and PR #7 were not changed.
+- [ ] Test browser Back/Forward during a delayed authenticated send and native claim-share sheet, including retry/unclear outcomes, on a real signed-in local or hosted account. The current browser smoke does not exercise a live send.
 
 ## Unavailable-account composer preview (2026-10-26)
 
@@ -9,8 +19,8 @@ Updated: 2026-10-26
 - [x] Extend the browser smoke to check the preview URL and announcement when preview mode is active.
 - [x] Pass `npm test` (333/333), lint, typecheck, browser-smoke syntax, and `git diff --check`; commit code as `25f7581` on `feat/drop-preview-continuity`.
 - [x] Push code and documentation to `origin/feat/drop-preview-continuity`; remote tip `202167d` verified. No PR was opened and no merge occurred.
-- [ ] Render the unavailable-account flow in a no-backend browser. The Chrome attempt on 6004 timed out at Home with the configured Supabase account check still showing “Checking your account…”, so it did not reach the changed CTA.
-- [ ] Turn off Edge’s temporary “Allow JavaScript from Apple Events” setting with a physical click; scripted menu interaction left it checked.
+- [ ] Render the exact unavailable-account preview CTA in a no-backend browser. The current `--friend-draft-only` smoke passed but does not exercise this CTA; the earlier timeout at Home remains historical evidence.
+- [x] Leave Edge’s “Allow JavaScript from Apple Events” setting enabled per the user's latest instruction; no Edge page scripts or setting changes were performed during this local Chrome test.
 
 ## Hosted Free Supabase setup (2026-10-26)
 
