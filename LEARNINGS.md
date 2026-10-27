@@ -2249,7 +2249,7 @@ An auth callback is complete only after the expected account is confirmed; a cha
 
 ### Verification
 
-- `npm run test:browser-first-signup` passed the full local private-claim/signup flow plus the new signed-out friend send and separate owner inbox check at 390×844. Cleanup verified the exact claim/send rows absent, four disposable Auth users and profiles absent, both Mailpit messages absent, and the temporary app/browser directory removed.
+- `node scripts/browser-first-signup-smoke.mjs` passed the full local private-claim/signup flow plus the new signed-out friend send and separate owner inbox check at 390×844. Cleanup verified the exact claim/send rows absent, four disposable Auth users and profiles absent, both Mailpit messages absent, and the temporary app/browser directory removed.
 - `npm test`: 301/301 passed. `npm run lint`, `npx tsc --noEmit --incremental false`, browser-script syntax, `git diff --check`, and `npm run build -- --webpack` passed. The usual `npm run typecheck` was blocked by sandbox `EPERM` writing `tsconfig.tsbuildinfo`; the non-incremental TypeScript check passed. Build emitted the existing Browserslist freshness and Tailwind easing warnings.
 - Only local loopback Supabase/Mailpit were used; no hosted Supabase calls, resource changes, or database reset occurred. Port 4004 was untouched during the smoke.
 
