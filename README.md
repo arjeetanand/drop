@@ -6,7 +6,7 @@ The append-only engineering learning log is in [LEARNINGS.md](./LEARNINGS.md); i
 
 ## Pilot status and closure
 
-Active first-use UX slice on `feat/drop-relay-first-choice`: Home presents direct sending and Relay as separate starts, and the mobile tab is labeled Relay at 12px. Code commit `2ab1f06` and documentation commit `65e77cb` were pushed to the branch; PR #17 is the path to `main`. PR #17 was refreshed at head `65e77cb`: it is open as a draft, clean against `main`, and CI plus GitGuardian passed. This closeout documentation update changes the PR head; refresh checks at the final head before merge. Rendered browser, keyboard-focus, and responsive-layout acceptance remains pending; do not merge until that gate is accepted.
+Active first-use UX slice on `feat/drop-relay-first-choice`: Home presents direct sending and Relay as separate starts, and the mobile tab is labeled Relay at 12px. Code commit `2ab1f06`, earlier documentation commit `65e77cb`, and closeout commit `b8bf5d7` are pushed; PR #17 is the path to `main`. At `b8bf5d7`, PR #17 was open as a draft, clean against `main`, and CI plus GitGuardian passed. The append-only learning update in this closeout advances the branch again, so refresh checks on that resulting head before merge. Rendered browser, keyboard-focus, and responsive-layout acceptance remains pending; do not merge until that gate is accepted.
 
 At the PR #15 checkpoint, local `main` and `origin/main` pointed to `b705b3b`. PR #16 subsequently merged, and the local `main` and `origin/main` tracking refs now point to `446337f`. The PR inventory recorded at the earlier checkpoint is historical only; this pass refreshed PR #17, not the full open-PR list. Recheck current PR state and scope before acting on any other branch.
 

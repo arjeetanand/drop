@@ -4,8 +4,8 @@ Updated: 2026-10-27
 
 ## Current repository and review status (2026-10-27)
 
-- `main` and the local `origin/main` tracking ref are at `446337f` (PR #16). `feat/drop-relay-first-choice` tracks `origin/feat/drop-relay-first-choice`; its last verified pre-correction head was `65e77cb`, based on that main. The code change is `2ab1f06`; PR #17 is the review path to `main` and was reported as draft in the prior session.
-- Refreshed this turn at `65e77cb`: PR #17 is open as a draft with a `CLEAN` merge state; CI and GitGuardian passed. This documentation correction changes the PR head and starts another check run. Refresh the PR and checks at the final head before merge.
+- `main` and the local `origin/main` tracking ref are at `446337f` (PR #16). `feat/drop-relay-first-choice` tracks `origin/feat/drop-relay-first-choice`; the latest verified pre-learning-update head was `b8bf5d7`, based on that main. The UX code change is `2ab1f06`, with earlier docs commit `65e77cb`. PR #17 is the review path to `main`.
+- Refreshed at `b8bf5d7`: PR #17 was open as a draft with a `CLEAN` merge state; CI and GitGuardian passed. This append-only learning update advances the PR head; refresh the PR and checks at the resulting head before merge.
 - Browser acceptance at 320px, 390px, and desktop, keyboard focus, and hydrated Relay mode selection remains pending the earlier Playwright approval request. Do not describe this first-use slice as browser accepted yet.
 - A Node listener was listed on `127.0.0.1:4004`, but HTTP probes to `/` and the Relay Compose URL failed with curl status 7 in this turn. Recheck or restart the app before a pilot demo.
 - This slice changed no backend or hosted Supabase configuration. Hosted readiness gates remain listed below.

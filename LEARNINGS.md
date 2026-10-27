@@ -2477,4 +2477,37 @@ Show a product’s defining alternative at the first decision point, and name na
 
 ### Git and remaining gaps
 
-Code commit `2ab1f06` and documentation commit `65e77cb` are pushed on `feat/drop-relay-first-choice`, which tracks `origin/feat/drop-relay-first-choice`; PR #17 is the review path to `main` and was last reported as draft. Local `main` and its `origin/main` tracking ref remain at `446337f`, so no merge is reflected locally. A GitHub CLI check initially failed to connect, then a read-only retry succeeded: PR #17 was open as a draft with a `CLEAN` merge state at `65e77cb`, and CI plus GitGuardian passed. This documentation correction changes the PR head; confirm passing CI and GitGuardian on the final head before merge. No application backend or hosted Supabase state changed. Responsive screenshots, keyboard focus, and hydrated Relay mode acceptance remain pending the earlier Playwright approval request.
+Code is committed as 2ab1f06 on feat/drop-relay-first-choice; it is local and not yet pushed. No application backend or hosted Supabase state changed. After browser approval, verify 320px, 390px, and desktop widths, keyboard focus, and the preselected Relay mode, then push this branch through a PR and wait for CI before merging.
+
+
+## 2026-10-27 — Reconcile Drop closeout pointers and PR state
+
+### Issue
+
+The README and handoff still pointed at the PR #15 main snapshot, and the first-use learning note still said its branch was unpushed. That made it difficult to tell which code was on main and which was still under review.
+
+### Cause
+
+The closeout notes were carried forward from earlier PR checkpoints without reconciling them against the current local refs and the live PR.
+
+### Resolution
+
+- Updated the README, handoff, and checklist to identify `446337f` as the local main/origin-main tracking point and to distinguish the current first-use PR from historical branch inventory.
+- Refreshed PR #17 at head `b8bf5d7`: it was open as a draft to `main`, had a clean merge state, and both CI and GitGuardian passed.
+- Preserved the earlier learning entry as written and appended this correction instead of rewriting the log history.
+
+### Learning
+
+Label old Git and PR snapshots as historical. Before closeout, reconcile the branch, its tracking ref, main, PR base/head, draft state, merge status, and checks. A passing check on an earlier commit does not prove the current PR head is ready.
+
+### Verification
+
+- `git rev-parse main` and `git rev-parse origin/main` both returned `446337fb92160d6f6e2475d9efe918e03f75833f`.
+- `git rev-parse HEAD` and `git rev-parse origin/feat/drop-relay-first-choice` both returned `b8bf5d7860e634dd3b1a6cdffcc3b4ac5a74c403`.
+- `gh pr view 17` reported OPEN, draft, base `main`, head `b8bf5d7`, and CLEAN. Required CI and GitGuardian checks passed on that head.
+- The browser screenshot/clickthrough gate remains pending. The local port probe saw a Node listener but `curl` to the Home and Relay Compose routes returned status 7 from this command environment; recheck the demo endpoint. No hosted Supabase configuration or data changed.
+- This documentation-only update did not rerun application tests; `npm test` 302/302, lint, and non-incremental TypeScript were verified on the preceding code head. `git diff --check` passed for the documentation changes.
+
+### Git and remaining gates
+
+At the time of this note, closeout commit `b8bf5d7` was pushed to `origin/feat/drop-relay-first-choice`. This appended learning record will be part of the next docs-only commit on the same PR; refresh its CI/GitGuardian results before merge. PR #17 remains a draft pending browser acceptance. Hosted two-account delivery, billing-plan confirmation, Auth/email setup, cleanup scheduling, and physical-device/accessibility checks remain separate pilot gates.

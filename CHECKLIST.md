@@ -4,8 +4,8 @@ Updated: 2026-10-27
 
 ## First-use delivery choice (2026-10-27)
 
-- [x] Push the Home and mobile Relay clarity slice on `feat/drop-relay-first-choice`; PR #17 is the route to `main` (last reported as draft).
-- [ ] Confirm the final PR #17 head, including this closeout documentation, has passing checks before merge. At prior head `65e77cb`, PR #17 was open/draft/clean and both CI and GitGuardian passed.
+- [x] Push the Home and mobile Relay clarity slice and closeout correction through `feat/drop-relay-first-choice`; PR #17 is the route to `main`.
+- [ ] Confirm the final PR #17 head, including this learning update, has passing checks before merge. At pre-learning-update head `b8bf5d7`, PR #17 was open/draft/clean and both CI and GitGuardian passed.
 
 - [x] Explain direct delivery and Relay on Home.
 - [x] Provide separate direct and Relay start links; the Relay link preselects relay mode in Compose.
