@@ -21,7 +21,7 @@ import { getActiveNavigationHref, usesPrivateShell } from '@/lib/navigation';
 const navItems = [
   { href: '/', label: 'Desk', icon: PenLine },
   { href: '/mailbox', label: 'Inbox', icon: Mail },
-  { href: '/journey', label: 'Journey', icon: Route },
+  { href: '/journey', label: 'Relay', icon: Route },
   { href: '/profile', label: 'You', icon: UserRound },
 ];
 
@@ -211,7 +211,7 @@ export function Sidebar() {
               href={item.href}
               aria-current={active ? 'page' : undefined}
               className={cn(
-                'flex min-h-11 min-w-[62px] flex-col items-center justify-center gap-1 px-2 text-[0.68rem] font-semibold transition-colors',
+                'flex min-h-11 min-w-[62px] flex-col items-center justify-center gap-1 px-2 text-xs font-semibold transition-colors',
                 active ? 'text-ink-navy' : 'text-on-surface-variant hover:text-ink-navy'
               )}
             >
@@ -230,7 +230,7 @@ export function Sidebar() {
           const active = activeNavigationHref === item.href;
           const Icon = item.icon;
           return (
-            <Link key={item.href} href={item.href} aria-current={active ? 'page' : undefined} className={cn('flex min-h-11 min-w-[54px] flex-col items-center justify-center gap-1 px-1 text-[0.66rem] font-semibold transition-colors', active ? 'text-[#2b45f7]' : 'text-on-surface-variant hover:text-ink-navy')}>
+            <Link key={item.href} href={item.href} aria-current={active ? 'page' : undefined} className={cn('flex min-h-11 min-w-[54px] flex-col items-center justify-center gap-1 px-1 text-xs font-semibold transition-colors', active ? 'text-[#2b45f7]' : 'text-on-surface-variant hover:text-ink-navy')}>
               <Icon className={cn('h-[18px] w-[18px]', active && 'text-[#2b45f7]')} aria-hidden="true" />
               <span>{item.label}</span>
             </Link>

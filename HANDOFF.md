@@ -2,10 +2,26 @@
 
 Updated: 2026-10-27
 
-## Main pointer before this closure follow-up (2026-10-27)
+## Current repository and review status (2026-10-27)
 
-- PR #15 is merged. Local main and origin/main both point to b705b3bf3b0b9a2437ac3cfaa5923f2bd8084aac; first-parent history contains code PR #13 and documentation PRs #14–#15.
-- GitHub lists PRs #3, #4, and #7–#12 as open. PR #7 still lacks authenticated QR issuance and physical camera-scan proof and is dirty against main. PR #11 is a 55-file draft with a dirty merge state and only GitGuardian passing. PR #12 targets feat/pilot-integrated-preview, not main. Do not treat any of these open branches as landed.
+- `main` and the local `origin/main` tracking ref are at `446337f` (PR #16). `feat/drop-relay-first-choice` tracks `origin/feat/drop-relay-first-choice`; the latest verified pre-learning-update head was `b8bf5d7`, based on that main. The UX code change is `2ab1f06`, with earlier docs commit `65e77cb`. PR #17 is the review path to `main`.
+- Refreshed at `b8bf5d7`: PR #17 was open as a draft with a `CLEAN` merge state; CI and GitGuardian passed. This append-only learning update advances the PR head; refresh the PR and checks at the resulting head before merge.
+- Browser acceptance at 320px, 390px, and desktop, keyboard focus, and hydrated Relay mode selection remains pending the earlier Playwright approval request. Do not describe this first-use slice as browser accepted yet.
+- A Node listener was listed on `127.0.0.1:4004`, but HTTP probes to `/` and the Relay Compose URL failed with curl status 7 in this turn. Recheck or restart the app before a pilot demo.
+- This slice changed no backend or hosted Supabase configuration. Hosted readiness gates remain listed below.
+
+## First-use delivery choice (2026-10-27)
+
+- Branch: `feat/drop-relay-first-choice`. Code commit: `2ab1f06`; branch head before this closeout correction: `65e77cb`.
+- Home now explains direct delivery and Relay, gives each a separate CTA, and links the Relay CTA to the composer with mode=relay. The mobile nav calls the route Relay and uses 12px labels.
+- Verification: npm test passed 302/302; npm run lint passed; npx tsc --noEmit --incremental false passed; git diff --check passed. GET / and GET /compose?new=1&mode=relay returned HTTP 200.
+- No browser screenshot or click-through was run. The Product Design audit guidance requires approval before Playwright, and that approval is pending. Do not call the responsive or keyboard flow accepted yet.
+- Local app is on localhost:4004. Hosted project configuration was not changed by this slice.
+
+## Historical main pointer before the PR #16 follow-up (2026-10-27)
+
+- At that checkpoint, PR #15 was merged and local `main` plus `origin/main` pointed to `b705b3bf3b0b9a2437ac3cfaa5923f2bd8084aac`; history contained code PR #13 and documentation PRs #14–#15. PR #16 later advanced the local main refs to `446337f`.
+- The PR inventory and individual branch findings below were captured at the earlier checkpoint. The full GitHub PR list was not refreshed in this pass; do not treat those observations as current.
 - The app started from this checkout on localhost:4004 and returned HTTP 200. It uses loopback .env.local; hosted settings remain separate in ignored .env.hosted.local.
 - The only local unstaged changes are AGENTS.md and next-env.d.ts; they were preserved and excluded from the task work.
 
@@ -668,3 +684,14 @@ From /Users/arjeetanand/projects/drop, run npm ci, then ./run.sh. Drop uses http
 - The canonical app on `127.0.0.1:4004` responded HTTP 200 and remains running. The smoke tests used only port `6004` and left that main process untouched. Edge's “Allow JavaScript from Apple Events” setting was left as requested.
 - PR #12 was last confirmed open/draft before these pushes. GitHub API access failed with `error connecting to api.github.com`, so current PR head/checks are not verified; refresh them when GitHub is reachable. Keep the PR unmerged pending user approval.
 - Remaining: hosted Free-project two-account delivery, native OS share sheet, screen-reader announcement checks, physical-device/keyboard/camera acceptance, and an opt-in human value study. The browser share API is stubbed in the smoke and does not prove OS share-sheet behavior.
+
+## Latest checkpoint — First-use and carrier-consent closeout (2026-10-27)
+
+- Branch `feat/drop-relay-first-choice`; code commit `bbaf38c` is pushed to the branch for [PR #17](https://github.com/arjeetanand/drop/pull/17), base `main`. At the immediate post-push check PR #17 was OPEN, draft, and mergeable; GitGuardian passed, while the required Tests/lint/types/build check had no conclusion yet. Refresh checks after this handoff commit and merge only through PR #17.
+- The code moves carrier acceptance disclosures before the Accept action, states the 10-minute/first-holder behavior and route/privacy limits, and raises the mobile Relay tab label to 12px. The browser runner adds an attach-only 4004 mode and checks the Home direct/Relay choices after hydration before it creates test fixtures.
+- Verification passed: `npm test` (302/302), `npm run lint`, non-incremental TypeScript, browser guard/syntax, `git diff --check`, and `npm run build -- --webpack` (22 routes). The build emitted the existing React 18 deprecation and ambiguous Tailwind easing warnings.
+- The complete isolated Chromium Relay journey passed against `http://localhost:4004` and loopback Supabase. Home keyboard focus/Enter, expected Instant/Relay selection, and no horizontal overflow passed at 320×740, 390×844, and 1440×900. Text and GIF carrier acceptance, replay denial, collection, sealed-media privacy, and recipient reveal passed. No browser console/runtime errors, failed requests, or cross-origin browser requests occurred. The harness verified deletion of exact disposable local accounts, profiles, drop rows, Storage objects, and browser profiles. Screenshots are under `/private/tmp/drop-pr17-ui-evidence-final`.
+- `./run.sh start` left the current branch available at `http://localhost:4004`; `/` and `/compose?new=1&mode=relay` return HTTP 200. The letter folder was not touched. Existing unrelated dirty edits in `AGENTS.md` and `next-env.d.ts` remain unstaged.
+- No public tester URL is configured or verified: the checkout has `netlify.toml` but no `.netlify` site link or Netlify CLI, and the Sites connector is disabled for this workspace. `localhost:4004` is available only on this machine.
+- Hosted pilot gates remain: confirm the Supabase project is on the Free plan; reconcile three remote-only migrations before any hosted migration push; deploy/configure Edge Functions and cleanup secrets; configure hosted Auth/email; verify two-account sends and actual 30-day deletion. Native OS sharing, screen-reader output, physical-device behavior, and the opt-in usability study are also open.
+- Next: refresh PR #17 checks at the latest head and merge it through the PR when clean. Separately provision/verify the no-cost public hosting target and hosted backend before inviting external testers to send real drops.

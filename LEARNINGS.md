@@ -2444,3 +2444,105 @@ Use the fetched main commit as the source-of-truth pointer, and describe code me
 ### Git and remaining gates
 
 This is a documentation-only checkpoint on docs/drop-current-main-checkpoint. No application code was changed. The hosted pilot is still pending billing-plan confirmation, remote-only migration reconciliation, Auth/email setup, the 30-day cleanup worker, real two-account delivery, and physical-device/accessibility checks. The remaining open PRs require individual scope and verification decisions.
+
+## 2026-10-27 — Make both delivery paths clear on first use
+
+### Issue
+
+The Home screen advertised a generic “Make a drop” action and described direct sharing, so a new sender could miss Relay. The mobile navigation called Relay “Journey”, and its 0.68rem labels rendered below 12px.
+
+### Cause
+
+The primary entry point did not present the two delivery choices together. The route label described where the journey is viewed, not the product feature a new user needs to discover.
+
+### Resolution
+
+- Added a direct-send CTA and a Relay CTA on Home; the Relay link opens Compose with relay mode selected.
+- Explained one-person direct sending, willing carriers, sealed contents, and recipient-controlled opening in the hero copy.
+- Renamed the mobile destination to Relay and changed its label size to the 12px text-xs token.
+- Kept the existing color and type system; this is a clarity pass, not a visual redesign.
+
+### Learning
+
+Show a product’s defining alternative at the first decision point, and name navigation after the task users understand. Keep the explanation short enough that the primary actions remain easy to scan.
+
+### Verification
+
+- npm test: 302/302 passed.
+- npm run lint passed.
+- npx tsc --noEmit --incremental false passed.
+- git diff --check passed.
+- Local GET / and GET /compose?new=1&mode=relay returned HTTP 200. These HTTP responses do not prove rendered layout, keyboard focus, or that the selected mode is visible after hydration.
+- Browser capture and click-through remain pending because the Product Design audit skill requires approval before Playwright.
+
+### Git and remaining gaps
+
+Code is committed as 2ab1f06 on feat/drop-relay-first-choice; it is local and not yet pushed. No application backend or hosted Supabase state changed. After browser approval, verify 320px, 390px, and desktop widths, keyboard focus, and the preselected Relay mode, then push this branch through a PR and wait for CI before merging.
+
+
+## 2026-10-27 — Reconcile Drop closeout pointers and PR state
+
+### Issue
+
+The README and handoff still pointed at the PR #15 main snapshot, and the first-use learning note still said its branch was unpushed. That made it difficult to tell which code was on main and which was still under review.
+
+### Cause
+
+The closeout notes were carried forward from earlier PR checkpoints without reconciling them against the current local refs and the live PR.
+
+### Resolution
+
+- Updated the README, handoff, and checklist to identify `446337f` as the local main/origin-main tracking point and to distinguish the current first-use PR from historical branch inventory.
+- Refreshed PR #17 at head `b8bf5d7`: it was open as a draft to `main`, had a clean merge state, and both CI and GitGuardian passed.
+- Preserved the earlier learning entry as written and appended this correction instead of rewriting the log history.
+
+### Learning
+
+Label old Git and PR snapshots as historical. Before closeout, reconcile the branch, its tracking ref, main, PR base/head, draft state, merge status, and checks. A passing check on an earlier commit does not prove the current PR head is ready.
+
+### Verification
+
+- `git rev-parse main` and `git rev-parse origin/main` both returned `446337fb92160d6f6e2475d9efe918e03f75833f`.
+- `git rev-parse HEAD` and `git rev-parse origin/feat/drop-relay-first-choice` both returned `b8bf5d7860e634dd3b1a6cdffcc3b4ac5a74c403`.
+- `gh pr view 17` reported OPEN, draft, base `main`, head `b8bf5d7`, and CLEAN. Required CI and GitGuardian checks passed on that head.
+- The browser screenshot/clickthrough gate remains pending. The local port probe saw a Node listener but `curl` to the Home and Relay Compose routes returned status 7 from this command environment; recheck the demo endpoint. No hosted Supabase configuration or data changed.
+- This documentation-only update did not rerun application tests; `npm test` 302/302, lint, and non-incremental TypeScript were verified on the preceding code head. `git diff --check` passed for the documentation changes.
+
+### Git and remaining gates
+
+At the time of this note, closeout commit `b8bf5d7` was pushed to `origin/feat/drop-relay-first-choice`. This appended learning record will be part of the next docs-only commit on the same PR; refresh its CI/GitGuardian results before merge. PR #17 remains a draft pending browser acceptance. Hosted two-account delivery, billing-plan confirmation, Auth/email setup, cleanup scheduling, and physical-device/accessibility checks remain separate pilot gates.
+
+
+## 2026-10-27 — Verify first-use routing and carrier consent in a real browser
+
+### Issue
+
+Home had two delivery paths, but the acceptance page presented its important bearer-invite and route-privacy limits after the carrier form. Source and unit checks also could not prove the new Home links worked after hydration or that the correct delivery mode stayed selected.
+
+### Cause
+
+The carrier's earlier privacy note was below the form and near the Accept action; it did not give the whole route/identity context before a person began accepting. Home is client-rendered, so checking raw server HTML was not a valid substitute for checking the hydrated page.
+
+### Resolution
+
+- Moved a compact **Before you carry** disclosure before the carrier form and Accept action. It explains that the first person with the one-time invite can accept, the ten-minute expiry, self-entered route details, unverified names, sealed text/media, and typed neighborhood without device location.
+- Raised the remaining small mobile navigation labels to the existing 12px `text-xs` token.
+- Added an attach-only browser mode that keeps the canonical app on 4004 running, verifies hydrated Home links and mode selection before creating any disposable accounts, then exercises text and GIF Relay flows against loopback Supabase with exact cleanup.
+- Aligned carrier-name wording with the existing test expectation, and made the smoke assert the rendered disclosure before both text and GIF Accept actions.
+
+### Learning
+
+For client-rendered routes, assert the actual hydrated DOM, interaction, and final selection in an isolated browser. Run that read-only preflight before creating fixtures so a stale app build cannot leave test accounts behind. Put identity, consent, expiry, and privacy context before the action that commits the user to a route.
+
+### Verification
+
+- `npm test`: 302/302 passed; `npm run lint`, `npx tsc --noEmit --incremental false`, browser guard/syntax, and `git diff --check` passed.
+- `npm run build -- --webpack` passed and generated all 22 routes. Existing warnings remain for React 18 support in Next 16 and an ambiguous Tailwind easing utility.
+- Isolated Chromium checked Home at 320×740, 390×844, and 1440×900: both CTAs had visible keyboard focus; Enter opened the expected route; Instant/Relay selection matched after hydration; no horizontal overflow.
+- The full local text/GIF Relay browser run passed consent disclosure, carrier replay denial, recipient collection, sealed-media boundaries, and explicit recipient reveal. It observed no console/runtime errors, failed requests, or cross-origin browser traffic. Exact disposable accounts, profiles, drops, media, and browser profiles were verified removed.
+- Home and Relay Compose returned HTTP 200 at `http://localhost:4004`; the app was left running. Screenshots: `/private/tmp/drop-pr17-ui-evidence-final`.
+- No hosted Supabase resources or data were changed. No public deployment was made.
+
+### Git and remaining gates
+
+Code commit `bbaf38c` is pushed to `feat/drop-relay-first-choice` for PR #17 into `main`; this closeout documentation is a separate update on that branch. At the last live PR check, GitGuardian passed and the main CI check was pending. Refresh all required checks at the latest head before merging through PR #17. No public hosting project is configured in this checkout; the Sites connector is disabled. Hosted Free-plan confirmation, migration reconciliation, Auth/email, deployed cleanup worker, real two-account delivery/deletion, native sharing, screen reader/physical device, and opt-in pilot acceptance remain open.
