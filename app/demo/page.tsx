@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, ArrowRight, LoaderCircle, Sparkles } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ArrowRight, LoaderCircle, Sparkles } from 'lucide-react';
 import { useState } from 'react';
 import type { DropPayloadKind } from '@/data/mockData';
 import { createLocalDemoDrop, type LetterDraftState } from '@/lib/letterStore';
@@ -130,9 +130,20 @@ export default function DemoPage() {
             Pick a sample and open it as the recipient. React to it, then peek at your sender copy. It stays on this device; nothing is sent or shared.
           </p>
 
+          <nav className="mt-5 flex flex-col gap-2 sm:flex-row" aria-label="Choose a demo experience">
+            <Link href="#relay-demo" onNavigate={() => document.getElementById('relay-demo')?.focus({ preventScroll: true })} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#2b45f7] px-5 text-sm font-bold text-white transition-colors hover:bg-[#2038db] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#263ee0]">
+              Try the hand-to-hand journey <ArrowDown className="h-4 w-4" aria-hidden="true" />
+            </Link>
+            <Link href="#sample-drops" onNavigate={() => document.getElementById('sample-drops')?.focus({ preventScroll: true })} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-[#d7defe] bg-white px-5 text-sm font-bold text-[#263ee0] transition-colors hover:bg-[#f7f8ff] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#263ee0]">
+              Open a photo or GIF sample <ArrowDown className="h-4 w-4" aria-hidden="true" />
+            </Link>
+          </nav>
+
           {error && <p className="error-notice mt-5" role="alert">{error}</p>}
 
-          <div className="mt-7 grid gap-4 sm:grid-cols-2 sm:gap-5" aria-busy={startingKind !== null}>
+          <RelayDemoPreview />
+
+          <div id="sample-drops" role="region" aria-label="Photo and GIF demo samples" tabIndex={-1} className="mt-7 grid scroll-mt-6 gap-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#263ee0] sm:grid-cols-2 sm:gap-5" aria-busy={startingKind !== null}>
             {demoOptions.map((option) => (
               <article key={option.kind} className="overflow-hidden rounded-[1.4rem] border border-[rgba(16,42,67,.12)] bg-white shadow-[0_9px_24px_rgba(16,42,67,.06)]">
                 <div className="relative aspect-[4/3] overflow-hidden bg-[#eee9df]">
@@ -155,7 +166,6 @@ export default function DemoPage() {
               </article>
             ))}
           </div>
-          <RelayDemoPreview />
           {startingKind && <p className="mt-5 text-center text-sm text-on-surface-variant" role="status" aria-live="polite">Saving this sample only in your browser…</p>}
         </section>
 
