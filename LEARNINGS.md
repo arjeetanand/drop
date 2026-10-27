@@ -2444,3 +2444,37 @@ Use the fetched main commit as the source-of-truth pointer, and describe code me
 ### Git and remaining gates
 
 This is a documentation-only checkpoint on docs/drop-current-main-checkpoint. No application code was changed. The hosted pilot is still pending billing-plan confirmation, remote-only migration reconciliation, Auth/email setup, the 30-day cleanup worker, real two-account delivery, and physical-device/accessibility checks. The remaining open PRs require individual scope and verification decisions.
+
+## 2026-10-27 — Make both delivery paths clear on first use
+
+### Issue
+
+The Home screen advertised a generic “Make a drop” action and described direct sharing, so a new sender could miss Relay. The mobile navigation called Relay “Journey”, and its 0.68rem labels rendered below 12px.
+
+### Cause
+
+The primary entry point did not present the two delivery choices together. The route label described where the journey is viewed, not the product feature a new user needs to discover.
+
+### Resolution
+
+- Added a direct-send CTA and a Relay CTA on Home; the Relay link opens Compose with relay mode selected.
+- Explained one-person direct sending, willing carriers, sealed contents, and recipient-controlled opening in the hero copy.
+- Renamed the mobile destination to Relay and changed its label size to the 12px text-xs token.
+- Kept the existing color and type system; this is a clarity pass, not a visual redesign.
+
+### Learning
+
+Show a product’s defining alternative at the first decision point, and name navigation after the task users understand. Keep the explanation short enough that the primary actions remain easy to scan.
+
+### Verification
+
+- npm test: 302/302 passed.
+- npm run lint passed.
+- npx tsc --noEmit --incremental false passed.
+- git diff --check passed.
+- Local GET / and GET /compose?new=1&mode=relay returned HTTP 200. These HTTP responses do not prove rendered layout, keyboard focus, or that the selected mode is visible after hydration.
+- Browser capture and click-through remain pending because the Product Design audit skill requires approval before Playwright.
+
+### Git and remaining gaps
+
+Code is committed as 2ab1f06 on feat/drop-relay-first-choice; it is local and not yet pushed. No application backend or hosted Supabase state changed. After browser approval, verify 320px, 390px, and desktop widths, keyboard focus, and the preselected Relay mode, then push this branch through a PR and wait for CI before merging.

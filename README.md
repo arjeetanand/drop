@@ -6,6 +6,8 @@ The append-only engineering learning log is in [LEARNINGS.md](./LEARNINGS.md); i
 
 ## Pilot status and closure
 
+Active first-use UX slice on feat/drop-relay-first-choice: the home screen now presents direct sending and Relay as separate starts, and the mobile tab is labeled Relay at 12px. Unit tests, lint, and non-incremental TypeScript pass. Rendered browser, keyboard-focus, and responsive-layout acceptance is still pending.
+
 This closure checkpoint started from matching local main and origin/main at b705b3b (PR #15, 2026-10-27). First-parent history at that point contained pilot code PR #13 and closure/status documentation PRs #14–#15; main remains the source-of-truth branch. GitHub still lists PRs #3, #4, and #7–#12 as open; they are separate candidates, not part of main. PR #7 still lacks authenticated QR and physical scan evidence, PR #11 is a dirty draft against current main, and PR #12 targets the pilot integration branch. Review each remaining PR on its own merits before treating it as pilot scope.
 
 PR [#13](https://github.com/arjeetanand/drop/pull/13) merged to `main` on 2026-10-27. Its source head was `641bb8d`; the squash merge commit is `f314ced66598d809e9e9ec104d0cba4ea602f6eb`. GitHub CI and GitGuardian passed on the final PR head. This completes the code integration for the pilot candidate.

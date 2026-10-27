@@ -2,6 +2,14 @@
 
 Updated: 2026-10-27
 
+## First-use delivery choice (2026-10-27)
+
+- Branch: feat/drop-relay-first-choice. Code commit: 2ab1f06.
+- Home now explains direct delivery and Relay, gives each a separate CTA, and links the Relay CTA to the composer with mode=relay. The mobile nav calls the route Relay and uses 12px labels.
+- Verification: npm test passed 302/302; npm run lint passed; npx tsc --noEmit --incremental false passed; git diff --check passed. GET / and GET /compose?new=1&mode=relay returned HTTP 200.
+- No browser screenshot or click-through was run. The Product Design audit guidance requires approval before Playwright, and that approval is pending. Do not call the responsive or keyboard flow accepted yet.
+- Local app is on localhost:4004. Hosted project configuration was not changed by this slice.
+
 ## Main pointer before this closure follow-up (2026-10-27)
 
 - PR #15 is merged. Local main and origin/main both point to b705b3bf3b0b9a2437ac3cfaa5923f2bd8084aac; first-parent history contains code PR #13 and documentation PRs #14–#15.

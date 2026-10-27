@@ -2,6 +2,15 @@
 
 Updated: 2026-10-27
 
+## First-use delivery choice (2026-10-27)
+
+- [x] Explain direct delivery and Relay on Home.
+- [x] Provide separate direct and Relay start links; the Relay link preselects relay mode in Compose.
+- [x] Label the mobile destination Relay and raise tab labels to 12px.
+- [x] Pass 302 unit tests, lint, non-incremental TypeScript, and diff check.
+- [ ] Capture and verify the Home-to-Compose flow at 320px, 390px, and desktop widths, including focus and Relay mode selection. Waiting on approval to use local Playwright.
+- [ ] Recheck rendered behavior and required CI before merging this feature branch.
+
 ## Main and PR closure checkpoint (2026-10-27)
 
 - [x] Verify PR #15 merged; fast-forward local main to origin/main at b705b3b.
