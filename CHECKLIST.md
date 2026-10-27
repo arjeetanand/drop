@@ -1,6 +1,15 @@
 # Drop integration checklist
 
-Updated: 2026-10-26
+Updated: 2026-10-27
+
+## Home first-friend activation (2026-10-27)
+
+- [x] Replace the passive empty-inbox message with a clear first-drop invitation and a link to `/profile?invite=1`; keep the demo sample marked as not received.
+- [x] Verify keyboard name/focus, 44px target, and clearance above fixed mobile navigation; activate the link and preserve invite context at 320×740 and 390×844.
+- [x] Run each mobile accessibility viewport in a fresh isolated Edge session so focus-scroll checks do not inherit the previous viewport's page state. Review screenshots in `/private/tmp/drop-first-friend-final-verification/`.
+- [x] Pass `npm test` (301/301), `npm run lint`, `npm run typecheck`, browser-script syntax, `bash -n run.sh`, `git diff --check`, and `npm run build -- --webpack`. The default Turbopack build in the scratch clone is blocked by its external `node_modules` symlink; the Webpack production build succeeds.
+- [x] Push code commit `986e2e4` to `codex/social-relay-pilot`. After that code push, PR #12 was open/draft against `feat/pilot-integrated-preview`; `GitGuardian Security Checks` was pending and GitHub reported merge state `UNSTABLE`. No merge occurred.
+- [ ] Verify current hosted Supabase project/Auth/migrations before real-account testing; complete hosted delivery and scheduled deletion, spoken screen-reader output, installed-PWA sharing, physical camera/device behavior, and the planned opt-in sender study.
 
 ## Compose starters and GIF Relay pilot slice (2026-10-26)
 

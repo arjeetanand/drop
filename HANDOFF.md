@@ -1,8 +1,20 @@
 # Drop handoff
 
-Updated: 2026-10-26
+Updated: 2026-10-27
 
-## Latest checkpoint — Compose starters and GIF Relay pilot verification (2026-10-26)
+## Latest checkpoint — Home first-friend activation (2026-10-27)
+
+- Replaced the passive empty-inbox sentence with a first-drop explanation and an **Invite a friend** action to `/profile?invite=1`. The action appears only when there are no real incoming drops; sample content remains labeled as a sample.
+- Extended the accessibility smoke to check the link’s semantic name, keyboard focus, 44px target, scroll visibility above the fixed navigation, retained invite query, profile route, and no horizontal overflow. The same page reused across viewport changes made whichever viewport ran second fail its natural-focus scroll check. The smoke now runs 320px and 390px in separate isolated Edge sessions; no manual scrolling is used to mask focus behavior.
+- Visual review: focused CTA and profile invite context at 320×740 and 390×844 are saved under `/private/tmp/drop-first-friend-final-verification/`. Photo/GIF picker focus and composer/recipient images also passed at both sizes. No cross-origin browser requests occurred.
+- Verification passed: `npm test` (301/301), ESLint, TypeScript, browser-script syntax, `bash -n run.sh`, and `git diff --check`. `npm run build -- --webpack` compiled and generated all routes. The default `npm run build` failed in this scratch clone because Turbopack rejects its `node_modules` symlink pointing outside the clone; this is a checkout-layout issue, not a source compilation error. Existing Browserslist and Tailwind easing warnings remain.
+- The local app remains available at `http://localhost:4004` (HTTP 200). Code commit `986e2e4` is pushed to `origin/codex/social-relay-pilot`. After that code push, PR #12 was open/draft against `feat/pilot-integrated-preview`; GitHub reported `UNSTABLE` while `GitGuardian Security Checks` was pending. This documentation push may retrigger checks, so refresh GitHub before merging. No merge occurred.
+- This slice made no hosted Supabase calls. The `supabase` CLI is not on the shell PATH, so current hosted project/Auth/migration state was not refreshed. Edge’s “Allow JavaScript from Apple Events” setting was left untouched as requested.
+- Still open: hosted account-to-account delivery and scheduled deletion; actual screen-reader output; installed-PWA OS sharing; physical camera/QR and device checks; the opt-in sender study.
+
+**Next:** refresh the hosted Supabase project state through an authenticated path, then complete hosted delivery/retention and device acceptance. Keep PR #12 draft and unmerged until its checks and pilot gates are reviewed.
+
+## Previous checkpoint — Compose starters and GIF Relay pilot verification (2026-10-26)
 
 - Added optional note/caption starters for text, photo, and GIF Compose; selection fills an editable field, preserves existing text and attachments, and never sends automatically. Wrapped unbroken subject, fragment, and message text on the opened-drop screen to prevent narrow-screen overflow.
 - Extended `npm run test:browser-relay` to exercise sender-created GIF Relay end to end, including exact final/staged Storage checks, private media before collection, post-collection render, confirmed not-found cleanup, and starter selection/focus/attachment preservation. Optional 390×844 screenshots are in `/private/tmp/drop-pilot-final-evidence.Lyw5xo/`.

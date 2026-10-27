@@ -2164,3 +2164,34 @@ Describe the identity evidence a social route actually records. A one-use link p
 ### Git and remaining gaps
 
 Code commit `b9fb0f5` (`feat: clarify Drop Relay pilot journey`) is on and pushed from `codex/social-relay-pilot`, based on `feat/pilot-integrated-preview`. No merge to `main` occurred. `gh auth status` reports an invalid saved token; the Git push succeeded, and the PR into the pilot branch still needs to be opened. Human value testing, external platform integration, native sharing, screen-reader output, and physical-device behavior remain unverified.
+
+## 2026-10-27 — Guide an empty inbox to the first friend invite
+
+### Issue
+
+Home told people to wait for their first drop, while the existing invite-and-share path was tucked inside Profile.
+
+### Cause
+
+The empty inbox had no next action. Reusing the existing profile invite context avoids duplicating share or copy behavior, but its keyboard path needed a responsive check because the mobile navigation is fixed to the viewport.
+
+### Resolution
+
+Show a short explanation and an **Invite a friend** link only when there are no real incoming drops. Route it to `/profile?invite=1`, keep the example clearly labeled as a sample, and give the link a 44px target plus scroll margin above the fixed mobile navigation. Extend the browser smoke to assert the accessible name, keyboard focus, route, visibility, navigation clearance, sample label, and profile invite context.
+
+The first browser run made the second viewport fail after reusing the same page at two widths. Reversing the order made the other width fail, which identified retained browser state rather than a width-specific UI defect. Run each viewport in a fresh isolated browser when validating natural keyboard focus; do not call `scrollIntoView` to conceal an auto-scroll failure.
+
+### Learning
+
+Give an empty state an immediate, low-pressure action that reuses the existing user journey. For keyboard-scroll checks, isolate viewport runs so state carried between emulated sizes cannot masquerade as a product bug.
+
+### Verification
+
+- `npm test`: 301/301 passed. ESLint, TypeScript, browser-script syntax, `bash -n run.sh`, and `git diff --check` passed.
+- The Edge accessibility flow passed in fresh isolated browser sessions at 320×740 and 390×844. It verified keyboard focus and target visibility above the mobile navigation, preserved `/profile?invite=1`, checked the photo/GIF picker and rendered media, and reported zero cross-origin requests. Screenshots are under `/private/tmp/drop-first-friend-final-verification/` and were visually reviewed.
+- `npm run build -- --webpack` compiled successfully and generated all routes. Plain `npm run build` hit a Turbopack panic because the temporary scratch clone’s `node_modules` symlink points outside the clone. The Webpack build is the positive production-build result for this source; the symlink layout issue remains environment-specific.
+- The existing local app responded HTTP 200 on port 4004. No hosted Supabase calls or resources changed.
+
+### Git and remaining gaps
+
+Code commit `986e2e4` (`feat: guide new users to invite their first friend`) is pushed to `origin/codex/social-relay-pilot`. After that code push, PR #12 was open/draft against `feat/pilot-integrated-preview`; `GitGuardian Security Checks` was pending and GitHub reported `UNSTABLE`. No merge occurred. Current hosted Supabase state was not refreshed; the `supabase` CLI is not on the shell PATH. Hosted delivery/retention, actual screen-reader output, installed-PWA sharing, physical camera/device acceptance, and the opt-in sender study remain open.
