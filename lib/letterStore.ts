@@ -8,6 +8,7 @@ const STORAGE_KEY = 'dear-exe:active-letter:v1';
 const NOTES_STORAGE_KEY = 'dear-exe:journey-notes:v1';
 const HISTORY_STORAGE_KEY = 'dear-exe:letter-history:v1';
 const DRAFT_HISTORY_STORAGE_KEY = 'dear-exe:letter-drafts:v1';
+const LOCAL_MAILBOX_CHANGE_EVENT = 'drop:local-mailbox-change';
 
 export type LetterAlignment = 'left' | 'center' | 'right';
 
@@ -669,6 +670,13 @@ export function completeSuccessfulSend(
     window.localStorage.setItem(draftsKey, JSON.stringify(nextDraftHistory));
     if (active?.id === submittedDraft.id) window.localStorage.setItem(activeKey, JSON.stringify(next));
     window.localStorage.setItem(lettersKey, JSON.stringify(nextLetterHistory));
+    try {
+      if (typeof window.dispatchEvent === 'function') {
+        window.dispatchEvent(new Event(LOCAL_MAILBOX_CHANGE_EVENT));
+      }
+    } catch {
+      // The saved receipt remains authoritative when same-tab observers fail.
+    }
     return next;
   } catch {
     try {

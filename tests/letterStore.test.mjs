@@ -857,9 +857,13 @@ test('completes a sent draft by ID and preserves a different active draft', () =
 test('persists a private claim as an unclaimed sent receipt', () => {
   const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
   const values = new Map();
+  const localMailboxEvents = [];
   Object.defineProperty(globalThis, 'window', {
     configurable: true,
-    value: { localStorage: { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value), removeItem: (key) => values.delete(key) } },
+    value: {
+      localStorage: { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value), removeItem: (key) => values.delete(key) },
+      dispatchEvent: (event) => { localMailboxEvents.push(event.type); return true; },
+    },
   });
   try {
     setLocalAccountId('claim-owner');
@@ -869,6 +873,7 @@ test('persists a private claim as an unclaimed sent receipt', () => {
     assert.equal(sent?.status, 'claim_pending');
     assert.equal(getLetterDraftById(draft.id)?.status, 'claim_pending');
     assert.equal(getLettersWithDraft().find((letter) => letter.id === draft.id)?.status, 'claim_pending');
+    assert.deepEqual(localMailboxEvents, ['drop:local-mailbox-change']);
   } finally {
     setLocalAccountId(null);
     if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);

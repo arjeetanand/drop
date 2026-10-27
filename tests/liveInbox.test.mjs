@@ -63,6 +63,15 @@ test('mailbox merge keeps local drafts and lets remote rows replace matching sam
   assert.equal(merged[1].subject, 'Real drop');
 });
 
+test('refreshes a local sent receipt without dropping remote mailbox rows', () => {
+  const localReceipt = letter('local-sent', 'sent', { status: 'delivered' });
+  const remoteReceived = letter('remote-received', 'received');
+  const merged = mergeInboxLetters([localReceipt], [remoteReceived], [remoteReceived], [remoteReceived]);
+
+  assert.deepEqual(new Set(merged.map(({ id }) => id)), new Set(['local-sent', 'remote-received']));
+  assert.equal(merged.find(({ id }) => id === 'local-sent')?.status, 'delivered');
+});
+
 test('retains a known claimed badge when a later mailbox refresh cannot hydrate claim status', () => {
   const eligibility = { deliveryMode: 'instant', payloadKind: 'text' };
   const previouslyClaimed = letter('claimed', 'sent', { ...eligibility, claimedViaInvite: true });

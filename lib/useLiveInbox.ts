@@ -42,6 +42,11 @@ export function useLiveInbox(initialLetters: MockLetter[] = mockLetters) {
       pendingReadEvents.set(detail.letterId, detail);
       setLetters((current) => applyRecipientDropRead(current, detail));
     });
+    const refreshLocalMailbox = () => {
+      const localLetters = getLettersWithDraft(getLetterDraft());
+      setLetters((current) => mergeInboxLetters(localLetters, current, current, current));
+    };
+    window.addEventListener('drop:local-mailbox-change', refreshLocalMailbox);
     const signaledDropIds = new Set<string>();
     const signaledReactionDropIds = new Set<string>();
 
@@ -163,6 +168,7 @@ export function useLiveInbox(initialLetters: MockLetter[] = mockLetters) {
       stopRealtime();
       stopReactionRealtime();
       stopRecipientDropReadEvents();
+      window.removeEventListener('drop:local-mailbox-change', refreshLocalMailbox);
       authSubscription?.unsubscribe();
     };
   }, [initialLetters, initialReactionSignalWindowStart]);

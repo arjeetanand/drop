@@ -21,6 +21,7 @@ import { shareInviteLink } from '@/lib/shareInvite';
 import { buildDropClaimUrl, createDropClaimSharePayload, createDropClaimToken } from '@/lib/dropClaim';
 import { buildPrivateClaimDetailsPath, buildSentReceiptPath, getComposerClaimPendingCopy } from '@/lib/claimReceipt';
 import { COMPOSE_STARTERS, getComposeStarterValue } from '@/lib/composeStarters';
+import { getComposerNavigationBlockReason, guardComposerNavigation, type ComposerNavigationState } from '@/lib/composerNavigation';
 import type { RecentDropRecipient } from '@/lib/recentDropRecipients';
 import { deleteShareTargetHandoff, getShareTargetHandoff, isValidShareTargetHandoffId, validateShareTargetHandoffFile } from '@/lib/shareTargetHandoff';
 
@@ -109,6 +110,7 @@ function Composer() {
   const [saved, setSaved] = useState(false);
   const [accountState, setAccountState] = useState<'checking' | 'connected' | 'signed-out' | 'unavailable'>('checking');
   const [sending, setSending] = useState(false);
+  const mountedRef = useRef(false);
   const [sendRecovery, setSendRecovery] = useState<'retry' | 'check-sent' | null>(null);
   const [deleting, setDeleting] = useState(false);
   const deletingRef = useRef(false);
@@ -123,6 +125,11 @@ function Composer() {
   const [sharingInvite, setSharingInvite] = useState(false);
   const privateClaimContextRef = useRef<{ accountId: string | null; draftId: string | null; url: string }>({ accountId: null, draftId: null, url: '' });
   const currentAccountId = getLocalAccountId();
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   const clearPrivateClaimInvite = () => {
     setPrivateClaimUrl('');
@@ -600,23 +607,17 @@ function Composer() {
     }
   };
 
+  const getComposerNavigationState = (): ComposerNavigationState => ({
+    deleting: deletingRef.current || deleting,
+    sending,
+    sharingInvite,
+    shareImporting: shareImporting || shareImportInProgressRef.current,
+    attachmentSaving,
+    unsavedAttachment: Boolean(file && !attachmentSaved),
+  });
+
   const saveBeforeLeaving = (event: React.MouseEvent<HTMLAnchorElement>) => {
-    if (deletingRef.current) {
-      event.preventDefault();
-      return;
-    }
-    if (shareImporting || shareImportInProgressRef.current) {
-      event.preventDefault();
-      setNotice('Adding the shared image to a draft… Keep Drop open for a moment.');
-      return;
-    }
-    if (attachmentSaving || (file && !attachmentSaved)) {
-      event.preventDefault();
-      setNotice(attachmentSaving
-        ? 'Saving your attachment on this device…'
-        : 'This browser cannot save attachments between screens. Remove it, connect your account, then add it again.');
-      return;
-    }
+    if (guardComposerNavigation(event, getComposerNavigationState(), setNotice)) return;
     makeDraft();
   };
 
@@ -748,6 +749,7 @@ function Composer() {
       }
       if (request !== recipientCheckRequest.current || !isCurrentLocalAccount(accountId)) return;
       if (!issued.ok || !issued.letterId) {
+        if (!mountedRef.current) return;
         const retryUploadId = next.payloadKind === 'text'
           ? null
           : getConfirmedMediaRetryUploadId(issued, next.mediaUploadId);
@@ -772,12 +774,14 @@ function Composer() {
         mediaSizeBytes: issued.mediaSizeBytes,
       } : {};
       const sent = completeSuccessfulSend(next, accountId, 'claim_pending', dispatchedAt, mediaReceipt);
+      // Keep the receipt durable if browser Back left Compose mid-request.
+      if (sent && next.payloadKind !== 'text') void deleteDraftAttachment(next.id, accountId).catch(() => undefined);
+      if (!mountedRef.current) return;
       setDraft(sent || { ...next, status: 'claim_pending', dispatchedAt, updatedAt: new Date().toISOString() });
       setSaved(Boolean(sent));
       if (next.payloadKind !== 'text') {
         setMediaExpiresAt(issued.mediaExpiresAt ?? null);
       }
-      if (sent && next.payloadKind !== 'text') void deleteDraftAttachment(next.id, accountId).catch(() => undefined);
 
       const inviteUrl = buildDropClaimUrl(window.location.origin, token);
       if (!inviteUrl) {
@@ -801,7 +805,7 @@ function Composer() {
         },
         payload,
       );
-      if (request !== recipientCheckRequest.current || !isCurrentLocalAccount(accountId)) return;
+      if (!mountedRef.current || request !== recipientCheckRequest.current || !isCurrentLocalAccount(accountId)) return;
       if (result === 'shared' || result === 'copied') {
         router.push(buildSentReceiptPath({ kind: 'claim', letterId: issued.letterId, shareOutcome: result }));
         return;
@@ -810,11 +814,13 @@ function Composer() {
         ? 'Nothing was shared yet. Copy this private link when you’re ready.'
         : 'Sharing is unavailable. Copy this private link to send it yourself.');
     } catch {
-      if (isCurrentLocalAccount(accountId)) setInviteNotice('The private link could not be prepared. Your draft is still here—try again.');
+      if (mountedRef.current && isCurrentLocalAccount(accountId)) setInviteNotice('The private link could not be prepared. Your draft is still here—try again.');
     } finally {
-      setSharingInvite(false);
-      setPrivateClaimAction(null);
-      setSending(false);
+      if (mountedRef.current) {
+        setSharingInvite(false);
+        setPrivateClaimAction(null);
+        setSending(false);
+      }
     }
   };
 
@@ -841,18 +847,18 @@ function Composer() {
         },
         createDropClaimSharePayload(privateClaimUrl),
       );
-      if (!isCurrentInviteContext()) return;
+      if (!mountedRef.current || !isCurrentInviteContext()) return;
       if (result === 'shared' || result === 'copied') {
-        router.push(buildSentReceiptPath({ kind: 'claim', letterId: draftId, shareOutcome: result }));
+        if (mountedRef.current) router.push(buildSentReceiptPath({ kind: 'claim', letterId: draftId, shareOutcome: result }));
         return;
       }
       setInviteNotice(result === 'cancelled'
         ? 'Nothing was shared yet. The same private link is still ready below.'
         : 'Sharing is unavailable. Copy the private link below instead.');
     } catch {
-      if (isCurrentInviteContext()) setInviteNotice('The share sheet is unavailable. The same private link is still ready to copy.');
+      if (mountedRef.current && isCurrentInviteContext()) setInviteNotice('The share sheet is unavailable. The same private link is still ready to copy.');
     } finally {
-      setSharingInvite(false);
+      if (mountedRef.current) setSharingInvite(false);
     }
   };
 
@@ -861,10 +867,10 @@ function Composer() {
     try {
       if (!navigator.clipboard) throw new Error('Clipboard unavailable');
       await navigator.clipboard.writeText(privateClaimUrl);
-      if (!draft) return;
+      if (!draft || !mountedRef.current) return;
       router.push(buildSentReceiptPath({ kind: 'claim', letterId: draft.id, shareOutcome: 'copied' }));
     } catch {
-      setInviteNotice('Copy is unavailable here. Select the link above and copy it manually.');
+      if (mountedRef.current) setInviteNotice('Copy is unavailable here. Select the link above and copy it manually.');
     }
   };
 
@@ -911,6 +917,7 @@ function Composer() {
         ? recordRecipientInviteProgress(draftId, accountId, inviteUsername, result, manualLinkAvailable)
         : null;
       if (getLetterDraft(accountId).id !== draftId) return;
+      if (!mountedRef.current) return;
       const progressSaved = Boolean(updatedDraft);
       if (updatedDraft) setDraft(updatedDraft);
       else setDraft({ ...savedDraft, recipientInviteProgress: undefined });
@@ -925,13 +932,13 @@ function Composer() {
               ? 'Invite not shared. Your draft is still saved on this device.'
               : 'Sharing and copying are unavailable. Copy the invite link below.');
     } finally {
-      setSharingInvite(false);
+      if (mountedRef.current) setSharingInvite(false);
     }
   };
 
   const handleSend = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!complete || !confirmedRecipient || !draft || sending || deletingRef.current || sendRecovery === 'check-sent') return;
+    if (!complete || !confirmedRecipient || !draft || sending || sharingInvite || deletingRef.current || sendRecovery === 'check-sent') return;
     if (payloadKind !== 'text') {
       const validationError = validateDropMedia(file);
       if (validationError) {
@@ -957,6 +964,7 @@ function Composer() {
       const result = await syncDropToBackend(next, confirmedRecipient.id, accountId, file || undefined);
       if (!isCurrentLocalAccount(accountId)) return;
       if (!result.ok) {
+        if (!mountedRef.current) return;
         const failureCopy = result.error || 'This drop could not be sent. Your draft is still here.';
         setError(result.recovery === 'retry' ? `${failureCopy} Check the recipient again to retry.` : failureCopy);
         setSendRecovery(result.recovery ?? null);
@@ -973,15 +981,16 @@ function Composer() {
         mediaSizeBytes: result.mediaSizeBytes,
       });
       if (!sent) {
+        if (!mountedRef.current) return;
         setError('Drop was sent, but this device could not save its receipt. Check Sent before trying again.');
         setSendRecovery('check-sent');
         setSending(false);
         return;
       }
       void deleteDraftAttachment(next.id, accountId).catch(() => undefined);
-      router.push(buildSentReceiptPath({ kind: 'delivery', letterId: sent.id, mode: deliveryMode }));
+      if (mountedRef.current) router.push(buildSentReceiptPath({ kind: 'delivery', letterId: sent.id, mode: deliveryMode }));
     } catch {
-      if (!isCurrentLocalAccount(accountId)) return;
+      if (!mountedRef.current || !isCurrentLocalAccount(accountId)) return;
       setError('The send status is unclear. Your saved drop and attachment are still here. Check Sent before sending again.');
       setSendRecovery('check-sent');
       setRecipientCheck({ status: 'idle', username: null });
@@ -990,7 +999,7 @@ function Composer() {
   };
 
   const handleDelete = async () => {
-    if (!draft || sending || attachmentSaving || deletingRef.current) return;
+    if (!draft || sending || sharingInvite || attachmentSaving || deletingRef.current) return;
     const accountId = getLocalAccountId();
     if (!canDeleteLocalDraft(draft.id, accountId)
       || !window.confirm('Delete this unsent draft and its saved attachment from this device? This can’t be undone.')) return;
@@ -1056,12 +1065,20 @@ function Composer() {
   const sendProgressLabel = isText ? 'Sending your note…' : payloadKind === 'gif' ? 'Sending your GIF…' : 'Sending your photo…';
   const mediaExpiryLabel = formatMediaExpiryDate(mediaExpiresAt);
   const deletableDraft = draft ? canDeleteLocalDraft(draft.id) : false;
+  const composerNavigationDisabled = getComposerNavigationBlockReason({
+    deleting,
+    sending,
+    sharingInvite,
+    shareImporting,
+    attachmentSaving,
+    unsavedAttachment: Boolean(file && !attachmentSaved),
+  }) !== null;
 
   return (
     <main className="page-shell page-enter page-shell--composer !pt-4 sm:!pt-8">
       <div className="page-container max-w-[760px]">
         <header className="flex items-center justify-between gap-3">
-          <Link href="/" onClick={saveBeforeLeaving} aria-disabled={shareImporting} className="inline-flex min-h-11 items-center gap-2 rounded-full px-3 text-sm font-semibold text-ink-navy hover:bg-white/65 aria-disabled:cursor-wait"><ArrowLeft className="h-4 w-4" aria-hidden="true" /> Desk</Link>
+          <Link href="/" onClick={saveBeforeLeaving} aria-disabled={composerNavigationDisabled} className="inline-flex min-h-11 items-center gap-2 rounded-full px-3 text-sm font-semibold text-ink-navy hover:bg-white/65 aria-disabled:cursor-wait"><ArrowLeft className="h-4 w-4" aria-hidden="true" /> Desk</Link>
           <p className="inline-flex items-center gap-1.5 font-mono text-[0.65rem] text-on-surface-variant" aria-live="polite">{saved ? <Check className="h-3.5 w-3.5 text-[#2f8d67]" aria-hidden="true" /> : <span className="h-1.5 w-1.5 rounded-full bg-[#d08354]" aria-hidden="true" />}{saved ? 'Saved on this device' : 'Saving as you go'}</p>
         </header>
 
@@ -1069,7 +1086,7 @@ function Composer() {
           <p className="eyebrow">Make a drop</p>
           <h1 className="mt-2 font-headline-md text-4xl font-semibold leading-[1.02] tracking-[-0.045em] text-ink-navy sm:text-5xl">Send a little moment.</h1>
           <p className="mt-3 max-w-xl text-sm leading-relaxed text-on-surface-variant sm:text-base">One person, one thing you wanted them to see. The rest can wait.</p>
-        {accountState !== 'connected' && <div className="rounded-xl border border-[#e9d6c7] bg-[#fff6ec] p-4"><p className="text-sm font-semibold text-ink-navy" role="status" aria-atomic="true">{accountState === 'checking' ? 'Checking your account…' : accountState === 'unavailable' ? 'Preview mode' : 'Connect your account to send.'}</p><p className="mt-1 text-xs leading-relaxed text-on-surface-variant">{accountState === 'unavailable' ? 'Drafts and previews stay on this device. Sign-in and account delivery aren’t available in this preview.' : 'Connect your account to send a private note or invite someone to claim one.'}</p>{accountState !== 'unavailable' && <Link href={profileHref} onClick={saveBeforeLeaving} aria-disabled={shareImporting || attachmentSaving || Boolean(file && !attachmentSaved)} className="mt-2 inline-flex min-h-11 items-center text-xs font-bold text-[#2b45f7]">Your profile <ArrowRightIcon /></Link>}</div>}
+        {accountState !== 'connected' && <div className="rounded-xl border border-[#e9d6c7] bg-[#fff6ec] p-4"><p className="text-sm font-semibold text-ink-navy" role="status" aria-atomic="true">{accountState === 'checking' ? 'Checking your account…' : accountState === 'unavailable' ? 'Preview mode' : 'Connect your account to send.'}</p><p className="mt-1 text-xs leading-relaxed text-on-surface-variant">{accountState === 'unavailable' ? 'Drafts and previews stay on this device. Sign-in and account delivery aren’t available in this preview.' : 'Connect your account to send a private note or invite someone to claim one.'}</p>{accountState !== 'unavailable' && <Link href={profileHref} onClick={saveBeforeLeaving} aria-disabled={composerNavigationDisabled} className="mt-2 inline-flex min-h-11 items-center text-xs font-bold text-[#2b45f7]">Your profile <ArrowRightIcon /></Link>}</div>}
         {accountState === 'connected' && <p className="mt-4 rounded-xl border border-[#cae6d5] bg-[#f0f9f3] px-4 py-3 text-sm font-semibold text-[#26734f]" role="status">Your account is ready. {shareWithoutHandle ? 'Choose what goes in this drop, then share its private link.' : 'Start by choosing who gets this drop.'}</p>}
         </div>
 
@@ -1099,9 +1116,9 @@ function Composer() {
             <button type="button" onClick={() => void sharePreparedPrivateClaimInvite()} disabled={sharingInvite || sending} className="button-secondary mt-2 !min-h-12 w-full !rounded-xl disabled:opacity-50">{sharingInvite ? 'Opening share…' : 'Share private link'}</button>
           </div>}
           {inviteNotice && <p className="field-help mt-3" role="status" aria-live="polite">{inviteNotice}</p>}
-          <Link href={privateClaimDetailsHref} onClick={saveBeforeLeaving} aria-disabled={shareImporting} className="button-secondary mt-5 !min-h-12 !rounded-xl aria-disabled:cursor-wait">Open saved drop <ArrowRightIcon /></Link>
-        </section> : <form onSubmit={handleSend} aria-busy={deleting || sending || shareImporting} className="composer-form mt-6 sm:mt-8">
-          <fieldset disabled={deleting || sending || shareImporting} aria-label="Compose drop" className="m-0 min-w-0 space-y-4 border-0 p-0 sm:space-y-5">
+          <Link href={privateClaimDetailsHref} onClick={saveBeforeLeaving} aria-disabled={composerNavigationDisabled} className="button-secondary mt-5 !min-h-12 !rounded-xl aria-disabled:cursor-wait">Open saved drop <ArrowRightIcon /></Link>
+        </section> : <form onSubmit={handleSend} aria-busy={deleting || sending || sharingInvite || shareImporting} className="composer-form mt-6 sm:mt-8">
+          <fieldset disabled={deleting || sending || sharingInvite || shareImporting} aria-label="Compose drop" className="m-0 min-w-0 space-y-4 border-0 p-0 sm:space-y-5">
           <section className="rounded-2xl border border-[rgba(16,42,67,.12)] bg-white/55 p-4 sm:p-6">
             <p className="eyebrow">First · your person</p>
             {shareWithoutHandle ? <div ref={recipientlessPanelRef} role="region" aria-labelledby="unaddressed-claim-title" tabIndex={-1} className="mt-2 rounded-xl border border-[#e9d6c7] bg-[#fff6ec] p-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2b45f7]">
@@ -1289,18 +1306,18 @@ function Composer() {
 
           {sendRecovery === 'check-sent' ? <div className="notice error-notice" role="alert">
             <p>{error || 'The send status is unclear. Your saved drop and attachment are still here.'}</p>
-            <Link href="/mailbox?filter=sent" onClick={saveBeforeLeaving} aria-label="Check Sent" className="mt-3 inline-flex min-h-11 items-center font-bold underline decoration-current underline-offset-4">Check Sent <ArrowRightIcon /></Link>
+            <Link href="/mailbox?filter=sent" onClick={saveBeforeLeaving} aria-label="Check Sent" aria-disabled={composerNavigationDisabled} className="mt-3 inline-flex min-h-11 items-center font-bold underline decoration-current underline-offset-4 aria-disabled:cursor-wait">Check Sent <ArrowRightIcon /></Link>
           </div> : error && <p className="notice error-notice" role="alert">{error}</p>}
           {notice && !error && <p className="notice" role="status">{notice}</p>}
 
           <div className={`composer-action-tray${deletableDraft ? ' composer-action-tray--with-delete' : ''}`} role="group" aria-label="Drop actions">
-            <Link href={draft ? `/compose/preview?letter=${encodeURIComponent(draft.id)}` : '/compose/preview'} onClick={saveBeforeLeaving} aria-label="Preview as recipient" aria-disabled={shareImporting} className="button-secondary composer-action-preview !min-h-12 !rounded-xl aria-disabled:cursor-wait"><Eye className="h-4 w-4" aria-hidden="true" /><span className="hidden sm:inline">Preview as recipient</span><span className="sm:hidden" aria-hidden="true">Preview</span></Link>
+            <Link href={draft ? `/compose/preview?letter=${encodeURIComponent(draft.id)}` : '/compose/preview'} onClick={saveBeforeLeaving} aria-label="Preview as recipient" aria-disabled={composerNavigationDisabled} className="button-secondary composer-action-preview !min-h-12 !rounded-xl aria-disabled:cursor-wait"><Eye className="h-4 w-4" aria-hidden="true" /><span className="hidden sm:inline">Preview as recipient</span><span className="sm:hidden" aria-hidden="true">Preview</span></Link>
             <div className="composer-action-footer">
               <div className="composer-action-secondary">
                 <button type="button" onClick={handleSave} aria-label={saveLabel} className="button-secondary composer-action-save !min-h-12 !rounded-xl"><span className="hidden sm:inline">{saveLabel}</span><span className="sm:hidden" aria-hidden="true">{saved ? 'Saved' : 'Save'}</span></button>
-                {deletableDraft && <button type="button" onClick={handleDelete} disabled={deleting || sending || attachmentSaving} aria-label={deleting ? 'Deleting draft' : 'Delete draft'} className="button-secondary composer-action-delete !min-h-12 !rounded-xl !border-[#e6c7bd] !text-[#9e4038] disabled:opacity-45"><Trash2 className="h-4 w-4" aria-hidden="true" /><span className="hidden sm:inline">{deleting ? 'Deleting…' : 'Delete draft'}</span><span className="sm:hidden" aria-hidden="true">{deleting ? 'Deleting…' : 'Delete'}</span></button>}
+                {deletableDraft && <button type="button" onClick={handleDelete} disabled={deleting || sending || sharingInvite || attachmentSaving} aria-label={deleting ? 'Deleting draft' : 'Delete draft'} className="button-secondary composer-action-delete !min-h-12 !rounded-xl !border-[#e6c7bd] !text-[#9e4038] disabled:opacity-45"><Trash2 className="h-4 w-4" aria-hidden="true" /><span className="hidden sm:inline">{deleting ? 'Deleting…' : 'Delete draft'}</span><span className="sm:hidden" aria-hidden="true">{deleting ? 'Deleting…' : 'Delete'}</span></button>}
               </div>
-              {accountState === 'connected' ? <button type="submit" disabled={!complete || sending || deleting || attachmentSaving || shareImporting || sendRecovery === 'check-sent'} className="button-primary composer-action-primary !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white disabled:opacity-45"><span aria-live="polite" aria-atomic="true">{sending ? sendProgressLabel : sendRecovery === 'check-sent' ? 'Check Sent first' : sendRecovery === 'retry' && complete ? 'Retry send' : 'Send drop'}</span> <Send className="h-4 w-4" aria-hidden="true" /></button> : <Link href={accountState === 'unavailable' ? (draft ? `/compose/preview?letter=${encodeURIComponent(draft.id)}` : '/compose/preview') : profileHref} onClick={saveBeforeLeaving} aria-disabled={shareImporting || deleting || attachmentSaving || Boolean(file && !attachmentSaved)} className="button-primary composer-action-primary !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white">{accountState === 'unavailable' ? 'Preview this drop' : 'Connect to send'} {accountState === 'unavailable' ? <Eye className="h-4 w-4" aria-hidden="true" /> : <Send className="h-4 w-4" aria-hidden="true" />}</Link>}
+              {accountState === 'connected' ? <button type="submit" disabled={!complete || sending || sharingInvite || deleting || attachmentSaving || shareImporting || sendRecovery === 'check-sent'} className="button-primary composer-action-primary !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white disabled:opacity-45"><span aria-live="polite" aria-atomic="true">{sending ? sendProgressLabel : sendRecovery === 'check-sent' ? 'Check Sent first' : sendRecovery === 'retry' && complete ? 'Retry send' : 'Send drop'}</span> <Send className="h-4 w-4" aria-hidden="true" /></button> : <Link href={accountState === 'unavailable' ? (draft ? `/compose/preview?letter=${encodeURIComponent(draft.id)}` : '/compose/preview') : profileHref} onClick={saveBeforeLeaving} aria-disabled={composerNavigationDisabled} className="button-primary composer-action-primary !min-h-12 !rounded-xl !border-[#2b45f7] !bg-[#2b45f7] !text-white">{accountState === 'unavailable' ? 'Preview this drop' : 'Connect to send'} {accountState === 'unavailable' ? <Eye className="h-4 w-4" aria-hidden="true" /> : <Send className="h-4 w-4" aria-hidden="true" />}</Link>}
             </div>
           </div>
           </fieldset>
