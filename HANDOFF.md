@@ -8,10 +8,10 @@ Updated: 2026-10-27
 - **Final review fixes:** commit `98651c5` pins fixture-write smokes to `supabase_kong_drop` / `supabase_inbucket_drop` and rejects another project on the same local port. It also stops Sidebar mailbox polling on public routes where the private shell is hidden. Home and its visible sidebar still each run a 60-second recovery read; the reviewer classified this as low-priority resource cleanup.
 - **Verification:** 302/302 unit tests, ESLint, Next `typegen`, `npm run typecheck`, `git diff --check`, and `npm run build -- --webpack` passed; the build generated all 22 routes. Existing local first-signup, direct send/reply, Relay, QR, and responsive accessibility browser runs passed at their documented checkpoints. `http://localhost:4004` returned HTTP 200.
 - **Review scope:** source review found no confirmed high-severity auth, media-privacy, or migration/API-compatibility flaw. The review did not verify hosted Supabase or GitHub checks, and did not fully review every line of historical browser scripts.
-- **GitHub:** pushed through documentation commit `722b5ec`; [draft PR #13](https://github.com/arjeetanand/drop/pull/13) is open from `codex/invitee-first-send` to `main`. CI and GitGuardian passed on this head and GitHub reported a clean merge state. This status-note push will start another CI run; verify that latest head/check before merge.
+- **GitHub:** pushed through documentation commit `be77b7c`; [draft PR #13](https://github.com/arjeetanand/drop/pull/13) is open from `codex/invitee-first-send` to `main`. CI and GitGuardian passed on this head and GitHub reported a clean merge state. This handoff update will start another CI run; verify that latest head/check before merge and after any future push.
 - **Still open for a real pilot:** verify the hosted Free project, Auth email, deployed migrations/functions, two-account delivery, scheduled physical Storage deletion, real OS sharing, spoken screen-reader output, and physical-device/camera behavior; then run the opt-in user study.
 
-**Next:** verify PR #13's head and CI after this status-note push, then complete hosted/device acceptance. Keep it unmerged until the remaining gates pass and explicit merge approval is obtained.
+**Next:** verify PR #13's head and CI after this handoff update, then complete hosted/device acceptance. Keep it unmerged until the remaining gates pass and explicit merge approval is obtained.
 
 ## Latest checkpoint — signed-out friend first send and unique inbox card (2026-10-27)
 

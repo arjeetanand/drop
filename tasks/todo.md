@@ -10,7 +10,7 @@ Tasks are ordered by dependency. Progress is recorded at each tested and pushed 
 - [x] Stop the sidebar mailbox poll on public routes where the sidebar is hidden; record the remaining duplicate Home/sidebar recovery read as a low-priority follow-up.
 - [x] Pass 302 unit tests, lint, Next route type generation, TypeScript, whitespace checks, and a 22-route Webpack production build; confirm the app at port 4004 returns HTTP 200.
 - [x] Push the verified branch and create draft [PR #13](https://github.com/arjeetanand/drop/pull/13) directly into `main`; GitGuardian passed on the initial PR head.
-- [x] Confirm PR #13 CI and GitGuardian passed on `722b5ec` and GitHub reported a clean merge state; recheck after this status-note push.
+- [x] Confirm PR #13 CI and GitGuardian passed on `be77b7c` and GitHub reported a clean merge state; recheck after this handoff update and any future push.
 - [ ] Verify hosted Free project identity, Auth/migrations/functions, two-account delivery, and scheduled physical media deletion.
 - [ ] Verify the actual OS share sheet, spoken screen-reader behavior, and physical-device/camera paths; run the small opt-in user pilot.
 - [ ] After PR review and hosted/device gates, merge to `main` with the user's explicit approval.
