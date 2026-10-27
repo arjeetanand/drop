@@ -2,6 +2,13 @@
 
 Updated: 2026-10-27
 
+## Main pointer before this closure follow-up (2026-10-27)
+
+- PR #15 is merged. Local main and origin/main both point to b705b3bf3b0b9a2437ac3cfaa5923f2bd8084aac; first-parent history contains code PR #13 and documentation PRs #14–#15.
+- GitHub lists PRs #3, #4, and #7–#12 as open. PR #7 still lacks authenticated QR issuance and physical camera-scan proof and is dirty against main. PR #11 is a 55-file draft with a dirty merge state and only GitGuardian passing. PR #12 targets feat/pilot-integrated-preview, not main. Do not treat any of these open branches as landed.
+- The app started from this checkout on localhost:4004 and returned HTTP 200. It uses loopback .env.local; hosted settings remain separate in ignored .env.hosted.local.
+- The only local unstaged changes are AGENTS.md and next-env.d.ts; they were preserved and excluded from the task work.
+
 ## Latest checkpoint — Relay arrival recap and pilot closure (2026-10-27)
 
 - Product pitch: Drop is a personal note, photo, or GIF sent directly or through an optional, human-carried Relay journey. Relay’s defensible product angle is the combination of willing one-at-a-time carriers, a payload hidden from carriers, and recipient-controlled collection; treat market distinction as a hypothesis to test. The short pitch, demo script, comparison, and eight-drop pilot question are in [README.md](./README.md#pitch).

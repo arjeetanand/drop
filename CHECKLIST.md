@@ -2,6 +2,14 @@
 
 Updated: 2026-10-27
 
+## Main and PR closure checkpoint (2026-10-27)
+
+- [x] Verify PR #15 merged; fast-forward local main to origin/main at b705b3b.
+- [x] Keep localhost:4004 available and confirm the merged app returns HTTP 200.
+- [x] Inventory the remaining open PRs (#3, #4, #7–#12) without treating them as merged.
+- [ ] Review/update/merge only the remaining PRs that are still needed for the pilot. PR #7 authenticated QR and camera scan remain unverified; PR #11 is a dirty draft; PR #12 targets a feature branch.
+- [ ] Finish the hosted Free-plan, migration reconciliation, Auth/email, 30-day cleanup, real two-account, and physical-device gates listed below before calling the hosted pilot ready.
+
 ## Relay arrival recap (2026-10-27)
 
 - [x] Add the recipient-facing “It made it” recap after Relay collection; show only the aggregate hand count and keep private text/media out of the recap.
