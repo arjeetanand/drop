@@ -546,14 +546,27 @@ async function clickButton(label) {
   assert.equal(result, true, `The browser could not activate the ${label} button.`);
 }
 
-async function clickLink(label) {
-  const result = await evaluate(`(() => {
-    const link = Array.from(document.querySelectorAll('a')).find((item) => item.innerText.replace(/\\s+/g, ' ').trim().toLocaleLowerCase() === ${JSON.stringify(label.toLocaleLowerCase())});
-    if (!link) return false;
-    link.click();
-    return true;
-  })()`);
-  assert.equal(result, true, `The browser could not open the ${label} link.`);
+async function activateHomeInviteWithKeyboard() {
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    const focused = await evaluate(`(() => {
+      const element = document.activeElement;
+      if (!element?.matches('a')) return null;
+      return {
+        href: element.getAttribute('href'),
+        label: (element.innerText || element.textContent || '').replace(/\\s+/g, ' ').trim().toLocaleLowerCase(),
+        focusVisible: element.matches(':focus-visible'),
+      };
+    })()`);
+    if (focused?.href === '/profile?invite=1' && focused.label === 'invite a friend') {
+      assert.equal(focused.focusVisible, true, 'Invite a friend must show a visible keyboard focus indicator.');
+      await pageCdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13 });
+      await pageCdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13 });
+      return;
+    }
+    await pageCdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9, nativeVirtualKeyCode: 9 });
+    await pageCdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9, nativeVirtualKeyCode: 9 });
+  }
+  throw new Error('Could not keyboard-focus and activate the Home Invite a friend link.');
 }
 
 async function waitForClaimUiState(predicate, description, handoffId) {
@@ -592,8 +605,19 @@ async function stubNativeShareForTest() {
       configurable: true,
       value: async (details) => {
         if (!details || typeof details.url !== 'string') throw new TypeError('Share URL missing.');
+        const captured = {
+          keys: Object.keys(details).sort(),
+          title: details.title ?? null,
+          text: details.text ?? null,
+          url: details.url,
+        };
+        window.__dropBrowserE2EShareCallCount = (window.__dropBrowserE2EShareCallCount || 0) + 1;
+        window.__dropBrowserE2EShareDetails = captured;
         window.__dropBrowserE2EShareUrl = details.url;
-        try { window.sessionStorage.setItem('drop-browser-e2e-share-url', details.url); } catch { /* The in-memory value remains available. */ }
+        try {
+          window.sessionStorage.setItem('drop-browser-e2e-share-url', details.url);
+          window.sessionStorage.setItem('drop-browser-e2e-share-details', JSON.stringify(captured));
+        } catch { /* The in-memory result remains available. */ }
       },
     });
     return typeof navigator.share === 'function';
@@ -647,6 +671,9 @@ async function readMagicLinkFromMailpit() {
   const redirect = new URL(url.searchParams.get('redirect_to') || '');
   assert.equal(redirect.origin, APP_ORIGIN, 'The email link must return to the isolated app on loopback.');
   assert.equal(redirect.pathname, '/auth/callback', 'The email link must return through the app auth callback.');
+  assert.equal(redirect.search, '?invite=1', 'The first-use signup link must return through the invite callback only.');
+  assert.equal(redirect.searchParams.get('invite'), '1', 'The first-use signup link must preserve the Home invite context.');
+  assert.equal(redirect.searchParams.has('next'), false, 'The Home invite signup link must not inherit an unrelated return route.');
   return url.href;
 }
 
@@ -776,7 +803,7 @@ async function createTextClaimInvite() {
   return dropFixture;
 }
 
-async function startUnauthenticatedRecipient(emailAddress) {
+async function startUnauthenticatedRecipient() {
   await navigate(dropFixture.url);
   let lastClaimPageState;
   try {
@@ -815,40 +842,66 @@ async function startUnauthenticatedRecipient(emailAddress) {
   assert.equal(sealedState.imageCount, 0, 'The text claim page must not render media.');
   assert.equal(sealedState.hash, '', 'The claim token fragment must be removed from the visible address.');
   assert.match(sealedState.handoff || '', /^[0-9a-f-]{36}$/i, 'The browser must retain an opaque return handoff.');
+  const storedHandoffId = await evaluate(`window.sessionStorage.getItem('drop:claim-handoff-id:v1')`);
+  assert.equal(storedHandoffId, sealedState.handoff, 'The sealed claim handoff must be stored before leaving its page.');
+  console.log('[browser-first-signup-smoke] PASS unauthenticated browser opened the sealed text invite and retained its opaque handoff.');
+  return { claimHandoffId: sealedState.handoff };
+}
 
-  await clickLink('Sign in or create your account');
-  await waitFor(async () => evaluate(`location.pathname === '/profile'
-    && document.querySelector('#account-email') !== null
-    && (new URLSearchParams(location.search).get('next') || '').startsWith('/claim?handoff=')`), 'the claim-linked public email form');
-  const claimHandoffId = await evaluate(`(() => {
-    const next = new URL(new URLSearchParams(location.search).get('next') || '/', location.origin);
-    return next.searchParams.get('handoff');
-  })()`);
-  assert.equal(claimHandoffId, sealedState.handoff, 'The profile route must retain the original invite handoff.');
-
+async function requestInviteSignupFromHome(emailAddress) {
+  await navigate(APP_ORIGIN);
+  await waitFor(async () => evaluate(`location.origin === ${JSON.stringify(APP_ORIGIN)}
+    && location.pathname === '/'
+    && document.body.innerText.includes('Your inbox is waiting on its first drop.')
+    && [...document.querySelectorAll('a')].some((link) => link.getAttribute('href') === '/profile?invite=1')`), 'the signed-out Home inbox and Invite a friend link');
+  await activateHomeInviteWithKeyboard();
+  await waitFor(async () => evaluate(`location.origin === ${JSON.stringify(APP_ORIGIN)}
+    && location.pathname === '/profile'
+    && location.search === '?invite=1'
+    && new URLSearchParams(location.search).get('invite') === '1'
+    && !new URLSearchParams(location.search).has('next')
+    && document.querySelector('#account-email') !== null`), 'the keyboard-invited signed-out email form without an unrelated return route');
+  const beforeSignupState = await evaluate(`(() => ({
+    inviteShareTitlePresent: Boolean(document.querySelector('#invite-share-title')),
+    inviteButtonsPresent: [...document.querySelectorAll('button')].some((button) => /^(share @|copy handle \\+ link)/i.test(button.innerText.trim())),
+    inviteContext: new URLSearchParams(location.search).get('invite'),
+    hasNext: new URLSearchParams(location.search).has('next'),
+    emailFormPresent: Boolean(document.querySelector('#account-email')),
+  }))()`);
+  assert.deepEqual(beforeSignupState, {
+    inviteShareTitlePresent: false,
+    inviteButtonsPresent: false,
+    inviteContext: '1',
+    hasNext: false,
+    emailFormPresent: true,
+  }, 'An unauthenticated invite page must retain its context without exposing post-sync share controls.');
   await fillBrowserInput('#account-email', emailAddress);
-  await evaluate(`(() => {
+  const submitted = await evaluate(`(() => {
     const form = document.querySelector('#account-email')?.closest('form');
     if (!form) return false;
     form.requestSubmit(form.querySelector('button[type="submit"]'));
     return true;
   })()`);
-  await waitFor(async () => evaluate(`document.body.innerText.includes('Sign-in link sent. Check your inbox to continue.')`), 'the public email form to request a sign-in link');
+  assert.equal(submitted, true, 'The invite profile must submit the public email sign-in form.');
+  await waitFor(async () => evaluate(`document.body.innerText.includes('Sign-in link sent. Check your inbox to continue.')`), 'the Home invite email form to request a sign-in link');
   const message = await waitForMailpitMessage();
-  console.log('[browser-first-signup-smoke] PASS unauthenticated browser opened the sealed text invite and requested email sign-in.');
-  return { claimHandoffId, message };
+  console.log('[browser-first-signup-smoke] PASS signed-out Home keyboard-activated Invite a friend and requested email signup from /profile?invite=1.');
+  return message;
 }
 
-async function saveFirstClaimProfile(handle, displayName, bio, claimHandoffId) {
+async function saveFirstInviteProfile(handle, displayName, bio) {
   await waitForNewProfileForm();
   await fillBrowserInput('#display-name', displayName);
   await fillBrowserInput('#username', handle);
   await fillBrowserInput('#bio', bio);
   await clickButton('Save & sync handle');
-  await waitForClaimUiState(async () => evaluate(`location.origin === ${JSON.stringify(APP_ORIGIN)}
-    && location.pathname === '/claim'
-    && new URLSearchParams(location.search).get('handoff') === ${JSON.stringify(claimHandoffId)}
-    && [...document.querySelectorAll('button')].some((button) => button.innerText.trim().toLocaleLowerCase() === 'claim this drop' && !button.disabled)`), 'first profile save to return to the original invite claim action', claimHandoffId);
+  await waitFor(async () => evaluate(`location.origin === ${JSON.stringify(APP_ORIGIN)}
+    && location.pathname === '/profile'
+    && location.search === '?invite=1'
+    && new URLSearchParams(location.search).get('invite') === '1'
+    && !new URLSearchParams(location.search).has('next')
+    && document.querySelector('#invite-share-title') !== null
+    && [...document.querySelectorAll('button')].some((button) => button.innerText.trim().toLocaleLowerCase() === ${JSON.stringify(`share @${handle}`)} && !button.disabled)`), 'the synced first-use profile to show the invite-share controls');
 }
 
 async function revealClaimedText(fixture, handoffId) {
@@ -1052,8 +1105,9 @@ async function main() {
     await closeCurrentBrowser();
 
     await startBrowser('recipient-browser');
-    const { claimHandoffId } = await startUnauthenticatedRecipient(email);
-    const newUser = await waitFor(async () => findDisposableUser(email), 'the public email form to create the exact new local Auth user');
+    const { claimHandoffId } = await startUnauthenticatedRecipient();
+    await requestInviteSignupFromHome(email);
+    const newUser = await waitFor(async () => findDisposableUser(email), 'the Home invite email form to create the exact new local Auth user');
     userId = newUser.id;
     if (!createdUsers.some((candidate) => candidate.id === userId)) createdUsers.push({ id: userId, email });
     const { data: beforeProfile, error: beforeProfileError } = await admin.from('profiles').select('id').eq('id', userId).maybeSingle();
@@ -1063,27 +1117,67 @@ async function main() {
     const magicLink = await readMagicLinkFromMailpit();
     await navigate(magicLink);
     await waitFor(async () => evaluate(`location.origin === ${JSON.stringify(APP_ORIGIN)}
-      && location.pathname === '/claim'
-      && new URLSearchParams(location.search).get('handoff') === ${JSON.stringify(claimHandoffId)}
-      && [...document.querySelectorAll('a')].some((link) => link.innerText.replace(/\\s+/g, ' ').trim().toLocaleLowerCase() === 'choose a drop handle')`), 'the email callback to return to the private claim and show its handle-setup link');
-    await clickLink('Choose a Drop handle');
+      && location.pathname === '/profile'
+      && location.search === '?invite=1'
+      && new URLSearchParams(location.search).get('invite') === '1'
+      && !new URLSearchParams(location.search).has('next')`), 'the Mailpit signup callback to preserve /profile?invite=1 without an unrelated next route');
     await waitForNewProfileForm(email);
-    const returnedHandoffId = await evaluate(`(() => {
-      const next = new URL(new URLSearchParams(location.search).get('next') || '/', location.origin);
-      return next.searchParams.get('handoff');
-    })()`);
-    assert.equal(returnedHandoffId, claimHandoffId, 'The handle-setup link must preserve the original claim handoff.');
-    console.log('[browser-first-signup-smoke] PASS new recipient opened the local Mailpit email link and returned to first profile setup.');
+    const returnedHandoffId = await evaluate(`window.sessionStorage.getItem('drop:claim-handoff-id:v1')`);
+    assert.equal(returnedHandoffId, claimHandoffId, 'The original sealed claim handoff must survive signup from the Home invite profile.');
+    console.log('[browser-first-signup-smoke] PASS Mailpit signup callback returned to /profile?invite=1 with the sealed claim handoff intact.');
 
     const recipientHandle = handle;
     const recipientDisplayName = displayName;
-    await saveFirstClaimProfile(recipientHandle, recipientDisplayName, bio, claimHandoffId);
+    const beforeSyncInviteState = await evaluate(`(() => ({
+      inviteShareTitlePresent: Boolean(document.querySelector('#invite-share-title')),
+      inviteButtonsPresent: [...document.querySelectorAll('button')].some((button) => /^(share @|copy handle \\+ link)/i.test(button.innerText.trim())),
+      inviteContext: new URLSearchParams(location.search).get('invite'),
+      hasNext: new URLSearchParams(location.search).has('next'),
+    }))()`);
+    assert.deepEqual(beforeSyncInviteState, {
+      inviteShareTitlePresent: false,
+      inviteButtonsPresent: false,
+      inviteContext: '1',
+      hasNext: false,
+    }, 'The invite share controls must stay hidden before the first verified profile sync.');
+    const { data: profileBeforeInviteSync, error: profileBeforeInviteSyncError } = await admin.from('profiles')
+      .select('id')
+      .eq('id', userId)
+      .maybeSingle();
+    assert.ifError(profileBeforeInviteSyncError);
+    assert.equal(profileBeforeInviteSync, null, 'The new profile must not exist remotely before the user saves it.');
+
+    await stubNativeShareForTest();
+    assert.equal(await evaluate('window.__dropBrowserE2EShareCallCount || 0'), 0, 'Loading the profile must not open sharing before an explicit user action.');
+    await saveFirstInviteProfile(recipientHandle, recipientDisplayName, bio);
     const { data: savedProfile, error: savedProfileError } = await admin.from('profiles')
       .select('id, username, display_name, bio')
       .eq('id', userId)
       .maybeSingle();
     assert.ifError(savedProfileError);
     assert.deepEqual(savedProfile, { id: userId, username: recipientHandle, display_name: recipientDisplayName, bio });
+
+    await clickButton(`Share @${recipientHandle}`);
+    await waitFor(async () => evaluate(`window.__dropBrowserE2EShareCallCount === 1
+      && document.body.innerText.includes(${JSON.stringify(`Shared @${recipientHandle} and your public profile link.`)})`), 'the explicit public handle share action');
+    const sharePayload = await evaluate(`window.__dropBrowserE2EShareDetails || null`);
+    assert.deepEqual(sharePayload, {
+      keys: ['text', 'title', 'url'],
+      title: 'My Drop handle',
+      text: `@${recipientHandle}`,
+      url: `${APP_ORIGIN}/u/${recipientHandle}`,
+    }, 'The share sheet must receive only the public handle and its profile URL.');
+    const sharePayloadText = JSON.stringify(sharePayload);
+    for (const privateValue of [dropSubject, dropContent, sender.username, outsider.username, email, bio]) {
+      assert.equal(sharePayloadText.includes(privateValue), false, 'The public invite share payload must not contain drop, account, or profile details.');
+    }
+    console.log('[browser-first-signup-smoke] PASS empty Home inbox keyboard-invited a friend, kept invite controls hidden until profile sync, and shared only the public handle and profile URL.');
+
+    await navigate(`${APP_ORIGIN}/claim?handoff=${encodeURIComponent(claimHandoffId)}`);
+    await waitForClaimUiState(async () => evaluate(`location.origin === ${JSON.stringify(APP_ORIGIN)}
+      && location.pathname === '/claim'
+      && new URLSearchParams(location.search).get('handoff') === ${JSON.stringify(claimHandoffId)}
+      && [...document.querySelectorAll('button')].some((button) => button.innerText.trim().toLocaleLowerCase() === 'claim this drop' && !button.disabled)`), 'the original private claim handoff after the invite share flow', claimHandoffId);
 
     const { data: beforeClaim, error: beforeClaimError } = await admin.from('letters')
       .select('id, recipient_id, status')
