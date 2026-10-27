@@ -6,7 +6,25 @@ Build Drop as a mobile-first private sharing app where a person can send a photo
 
 The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailbox, and relay foundations. Existing letters continue to work as text drops, and their routes and saved content remain readable. The build covers the end-to-end mobile flow: choose content, attach an image or GIF, choose a recipient, send, open, react, and optionally follow a relay.
 
-## Implementation Status — 2026-10-27
+## Implementation Status — 2026-10-28
+
+### Current try-it build — Relay-first public demo (2026-10-28)
+
+- The mobile no-account demo now leads with Drop’s hand-to-hand Relay journey, with direct links to Relay and the photo/GIF samples. The destination receives focus, and browser reduced-motion preferences are respected.
+- The browser smoke checks that the Relay entry point is visible at 320×740, stays before the large samples, scrolls/focuses correctly, and advances through all three handoffs. A fresh 390×844 keyboard run and the production flow both passed.
+- Verification passed: 302/302 tests, lint, non-incremental TypeScript, browser-smoke syntax, and diff check. A clean environment production build generated all 22 routes; the full production browser smoke passed at widths from 320px to 1440px with no Auth/RPC/Storage/cross-origin requests.
+- The credential-free build is served on port 6004 through a temporary Quick Tunnel: https://bottom-greatest-bras-christmas.trycloudflare.com/demo. The existing 5004 preview remains untouched. The local development app remains on port 4004.
+- Feature branch `feat/pilot-demo-relay-first` is pushed at `ae2c9a6`; [PR #19](https://github.com/arjeetanand/drop/pull/19) is the review and integration path into `main`.
+
+### Remaining real-pilot gates
+
+1. Confirm the Supabase Free plan and reconcile the three remote-only migration versions before any `db push`; no live migration push is authorized by this status note.
+2. Configure hosted Auth/email and the cleanup worker plus 30-day schedule, then pass real two-account text/media sends and physical deletion.
+3. Set up durable public hosting and complete OS-sharing, screen-reader, physical-device, and opt-in user-pilot checks.
+
+The temporary browser-local demo lets visitors try the interaction but is not a real send/receive pilot.
+
+## Previous implementation status — 2026-10-27
 
 ### Main-target pilot closure (2026-10-27)
 

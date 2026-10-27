@@ -2580,3 +2580,36 @@ Keep code integration, a temporary product demo, and a real hosted pilot as sepa
 ### Git and remaining gates
 
 The application source remains merged on main at 77c03c6. This status documentation is on docs/drop-pilot-preview-closeout-20261027; stage only README, CHECKLIST, HANDOFF, and LEARNINGS. Preserve the unrelated edits to AGENTS.md and next-env.d.ts. Real hosted two-account delivery is not verified. Before that pilot, obtain durable free hosting, confirm the project plan, reconcile migration history before any push, configure Auth/email and cleanup scheduling, and test actual deletion.
+
+## 2026-10-28 — Put the Relay try-it path first
+
+### Issue
+
+The mobile demo chooser placed its large photo/GIF sample cards before the product's hand-carried Relay experience. Visitors could miss the core Drop journey without scrolling.
+
+### Cause
+
+The demo page rendered the sample grid before the Relay preview, and did not provide direct, focused navigation to either experience.
+
+### Resolution
+
+- Moved the fictional Relay journey above the sample cards and added visible jump links for Relay and photo/GIF.
+- Made both targets programmatically focusable and asserted fragment, focus, and scroll behavior in the browser smoke.
+- Extended the smoke to cover the Relay-first order, a 320×740 visible entry point, and all three handoffs plus collection.
+- Started a separate no-credentials production preview on port 6004 and a temporary Quick Tunnel. It supports browser-local samples only and cannot sign in, upload, or send real drops.
+- Updated README, checklist, task plan, and handoff with the current preview, exact checks, and real-pilot gates.
+
+### Learning
+
+For a try-it page, put the product's differentiating journey before secondary sample choices, and verify both the rendered order and keyboard focus after anchor navigation. Keep temporary public demos credential-free and describe their uptime and backend limits plainly.
+
+### Verification
+
+- `npm test`: 302/302 passed; `npm run lint`, `npx tsc --noEmit --incremental false`, `node --check scripts/browser-demo-smoke.mjs`, and `git diff --check` passed.
+- A clean production build without `.env` or Supabase values generated all 22 routes. The production browser smoke passed at 320×740, 360×844, 390×844, 430×844, 768×1024, and 1440×900, including Relay handoffs, bundled media, claim recovery, focus, and sender copy. It observed no Auth, RPC, Storage, or cross-origin requests.
+- The current temporary public Home and `/demo` routes returned HTTP 200. Screenshots are under `/private/tmp/drop-prod-demo-first-390-20261028` and `/private/tmp/drop-prod-demo-first-full-20261028`.
+- The demo remains a local-data preview; hosted two-account sends, hosted deletion, stable hosting, screen readers, OS share, and physical-device behavior are not verified.
+
+### Git state
+
+Code commit `ae2c9a6` is pushed to `origin/feat/pilot-demo-relay-first`, and [PR #19](https://github.com/arjeetanand/drop/pull/19) is open into `main`. The GitHub CLI's saved token was invalid, so the existing macOS GitHub credential was used in memory for the requested PR action and was neither printed nor saved by this task. At the first check refresh the PR was mergeable, GitGuardian had passed, and the required CI check was pending. Unrelated `AGENTS.md` and `next-env.d.ts` edits remain unstaged. No credentials were added to Git.

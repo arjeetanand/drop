@@ -1,16 +1,16 @@
 # Drop handoff
 
-Updated: 2026-10-27
+Updated: 2026-10-28
 
-## Current repository and pilot status (2026-10-27)
+## Current repository and pilot status (2026-10-28)
 
-- PR [#17](https://github.com/arjeetanand/drop/pull/17) is merged to main as 77c03c67d9282cdd32f338bfc9eb437227ebe505. Its final required Tests/lint/types/build and GitGuardian checks passed.
-- The main branch ref is at 77c03c6; this documentation task is on docs/drop-pilot-preview-closeout-20261027. Existing local edits to AGENTS.md and next-env.d.ts are unrelated and excluded.
-- The full local development app is running at http://localhost:4004; the Home route returned HTTP 200. The local .env.local points to loopback Supabase.
-- A separate production demo build is in /private/tmp/drop-pilot-demo.3CD4GC, on port 5004, with no .env.local and no Supabase keys in its environment. Current preview: [Drop demo](https://commissioner-cool-spoken-disable.trycloudflare.com/demo). The Quick Tunnel is temporary and ends when its process or this local server stops. It exposes the browser-local demo only; it cannot sign users in or send real drops.
-- The demo browser smoke passed photo/GIF opening, saved reactions, sender copy, saved-claim recovery, keyboard behavior, responsive checks at 360px/390px/430px/1440px, 320px action-fit, and 768px fixed-navigation clearance, and zero Auth/RPC/Storage or cross-origin requests. The isolated build produced all 22 routes. Screenshots are in /private/tmp/drop-public-demo-evidence-20261027.
-- The hosted Supabase project is Drop in ap-south-1, status ACTIVE_HEALTHY; the actual billing plan is still unverified. The CLI migration listing shows all 22 main migrations applied plus remote-only versions 20261026100000, 20261026110000, and 20261026120000. Read-only CLI checks returned no deployed Edge Functions and no Edge Function secrets. No hosted project settings or data changed in this closeout.
-- Next: connect a durable no-cost host; verify the Free plan; reconcile remote migration history before migrations; deploy and configure the cleanup function and its schedule; validate hosted Auth/email; then test real two-account delivery and 30-day deletion. Keep the temporary link labeled as a demo preview. OS sharing, screen-reader output, physical-device behavior, and the opt-in study remain open.
+- Current source base: local `main` and `origin/main` point to `4f7c6e8` (PR #18). The Relay-first try-it change is committed as `ae2c9a6` on `feat/pilot-demo-relay-first` and pushed to origin. It is not merged.
+- [PR #19](https://github.com/arjeetanand/drop/pull/19) is open from `feat/pilot-demo-relay-first` to `main`; use the PR page for the current check and merge status. At the first refresh, GitGuardian passed and the required Tests/lint/types/build check was pending; the PR was mergeable.
+- The full local app runs at http://localhost:4004. Its `.env.local` is local-only and was not staged or copied into the demo.
+- Current public try-it link: [Drop demo](https://bottom-greatest-bras-christmas.trycloudflare.com/demo), a temporary Quick Tunnel to the credential-free production build on port 6004. Home and `/demo` both returned HTTP 200. The existing 5004 preview and its tunnel were left unchanged. Anyone with the URL can open the demo; it contains no account sign-in, uploads, or real delivery. It stops when the tunnel or local preview process exits.
+- The updated chooser places the fictional Relay route before the photo/GIF sample cards and offers clear jumps to both. Verification passed: 302/302 unit tests, lint, non-incremental TypeScript, smoke-script syntax, `git diff --check`, a clean no-credentials production build with all 22 routes, and production browser flows at 320×740, 360×844, 390×844, 430×844, 768×1024, and 1440×900. The demo issued no Auth, RPC, Storage, or cross-origin requests. Screenshots: `/private/tmp/drop-prod-demo-first-390-20261028` and `/private/tmp/drop-prod-demo-first-full-20261028`.
+- Hosted live-pilot gates remain: verify Supabase Free billing; reconcile remote-only migrations `20261026100000`, `20261026110000`, and `20261026120000` before any migration push; configure hosted Auth/email and scheduled 30-day cleanup; validate two-account delivery and deletion; provision durable hosting; and complete OS-share, screen-reader, physical-device, and opt-in user-pilot checks.
+- Run locally with `./run.sh` at port 4004. Preview/test port 6004 maps to the project's 4004 suffix; isolated local Supabase/browser test port 5004 maps likewise. Do not use the temporary link for private content.
 
 ## Historical main pointer before the PR #16 follow-up (2026-10-27)
 

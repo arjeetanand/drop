@@ -2,6 +2,19 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
+## Latest checkpoint — Relay-first try-it demo (2026-10-28)
+
+- [x] Put the hand-carried Relay experience ahead of the large photo/GIF cards and add clear jump links to both experiences.
+- [x] Focus the Relay section after Next.js hash navigation; maintain browser reduced-motion behavior.
+- [x] Add regression checks for 320px visibility, Relay-before-samples order, focus/scroll, and the full fictional handoff journey.
+- [x] Pass 302 unit tests, lint, non-incremental TypeScript, browser script syntax, and diff check.
+- [x] Build the latest source in a clean environment with no `.env` or Supabase values; production output contains all 22 routes.
+- [x] Pass the full production browser smoke across 320, 360, 390, 430, 768, and 1440px. No backend or cross-origin requests occurred in the demo flow.
+- [x] Serve the current preview on 6004 and verify its temporary public Home and `/demo` routes return HTTP 200: https://bottom-greatest-bras-christmas.trycloudflare.com/demo.
+- [x] Commit source as `ae2c9a6` and push `feat/pilot-demo-relay-first` to origin.
+- [x] Open [PR #19](https://github.com/arjeetanand/drop/pull/19) into `main`; use its current required checks as the merge gate.
+- [ ] Complete hosted Free-plan/migration/Auth/email/cleanup configuration, real two-account send/delete acceptance, durable hosting, OS share, screen reader, physical device, and opt-in pilot before claiming a real live pilot.
+
 ## Project closure — full pilot PR to main (2026-10-27)
 
 - [x] Consolidate the candidate on codex/invitee-first-send; remote main was last verified at 5138f88.
