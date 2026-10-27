@@ -2,6 +2,16 @@
 
 Updated: 2026-10-27
 
+## Signed-out friend first send and unique Home inbox (2026-10-27)
+
+- [x] Open an owner's public profile while signed out, follow **Send a drop**, and keep the pre-addressed editable draft through local Mailpit signup at 390×844.
+- [x] Require a separate explicit **Send drop** tap, verify exactly one delivered text row, and sign the owner in separately to confirm the drop appears once on Home.
+- [x] Remove the featured drop from the mailbox preview list so Home does not render the same received drop twice; show accurate copy when the newest drop is featured above.
+- [x] Pass `npm test` (301/301), `npm run lint`, `npx tsc --noEmit --incremental false`, browser-script syntax, `git diff --check`, and the Webpack production build. The plain `npm run typecheck` was blocked by sandbox `EPERM` writing `tsconfig.tsbuildinfo`.
+- [x] Commit the code as `c388a14` and push `codex/invitee-first-send` to `origin`.
+- [ ] Open a review PR into `codex/social-relay-pilot`; GitHub CLI reports an invalid saved token and the PR API is currently unreachable.
+- [ ] Verify hosted account-to-account delivery, OS sharing, screen-reader output, and physical-device behavior.
+
 ## First-friend local end-to-end verification (2026-10-27)
 
 - [x] From signed-out Home, keyboard-activate **Invite a friend**, sign up through local Mailpit, and verify the auth callback returns to exactly `/profile?invite=1` without an unrelated `next` route.

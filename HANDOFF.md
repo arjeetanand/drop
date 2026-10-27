@@ -2,6 +2,16 @@
 
 Updated: 2026-10-27
 
+## Latest checkpoint — signed-out friend first send and unique inbox card (2026-10-27)
+
+- The public-profile **Send a drop** path now works for a brand-new, signed-out friend: the addressed draft survives email signup, remains editable, and sends only after the friend taps **Send drop**. A separate owner session sees the delivered drop on Home at 390×844.
+- The end-to-end check exposed a Home duplication: the featured latest drop was also repeated in the “Fresh from the mailbox” list. Home now omits the featured item from that list and shows “Your newest drop is up top” when no older items remain. The browser regression requires one link for the new drop and verifies the owner session before opening Home.
+- Verification passed: `npm run test:browser-first-signup` completed the signed-out send and owner inbox check; cleanup confirmed the exact claim/send rows, four disposable Auth users and profiles, two Mailpit messages, and temporary app/browser directory were removed. `npm test` passed 301/301, `npm run lint`, `npx tsc --noEmit --incremental false`, browser-script syntax, `git diff --check`, and `npm run build -- --webpack` passed. The regular `npm run typecheck` hit sandbox `EPERM` writing `tsconfig.tsbuildinfo`; the non-incremental typecheck passed. Build reported the existing outdated Browserslist and ambiguous Tailwind easing warnings.
+- No hosted Supabase requests or resource changes occurred. Local browser testing used loopback Supabase/Mailpit on port 6004 and left the main app on 4004 untouched. Hosted delivery/retention, native OS sharing, spoken screen-reader output, and physical-device behavior remain open.
+- Code commit `c388a14` (`fix: avoid duplicate featured inbox drops`) is pushed to `origin/codex/invitee-first-send`, based on `codex/social-relay-pilot`; the task checkpoint is documented separately from code. GitHub offered `https://github.com/arjeetanand/drop/pull/new/codex/invitee-first-send`; no PR was opened because `gh auth status` reports an invalid saved GitHub token and `gh pr view 12` could not reach `api.github.com`. No merge occurred.
+
+**Next:** refresh GitHub authentication, open a review PR into `codex/social-relay-pilot`, and refresh PR #12's state/checks before integration. Keep this branch separate and do not merge without review. Continue the hosted and device acceptance gates when access is available.
+
 ## Latest checkpoint — Home first-friend activation (2026-10-27)
 
 - Replaced the passive empty-inbox sentence with a first-drop explanation and an **Invite a friend** action to `/profile?invite=1`. The action appears only when there are no real incoming drops; sample content remains labeled as a sample.

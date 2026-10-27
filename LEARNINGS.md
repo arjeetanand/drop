@@ -2226,3 +2226,33 @@ Test the whole first-friend loop across account setup, explicit sharing, the rec
 ### Git and remaining gaps
 
 Code commits `a238fa0` (first-friend signup/share) and `70214d9` (profile send-back) were pushed separately to `origin/codex/social-relay-pilot`. PR #12 was last confirmed open/draft before these pushes; GitHub API access then failed, so current check state and head are unverified. No merge occurred. The tests stub native browser sharing, so actual OS share sheets remain unverified. Hosted delivery, spoken screen-reader output, physical-device/camera behavior, and an opt-in human study remain open.
+
+## 2026-10-27 — Keep the first friend's drop visible once
+
+### Issue
+
+The first-time signed-out friend journey had no browser proof that a new user could open a public profile, keep a pre-addressed draft through signup, send it, and see it arrive in the owner's inbox. The first full run delivered the drop but its Home assertion timed out.
+
+### Cause
+
+Two separate gaps surfaced. The owner callback wait accepted any redirect away from `/auth/callback` without checking the signed-in account. Once that was strengthened, Home proved the owner was signed in and showed the same received drop twice: once in the featured card and again in the mailbox preview list. The test expected one Home entry, exposing a real duplicate presentation rather than a delivery failure.
+
+### Resolution
+
+- Add a 390×844 mobile flow from a signed-out friend's public profile through an editable addressed draft, local Mailpit signup, the restored composer, recipient confirmation, and an explicit **Send drop** tap. Verify the exact delivered row and check the new sender in a separate owner browser session before testing Home.
+- Exclude the featured drop from the “Fresh from the mailbox” list. When no older drops remain, show that the newest drop is featured above instead of displaying the empty-inbox invitation.
+- Require the owner's Home to contain exactly one link to the new drop. Keep cleanup scoped to the test draft ID, unique subject/content, sender/recipient IDs, exact Auth/profile fixtures, and matching Mailpit messages.
+
+### Learning
+
+An auth callback is complete only after the expected account is confirmed; a changed pathname alone is not enough. For inbox UI tests, assert unique rendered destinations as well as database row count so duplicate cards are caught even when delivery succeeds.
+
+### Verification
+
+- `npm run test:browser-first-signup` passed the full local private-claim/signup flow plus the new signed-out friend send and separate owner inbox check at 390×844. Cleanup verified the exact claim/send rows absent, four disposable Auth users and profiles absent, both Mailpit messages absent, and the temporary app/browser directory removed.
+- `npm test`: 301/301 passed. `npm run lint`, `npx tsc --noEmit --incremental false`, browser-script syntax, `git diff --check`, and `npm run build -- --webpack` passed. The usual `npm run typecheck` was blocked by sandbox `EPERM` writing `tsconfig.tsbuildinfo`; the non-incremental TypeScript check passed. Build emitted the existing Browserslist freshness and Tailwind easing warnings.
+- Only local loopback Supabase/Mailpit were used; no hosted Supabase calls, resource changes, or database reset occurred. Port 4004 was untouched during the smoke.
+
+### Git and remaining gaps
+
+Code commit `c388a14` (`fix: avoid duplicate featured inbox drops`) is pushed to `origin/codex/invitee-first-send`, based on `codex/social-relay-pilot`. GitHub's CLI token is invalid and the PR API is unreachable, so a review PR has not been opened; the push output supplied `https://github.com/arjeetanand/drop/pull/new/codex/invitee-first-send`. No merge occurred. Hosted two-account delivery/retention, native OS sharing, spoken screen-reader output, and physical-device behavior remain unverified.
