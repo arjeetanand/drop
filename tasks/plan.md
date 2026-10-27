@@ -6,7 +6,25 @@ Build Drop as a mobile-first private sharing app where a person can send a photo
 
 The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailbox, and relay foundations. Existing letters continue to work as text drops, and their routes and saved content remain readable. The build covers the end-to-end mobile flow: choose content, attach an image or GIF, choose a recipient, send, open, react, and optionally follow a relay.
 
-## Implementation Status — 2026-10-26
+## Implementation Status — 2026-10-27
+
+### Latest checkpoint — signed-out friend first send and unique Home inbox (2026-10-27)
+
+- A new friend can open an owner's public profile while signed out, keep an editable pre-addressed draft through local Mailpit signup, explicitly send it, and return to the same text drop in the owner's Home inbox.
+- Fixed duplicate Home presentation by excluding the featured latest drop from the mailbox preview list. When that featured drop is the only incoming item, Home now explains that it appears above instead of showing the empty-inbox invitation.
+- Local mobile browser evidence: `npm run test:browser-first-signup` passed at 390×844 with one delivered row and exactly one Home link. Cleanup removed the exact test drops, four disposable Auth/profile fixtures, two Mailpit messages, isolated app/browser files, and test processes.
+- Verification: `npm test` 301/301; lint; `npx tsc --noEmit --incremental false`; browser-script syntax; `git diff --check`; and `npm run build -- --webpack` passed. Plain `npm run typecheck` was denied by sandbox `EPERM` writing `tsconfig.tsbuildinfo`; the non-incremental typecheck passed. The build reports existing Browserslist and Tailwind easing warnings.
+- Code commit `c388a14` and documentation commits `f4438c9`, `e122132` are pushed to `origin/codex/invitee-first-send`, based on `codex/social-relay-pilot`. No PR or merge occurred. GitHub CLI authentication is invalid and the PR API could not be reached, so the review PR and PR #12 status need refresh.
+- Drop is running at `http://localhost:4004` (HTTP 200). The smoke used local loopback Supabase/Mailpit only; hosted delivery and retention were not tested or changed.
+
+### Current pilot gates
+
+1. Reauthenticate GitHub, open a review PR from `codex/invitee-first-send` into `codex/social-relay-pilot`, and refresh PR #12 checks before integration.
+2. Verify the hosted Free project identity, plan, Auth, migrations, and delivery configuration through an authenticated path. Keep existing local browser runners loopback-only.
+3. After the hosted project is verified, run disposable two-account send/reply and retention checks with exact-row cleanup; no database reset.
+4. Complete actual OS sharing, spoken screen-reader, physical-camera/device checks, then schedule a small opt-in user pilot.
+
+These gates are not proven by local browser, unit, lint, typecheck, or build results. No hosted project, billing, or hosted data state was changed in this checkpoint.
 
 ### Latest checkpoint — Compose starters, mobile wrapping, and GIF Relay acceptance (2026-10-26)
 
