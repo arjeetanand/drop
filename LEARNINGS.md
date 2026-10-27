@@ -2350,3 +2350,32 @@ Realtime list updates can unmount local success UI. Put transaction follow-up st
 ### Git and remaining gates
 
 Code commit `6ccd4c6` is pushed to `origin/codex/invitee-first-send`. This learning entry and the updated README, checklist, and handoff are the documentation follow-up on the same branch. At PR head `04a2fc7`, GitHub CI and GitGuardian passed and GitHub reported `CLEAN`; the PR remains open as a draft pending explicit merge approval. This status-documentation commit triggers another CI run, so refresh the final head before merging. Hosted Supabase delivery/retention, OS sharing, actual screen-reader output, physical-device behavior, and user-pilot acceptance remain open.
+
+## 2026-10-27 — PR #13 merged; hosted pilot gates remain open
+
+### Issue
+
+The project handoff still described PR #13 as a draft awaiting approval after its code had been integrated, making the current source-of-truth branch unclear and obscuring which launch checks were still unverified.
+
+### Cause
+
+The handoff was written before the final PR status refresh and merge. Source merge readiness and hosted-pilot acceptance were recorded together as one status.
+
+### Resolution
+
+- Confirm PR #13 is merged and remote `main` points to squash commit `f314ced66598d809e9e9ec104d0cba4ea602f6eb`, containing source head `641bb8d`.
+- Refresh the current status in README, CHECKLIST, and HANDOFF; keep the hosted delivery, retention, and device acceptance gates explicitly pending.
+
+### Learning
+
+Record the PR source head and resulting `main` merge SHA separately. A green CI run and merged source prove code integration, not hosted account-to-account delivery or device acceptance.
+
+### Verification
+
+- GitHub reports PR #13 `MERGED`; `git ls-remote origin refs/heads/main` returned `f314ced66598d809e9e9ec104d0cba4ea602f6eb`.
+- GitHub CI and GitGuardian pass on PR #13.
+- The code verification recorded at merge was 302/302 unit tests, lint, type generation, TypeScript, diff check, production build, and the isolated Relay and photo/GIF claim browser journeys.
+
+### Git and remaining gates
+
+The code is on `main` through PR #13. This entry records the merged state and does not change the finding that hosted Supabase access, real hosted delivery/retention, OS sharing, actual screen-reader output, physical-device behavior, and user-pilot acceptance remain unverified.

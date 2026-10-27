@@ -6,15 +6,11 @@ The append-only engineering learning log is in [LEARNINGS.md](./LEARNINGS.md); i
 
 ## Pilot status and closure
 
-The integrated candidate is on codex/invitee-first-send and targets main, last verified at 5138f88. It carries the Drop pilot and a secret-free CI workflow for tests, lint, Next route types, TypeScript, and a Webpack production build. Local destructive fixtures require this repo's exact Supabase containers. Sidebar polling stops on public routes; Home and its visible sidebar still make separate 60-second recovery reads.
+PR [#13](https://github.com/arjeetanand/drop/pull/13) merged to `main` on 2026-10-27. Its source head was `641bb8d`; the squash merge commit is `f314ced66598d809e9e9ec104d0cba4ea602f6eb`. GitHub CI and GitGuardian passed on the final PR head. This completes the code integration for the pilot candidate.
 
-The dependency closure patch updates Next.js and eslint-config-next to 16.4.3, Sharp to 0.35.5, and the Next SWC WASM fallback to 16.4.3. It removes the unused direct Zod dependency and refreshes compatible transitive packages. npm's install/audit pass reported zero vulnerabilities. A separate online npm audit attempt could not reach the registry; repeat that check when registry access is available.
+Final local verification passed: 302/302 unit tests, ESLint, Next route type generation, TypeScript, diff checks, and the Webpack production build with all 22 routes. The isolated production Relay browser journey passed for text and GIF at 390×844; the photo/GIF claim browser flow also passed. The PR's required CI and GitGuardian checks passed after the final documentation commit.
 
-Local verification: 302/302 unit tests, ESLint, Next route type generation, TypeScript, diff checks, and a Webpack production build with all 22 routes passed. The recorded local photo/GIF claim browser flow passed on the updated Next and Sharp runtime. Prior browser journeys cover first signup/send, send/reply/read/reaction, Relay, QR privacy, and responsive accessibility. The app's run.sh process owns port 4004; this session's HTTP probe was blocked by sandbox loopback permissions. Earlier local verification returned HTTP 200.
-
-The code candidate is ready for PR review; live-pilot readiness is still open. Hosted Supabase project/Auth/migrations/functions, real hosted two-account delivery, scheduled physical media deletion, actual OS sharing, spoken screen-reader output, physical camera/device behavior, and the opt-in user study remain unverified.
-
-Draft PR #13 is open from codex/invitee-first-send to main. Dependency commits 66d8930 and f651b3e are pushed. On f651b3e, GitHub showed CI and GitGuardian in progress and an unstable merge state. On head 14cee94, both checks passed and GitHub reported CLEAN. This final status note triggers a new run; verify the documentation head before merge.
+This is a locally verified pilot candidate, not yet a verified hosted pilot. The Supabase CLI had no Management API access token and `.env.local` points to loopback Supabase. A hosted Free project, hosted Auth/migrations/functions/Storage, real hosted two-account delivery, and scheduled physical media deletion remain unverified. Actual OS sharing, spoken screen-reader output, physical camera/device behavior, and the opt-in user study also remain open.
 
 ## Pitch
 
