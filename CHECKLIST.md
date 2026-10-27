@@ -4,16 +4,17 @@ Updated: 2026-10-27
 
 ## Full pilot closure to main (2026-10-27)
 
-- [x] Include the secret-free GitHub Actions gate for pull requests and `main` pushes.
-- [x] Restrict local destructive fixtures to the exact Drop Supabase containers; reject another project even if it publishes the same port.
-- [x] Stop background sidebar mailbox refresh on routes where the private shell is hidden; note the remaining Home/sidebar duplicate recovery read for later optimization.
-- [x] Pass 302 unit tests, lint, Next route type generation, TypeScript, `git diff --check`, and the Webpack production build with all 22 routes.
-- [x] Verify the local app responds HTTP 200 at `http://localhost:4004`.
-- [x] Push the verified branch and open draft [PR #13](https://github.com/arjeetanand/drop/pull/13) directly into `main`.
-- [x] Confirm CI and GitGuardian passed on PR head `be77b7c`; recheck after this handoff update and any future push.
+- [x] Include the secret-free GitHub Actions gate for pull requests and main pushes.
+- [x] Restrict local destructive fixtures to the exact Drop Supabase containers and reject another project using the same port.
+- [x] Stop background sidebar mailbox refresh on routes where the private shell is hidden; record the remaining duplicate recovery read as a low-priority follow-up.
+- [x] Patch the dependency advisories: Next.js, eslint-config-next, and the SWC WASM fallback at 16.4.3; Sharp 0.35.5; remove unused direct Zod; refresh compatible transitive packages. npm's install/audit pass reported zero vulnerabilities.
+- [x] Pass 302 unit tests, lint, Next route type generation, TypeScript, diff checks, and the Webpack production build with all 22 routes.
+- [x] Commit and push dependency changes 66d8930 and f651b3e to codex/invitee-first-send.
+- [x] Open draft PR #13 directly into main. GitGuardian and CI were running on head f651b3e at the last status check; refresh after this documentation push and before merge.
+- [x] Keep Drop's run.sh process on its documented port 4004. The current sandbox HTTP probe was blocked by local-network permission; earlier local checks returned HTTP 200.
 - [ ] Verify the hosted Free project, Auth, migrations/functions, real two-account delivery, and scheduled physical cleanup.
 - [ ] Verify OS sharing, spoken screen-reader output, and physical-device/camera behavior; run the opt-in pilot.
-- [ ] Merge only after PR review, readiness gates, and explicit merge approval.
+- [ ] Refresh final PR checks and merge only after review and explicit approval.
 
 ## Signed-out friend first send and unique Home inbox (2026-10-27)
 

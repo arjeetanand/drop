@@ -2285,3 +2285,33 @@ For fixture-writing tests, bind the local endpoint to the expected project ident
 ### Git and remaining gaps
 
 The code is committed as `98651c5` on `codex/invitee-first-send`; the secret-free CI workflow is in `72ec464`. The branch and closure documentation are pushed through `be77b7c`, and draft PR #13 is open to `main`. CI and GitGuardian passed with a clean merge state on that head; this handoff update requires a fresh check. Hosted acceptance, actual OS sharing, spoken screen-reader output, physical-device behavior, and the opt-in user study remain open.
+
+## 2026-10-27 — Patch dependency advisories for the pilot PR
+
+### Issue
+
+The previous lockfile reported eight advisories: one critical, six high, and one moderate. The app resolved Next.js 16.3.2 and Sharp 0.35.3, and it pinned an unused direct Zod 3 dependency. A follow-up review also found eslint-config-next on 16.3.2 and the Next SWC WASM fallback on 13.5.1.
+
+### Cause
+
+The Next.js version floor allowed the vulnerable 16.3 line, Sharp was pinned to the affected release, and Zod remained direct despite no application imports. Framework tooling and the WASM fallback were on older Next release lines.
+
+### Resolution
+
+- Update Next.js, eslint-config-next, and @next/swc-wasm-nodejs to 16.4.3; pin Sharp to 0.35.5; remove the unused direct Zod dependency.
+- Regenerate the lockfile with non-forced compatible updates. Do not use npm audit fix --force.
+- Commit the dependency changes as 66d8930 and f651b3e, then push both to origin/codex/invitee-first-send for draft PR #13.
+
+### Learning
+
+Raise declared version floors as well as updating the lockfile. Keep framework tooling and fallback packages aligned with the runtime version. Remove unused direct dependencies only after checking application imports and peer ranges.
+
+### Verification
+
+- npm install/audit reported zero vulnerabilities across 656 packages. npm ls confirmed Next.js, eslint-config-next, and the SWC WASM fallback at 16.4.3; Sharp 0.35.5; and Zod 4.6.7 only through compatible peers.
+- npm test passed 302/302; lint, Next route type generation, TypeScript, git diff --check, and the Webpack production build passed with all 22 routes. The local photo/GIF claim journey passed with patched Next and Sharp. The native macOS SWC build passed; the WASM fallback path itself was not exercised.
+- A separate online npm audit request could not reach the registry, so repeat the direct audit when registry access is available. No hosted Supabase resources or data were changed.
+
+### Git and remaining gates
+
+Commits 66d8930 and f651b3e are pushed on codex/invitee-first-send. Draft PR #13 is open to main; CI and GitGuardian were in progress at the last check. Hosted delivery and retention, native OS sharing, spoken screen-reader output, physical device/camera behavior, and the opt-in pilot remain unverified.

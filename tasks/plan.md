@@ -10,12 +10,13 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 
 ### Main-target pilot closure (2026-10-27)
 
-- The review candidate is `codex/invitee-first-send`, intended for one full pilot PR directly to `main`; the last fetched `origin/main` is `5138f88`. The candidate now includes the secret-free GitHub Actions gate.
-- Tightened the local test fixture guard from a generic Supabase service prefix to this repository's exact `supabase_kong_drop` and `supabase_inbucket_drop` containers; added a regression rejecting another project on the same local port.
-- Stopped sidebar mailbox polling on routes where the private shell is hidden. Home and its visible sidebar still run separate 60-second recovery reads; this resource optimization is a low-priority follow-up, not a release blocker.
-- Fresh verification: `npm test` 302/302, `npm run lint`, `next typegen`, `npm run typecheck`, `git diff --check`, and `npm run build -- --webpack` passed. The build generated all 22 app routes. `http://localhost:4004` returned HTTP 200.
-- Previously recorded local browser journeys cover new-user signup/send, direct send/reply/read/reaction, text/GIF Relay, private claim and QR, and responsive accessibility. No hosted Supabase delivery, actual OS share sheet, spoken screen-reader, or physical-device acceptance was performed.
-- Draft PR #13 is open from `codex/invitee-first-send` directly to `main`; CI and GitGuardian passed on `be77b7c` with a clean merge state. This handoff update triggers another run; verify the latest head/checks after any future push.
+- The candidate is codex/invitee-first-send, targeting one full PR directly to main; remote main was last verified at 5138f88. The branch includes the secret-free GitHub Actions gate.
+- The local fixture guard pins writes to this repository's supabase_kong_drop and supabase_inbucket_drop containers. Sidebar polling stops on routes where the private shell is hidden; Home and its visible sidebar still make separate 60-second recovery reads.
+- Dependency advisory fixes are in commits 66d8930 and f651b3e: Next.js, eslint-config-next, and Next SWC WASM fallback 16.4.3; Sharp 0.35.5; unused direct Zod removed; compatible transitive packages refreshed. npm's install/audit pass reported zero vulnerabilities. A separate online npm audit attempt could not reach the registry.
+- Verification: 302 unit tests, lint, Next route typegen, TypeScript, diff checks, and Webpack production build passed; all 22 routes generated. The local photo/GIF claim browser flow passed on the updated Next and Sharp packages. Build warns that React 18 support is deprecated in Next 16 and removed in Next 17.
+- Draft PR #13 is open to main. On f651b3e, GitHub showed CI and GitGuardian in progress with an unstable merge state. Refresh after the closeout docs push.
+- The app is running through run.sh on port 4004. This session's HTTP probe was blocked by sandbox loopback permissions; earlier local checks returned HTTP 200.
+- Previously recorded local browser journeys cover new-user signup/send, direct send/reply/read/reaction, text/GIF Relay, private claims/QR, and responsive accessibility. Hosted delivery/retention, real OS sharing, spoken screen-reader output, physical-device/camera acceptance, and an opt-in study remain open.
 
 ### Latest checkpoint — signed-out friend first send and unique Home inbox (2026-10-27)
 

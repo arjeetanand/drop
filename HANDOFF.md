@@ -2,16 +2,17 @@
 
 Updated: 2026-10-27
 
-## Latest checkpoint — full pilot PR to main (2026-10-27)
+## Latest checkpoint — dependency security fix and full pilot PR to main (2026-10-27)
 
-- **Candidate:** `codex/invitee-first-send`, targeting one full review PR directly to `main`. The last fetched `origin/main` is `5138f88`. This branch carries the pilot work plus the secret-free `.github/workflows/ci.yml` gate from commit `72ec464`.
-- **Final review fixes:** commit `98651c5` pins fixture-write smokes to `supabase_kong_drop` / `supabase_inbucket_drop` and rejects another project on the same local port. It also stops Sidebar mailbox polling on public routes where the private shell is hidden. Home and its visible sidebar still each run a 60-second recovery read; the reviewer classified this as low-priority resource cleanup.
-- **Verification:** 302/302 unit tests, ESLint, Next `typegen`, `npm run typecheck`, `git diff --check`, and `npm run build -- --webpack` passed; the build generated all 22 routes. Existing local first-signup, direct send/reply, Relay, QR, and responsive accessibility browser runs passed at their documented checkpoints. `http://localhost:4004` returned HTTP 200.
-- **Review scope:** source review found no confirmed high-severity auth, media-privacy, or migration/API-compatibility flaw. The review did not verify hosted Supabase or GitHub checks, and did not fully review every line of historical browser scripts.
-- **GitHub:** pushed through documentation commit `be77b7c`; [draft PR #13](https://github.com/arjeetanand/drop/pull/13) is open from `codex/invitee-first-send` to `main`. CI and GitGuardian passed on this head and GitHub reported a clean merge state. This handoff update will start another CI run; verify that latest head/check before merge and after any future push.
-- **Still open for a real pilot:** verify the hosted Free project, Auth email, deployed migrations/functions, two-account delivery, scheduled physical Storage deletion, real OS sharing, spoken screen-reader output, and physical-device/camera behavior; then run the opt-in user study.
+- Candidate: codex/invitee-first-send targets the open draft PR #13 to main. Remote main was last verified at 5138f88. The integrated branch includes the secret-free CI workflow and exact-container local fixture guard.
+- Dependency issue: the previous lockfile reported eight advisories, including one critical, six high, and one moderate. Commit 66d8930 updates Next.js and eslint-config-next to 16.4.3, pins Sharp to 0.35.5, removes the unused direct Zod dependency, and refreshes patched transitive packages. Commit f651b3e aligns the Next SWC WASM fallback to 16.4.3.
+- Verification: npm's install/audit pass reported zero vulnerabilities across 656 packages. npm test passed 302/302; ESLint, Next route typegen, TypeScript, and git diff --check passed. The Webpack production build passed and generated all 22 routes. The recorded local photo/GIF claim browser journey passed with the updated Next and Sharp packages.
+- Review scope: independent source review found no confirmed high-severity auth, media-privacy, or migration/API compatibility defect. Review confirmed no Drop source imports of Zod and peer compatibility with Zod 4.6.7. The SWC WASM package is version-aligned; local builds used the native macOS binding, so the WASM fallback itself was not exercised.
+- Local app: run.sh owns the documented port 4004. This session's HTTP request was denied by sandbox loopback permissions; earlier local checks returned HTTP 200. Build warns that React 18 support is deprecated in Next 16 and will be removed in Next 17; plan a React 19 upgrade before adopting Next 17.
+- GitHub: commits 66d8930 and f651b3e are pushed to origin/codex/invitee-first-send. Draft PR #13 remains open to main. On f651b3e, CI and GitGuardian were in progress and GitHub reported UNSTABLE; the closeout docs push will start another run. Refresh the final head/checks before merge.
+- Still open for a live pilot: verify the hosted Free project, Auth email, deployed migrations/functions, real two-account delivery, and scheduled physical Storage deletion; verify real OS sharing, spoken screen-reader output, and physical camera/device behavior; then run the opt-in user study.
 
-**Next:** verify PR #13's head and CI after this handoff update, then complete hosted/device acceptance. Keep it unmerged until the remaining gates pass and explicit merge approval is obtained.
+Next: push the closeout docs, refresh PR #13 checks on its final head, and request merge approval after review. The code is prepared for review, but hosted pilot acceptance is not complete.
 
 ## Latest checkpoint — signed-out friend first send and unique inbox card (2026-10-27)
 
