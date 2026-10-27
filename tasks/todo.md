@@ -2,13 +2,25 @@
 
 Tasks are ordered by dependency. Progress is recorded at each tested and pushed checkpoint.
 
+## Project closure — full pilot PR to main (2026-10-27)
+
+- [x] Consolidate the main-target candidate on `codex/invitee-first-send`; the last fetched `origin/main` is `5138f88`.
+- [x] Add the secret-free pull-request CI workflow: clean npm install, tests, lint, route type generation, TypeScript, and Webpack production build.
+- [x] Bind local fixture setup to the exact Drop Supabase container names and reject another local project on the same port.
+- [x] Stop the sidebar mailbox poll on public routes where the sidebar is hidden; record the remaining duplicate Home/sidebar recovery read as a low-priority follow-up.
+- [x] Pass 302 unit tests, lint, Next route type generation, TypeScript, whitespace checks, and a 22-route Webpack production build; confirm the app at port 4004 returns HTTP 200.
+- [ ] Restore GitHub CLI authentication, push the final branch commits, create one review PR directly into `main`, and refresh PR checks. The saved token is currently invalid, so no current PR state is confirmed.
+- [ ] Verify hosted Free project identity, Auth/migrations/functions, two-account delivery, and scheduled physical media deletion.
+- [ ] Verify the actual OS share sheet, spoken screen-reader behavior, and physical-device/camera paths; run the small opt-in user pilot.
+- [ ] After PR review and hosted/device gates, merge to `main` with the user's explicit approval.
+
 ## Checkpoint — signed-out friend first send and unique Home inbox (2026-10-27)
 
 - [x] Verify a brand-new signed-out friend opens the owner's public profile, keeps an editable addressed draft through local Mailpit signup, explicitly sends it, and returns to the same owner in a separate session.
 - [x] Fix the duplicate Home card and verify exactly one link to the new drop at 390×844.
 - [x] Pass the full local browser flow and cleanup; pass 301 unit tests, lint, non-incremental TypeScript, browser syntax, diff check, and Webpack production build.
 - [x] Push code commit `c388a14` and docs commits `f4438c9`, `e122132` to `origin/codex/invitee-first-send`; leave Drop running on port 4004.
-- [ ] Reauthenticate GitHub and create a review PR into `codex/social-relay-pilot`; refresh PR #12's head/checks before integration.
+- [ ] Use the full-pilot closure target above: create one review PR directly into `main`; this supersedes the earlier intermediate-branch target. Recheck all remote PR state after GitHub authentication is restored.
 - [ ] Verify hosted project identity/plan/migrations, then complete disposable hosted two-account delivery and retention checks. Local tests do not satisfy these gates.
 - [ ] Verify actual OS sharing, spoken screen-reader output, and physical-device/camera behavior; then plan an opt-in user pilot.
 

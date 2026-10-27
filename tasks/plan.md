@@ -8,6 +8,15 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 
 ## Implementation Status — 2026-10-27
 
+### Main-target pilot closure (2026-10-27)
+
+- The review candidate is `codex/invitee-first-send`, intended for one full pilot PR directly to `main`; the last fetched `origin/main` is `5138f88`. The candidate now includes the secret-free GitHub Actions gate.
+- Tightened the local test fixture guard from a generic Supabase service prefix to this repository's exact `supabase_kong_drop` and `supabase_inbucket_drop` containers; added a regression rejecting another project on the same local port.
+- Stopped sidebar mailbox polling on routes where the private shell is hidden. Home and its visible sidebar still run separate 60-second recovery reads; this resource optimization is a low-priority follow-up, not a release blocker.
+- Fresh verification: `npm test` 302/302, `npm run lint`, `next typegen`, `npm run typecheck`, `git diff --check`, and `npm run build -- --webpack` passed. The build generated all 22 app routes. `http://localhost:4004` returned HTTP 200.
+- Previously recorded local browser journeys cover new-user signup/send, direct send/reply/read/reaction, text/GIF Relay, private claim and QR, and responsive accessibility. No hosted Supabase delivery, actual OS share sheet, spoken screen-reader, or physical-device acceptance was performed.
+- GitHub CLI reports an invalid saved token; a PR could not be created or refreshed from this session. The GitHub push/PR state must be refreshed after restoring auth; do not infer current PR #12 status.
+
 ### Latest checkpoint — signed-out friend first send and unique Home inbox (2026-10-27)
 
 - A new friend can open an owner's public profile while signed out, keep an editable pre-addressed draft through local Mailpit signup, explicitly send it, and return to the same text drop in the owner's Home inbox.
@@ -19,7 +28,7 @@ The app keeps its current Next.js, React, Tailwind, Supabase, local draft, mailb
 
 ### Current pilot gates
 
-1. Reauthenticate GitHub, open a review PR from `codex/invitee-first-send` into `codex/social-relay-pilot`, and refresh PR #12 checks before integration.
+1. Restore GitHub CLI authentication, push the verified closure commits, then open one full-pilot review PR from `codex/invitee-first-send` directly into `main`; verify current PR state and CI before any merge.
 2. Verify the hosted Free project identity, plan, Auth, migrations, and delivery configuration through an authenticated path. Keep existing local browser runners loopback-only.
 3. After the hosted project is verified, run disposable two-account send/reply and retention checks with exact-row cleanup; no database reset.
 4. Complete actual OS sharing, spoken screen-reader, physical-camera/device checks, then schedule a small opt-in user pilot.

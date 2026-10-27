@@ -2256,3 +2256,32 @@ An auth callback is complete only after the expected account is confirmed; a cha
 ### Git and remaining gaps
 
 Code commit `c388a14` (`fix: avoid duplicate featured inbox drops`) is pushed to `origin/codex/invitee-first-send`, based on `codex/social-relay-pilot`. GitHub's CLI token is invalid and the PR API is unreachable, so a review PR has not been opened; the push output supplied `https://github.com/arjeetanand/drop/pull/new/codex/invitee-first-send`. No merge occurred. Hosted two-account delivery/retention, native OS sharing, spoken screen-reader output, and physical-device behavior remain unverified.
+
+## 2026-10-27 — Bind local fixtures to Drop and stop hidden sidebar polling
+
+### Issue
+
+The local Supabase smoke guard accepted any container with the generic `supabase_kong_` or `supabase_inbucket_` prefix, and the root Sidebar continued its mailbox recovery poll on public routes where it rendered nothing.
+
+### Cause
+
+A loopback URL and local Docker context prove locality but do not prove the target is this repository's Supabase project. The Sidebar started its refresh effect unconditionally before the render-time hidden-shell return.
+
+### Resolution
+
+- Match the exact configured Drop containers, `supabase_kong_drop` and `supabase_inbucket_drop`, and add a regression rejecting a different local project on the same published port.
+- Start and stop the Sidebar mailbox refresh according to the existing private-shell route helper; cover public demo and auth callback routes in the navigation test.
+
+### Learning
+
+For fixture-writing tests, bind the local endpoint to the expected project identity as well as a local address and trusted container runtime. Run polling only where its UI is available. The Home page and visible Sidebar still issue separate 60-second recovery reads; consolidate those only if later usage measurements justify the refactor.
+
+### Verification
+
+- `npm test`: 302/302 passed; `npm run lint`, Next `typegen`, `npm run typecheck`, `git diff --check`, and `npm run build -- --webpack` passed. The build generated 22 routes.
+- Docker inspection confirmed the active local services are exactly `supabase_kong_drop` and `supabase_inbucket_drop`; the app on port 4004 returned HTTP 200.
+- Whole-branch source review found no confirmed high-severity auth, media-privacy, or migration/API flaw. GitHub CI and hosted Supabase were not verified.
+
+### Git and remaining gaps
+
+The code is committed as `98651c5` on `codex/invitee-first-send`; the secret-free CI workflow is in `72ec464`. Both are local commits not yet confirmed pushed; the remote branch tip was last `0981749`. Push, PR creation/checks, hosted acceptance, actual OS sharing, spoken screen-reader output, physical-device behavior, and the opt-in user study remain open.

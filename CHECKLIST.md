@@ -2,6 +2,18 @@
 
 Updated: 2026-10-27
 
+## Full pilot closure to main (2026-10-27)
+
+- [x] Include the secret-free GitHub Actions gate for pull requests and `main` pushes.
+- [x] Restrict local destructive fixtures to the exact Drop Supabase containers; reject another project even if it publishes the same port.
+- [x] Stop background sidebar mailbox refresh on routes where the private shell is hidden; note the remaining Home/sidebar duplicate recovery read for later optimization.
+- [x] Pass 302 unit tests, lint, Next route type generation, TypeScript, `git diff --check`, and the Webpack production build with all 22 routes.
+- [x] Verify the local app responds HTTP 200 at `http://localhost:4004`.
+- [ ] Restore GitHub CLI auth, push the final closure commits, and open one full-pilot review PR directly into `main`; confirm the PR head and CI checks.
+- [ ] Verify the hosted Free project, Auth, migrations/functions, real two-account delivery, and scheduled physical cleanup.
+- [ ] Verify OS sharing, spoken screen-reader output, and physical-device/camera behavior; run the opt-in pilot.
+- [ ] Merge only after PR review, readiness gates, and explicit merge approval.
+
 ## Signed-out friend first send and unique Home inbox (2026-10-27)
 
 - [x] Open an owner's public profile while signed out, follow **Send a drop**, and keep the pre-addressed editable draft through local Mailpit signup at 390×844.
@@ -10,7 +22,7 @@ Updated: 2026-10-27
 - [x] Pass `npm test` (301/301), `npm run lint`, `npx tsc --noEmit --incremental false`, browser-script syntax, `git diff --check`, and the Webpack production build. The plain `npm run typecheck` was blocked by sandbox `EPERM` writing `tsconfig.tsbuildinfo`.
 - [x] Commit the code as `c388a14` and push `codex/invitee-first-send` to `origin`.
 - [x] Leave Drop running at `http://localhost:4004` via `./run.sh start`; verify HTTP 200.
-- [ ] Open a review PR into `codex/social-relay-pilot`; GitHub CLI reports an invalid saved token and the PR API is currently unreachable.
+- [ ] Open one full-pilot review PR directly into `main` after restoring GitHub CLI authentication; see the closure checklist above.
 - [ ] Verify hosted account-to-account delivery, OS sharing, screen-reader output, and physical-device behavior.
 
 ## First-friend local end-to-end verification (2026-10-27)

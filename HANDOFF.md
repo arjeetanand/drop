@@ -2,6 +2,17 @@
 
 Updated: 2026-10-27
 
+## Latest checkpoint — full pilot PR to main (2026-10-27)
+
+- **Candidate:** `codex/invitee-first-send`, targeting one full review PR directly to `main`. The last fetched `origin/main` is `5138f88`. This branch carries the pilot work plus the secret-free `.github/workflows/ci.yml` gate from commit `72ec464`.
+- **Final review fixes:** commit `98651c5` pins fixture-write smokes to `supabase_kong_drop` / `supabase_inbucket_drop` and rejects another project on the same local port. It also stops Sidebar mailbox polling on public routes where the private shell is hidden. Home and its visible sidebar still each run a 60-second recovery read; the reviewer classified this as low-priority resource cleanup.
+- **Verification:** 302/302 unit tests, ESLint, Next `typegen`, `npm run typecheck`, `git diff --check`, and `npm run build -- --webpack` passed; the build generated all 22 routes. Existing local first-signup, direct send/reply, Relay, QR, and responsive accessibility browser runs passed at their documented checkpoints. `http://localhost:4004` returned HTTP 200.
+- **Review scope:** source review found no confirmed high-severity auth, media-privacy, or migration/API-compatibility flaw. The review did not verify hosted Supabase or GitHub checks, and did not fully review every line of historical browser scripts.
+- **GitHub:** `origin/main` was last fetched at `5138f88`; `origin/codex/invitee-first-send` was last fetched at `0981749`, before the two local commits above. `gh auth status` reports the saved GitHub token is invalid, so the final branch push, PR creation, and current PR/check status remain unverified.
+- **Still open for a real pilot:** verify the hosted Free project, Auth email, deployed migrations/functions, two-account delivery, scheduled physical Storage deletion, real OS sharing, spoken screen-reader output, and physical-device/camera behavior; then run the opt-in user study.
+
+**Next:** push the two verified commits and the closure documentation, restore GitHub CLI auth, open the full-pilot PR directly into `main`, and check its CI. Keep it unmerged until hosted/device acceptance and explicit merge approval.
+
 ## Latest checkpoint — signed-out friend first send and unique inbox card (2026-10-27)
 
 - The public-profile **Send a drop** path now works for a brand-new, signed-out friend: the addressed draft survives email signup, remains editable, and sends only after the friend taps **Send drop**. A separate owner session sees the delivered drop on Home at 390×844.
