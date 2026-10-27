@@ -9,7 +9,8 @@ Updated: 2026-10-27
 - [x] Move focus to the next action and add a browser assertion for focus, recap privacy, handoff counts, and no GIF Storage request before opening.
 - [x] Pass `npm test` (302/302), `npm run lint`, `npx tsc --noEmit --incremental false`, browser-script syntax, `git diff --check`, and `npm run test:browser-relay`. The isolated production browser journey passed for text and GIF at 390×844 with no overflow, failed requests, console errors, runtime exceptions, or cross-origin requests.
 - [x] Commit as `6ccd4c6` and push to `origin/codex/invitee-first-send` for draft PR #13.
-- [ ] Refresh PR #13 checks on the final documentation head and complete review/merge through the PR.
+- [x] Refresh PR #13 on head `04a2fc7`: CI and GitGuardian passed and GitHub reported `CLEAN`.
+- [ ] Complete review and merge PR #13 after explicit approval; keep hosted-pilot gates separate from source merge readiness.
 - [ ] Verify hosted Free Supabase delivery/retention, actual OS sharing, spoken screen-reader output, and physical-device/camera behavior before a live user pilot.
 
 ## Full pilot closure to main (2026-10-27)
