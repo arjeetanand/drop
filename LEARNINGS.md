@@ -2706,4 +2706,4 @@ Treat durable operation results as independent from the screen that started them
 
 ### Git and remaining gaps
 
-Code commit `e1b88cd978d1f330eaa830cc4e8a02a33fa91c6f` was pushed to `origin/fix/compose-send-navigation-guard`; this log is part of the separate documentation checkpoint. No PR or merge occurred, and `main` and PR #7 were not changed. Delayed authenticated Back/Forward and ambiguous-send recovery still need browser verification. No `.env.local` was present in this isolated checkout and no hosted Supabase action was taken. Edge’s Apple Events setting remains on per the user’s instruction.
+Code commit `e1b88cd978d1f330eaa830cc4e8a02a33fa91c6f` and documentation commit `76bb51015b0853d7c0a00a199b08fb00738aec93` were pushed to `origin/fix/compose-send-navigation-guard`; both are included in the verified remote tip. No PR or merge occurred, and `main` and PR #7 were not changed. Delayed authenticated Back/Forward and ambiguous-send recovery still need browser verification. No `.env.local` was present in this isolated checkout and no hosted Supabase action was taken. Edge’s Apple Events setting remains on per the user’s instruction.
